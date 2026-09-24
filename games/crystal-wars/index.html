@@ -1,0 +1,1354 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+<title>Guerra dei Cristalli</title>
+<style>
+  :root {
+    --bg: #0b1410;
+    --panel: #111c17;
+    --fg: #e8f0ea;
+    --muted: #9fb3a8;
+    --line: rgba(232, 240, 234, 0.14);
+    --player: #3c9dff;
+    --enemy: #ff4f5e;
+    --crystal: #5ff3e0;
+    --gold: #ffd34d;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  html, body {
+    height: 100%;
+    background: var(--bg);
+    color: var(--fg);
+    font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+    overflow: hidden;
+    user-select: none;
+    -webkit-user-select: none;
+  }
+  #app { display: flex; flex-direction: column; height: 100%; }
+  #topbar {
+    display: flex; align-items: center; gap: 18px; flex-wrap: wrap;
+    padding: 6px 12px; background: var(--panel); border-bottom: 1px solid var(--line);
+    font-weight: 600; font-size: 14px; font-variant-numeric: tabular-nums;
+  }
+  #topbar .res { color: var(--crystal); }
+  #topbar .spacer { flex: 1; }
+  #stage { flex: 1; min-height: 0; display: flex; align-items: center; justify-content: center; }
+  canvas { display: block; touch-action: none; cursor: crosshair; }
+  #panel {
+    display: flex; align-items: center; gap: 12px; flex-wrap: wrap;
+    padding: 8px 12px; min-height: 76px;
+    background: var(--panel); border-top: 1px solid var(--line);
+  }
+  #info { flex: 1; min-width: 200px; font-size: 14px; line-height: 1.45; }
+  #info .title { font-weight: 700; }
+  #info .muted { color: var(--muted); }
+  #actions { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
+  #actions .sep { width: 1px; align-self: stretch; background: var(--line); margin: 0 4px; }
+  button.act, #topbar button {
+    font: 600 13px system-ui, sans-serif;
+    color: var(--fg); background: #1a2a22;
+    border: 1px solid var(--line); border-radius: 6px;
+    padding: 7px 10px; cursor: pointer; line-height: 1.25; text-align: left;
+  }
+  button.act:hover:not(:disabled), #topbar button:hover { border-color: var(--player); }
+  button.act:disabled { opacity: 0.4; cursor: not-allowed; }
+  button.act .cost { color: var(--crystal); font-weight: 500; font-size: 12px; }
+  button.act kbd { font: inherit; font-size: 11px; color: var(--muted); margin-left: 4px; }
+
+  #overlay {
+    position: fixed; inset: 0; z-index: 5;
+    display: flex; flex-direction: column; align-items: center; justify-content: flex-start;
+    gap: 14px; padding: 16px; text-align: center;
+    background: rgba(6, 12, 9, 0.88);
+    overflow-y: auto;
+  }
+  /* Auto margins center the content, but let it scroll when it doesn't fit. */
+  #overlay > :first-child { margin-top: auto; }
+  #overlay > :last-child { margin-bottom: auto; }
+  #overlay.hidden { display: none; }
+  #rotate { display: none; color: var(--gold); font-weight: 500; font-size: 12px; width: 100%; }
+  @media (orientation: portrait) and (max-width: 700px) { #rotate { display: block; } }
+  #overlay h1 { font-size: clamp(30px, 7vw, 56px); color: var(--crystal); letter-spacing: 2px; text-shadow: 0 0 18px rgba(95, 243, 224, 0.45); }
+  #overlay h2 { font-size: clamp(28px, 6vw, 48px); }
+  #overlay h2.win { color: var(--gold); }
+  #overlay h2.lose { color: var(--enemy); }
+  #overlay p { max-width: 560px; font-size: clamp(13px, 3.2vw, 16px); line-height: 1.55; color: var(--fg); }
+  #overlay p.muted { color: var(--muted); }
+  #overlay .diff { display: flex; gap: 10px; flex-wrap: wrap; justify-content: center; }
+  #overlay .diff button, #overlay .start {
+    font: 700 15px system-ui, sans-serif; letter-spacing: 1px;
+    color: var(--fg); background: transparent; cursor: pointer;
+    border: 2px solid rgba(232, 240, 234, 0.3); border-radius: 6px; padding: 8px 16px;
+  }
+  #overlay .diff button.on { border-color: var(--c); color: var(--c); box-shadow: 0 0 12px var(--c); }
+  #overlay .start { background: var(--player); border-color: var(--player); color: #04101f; padding: 10px 28px; }
+  @media (max-height: 520px) {
+    #overlay { gap: 8px; }
+    #overlay h1 { font-size: 28px; }
+    #overlay p { font-size: 13px; line-height: 1.4; }
+  }
+</style>
+</head>
+<body>
+<div id="app">
+  <div id="topbar">
+    <span class="res">◆ <span id="crys">0</span></span>
+    <span>Unità <span id="pop">0/40</span></span>
+    <span>⏱ <span id="clock">00:00</span></span>
+    <span id="dlabel"></span>
+    <span class="spacer"></span>
+    <button id="pauseBtn" type="button">Pausa (P)</button>
+    <span id="rotate">Suggerimento: ruota il telefono in orizzontale per una mappa più grande</span>
+  </div>
+  <div id="stage"><canvas id="game"></canvas></div>
+  <div id="panel">
+    <div id="info"></div>
+    <div id="actions"></div>
+  </div>
+</div>
+<div id="overlay"></div>
+
+<script>
+(() => {
+  "use strict";
+
+  // ---------- Constants ----------
+  const W = 1200, H = 760;
+  const MAX_POP = 40, CARRY = 5, MINE_TIME = 1.4;
+  const TEAM_COLOR = ["#3c9dff", "#ff4f5e"];
+  const TEAM_DARK = ["#1b4f8a", "#8a1f2b"];
+
+  const UNIT = {
+    worker:  { name: "Lavoratore", hp: 45,  speed: 78, dmg: 5,  range: 6,   cd: 1.0, r: 8,  cost: 50, time: 7,  aggro: 0 },
+    soldier: { name: "Soldato",    hp: 130, speed: 62, dmg: 13, range: 6,   cd: 0.9, r: 10, cost: 60, time: 9,  aggro: 170 },
+    archer:  { name: "Arciere",    hp: 70,  speed: 66, dmg: 11, range: 125, cd: 1.3, r: 9,  cost: 75, time: 10, aggro: 185, ranged: true },
+  };
+  const BUILD = {
+    hq:       { name: "Quartier generale", hp: 2500, w: 100, h: 80, cost: 400, time: 60, trains: ["worker"] },
+    barracks: { name: "Caserma",           hp: 1000, w: 80,  h: 62, cost: 150, time: 20, trains: ["soldier", "archer"] },
+    tower:    { name: "Torre",             hp: 500,  w: 36,  h: 36, cost: 100, time: 15, range: 165, dmg: 14, cd: 1.1 },
+  };
+  const UNIT_TIPS = {
+    worker: "Raccoglie cristalli e costruisce edifici",
+    soldier: "Robusto, combatte corpo a corpo",
+    archer: "Fragile, colpisce dalla distanza",
+  };
+  const BUILD_TIPS = {
+    barracks: "Addestra soldati e arcieri",
+    tower: "Difesa che colpisce i nemici vicini",
+    hq: "Deposito per i cristalli, addestra lavoratori",
+  };
+
+  // AI and economy tuning per difficulty.
+  const DIFFICULTIES = {
+    facile: {
+      label: "FACILE", color: "#7dff9a", desc: "Avversario lento · primo attacco dopo 5 minuti",
+      start: 300, aiGather: 0.7, aiWorkers: 5, guard: 1, firstAttack: 300, interval: 120, wave: 3, growth: 1, barracks2: 1e9, towers: [420],
+    },
+    normale: {
+      label: "NORMALE", color: "#3c9dff", desc: "Partita equilibrata · primo attacco dopo 3 minuti e mezzo",
+      start: 200, aiGather: 1, aiWorkers: 7, guard: 2, firstAttack: 210, interval: 100, wave: 4, growth: 2, barracks2: 360, towers: [180],
+    },
+    difficile: {
+      label: "DIFFICILE", color: "#ff4f5e", desc: "Economia nemica più forte · attacchi presto e spesso",
+      start: 150, aiGather: 1.3, aiWorkers: 9, guard: 3, firstAttack: 150, interval: 80, wave: 5, growth: 3, barracks2: 200, towers: [100, 260],
+    },
+  };
+  const DIFF_IDS = Object.keys(DIFFICULTIES);
+  const DIFF_KEY = "crystal-wars-difficulty";
+  const bestKey = (id) => `crystal-wars-best-${id}`;
+
+  function store(key, value) { try { localStorage.setItem(key, value); } catch { /* ignore */ } }
+  function load(key) { try { return localStorage.getItem(key); } catch { return null; } }
+
+  // ---------- DOM ----------
+  const canvas = document.getElementById("game");
+  const ctx = canvas.getContext("2d");
+  const stage = document.getElementById("stage");
+  const overlay = document.getElementById("overlay");
+  const el = (id) => document.getElementById(id);
+
+  let scale = 1, pxRatio = 1;
+  function resize() {
+    const r = stage.getBoundingClientRect();
+    scale = Math.max(0.1, Math.min(r.width / W, r.height / H));
+    pxRatio = Math.min(2.5, scale * (window.devicePixelRatio || 1));
+    canvas.style.width = W * scale + "px";
+    canvas.style.height = H * scale + "px";
+    canvas.width = Math.round(W * pxRatio);
+    canvas.height = Math.round(H * pxRatio);
+  }
+  window.addEventListener("resize", resize);
+  resize();
+
+  // ---------- Audio ----------
+  let audioCtx = null;
+  function beep(freq, dur, type = "triangle", vol = 0.06, slide = 0) {
+    if (!audioCtx) return;
+    const t = audioCtx.currentTime;
+    const osc = audioCtx.createOscillator();
+    const gain = audioCtx.createGain();
+    osc.type = type;
+    osc.frequency.setValueAtTime(freq, t);
+    if (slide) osc.frequency.exponentialRampToValueAtTime(Math.max(20, freq + slide), t + dur);
+    gain.gain.setValueAtTime(vol, t);
+    gain.gain.exponentialRampToValueAtTime(0.0001, t + dur);
+    osc.connect(gain).connect(audioCtx.destination);
+    osc.start(t);
+    osc.stop(t + dur);
+  }
+  const sfx = {
+    click: () => beep(660, 0.05, "square", 0.03),
+    error: () => beep(160, 0.18, "square", 0.05),
+    place: () => beep(330, 0.12, "triangle", 0.07, 200),
+    ready: () => { beep(523, 0.09); setTimeout(() => beep(784, 0.12), 80); },
+    built: () => [392, 523, 659].forEach((f, i) => setTimeout(() => beep(f, 0.12), i * 80)),
+    alert: () => { beep(440, 0.15, "sawtooth", 0.05); setTimeout(() => beep(330, 0.2, "sawtooth", 0.05), 160); },
+    win: () => [523, 659, 784, 1047].forEach((f, i) => setTimeout(() => beep(f, 0.2, "triangle", 0.08), i * 140)),
+    lose: () => [392, 330, 262, 196].forEach((f, i) => setTimeout(() => beep(f, 0.25, "sawtooth", 0.06), i * 180)),
+  };
+
+  // ---------- State ----------
+  let state = "menu";
+  let difficulty = DIFFICULTIES[load(DIFF_KEY)] ? load(DIFF_KEY) : "normale";
+  let diff = DIFFICULTIES[difficulty];
+  let ents = [], nextId = 1, teams, selection = [], placing = null, time = 0;
+  let particles = [], projectiles = [], markers = [], banner = null, stats, ai, lastAlert = -99;
+  let mouse = { x: W / 2, y: H / 2, inside: false };
+  let menu = null;
+
+  // Static ground detail, generated once.
+  const groundBlobs = Array.from({ length: 70 }, () => ({
+    x: Math.random() * W, y: Math.random() * H,
+    rx: 20 + Math.random() * 70, ry: 12 + Math.random() * 40,
+    a: Math.random() * Math.PI, dark: Math.random() < 0.6,
+  }));
+
+  const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
+  const alive = (e) => e && !e.dead;
+  const mirror = (p) => ({ x: W - p.x, y: H - p.y });
+
+  // ---------- Entities ----------
+  function add(e) { e.id = nextId++; e.hitFlash = 0; ents.push(e); return e; }
+
+  function makeUnit(type, team, x, y) {
+    const d = UNIT[type];
+    return add({ kind: "unit", type, team, x, y, r: d.r, hp: d.hp, maxHp: d.hp, order: { type: "idle" }, cd: 0, carry: 0, mine: 0, face: team === 0 ? -0.8 : 2.3 });
+  }
+  function makeBuilding(type, team, x, y, done) {
+    const d = BUILD[type];
+    return add({ kind: "building", type, team, x, y, w: d.w, h: d.h, maxHp: d.hp, hp: done ? d.hp : d.hp * 0.1, progress: done ? 1 : 0, queue: [], qt: 0, rally: null, cd: 0 });
+  }
+  function makeResource(x, y, amount) {
+    return add({ kind: "resource", team: -1, x, y, r: 14, amount, max: amount, rot: Math.random() * Math.PI });
+  }
+
+  // ---------- Geometry ----------
+  function closestPoint(e, px, py) {
+    if (e.kind === "building") return [clamp(px, e.x - e.w / 2, e.x + e.w / 2), clamp(py, e.y - e.h / 2, e.y + e.h / 2)];
+    const dx = px - e.x, dy = py - e.y, l = Math.hypot(dx, dy) || 1;
+    return [e.x + (dx / l) * e.r, e.y + (dy / l) * e.r];
+  }
+  // Distance from a point to an entity's surface (0 when inside).
+  function surfDist(e, px, py) {
+    if (e.kind === "building") { const [cx, cy] = closestPoint(e, px, py); return Math.hypot(px - cx, py - cy); }
+    return Math.max(0, Math.hypot(px - e.x, py - e.y) - e.r);
+  }
+  // Edge-to-edge gap between a (unit or tower) and b.
+  function gap(a, b) {
+    if (a.kind === "building") return surfDist(a, b.x, b.y) - (b.r || 0);
+    return surfDist(b, a.x, a.y) - a.r;
+  }
+  function pushOutOf(o, p, r) {
+    if (o.kind === "building") {
+      const hw = o.w / 2 + r, hh = o.h / 2 + r, dx = p.x - o.x, dy = p.y - o.y;
+      if (Math.abs(dx) < hw && Math.abs(dy) < hh) {
+        const px = hw - Math.abs(dx), py = hh - Math.abs(dy);
+        if (px < py) p.x += Math.sign(dx || 1) * px; else p.y += Math.sign(dy || 1) * py;
+      }
+    } else {
+      const dx = p.x - o.x, dy = p.y - o.y, d = Math.hypot(dx, dy), m = o.r + r;
+      if (d < m) { const l = d || 1; p.x = o.x + (dx / l) * m; p.y = o.y + (dy / l) * m; }
+    }
+  }
+  function clampToMap(p, r) { p.x = clamp(p.x, r, W - r); p.y = clamp(p.y, r, H - r); }
+
+  function entityAt(x, y, tol) {
+    let best = null, bestD = Infinity;
+    for (const e of ents) {
+      if (e.dead || e.kind !== "unit") continue;
+      const d = Math.hypot(e.x - x, e.y - y) - e.r;
+      if (d < tol && d < bestD) { best = e; bestD = d; }
+    }
+    if (best) return best;
+    for (const e of ents) {
+      if (e.dead || e.kind === "unit") continue;
+      if (surfDist(e, x, y) < tol * 0.6) return e;
+    }
+    return null;
+  }
+
+  function nearestEnemy(src, range, unitsOnly) {
+    let best = null, bestScore = Infinity;
+    for (const e of ents) {
+      if (e.dead || e.team !== 1 - src.team) continue;
+      if (e.kind === "building" && (unitsOnly || src.kind === "building")) continue;
+      const g = gap(src, e);
+      if (g > range) continue;
+      const score = g + (e.kind === "building" ? 80 : 0);
+      if (score < bestScore) { best = e; bestScore = score; }
+    }
+    return best;
+  }
+  function nearestResource(x, y) {
+    let best = null, bestD = Infinity;
+    for (const e of ents) {
+      if (e.dead || e.kind !== "resource") continue;
+      const d = Math.hypot(e.x - x, e.y - y);
+      if (d < bestD) { best = e; bestD = d; }
+    }
+    return best;
+  }
+  function nearestDrop(u) {
+    let best = null, bestD = Infinity;
+    for (const e of ents) {
+      if (e.dead || e.team !== u.team || e.type !== "hq" || e.progress < 1) continue;
+      const d = Math.hypot(e.x - u.x, e.y - u.y);
+      if (d < bestD) { best = e; bestD = d; }
+    }
+    return best;
+  }
+  function popOf(team) {
+    let n = 0;
+    for (const e of ents) {
+      if (e.dead || e.team !== team) continue;
+      if (e.kind === "unit") n++;
+      else if (e.kind === "building") n += e.queue.length;
+    }
+    return n;
+  }
+
+  // ---------- Movement ----------
+  // Sidestep buildings and crystals that block the straight line.
+  function steer(u, nx, ny, ignore) {
+    const look = u.r + 12;
+    const ax = u.x + nx * look, ay = u.y + ny * look;
+    for (const o of ents) {
+      if (o.dead || o === ignore || o.kind === "unit") continue;
+      if (surfDist(o, ax, ay) < u.r + 1) {
+        let ox = u.x - o.x, oy = u.y - o.y;
+        const l = Math.hypot(ox, oy) || 1; ox /= l; oy /= l;
+        let tx = -oy, ty = ox;
+        if (tx * nx + ty * ny < 0) { tx = -tx; ty = -ty; }
+        const sx = tx + ox * 0.15, sy = ty + oy * 0.15, sl = Math.hypot(sx, sy);
+        return [sx / sl, sy / sl];
+      }
+    }
+    return [nx, ny];
+  }
+  function moveTo(u, tx, ty, dt, ignore) {
+    const dx = tx - u.x, dy = ty - u.y, dist = Math.hypot(dx, dy);
+    if (dist < 3) return true;
+    const [nx, ny] = steer(u, dx / dist, dy / dist, ignore);
+    const step = Math.min(UNIT[u.type].speed * dt, dist);
+    u.x += nx * step; u.y += ny * step;
+    u.face = Math.atan2(ny, nx);
+    return false;
+  }
+  const isGhost = (u) => u.type === "worker" && (u.order.type === "gather" || u.order.type === "return");
+
+  function resolveCollisions() {
+    const units = ents.filter((e) => !e.dead && e.kind === "unit");
+    const solids = ents.filter((e) => !e.dead && e.kind !== "unit");
+    for (let i = 0; i < units.length; i++) {
+      const a = units[i];
+      if (isGhost(a)) continue;
+      for (let j = i + 1; j < units.length; j++) {
+        const b = units[j];
+        if (isGhost(b)) continue;
+        let dx = b.x - a.x, dy = b.y - a.y;
+        const m = a.r + b.r, d2 = dx * dx + dy * dy;
+        if (d2 >= m * m) continue;
+        let d = Math.sqrt(d2);
+        if (d < 0.01) { dx = Math.random() - 0.5; dy = Math.random() - 0.5; d = Math.hypot(dx, dy); }
+        const push = (m - d) / 2;
+        a.x -= (dx / d) * push; a.y -= (dy / d) * push;
+        b.x += (dx / d) * push; b.y += (dy / d) * push;
+      }
+    }
+    for (const u of units) {
+      for (const o of solids) pushOutOf(o, u, u.r);
+      clampToMap(u, u.r);
+    }
+  }
+
+  // ---------- Combat ----------
+  function damage(t, dmg, srcTeam) {
+    if (t.dead) return;
+    t.hp -= dmg;
+    t.hitFlash = 0.12;
+    if (t.team === 0 && srcTeam === 1) alertAt(t.x, t.y);
+    if (t.hp <= 0) kill(t);
+  }
+  function kill(e) {
+    if (e.dead) return;
+    e.dead = true;
+    const big = e.kind === "building";
+    burst(e.x, e.y, e.kind === "resource" ? "#5ff3e0" : TEAM_COLOR[e.team], big ? 50 : 14, big ? 160 : 90);
+    if (big) burst(e.x, e.y, "#9a8a70", 30, 120);
+    if (e.kind === "unit") { if (e.team === 1) stats.kills++; else stats.lost++; }
+  }
+  function strike(src, t, dmg) {
+    if (src.kind === "building" || UNIT[src.type].ranged) {
+      const sx = src.x, sy = src.kind === "building" ? src.y - src.h / 2 : src.y;
+      projectiles.push({ x: sx, y: sy, t, dmg, team: src.team, arrow: src.kind === "unit" });
+    } else {
+      damage(t, dmg, src.team);
+      burst((src.x + t.x) / 2, (src.y + t.y) / 2, "#fff", 3, 40);
+    }
+  }
+  function alertAt(x, y) {
+    if (time - lastAlert < 12) return;
+    lastAlert = time;
+    showBanner("Sei sotto attacco!", "#ff4f5e");
+    markers.push({ x, y, t: 0, max: 1.6, color: "#ff4f5e", ping: true });
+    sfx.alert();
+  }
+
+  // ---------- Economy / production ----------
+  function canPlace(type, x, y) {
+    const d = BUILD[type], pad = 8;
+    if (x - d.w / 2 < 8 || x + d.w / 2 > W - 8 || y - d.h / 2 < 8 || y + d.h / 2 > H - 8) return false;
+    for (const e of ents) {
+      if (e.dead || e.kind === "unit") continue;
+      if (e.kind === "building") {
+        if (Math.abs(e.x - x) < (e.w + d.w) / 2 + pad && Math.abs(e.y - y) < (e.h + d.h) / 2 + pad) return false;
+      } else {
+        const cx = clamp(e.x, x - d.w / 2, x + d.w / 2), cy = clamp(e.y, y - d.h / 2, y + d.h / 2);
+        if (Math.hypot(e.x - cx, e.y - cy) < e.r + pad) return false;
+      }
+    }
+    return true;
+  }
+  // Returns an error message, or null on success.
+  function enqueue(b, type) {
+    const T = teams[b.team];
+    if (b.queue.length >= 5) return "Coda piena";
+    if (popOf(b.team) >= MAX_POP) return "Limite di unità raggiunto";
+    if (T.crystals < UNIT[type].cost) return "Cristalli insufficienti";
+    T.crystals -= UNIT[type].cost;
+    b.queue.push(type);
+    return null;
+  }
+  function placeBuilding(type, team, x, y, worker) {
+    const T = teams[team];
+    if (T.crystals < BUILD[type].cost) return "Cristalli insufficienti";
+    if (!canPlace(type, x, y)) return "Posizione non valida";
+    T.crystals -= BUILD[type].cost;
+    const b = makeBuilding(type, team, x, y, false);
+    if (worker) worker.order = { type: "build", target: b };
+    return null;
+  }
+  function spawnFrom(b, type) {
+    const target = b.rally || { x: b.x + (b.team === 0 ? 60 : -60), y: b.y + (b.team === 0 ? -80 : 80) };
+    const [ex, ey] = closestPoint(b, target.x, target.y);
+    let dx = ex - b.x, dy = ey - b.y;
+    const l = Math.hypot(dx, dy) || 1;
+    const r = UNIT[type].r;
+    const u = makeUnit(type, b.team, ex + (dx / l) * (r + 3), ey + (dy / l) * (r + 3));
+    u.face = Math.atan2(dy, dx);
+    if (type === "worker") {
+      const res = (b.rally && alive(b.rally.res)) ? b.rally.res : nearestResource(b.x, b.y);
+      if (b.rally && !b.rally.res) u.order = { type: "move", x: b.rally.x, y: b.rally.y };
+      else if (res) u.order = { type: "gather", target: res };
+    } else if (b.rally) {
+      const p = freePoint(b.rally.x + (Math.random() - 0.5) * 30, b.rally.y + (Math.random() - 0.5) * 30, r);
+      u.order = { type: "amove", x: p.x, y: p.y };
+    } else if (b.team === 1) {
+      u.order = { type: "amove", x: ai.rally.x, y: ai.rally.y };
+    }
+    if (b.team === 0) { stats.trained++; sfx.ready(); }
+    return u;
+  }
+  function freePoint(x, y, r) {
+    const p = { x, y };
+    for (let k = 0; k < 2; k++) for (const o of ents) if (!o.dead && o.kind !== "unit") pushOutOf(o, p, r);
+    clampToMap(p, r);
+    return p;
+  }
+
+  // ---------- Updates ----------
+  function updateUnit(u, dt) {
+    const d = UNIT[u.type];
+    u.cd = Math.max(0, u.cd - dt);
+    u.hitFlash = Math.max(0, u.hitFlash - dt);
+    let o = u.order;
+
+    if (d.aggro && (o.type === "idle" || o.type === "amove")) {
+      const t = nearestEnemy(u, d.aggro);
+      if (t) { u.order = o = { type: "attack", target: t, prev: o }; }
+    }
+
+    switch (o.type) {
+      case "move":
+      case "amove":
+        if (moveTo(u, o.x, o.y, dt)) u.order = { type: "idle" };
+        break;
+
+      case "attack": {
+        const t = o.target;
+        if (!alive(t)) { u.order = o.prev || { type: "idle" }; break; }
+        // While hitting a building, turn on enemy units that come close; resume afterwards.
+        if (t.kind === "building" && d.aggro) {
+          u.scan = (u.scan || 0) - dt;
+          if (u.scan <= 0) {
+            u.scan = 0.4;
+            const threat = nearestEnemy(u, d.aggro, true);
+            if (threat) { u.order = { type: "attack", target: threat, prev: o }; break; }
+          }
+        }
+        const g = gap(u, t);
+        if (g > d.range) {
+          // Auto-acquired targets are dropped if they lure the unit too far.
+          if (o.prev && g > d.aggro * 1.6) { u.order = o.prev; break; }
+          moveTo(u, t.x, t.y, dt, t);
+        } else {
+          u.face = Math.atan2(t.y - u.y, t.x - u.x);
+          if (u.cd <= 0) { strike(u, t, d.dmg); u.cd = d.cd; }
+        }
+        break;
+      }
+
+      case "gather": {
+        let res = o.target;
+        if (u.carry >= CARRY) { u.order = { type: "return", res }; break; }
+        if (!alive(res)) {
+          res = nearestResource(u.x, u.y);
+          if (!res) { u.order = { type: "idle" }; break; }
+          o.target = res;
+        }
+        if (gap(u, res) > 4) { u.mine = 0; moveTo(u, res.x, res.y, dt, res); }
+        else {
+          u.face = Math.atan2(res.y - u.y, res.x - u.x);
+          u.mine += dt;
+          if (u.mine >= MINE_TIME) {
+            u.mine = 0;
+            const got = Math.min(CARRY, res.amount);
+            res.amount -= got;
+            u.carry = got;
+            if (res.amount <= 0) kill(res);
+            u.order = { type: "return", res };
+          }
+        }
+        break;
+      }
+
+      case "return": {
+        const hq = nearestDrop(u);
+        if (!hq) { u.order = { type: "idle" }; break; }
+        if (gap(u, hq) > 4) moveTo(u, hq.x, hq.y, dt, hq);
+        else {
+          teams[u.team].crystals += Math.round(u.carry * (u.team === 1 ? diff.aiGather : 1));
+          u.carry = 0;
+          const next = alive(o.res) ? o.res : nearestResource(u.x, u.y);
+          u.order = next ? { type: "gather", target: next } : { type: "idle" };
+        }
+        break;
+      }
+
+      case "build": {
+        const b = o.target;
+        if (!alive(b) || b.progress >= 1) {
+          const res = nearestResource(u.x, u.y);
+          u.order = res ? { type: "gather", target: res } : { type: "idle" };
+          break;
+        }
+        if (gap(u, b) > 4) moveTo(u, b.x, b.y, dt, b);
+        else {
+          const bt = BUILD[b.type].time;
+          b.progress = Math.min(1, b.progress + dt / bt);
+          b.hp = Math.min(b.maxHp, b.hp + (b.maxHp * 0.9 * dt) / bt);
+          if (b.progress >= 1 && b.team === 0) { sfx.built(); showBanner(`${BUILD[b.type].name} completata`, "#7dff9a"); }
+        }
+        break;
+      }
+    }
+  }
+
+  function updateBuilding(b, dt) {
+    b.hitFlash = Math.max(0, b.hitFlash - dt);
+    if (b.progress < 1) return;
+    if (b.queue.length) {
+      const t = UNIT[b.queue[0]].time;
+      b.qt += dt;
+      if (b.qt >= t) {
+        if (ents.filter((e) => !e.dead && e.kind === "unit" && e.team === b.team).length < MAX_POP) {
+          spawnFrom(b, b.queue.shift());
+          b.qt = 0;
+        } else b.qt = t;
+      }
+    }
+    if (b.type === "tower") {
+      b.cd -= dt;
+      if (b.cd <= 0) {
+        const t = nearestEnemy(b, BUILD.tower.range, true);
+        if (t) { strike(b, t, BUILD.tower.dmg); b.cd = BUILD.tower.cd; }
+      }
+    }
+  }
+
+  function updateProjectiles(dt) {
+    for (const p of projectiles) {
+      if (!alive(p.t)) { p.dead = true; continue; }
+      const dx = p.t.x - p.x, dy = p.t.y - p.y, d = Math.hypot(dx, dy), step = 380 * dt;
+      p.ang = Math.atan2(dy, dx);
+      if (d <= step + (p.t.r || 12)) { damage(p.t, p.dmg, p.team); p.dead = true; }
+      else { p.x += (dx / d) * step; p.y += (dy / d) * step; }
+    }
+    projectiles = projectiles.filter((p) => !p.dead);
+  }
+
+  // ---------- AI ----------
+  let aiTimer = 0;
+  function aiBuild(type, hq, workers) {
+    if (!hq) return;
+    const toCenter = Math.atan2(H / 2 - hq.y, W / 2 - hq.x);
+    const [rMin, rMax, spread] = type === "tower" ? [110, 200, 0.9] : [140, 260, 1.3];
+    let spot = null;
+    for (let k = 0; k < 40 && !spot; k++) {
+      const a = toCenter + (Math.random() * 2 - 1) * spread;
+      const r = rMin + Math.random() * (rMax - rMin);
+      const x = hq.x + Math.cos(a) * r, y = hq.y + Math.sin(a) * r;
+      if (canPlace(type, x, y)) spot = { x, y };
+    }
+    if (!spot) return;
+    const free = workers.filter((w) => w.order.type !== "build");
+    if (!free.length) return;
+    free.sort((a, b) => Math.hypot(a.x - spot.x, a.y - spot.y) - Math.hypot(b.x - spot.x, b.y - spot.y));
+    placeBuilding(type, 1, spot.x, spot.y, free[0]);
+  }
+
+  function aiThink() {
+    const T = teams[1];
+    const mine = ents.filter((e) => !e.dead && e.team === 1);
+    const buildings = mine.filter((e) => e.kind === "building");
+    const hq = buildings.find((e) => e.type === "hq" && e.progress >= 1);
+    const workers = mine.filter((e) => e.kind === "unit" && e.type === "worker");
+    const army = mine.filter((e) => e.kind === "unit" && e.type !== "worker");
+    const barracks = buildings.filter((e) => e.type === "barracks");
+    const towers = buildings.filter((e) => e.type === "tower");
+    const pop = popOf(1);
+
+    for (const w of workers) {
+      if (w.order.type === "idle") {
+        const res = nearestResource(hq ? hq.x : w.x, hq ? hq.y : w.y);
+        if (res) w.order = { type: "gather", target: res };
+      }
+    }
+    for (const b of buildings) {
+      if (b.progress < 1 && !workers.some((w) => w.order.type === "build" && w.order.target === b)) {
+        const w = workers.slice().sort((a, c) => Math.hypot(a.x - b.x, a.y - b.y) - Math.hypot(c.x - b.x, c.y - b.y))[0];
+        if (w) w.order = { type: "build", target: b };
+      }
+    }
+
+    const wantWorkers = diff.aiWorkers + (time > 300 ? 2 : 0);
+    const savingForBarracks = barracks.length === 0 && workers.length >= 4 && T.crystals < 200;
+    if (hq && !savingForBarracks && workers.length + hq.queue.length < wantWorkers && hq.queue.length === 0 && pop < MAX_POP) {
+      enqueue(hq, "worker");
+    }
+
+    const wantBarracks = time >= diff.barracks2 ? 2 : 1;
+    const wantTowers = diff.towers.filter((t) => time >= t).length;
+    if (barracks.length < wantBarracks && T.crystals >= BUILD.barracks.cost) aiBuild("barracks", hq, workers);
+    else if (towers.length < wantTowers && T.crystals >= BUILD.tower.cost) aiBuild("tower", hq, workers);
+
+    // The army size is capped by the next wave, so attacks escalate gradually.
+    const homeArmy = army.filter((a) => !a.raid).length;
+    let queued = barracks.reduce((n, b) => n + b.queue.length, 0);
+    for (const b of barracks) {
+      if (b.progress < 1 || b.queue.length >= 2) continue;
+      if (homeArmy + queued >= ai.wave + diff.guard) break;
+      queued++;
+      enqueue(b, Math.random() < 0.55 ? "soldier" : "archer");
+    }
+
+    // Defend the base against intruders.
+    const intruder = ents.find((e) => !e.dead && e.team === 0 && e.kind === "unit" && buildings.some((b) => surfDist(b, e.x, e.y) < 220));
+    if (intruder) {
+      for (const a of army) if (!a.raid && a.order.type !== "attack") a.order = { type: "amove", x: intruder.x, y: intruder.y };
+    }
+
+    // Launch waves.
+    const home = army.filter((a) => !a.raid);
+    if (time >= ai.nextAttack && home.length >= Math.ceil(ai.wave * 0.6)) {
+      for (const a of home.slice(0, ai.wave)) a.raid = true;
+      ai.nextAttack = time + diff.interval;
+      ai.wave += diff.growth;
+    }
+    for (const a of army) {
+      if (a.order.type !== "idle") continue;
+      if (a.raid) {
+        const target = ents.filter((e) => !e.dead && e.team === 0 && e.kind === "building")
+          .sort((p, q) => Math.hypot(p.x - a.x, p.y - a.y) - Math.hypot(q.x - a.x, q.y - a.y))[0];
+        if (target) a.order = { type: "amove", x: target.x, y: target.y };
+      } else if (Math.hypot(a.x - ai.rally.x, a.y - ai.rally.y) > 90) {
+        a.order = { type: "amove", x: ai.rally.x + (Math.random() - 0.5) * 60, y: ai.rally.y + (Math.random() - 0.5) * 60 };
+      }
+    }
+  }
+
+  // ---------- Effects ----------
+  function burst(x, y, color, n, speed) {
+    for (let i = 0; i < n; i++) {
+      const a = Math.random() * Math.PI * 2, v = Math.random() * speed;
+      particles.push({ x, y, vx: Math.cos(a) * v, vy: Math.sin(a) * v, life: 0.3 + Math.random() * 0.5, max: 0.8, color, size: 1.5 + Math.random() * 2.5 });
+    }
+  }
+  function showBanner(text, color = "#e8f0ea") { banner = { text, color, t: 2.2 }; }
+
+  // ---------- Game flow ----------
+  function startGame() {
+    if (!audioCtx) {
+      try { audioCtx = new (window.AudioContext || window.webkitAudioContext)(); } catch { audioCtx = null; }
+    }
+    ents = []; nextId = 1; particles = []; projectiles = []; markers = []; selection = [];
+    placing = null; time = 0; banner = null; lastAlert = -99; aiTimer = 1;
+    teams = [{ crystals: diff.start }, { crystals: 200 }];
+    stats = { trained: 0, kills: 0, lost: 0 };
+
+    const P = { x: 220, y: 560 }, E = mirror(P);
+    makeBuilding("hq", 0, P.x, P.y, true);
+    makeBuilding("hq", 1, E.x, E.y, true);
+    for (let i = 0; i < 6; i++) {
+      const a = ((100 + i * 22) * Math.PI) / 180;
+      const p = { x: P.x + 150 * Math.cos(a), y: P.y + 150 * Math.sin(a) };
+      makeResource(p.x, p.y, 1200);
+      const m = mirror(p);
+      makeResource(m.x, m.y, 1200);
+    }
+    for (const [ox, oy] of [[-32, -6], [0, -24], [32, -6], [0, 16]]) {
+      makeResource(430 + ox, 150 + oy, 1500);
+      const m = mirror({ x: 430 + ox, y: 150 + oy });
+      makeResource(m.x, m.y, 1500);
+    }
+    for (let i = 0; i < 4; i++) {
+      for (const [team, base] of [[0, P], [1, E]]) {
+        const s = team === 0 ? 1 : -1;
+        const u = makeUnit("worker", team, base.x + s * (70 + i * 12), base.y - s * (40 - i * 18));
+        u.order = { type: "gather", target: nearestResource(base.x, base.y) };
+      }
+    }
+    const toCenter = Math.atan2(H / 2 - E.y, W / 2 - E.x);
+    ai = { nextAttack: diff.firstAttack, wave: diff.wave, rally: { x: E.x + Math.cos(toCenter) * 150, y: E.y + Math.sin(toCenter) * 150 } };
+
+    el("dlabel").textContent = diff.label;
+    el("dlabel").style.color = diff.color;
+    state = "playing";
+    menu = null;
+    overlay.classList.add("hidden");
+    showBanner("Raccogli cristalli e costruisci una caserma!", "#5ff3e0");
+    hudSig = "";
+    last = performance.now();
+  }
+
+  function endGame(won) {
+    state = "over";
+    placing = null;
+    const secs = Math.floor(time);
+    let newBest = false;
+    if (won) {
+      const prev = parseInt(load(bestKey(difficulty)), 10);
+      if (!prev || secs < prev) { store(bestKey(difficulty), String(secs)); newBest = true; }
+      sfx.win();
+    } else sfx.lose();
+    const played = diff.label;
+    menu = () => showOverlay(
+      `<h2 class="${won ? "win" : "lose"}">${won ? "VITTORIA!" : "SCONFITTA"}</h2>
+       <p>${won ? "Hai distrutto la base nemica" : "La tua base è stata distrutta"} in ${fmtTime(secs)} · ${played}</p>
+       <p class="muted">Unità addestrate: ${stats.trained} · Nemici eliminati: ${stats.kills} · Unità perse: ${stats.lost}</p>
+       ${newBest ? "<p style='color:var(--gold)'>★ NUOVO MIGLIOR TEMPO! ★</p>" : ""}
+       ${difficultyHTML()}
+       <button class="start" data-start>GIOCA ANCORA</button>`
+    );
+    menu();
+  }
+
+  function togglePause() {
+    if (state === "playing") {
+      state = "paused";
+      showOverlay(`<h2>PAUSA</h2><button class="start" data-resume>CONTINUA</button><p class="muted">Premi P per continuare</p>`);
+    } else if (state === "paused") {
+      state = "playing";
+      overlay.classList.add("hidden");
+      last = performance.now();
+    }
+  }
+
+  const fmtTime = (s) => `${String(Math.floor(s / 60)).padStart(2, "0")}:${String(Math.floor(s % 60)).padStart(2, "0")}`;
+
+  function showOverlay(html) {
+    overlay.innerHTML = html;
+    overlay.classList.remove("hidden");
+  }
+  function difficultyHTML() {
+    const buttons = DIFF_IDS.map((id) => {
+      const d = DIFFICULTIES[id];
+      return `<button type="button" data-diff="${id}" class="${id === difficulty ? "on" : ""}" style="--c:${d.color}">${d.label}</button>`;
+    }).join("");
+    const best = parseInt(load(bestKey(difficulty)), 10);
+    return `<div class="diff">${buttons}</div>
+      <p class="muted">${diff.desc}${best ? ` · Miglior tempo: ${fmtTime(best)}` : ""}</p>`;
+  }
+  function setDifficulty(id) {
+    if (!DIFFICULTIES[id]) return;
+    difficulty = id;
+    diff = DIFFICULTIES[id];
+    store(DIFF_KEY, id);
+    if (menu) menu();
+  }
+  function showTitle() {
+    menu = showTitle;
+    showOverlay(
+      `<h1>GUERRA DEI CRISTALLI</h1>
+       <p>Raccogli cristalli, costruisci caserme e torri, addestra un esercito e distruggi tutti gli edifici nemici prima che il nemico distrugga i tuoi.</p>
+       <p class="muted">Tocca o clicca un'unità per selezionarla, trascina per selezionarne tante (doppio tocco: tutte quelle dello stesso tipo).
+       Poi tocca il terreno per muoverle, un nemico per attaccarlo, i cristalli per raccoglierli.
+       Con il mouse puoi anche usare il tasto destro per dare ordini.<br>
+       Tasti: Q W E azioni · A esercito · S lavoratori inattivi · H quartier generale · Esc annulla · P pausa</p>
+       ${difficultyHTML()}
+       <button class="start" data-start>INIZIA</button>`
+    );
+  }
+  overlay.addEventListener("click", (e) => {
+    const d = e.target.closest("[data-diff]");
+    if (d) { setDifficulty(d.dataset.diff); sfx.click(); return; }
+    if (e.target.closest("[data-start]")) startGame();
+    if (e.target.closest("[data-resume]")) togglePause();
+  });
+
+  // ---------- Player commands ----------
+  const ownSelected = () => selection.filter((e) => alive(e) && e.team === 0);
+  const ownSelectedUnits = () => ownSelected().filter((e) => e.kind === "unit");
+
+  function formationMove(units, x, y) {
+    const n = units.length, cols = Math.ceil(Math.sqrt(n)), rows = Math.ceil(n / cols), sp = 24;
+    const sorted = units.slice().sort((a, b) => a.y - b.y || a.x - b.x);
+    sorted.forEach((u, i) => {
+      const c = i % cols, r = Math.floor(i / cols);
+      const p = freePoint(x + (c - (cols - 1) / 2) * sp, y + (r - (rows - 1) / 2) * sp, u.r);
+      u.order = { type: u.type === "worker" ? "move" : "amove", x: p.x, y: p.y };
+    });
+  }
+
+  function command(x, y, hit) {
+    const units = ownSelectedUnits();
+    if (!units.length) return false;
+    if (hit && hit.team === 1) {
+      for (const u of units) u.order = { type: "attack", target: hit };
+      markers.push({ x: hit.x, y: hit.y, t: 0, max: 0.5, color: "#ff4f5e" });
+    } else if (hit && hit.kind === "resource") {
+      const workers = units.filter((u) => u.type === "worker");
+      for (const w of workers) w.order = { type: "gather", target: hit };
+      const others = units.filter((u) => u.type !== "worker");
+      if (others.length) formationMove(others, x, y);
+      markers.push({ x: hit.x, y: hit.y, t: 0, max: 0.5, color: "#5ff3e0" });
+    } else if (hit && hit.team === 0 && hit.kind === "building" && hit.progress < 1) {
+      for (const u of units) if (u.type === "worker") u.order = { type: "build", target: hit };
+      markers.push({ x: hit.x, y: hit.y, t: 0, max: 0.5, color: "#ffd34d" });
+    } else {
+      formationMove(units, x, y);
+      markers.push({ x, y, t: 0, max: 0.5, color: "#7dff9a" });
+    }
+    sfx.click();
+    return true;
+  }
+
+  function trySetRally(x, y, hit) {
+    const own = ownSelected();
+    if (own.length !== 1 || own[0].kind !== "building" || !BUILD[own[0].type].trains) return false;
+    const b = own[0];
+    b.rally = hit && hit.kind === "resource" ? { x: hit.x, y: hit.y, res: hit } : { x, y };
+    markers.push({ x, y, t: 0, max: 0.5, color: "#7dff9a" });
+    sfx.click();
+    return true;
+  }
+
+  let lastTap = { e: null, t: 0 };
+  function handleClick(x, y, button, shift, touch) {
+    if (placing) {
+      if (button === 2) { placing = null; return; }
+      tryPlace(x, y);
+      return;
+    }
+    const hit = entityAt(x, y, touch ? 14 : 5);
+    if (button === 2) { if (!command(x, y, hit)) trySetRally(x, y, hit); return; }
+
+    const units = ownSelectedUnits();
+    if (hit && hit.team === 0) {
+      if (hit.kind === "building" && hit.progress < 1 && units.some((u) => u.type === "worker")) { command(x, y, hit); return; }
+      const now = performance.now();
+      if (hit.kind === "unit" && lastTap.e === hit && now - lastTap.t < 400) {
+        selection = ents.filter((e) => !e.dead && e.team === 0 && e.kind === "unit" && e.type === hit.type);
+      } else if (shift && hit.kind === "unit") {
+        selection = selection.includes(hit) ? selection.filter((e) => e !== hit) : selection.concat(hit);
+      } else {
+        selection = [hit];
+      }
+      lastTap = { e: hit, t: now };
+      sfx.click();
+      return;
+    }
+    if (units.length) { command(x, y, hit); return; }
+    if ((!hit || hit.kind === "resource") && trySetRally(x, y, hit)) return;
+    selection = hit ? [hit] : [];
+  }
+
+  function boxSelect(x1, y1, x2, y2, shift) {
+    const [ax, bx] = [Math.min(x1, x2), Math.max(x1, x2)], [ay, by] = [Math.min(y1, y2), Math.max(y1, y2)];
+    const picked = ents.filter((e) => !e.dead && e.team === 0 && e.kind === "unit" && e.x >= ax - e.r && e.x <= bx + e.r && e.y >= ay - e.r && e.y <= by + e.r);
+    if (!picked.length) return;
+    selection = shift ? [...new Set(selection.concat(picked))] : picked;
+    sfx.click();
+  }
+
+  function startPlacing(type) {
+    if (teams[0].crystals < BUILD[type].cost) { showBanner("Cristalli insufficienti", "#ff4f5e"); sfx.error(); return; }
+    placing = { type };
+  }
+  function tryPlace(x, y) {
+    const type = placing.type;
+    const workers = ownSelectedUnits().filter((u) => u.type === "worker");
+    if (!workers.length) { placing = null; return; }
+    workers.sort((a, b) => Math.hypot(a.x - x, a.y - y) - Math.hypot(b.x - x, b.y - y));
+    const err = placeBuilding(type, 0, x, y, workers[0]);
+    if (err) { showBanner(err, "#ff4f5e"); sfx.error(); return; }
+    sfx.place();
+    placing = null;
+  }
+  function trainFrom(b, type) {
+    const err = enqueue(b, type);
+    if (err) { showBanner(err, "#ff4f5e"); sfx.error(); } else sfx.click();
+  }
+
+  function selectArmy() {
+    const army = ents.filter((e) => !e.dead && e.team === 0 && e.kind === "unit" && e.type !== "worker");
+    if (army.length) { selection = army; sfx.click(); } else showBanner("Non hai ancora un esercito", "#9fb3a8");
+  }
+  function selectIdleWorkers() {
+    const idle = ents.filter((e) => !e.dead && e.team === 0 && e.type === "worker" && (e.order.type === "idle" || e.order.type === "move"));
+    if (idle.length) { selection = idle; sfx.click(); } else showBanner("Nessun lavoratore inattivo", "#9fb3a8");
+  }
+  function selectHQ() {
+    const hq = ents.find((e) => !e.dead && e.team === 0 && e.type === "hq");
+    if (hq) { selection = [hq]; sfx.click(); }
+  }
+
+  function getActions() {
+    if (placing) return [{ label: "Annulla", hot: "Esc", fn: () => { placing = null; }, enabled: true }];
+    const own = ownSelected();
+    const acts = [];
+    if (own.length && own.every((e) => e.kind === "unit") && own.some((e) => e.type === "worker")) {
+      ["barracks", "tower", "hq"].forEach((t, i) => acts.push({
+        label: BUILD[t].name, cost: BUILD[t].cost, hot: "QWE"[i], tip: BUILD_TIPS[t],
+        enabled: teams[0].crystals >= BUILD[t].cost, fn: () => startPlacing(t),
+      }));
+    } else if (own.length === 1 && own[0].kind === "building" && own[0].progress >= 1 && BUILD[own[0].type].trains) {
+      const b = own[0];
+      BUILD[b.type].trains.forEach((t, i) => acts.push({
+        label: UNIT[t].name, cost: UNIT[t].cost, hot: "QWE"[i], tip: UNIT_TIPS[t],
+        enabled: teams[0].crystals >= UNIT[t].cost && b.queue.length < 5, fn: () => trainFrom(b, t),
+      }));
+    }
+    return acts;
+  }
+
+  // ---------- Input ----------
+  function toWorld(e) {
+    const r = canvas.getBoundingClientRect();
+    return [((e.clientX - r.left) / r.width) * W, ((e.clientY - r.top) / r.height) * H];
+  }
+  let ptr = null;
+  canvas.addEventListener("contextmenu", (e) => e.preventDefault());
+  canvas.addEventListener("pointerdown", (e) => {
+    if (state !== "playing" || ptr) return;
+    canvas.setPointerCapture(e.pointerId);
+    const [x, y] = toWorld(e);
+    mouse = { x, y, inside: true };
+    ptr = { id: e.pointerId, sx: e.clientX, sy: e.clientY, x, y, cx: x, cy: y, drag: false, button: e.button, touch: e.pointerType !== "mouse" };
+  });
+  canvas.addEventListener("pointermove", (e) => {
+    const [x, y] = toWorld(e);
+    mouse = { x, y, inside: true };
+    if (!ptr || ptr.id !== e.pointerId) return;
+    ptr.cx = x; ptr.cy = y;
+    if (!ptr.drag && ptr.button === 0 && !placing && Math.hypot(e.clientX - ptr.sx, e.clientY - ptr.sy) > 12) ptr.drag = true;
+  });
+  canvas.addEventListener("pointerleave", (e) => { if (e.pointerType === "mouse") mouse.inside = false; });
+  canvas.addEventListener("pointerup", (e) => {
+    if (!ptr || ptr.id !== e.pointerId) return;
+    const p = ptr;
+    ptr = null;
+    if (state !== "playing") return;
+    if (p.drag) boxSelect(p.x, p.y, p.cx, p.cy, e.shiftKey);
+    else handleClick(p.x, p.y, p.button, e.shiftKey, p.touch);
+  });
+  canvas.addEventListener("pointercancel", () => { ptr = null; });
+
+  window.addEventListener("keydown", (e) => {
+    const k = e.key.toLowerCase();
+    if (state === "menu" || state === "over") {
+      if (e.key === "Enter") startGame();
+      else if (k === "arrowleft") setDifficulty(DIFF_IDS[(DIFF_IDS.indexOf(difficulty) + 2) % 3]);
+      else if (k === "arrowright") setDifficulty(DIFF_IDS[(DIFF_IDS.indexOf(difficulty) + 1) % 3]);
+      else if (["1", "2", "3"].includes(k)) setDifficulty(DIFF_IDS[+k - 1]);
+      return;
+    }
+    if (k === "p") { togglePause(); return; }
+    if (state !== "playing") return;
+    if (k === "escape") { if (placing) placing = null; else selection = []; }
+    else if (k === "a") selectArmy();
+    else if (k === "s") selectIdleWorkers();
+    else if (k === "h") selectHQ();
+    else {
+      const i = "qwe".indexOf(k);
+      if (i >= 0) { const act = getActions()[i]; if (act && act.hot !== "Esc") act.fn(); }
+    }
+  });
+  window.addEventListener("blur", () => { if (state === "playing") togglePause(); });
+  el("pauseBtn").addEventListener("click", () => togglePause());
+
+  // ---------- HUD ----------
+  let hudTimer = 0, hudSig = "";
+  const ORDER_LABEL = { idle: "In attesa", move: "In movimento", amove: "In marcia", attack: "In combattimento", gather: "Raccoglie cristalli", return: "Porta cristalli alla base", build: "Costruisce" };
+
+  function infoHTML() {
+    const sel = selection.filter(alive);
+    if (placing) return `<div class="title">Posiziona: ${BUILD[placing.type].name}</div><div class="muted">Tocca un punto libero della mappa. Esc o tasto destro per annullare.</div>`;
+    if (!sel.length) return `<div class="title">Nessuna selezione</div><div class="muted">Seleziona le tue unità blu. Tocca il terreno per muoverle, un nemico per attaccarlo, i cristalli per raccoglierli.</div>`;
+    if (sel.length === 1) {
+      const e = sel[0];
+      const enemy = e.team === 1 ? "Nemico · " : "";
+      if (e.kind === "resource") return `<div class="title">Cristalli</div><div class="muted">Rimasti: ${e.amount}</div>`;
+      if (e.kind === "unit") {
+        return `<div class="title">${enemy}${UNIT[e.type].name}</div><div class="muted">PV ${Math.ceil(e.hp)}/${e.maxHp} · ${ORDER_LABEL[e.order.type] || ""}${e.carry ? ` · trasporta ${e.carry} ◆` : ""}</div>`;
+      }
+      let extra = "";
+      if (e.progress < 1) extra = `In costruzione ${Math.floor(e.progress * 100)}%`;
+      else if (e.queue.length) {
+        const pct = Math.floor((e.qt / UNIT[e.queue[0]].time) * 100);
+        extra = `Addestra ${UNIT[e.queue[0]].name} (${pct}%)${e.queue.length > 1 ? ` · in coda ${e.queue.length - 1}` : ""}`;
+      } else if (e.type === "tower") extra = "Colpisce automaticamente i nemici vicini";
+      else if (e.team === 0) extra = "Tocca il terreno per impostare il punto di raccolta";
+      return `<div class="title">${enemy}${BUILD[e.type].name}</div><div class="muted">PV ${Math.ceil(e.hp)}/${e.maxHp}${extra ? " · " + extra : ""}</div>`;
+    }
+    const counts = {};
+    for (const e of sel) if (e.kind === "unit") counts[e.type] = (counts[e.type] || 0) + 1;
+    const parts = Object.entries(counts).map(([t, n]) => `${UNIT[t].name} ×${n}`).join(" · ");
+    return `<div class="title">${sel.length} unità selezionate</div><div class="muted">${parts}</div>`;
+  }
+
+  function updateHUD() {
+    el("crys").textContent = Math.floor(teams[0].crystals);
+    el("pop").textContent = `${popOf(0)}/${MAX_POP}`;
+    el("clock").textContent = fmtTime(time);
+    el("info").innerHTML = infoHTML();
+    const acts = getActions();
+    const sig = JSON.stringify(acts.map((a) => [a.label, a.enabled])) + (placing ? "p" : "");
+    if (sig === hudSig) return;
+    hudSig = sig;
+    const box = el("actions");
+    box.innerHTML = "";
+    acts.forEach((a) => {
+      const b = document.createElement("button");
+      b.type = "button";
+      b.className = "act";
+      b.disabled = !a.enabled;
+      if (a.tip) b.title = a.tip;
+      b.innerHTML = `${a.label}<kbd>${a.hot}</kbd>${a.cost ? `<br><span class="cost">◆ ${a.cost}</span>` : ""}`;
+      b.addEventListener("click", () => { if (state === "playing") { a.fn(); hudSig = ""; } });
+      box.appendChild(b);
+    });
+    if (acts.length) { const s = document.createElement("div"); s.className = "sep"; box.appendChild(s); }
+    for (const [label, hot, fn] of [["Esercito", "A", selectArmy], ["Inattivi", "S", selectIdleWorkers], ["Base", "H", selectHQ]]) {
+      const b = document.createElement("button");
+      b.type = "button";
+      b.className = "act";
+      b.innerHTML = `${label}<kbd>${hot}</kbd>`;
+      b.addEventListener("click", () => { if (state === "playing") { fn(); hudSig = ""; } });
+      box.appendChild(b);
+    }
+  }
+
+  // ---------- Main update ----------
+  function update(dt) {
+    time += dt;
+    for (const e of ents.slice()) {
+      if (e.dead) continue;
+      if (e.kind === "unit") updateUnit(e, dt);
+      else if (e.kind === "building") updateBuilding(e, dt);
+    }
+    updateProjectiles(dt);
+    resolveCollisions();
+
+    aiTimer -= dt;
+    if (aiTimer <= 0) { aiThink(); aiTimer = 0.5; }
+
+    for (const p of particles) { p.x += p.vx * dt; p.y += p.vy * dt; p.vx *= 0.93; p.vy *= 0.93; p.life -= dt; }
+    particles = particles.filter((p) => p.life > 0);
+    for (const m of markers) m.t += dt;
+    markers = markers.filter((m) => m.t < m.max);
+    if (banner) { banner.t -= dt; if (banner.t <= 0) banner = null; }
+
+    ents = ents.filter((e) => !e.dead);
+    selection = selection.filter(alive);
+
+    const hasBuildings = (t) => ents.some((e) => e.team === t && e.kind === "building");
+    if (!hasBuildings(1)) endGame(true);
+    else if (!hasBuildings(0)) endGame(false);
+  }
+
+  // ---------- Rendering ----------
+  function drawGround() {
+    ctx.fillStyle = "#1f3a2a";
+    ctx.fillRect(0, 0, W, H);
+    for (const b of groundBlobs) {
+      ctx.fillStyle = b.dark ? "rgba(10, 30, 18, 0.35)" : "rgba(90, 130, 80, 0.12)";
+      ctx.beginPath();
+      ctx.ellipse(b.x, b.y, b.rx, b.ry, b.a, 0, Math.PI * 2);
+      ctx.fill();
+    }
+  }
+
+  function hpBar(x, y, w, frac, color) {
+    ctx.fillStyle = "rgba(0,0,0,0.55)";
+    ctx.fillRect(x - w / 2 - 1, y - 1, w + 2, 5);
+    ctx.fillStyle = frac > 0.5 ? "#7dff9a" : frac > 0.25 ? "#ffd34d" : "#ff4f5e";
+    if (color) ctx.fillStyle = color;
+    ctx.fillRect(x - w / 2, y, w * clamp(frac, 0, 1), 3);
+  }
+
+  function drawResource(r) {
+    const s = r.r * (0.55 + 0.45 * (r.amount / r.max));
+    ctx.save();
+    ctx.translate(r.x, r.y);
+    ctx.fillStyle = "rgba(0,0,0,0.3)";
+    ctx.beginPath(); ctx.ellipse(2, s * 0.7, s, s * 0.4, 0, 0, Math.PI * 2); ctx.fill();
+    ctx.rotate(r.rot * 0.3 - 0.2);
+    const shards = [[0, 0, 1.1], [-0.55, 0.25, 0.7], [0.55, 0.3, 0.75]];
+    for (const [ox, oy, k] of shards) {
+      ctx.save();
+      ctx.translate(ox * s, oy * s);
+      ctx.fillStyle = "#2cb7a6";
+      ctx.beginPath();
+      ctx.moveTo(0, -s * k); ctx.lineTo(s * 0.4 * k, 0); ctx.lineTo(0, s * 0.45 * k); ctx.lineTo(-s * 0.4 * k, 0);
+      ctx.closePath(); ctx.fill();
+      ctx.fillStyle = "#8ffff0";
+      ctx.beginPath();
+      ctx.moveTo(0, -s * k); ctx.lineTo(s * 0.4 * k, 0); ctx.lineTo(0, 0);
+      ctx.closePath(); ctx.fill();
+      ctx.restore();
+    }
+    ctx.restore();
+  }
+
+  function drawBuilding(b, selected) {
+    const { x, y, w, h } = b;
+    const col = b.hitFlash > 0 ? "#ffffff" : TEAM_COLOR[b.team], dark = TEAM_DARK[b.team];
+    ctx.save();
+    ctx.fillStyle = "rgba(0,0,0,0.35)";
+    ctx.fillRect(x - w / 2 + 5, y - h / 2 + 7, w, h);
+    ctx.globalAlpha = b.progress < 1 ? 0.35 + 0.5 * b.progress : 1;
+    if (b.type === "hq") {
+      ctx.fillStyle = dark; ctx.fillRect(x - w / 2, y - h / 2, w, h);
+      ctx.fillStyle = col; ctx.fillRect(x - w / 2 + 8, y - h / 2 + 8, w - 16, h - 16);
+      ctx.fillStyle = dark; ctx.fillRect(x - 14, y - 14, 28, 28);
+      ctx.fillStyle = "#5ff3e0";
+      ctx.beginPath(); ctx.moveTo(x, y - 10); ctx.lineTo(x + 7, y); ctx.lineTo(x, y + 10); ctx.lineTo(x - 7, y); ctx.closePath(); ctx.fill();
+      ctx.fillStyle = dark;
+      for (const [cx, cy] of [[-1, -1], [1, -1], [-1, 1], [1, 1]]) ctx.fillRect(x + cx * (w / 2 - 4) - 6, y + cy * (h / 2 - 4) - 6, 12, 12);
+    } else if (b.type === "barracks") {
+      ctx.fillStyle = dark; ctx.fillRect(x - w / 2, y - h / 2, w, h);
+      ctx.fillStyle = col;
+      for (let i = 0; i < 4; i++) ctx.fillRect(x - w / 2 + 6, y - h / 2 + 6 + i * 13, w - 12, 8);
+      ctx.fillStyle = dark; ctx.fillRect(x - 10, y + h / 2 - 16, 20, 16);
+    } else {
+      ctx.fillStyle = dark; ctx.fillRect(x - w / 2, y - h / 2, w, h);
+      ctx.fillStyle = col;
+      ctx.beginPath(); ctx.arc(x, y, w * 0.34, 0, Math.PI * 2); ctx.fill();
+      ctx.fillStyle = dark;
+      ctx.beginPath(); ctx.arc(x, y, w * 0.14, 0, Math.PI * 2); ctx.fill();
+    }
+    ctx.globalAlpha = 1;
+    if (b.progress < 1) {
+      ctx.strokeStyle = "rgba(255, 211, 77, 0.7)";
+      ctx.lineWidth = 1.5;
+      ctx.setLineDash([5, 4]);
+      ctx.strokeRect(x - w / 2, y - h / 2, w, h);
+      ctx.setLineDash([]);
+      hpBar(x, y + h / 2 + 4, w, b.progress, "#ffd34d");
+    } else if (b.queue.length) {
+      hpBar(x, y + h / 2 + 4, w, b.qt / UNIT[b.queue[0]].time, "#5ff3e0");
+    }
+    if (selected) {
+      ctx.strokeStyle = b.team === 0 ? "#7dff9a" : "#ff4f5e";
+      ctx.lineWidth = 2;
+      ctx.strokeRect(x - w / 2 - 4, y - h / 2 - 4, w + 8, h + 8);
+      if (b.type === "tower") {
+        ctx.strokeStyle = "rgba(255,255,255,0.25)";
+        ctx.beginPath(); ctx.arc(x, y, BUILD.tower.range + w / 2, 0, Math.PI * 2); ctx.stroke();
+      }
+    }
+    if (selected || b.hp < b.maxHp) hpBar(x, y - h / 2 - 9, w, b.hp / b.maxHp);
+    ctx.restore();
+  }
+
+  function drawUnit(u, selected) {
+    const col = u.hitFlash > 0 ? "#ffffff" : TEAM_COLOR[u.team];
+    ctx.save();
+    ctx.translate(u.x, u.y);
+    ctx.fillStyle = "rgba(0,0,0,0.3)";
+    ctx.beginPath(); ctx.ellipse(2, u.r * 0.7, u.r, u.r * 0.45, 0, 0, Math.PI * 2); ctx.fill();
+    if (selected) {
+      ctx.strokeStyle = u.team === 0 ? "#7dff9a" : "#ff4f5e";
+      ctx.lineWidth = 1.5;
+      ctx.beginPath(); ctx.ellipse(0, u.r * 0.5, u.r + 5, (u.r + 5) * 0.6, 0, 0, Math.PI * 2); ctx.stroke();
+    }
+    ctx.rotate(u.face);
+    const r = u.r;
+    if (u.type === "soldier") {
+      ctx.strokeStyle = "#dfe6ee"; ctx.lineWidth = 2.5;
+      ctx.beginPath(); ctx.moveTo(r * 0.2, r * 0.6); ctx.lineTo(r + 8, r * 0.6); ctx.stroke();
+    } else if (u.type === "archer") {
+      ctx.strokeStyle = "#c8995a"; ctx.lineWidth = 2;
+      ctx.beginPath(); ctx.arc(r * 0.2, 0, r + 3, -1.0, 1.0); ctx.stroke();
+    } else {
+      ctx.fillStyle = "#b9c2c9";
+      ctx.fillRect(r * 0.5, -2, r * 0.9, 4);
+    }
+    ctx.fillStyle = col;
+    ctx.strokeStyle = TEAM_DARK[u.team];
+    ctx.lineWidth = 2;
+    ctx.beginPath(); ctx.arc(0, 0, r, 0, Math.PI * 2); ctx.fill(); ctx.stroke();
+    if (u.type === "soldier") {
+      ctx.fillStyle = TEAM_DARK[u.team];
+      ctx.beginPath(); ctx.arc(0, -r * 0.55, r * 0.45, 0, Math.PI * 2); ctx.fill();
+    }
+    ctx.restore();
+    if (u.carry > 0) {
+      ctx.fillStyle = "#5ff3e0";
+      ctx.beginPath(); ctx.moveTo(u.x, u.y - r - 9); ctx.lineTo(u.x + 4, u.y - r - 5); ctx.lineTo(u.x, u.y - r - 1); ctx.lineTo(u.x - 4, u.y - r - 5); ctx.closePath(); ctx.fill();
+    }
+    if (selected || u.hp < u.maxHp) hpBar(u.x, u.y - r - 8 - (u.carry ? 8 : 0), r * 2 + 6, u.hp / u.maxHp);
+  }
+
+  function draw() {
+    ctx.setTransform(pxRatio, 0, 0, pxRatio, 0, 0);
+    drawGround();
+    if (!teams) return;
+
+    const selSet = new Set(selection);
+    for (const e of ents) if (e.kind === "resource") drawResource(e);
+    for (const e of ents) if (e.kind === "building") drawBuilding(e, selSet.has(e));
+
+    // Rally point of the selected building
+    const own = ownSelected();
+    if (own.length === 1 && own[0].kind === "building" && own[0].rally) {
+      const b = own[0], r = b.rally;
+      ctx.strokeStyle = "rgba(125,255,154,0.5)";
+      ctx.setLineDash([6, 6]); ctx.lineWidth = 1.5;
+      ctx.beginPath(); ctx.moveTo(b.x, b.y); ctx.lineTo(r.x, r.y); ctx.stroke();
+      ctx.setLineDash([]);
+      ctx.fillStyle = "#7dff9a";
+      ctx.fillRect(r.x, r.y - 16, 2, 16);
+      ctx.beginPath(); ctx.moveTo(r.x + 2, r.y - 16); ctx.lineTo(r.x + 12, r.y - 12); ctx.lineTo(r.x + 2, r.y - 8); ctx.fill();
+    }
+
+    const units = ents.filter((e) => e.kind === "unit").sort((a, b) => a.y - b.y);
+    for (const u of units) drawUnit(u, selSet.has(u));
+
+    for (const p of projectiles) {
+      ctx.save();
+      ctx.translate(p.x, p.y);
+      ctx.rotate(p.ang || 0);
+      if (p.arrow) { ctx.strokeStyle = "#f3e2c0"; ctx.lineWidth = 1.5; ctx.beginPath(); ctx.moveTo(-7, 0); ctx.lineTo(3, 0); ctx.stroke(); }
+      else { ctx.fillStyle = p.team === 0 ? "#9fd0ff" : "#ffb0b8"; ctx.beginPath(); ctx.arc(0, 0, 3.5, 0, Math.PI * 2); ctx.fill(); }
+      ctx.restore();
+    }
+
+    for (const p of particles) {
+      ctx.globalAlpha = Math.max(0, p.life / p.max);
+      ctx.fillStyle = p.color;
+      ctx.fillRect(p.x, p.y, p.size, p.size);
+    }
+    ctx.globalAlpha = 1;
+
+    for (const m of markers) {
+      const k = m.t / m.max;
+      ctx.strokeStyle = m.color;
+      ctx.globalAlpha = 1 - k;
+      ctx.lineWidth = m.ping ? 3 : 2;
+      const rr = m.ping ? 10 + k * 60 : 14 - k * 8;
+      ctx.beginPath(); ctx.arc(m.x, m.y, rr, 0, Math.PI * 2); ctx.stroke();
+    }
+    ctx.globalAlpha = 1;
+
+    if (ptr && ptr.drag) {
+      ctx.strokeStyle = "#7dff9a";
+      ctx.fillStyle = "rgba(125,255,154,0.08)";
+      ctx.lineWidth = 1;
+      const x = Math.min(ptr.x, ptr.cx), y = Math.min(ptr.y, ptr.cy), w = Math.abs(ptr.cx - ptr.x), h = Math.abs(ptr.cy - ptr.y);
+      ctx.fillRect(x, y, w, h);
+      ctx.strokeRect(x, y, w, h);
+    }
+
+    if (placing && mouse.inside) {
+      const d = BUILD[placing.type];
+      const ok = canPlace(placing.type, mouse.x, mouse.y);
+      ctx.fillStyle = ok ? "rgba(125,255,154,0.3)" : "rgba(255,79,94,0.3)";
+      ctx.strokeStyle = ok ? "#7dff9a" : "#ff4f5e";
+      ctx.lineWidth = 2;
+      ctx.fillRect(mouse.x - d.w / 2, mouse.y - d.h / 2, d.w, d.h);
+      ctx.strokeRect(mouse.x - d.w / 2, mouse.y - d.h / 2, d.w, d.h);
+      if (placing.type === "tower") {
+        ctx.strokeStyle = "rgba(255,255,255,0.3)";
+        ctx.beginPath(); ctx.arc(mouse.x, mouse.y, d.range + d.w / 2, 0, Math.PI * 2); ctx.stroke();
+      }
+    }
+
+    if (banner) {
+      ctx.globalAlpha = Math.min(1, banner.t * 2);
+      ctx.font = "600 20px system-ui, sans-serif";
+      ctx.textAlign = "center";
+      ctx.textBaseline = "middle";
+      const tw = ctx.measureText(banner.text).width + 32;
+      ctx.fillStyle = "rgba(6,12,9,0.75)";
+      ctx.fillRect(W / 2 - tw / 2, 14, tw, 36);
+      ctx.fillStyle = banner.color;
+      ctx.fillText(banner.text, W / 2, 32);
+      ctx.globalAlpha = 1;
+    }
+  }
+
+  // ---------- Loop ----------
+  let last = performance.now();
+  function loop(now) {
+    const dt = Math.min(0.05, (now - last) / 1000);
+    last = now;
+    if (state === "playing") {
+      update(dt);
+      hudTimer -= dt;
+      if (hudTimer <= 0 && state === "playing") { updateHUD(); hudTimer = 0.2; }
+    }
+    draw();
+    requestAnimationFrame(loop);
+  }
+
+  showTitle();
+  requestAnimationFrame(loop);
+})();
+</script>
+</body>
+</html>
