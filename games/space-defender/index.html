@@ -60,18 +60,24 @@
   #overlay p { font-size: clamp(13px, 3.2vw, 18px); line-height: 1.6; opacity: 0.9; }
   #overlay .blink { color: var(--gold); animation: blink 1s steps(2) infinite; }
   @keyframes blink { 50% { opacity: 0; } }
+  .diff { display: flex; gap: 10px; flex-wrap: wrap; justify-content: center; pointer-events: auto; }
+  .diff button {
+    font: bold clamp(13px, 3.4vw, 17px) "Courier New", monospace;
+    color: var(--fg);
+    background: transparent;
+    border: 2px solid rgba(232, 240, 255, 0.35);
+    padding: 8px 14px;
+    cursor: pointer;
+    letter-spacing: 1px;
+  }
+  .diff button.on { border-color: var(--c); color: var(--c); box-shadow: 0 0 12px var(--c); }
+  .diff-desc { font-size: clamp(12px, 3vw, 15px) !important; opacity: 0.75 !important; min-height: 1.6em; }
 </style>
 </head>
 <body>
 <div id="wrap">
   <canvas id="game"></canvas>
-  <div id="overlay">
-    <h1>SPACE DEFENDER</h1>
-    <p>← → / A D per muoverti<br>SPAZIO per sparare · P per pausa<br>
-       Su mobile: trascina per muoverti<br>(lo sparo è automatico)</p>
-    <p id="hiscore-label"></p>
-    <p class="blink">PREMI INVIO O TOCCA PER INIZIARE</p>
-  </div>
+  <div id="overlay"></div>
 </div>
 
 <script>
@@ -84,6 +90,27 @@
   const ctx = canvas.getContext("2d");
   const overlay = document.getElementById("overlay");
   const HISCORE_KEY = "space-defender-hiscore";
+  const DIFF_KEY = "space-defender-difficulty";
+
+  // Multipliers applied on top of the base ("normale") tuning.
+  const DIFFICULTIES = {
+    facile: {
+      label: "FACILE", color: "#7dff9a", lives: 5,
+      growth: 0.55, fire: 0.6, bulletSpeed: 0.8, dive: 0.5, drop: 1.8, bossHp: 0.7,
+      desc: "5 vite · nemici lenti · più power-up",
+    },
+    normale: {
+      label: "NORMALE", color: "#3cf2ff", lives: 3,
+      growth: 1, fire: 1, bulletSpeed: 1, dive: 1, drop: 1, bossHp: 1,
+      desc: "3 vite · l'esperienza classica",
+    },
+    difficile: {
+      label: "DIFFICILE", color: "#ff4f7b", lives: 2,
+      growth: 1.4, fire: 1.35, bulletSpeed: 1.15, dive: 1.5, drop: 0.7, bossHp: 1.3,
+      desc: "2 vite · nemici aggressivi · pochi power-up",
+    },
+  };
+  const DIFF_IDS = Object.keys(DIFFICULTIES);
 
   canvas.width = W;
   canvas.height = H;
@@ -96,11 +123,19 @@
   window.addEventListener("resize", resize);
   resize();
 
-  function loadHiscore() {
-    try { return parseInt(localStorage.getItem(HISCORE_KEY), 10) || 0; } catch { return 0; }
+  // "normale" keeps the original key so existing records carry over.
+  function hiscoreKey(id) { return id === "normale" ? HISCORE_KEY : `${HISCORE_KEY}-${id}`; }
+  function loadHiscore(id) {
+    try { return parseInt(localStorage.getItem(hiscoreKey(id)), 10) || 0; } catch { return 0; }
   }
-  function saveHiscore(v) {
-    try { localStorage.setItem(HISCORE_KEY, String(v)); } catch { /* ignore */ }
+  function saveHiscore(id, v) {
+    try { localStorage.setItem(hiscoreKey(id), String(v)); } catch { /* ignore */ }
+  }
+  function loadDifficulty() {
+    try { const d = localStorage.getItem(DIFF_KEY); return DIFFICULTIES[d] ? d : "normale"; } catch { return "normale"; }
+  }
+  function saveDifficulty(id) {
+    try { localStorage.setItem(DIFF_KEY, id); } catch { /* ignore */ }
   }
 
   // ---------- Audio (tiny synth, no assets) ----------
@@ -135,7 +170,13 @@
   window.addEventListener("keydown", (e) => {
     if (["ArrowLeft", "ArrowRight", "ArrowUp", "ArrowDown", " "].includes(e.key)) e.preventDefault();
     keys[e.key.toLowerCase()] = true;
-    if (e.key === "Enter" && (state === "title" || state === "gameover")) startGame();
+    if (state === "title" || state === "gameover") {
+      const k = e.key.toLowerCase();
+      if (e.key === "Enter") startGame();
+      else if (k === "arrowleft" || k === "a") cycleDifficulty(-1);
+      else if (k === "arrowright" || k === "d") cycleDifficulty(1);
+      else if (["1", "2", "3"].includes(k)) setDifficulty(DIFF_IDS[+k - 1]);
+    }
     if (e.key.toLowerCase() === "p" && (state === "playing" || state === "paused")) togglePause();
   });
   window.addEventListener("keyup", (e) => { keys[e.key.toLowerCase()] = false; });
@@ -145,7 +186,12 @@
     return ((clientX - r.left) / r.width) * W;
   }
   window.addEventListener("pointerdown", (e) => {
-    if (state === "title" || state === "gameover") { startGame(); return; }
+    if (state === "title" || state === "gameover") {
+      const btn = e.target.closest && e.target.closest("[data-diff]");
+      if (btn) setDifficulty(btn.dataset.diff);
+      startGame();
+      return;
+    }
     if (e.pointerType !== "mouse") touchX = canvasX(e.clientX);
   });
   window.addEventListener("pointermove", (e) => {
@@ -158,7 +204,9 @@
   // ---------- Game state ----------
   let state = "title";
   let player, bullets, enemyBullets, enemies, particles, powerups, stars;
-  let score, hiscore = loadHiscore(), lives, wave, waveTimer, shake, flash;
+  let difficulty = loadDifficulty(), diff = DIFFICULTIES[difficulty];
+  let score, hiscore = loadHiscore(difficulty), lives, wave, waveTimer, shake, flash;
+  let menu = null; // re-renders the current menu overlay (title / game over)
   let bannerText = "", bannerTime = 0;
 
   function initStars() {
@@ -168,10 +216,40 @@
     }
   }
   initStars();
-  updateOverlayHiscore();
 
-  function updateOverlayHiscore() {
-    document.getElementById("hiscore-label").textContent = hiscore ? `RECORD: ${hiscore}` : "";
+  function setDifficulty(id) {
+    if (!DIFFICULTIES[id]) return;
+    difficulty = id;
+    diff = DIFFICULTIES[id];
+    hiscore = loadHiscore(id);
+    saveDifficulty(id);
+    if (menu) menu();
+  }
+  function cycleDifficulty(step) {
+    const i = DIFF_IDS.indexOf(difficulty);
+    setDifficulty(DIFF_IDS[(i + step + DIFF_IDS.length) % DIFF_IDS.length]);
+  }
+
+  function difficultyHTML() {
+    const buttons = DIFF_IDS.map((id) => {
+      const d = DIFFICULTIES[id];
+      return `<button data-diff="${id}" class="${id === difficulty ? "on" : ""}" style="--c:${d.color}">${d.label}</button>`;
+    }).join("");
+    return `<div class="diff">${buttons}</div>
+      <p class="diff-desc">${diff.desc}</p>
+      <p>${hiscore ? `RECORD ${diff.label}: ${hiscore}` : "&nbsp;"}</p>`;
+  }
+
+  function showTitle() {
+    menu = showTitle;
+    showOverlay(
+      `<h1>SPACE DEFENDER</h1>
+       <p>← → / A D per muoverti<br>SPAZIO per sparare · P per pausa<br>
+          Su mobile: trascina per muoverti<br>(lo sparo è automatico)</p>
+       <p>SCEGLI LA DIFFICOLTÀ (← → o 1 2 3)</p>
+       ${difficultyHTML()}
+       <p class="blink">PREMI INVIO O TOCCA PER INIZIARE</p>`
+    );
   }
 
   function startGame() {
@@ -180,8 +258,9 @@
     }
     player = { x: W / 2, y: H - 80, w: 34, h: 30, speed: 320, cooldown: 0, invuln: 2, spread: 0, rapid: 0, shield: 0 };
     bullets = []; enemyBullets = []; enemies = []; particles = []; powerups = [];
-    score = 0; lives = 3; wave = 0; waveTimer = 1; shake = 0; flash = 0;
+    score = 0; lives = diff.lives; wave = 0; waveTimer = 1; shake = 0; flash = 0;
     state = "playing";
+    menu = null;
     overlay.classList.add("hidden");
   }
 
@@ -204,13 +283,17 @@
   function gameOver() {
     state = "gameover";
     const record = score > hiscore;
-    if (record) { hiscore = score; saveHiscore(hiscore); }
-    showOverlay(
+    if (record) { hiscore = score; saveHiscore(difficulty, hiscore); }
+    const played = diff.label;
+    const finalScore = score, finalWave = wave;
+    menu = () => showOverlay(
       `<h2>GAME OVER</h2>
-       <p>PUNTEGGIO: ${score}<br>ONDATA: ${wave}</p>
-       ${record ? "<p style='color:var(--gold)'>★ NUOVO RECORD! ★</p>" : `<p>RECORD: ${hiscore}</p>`}
+       <p>PUNTEGGIO: ${finalScore}<br>ONDATA: ${finalWave} · ${played}</p>
+       ${record ? "<p style='color:var(--gold)'>★ NUOVO RECORD! ★</p>" : ""}
+       ${difficultyHTML()}
        <p class="blink">PREMI INVIO O TOCCA PER RIGIOCARE</p>`
     );
+    menu();
   }
 
   // ---------- Waves ----------
@@ -229,7 +312,7 @@
     sfx.wave();
 
     if (isBoss) {
-      const hp = ENEMY_TYPES.boss.hp + (wave / 5 - 1) * 30;
+      const hp = Math.round((ENEMY_TYPES.boss.hp + (wave / 5 - 1) * 30) * diff.bossHp);
       spawnEnemy("boss", W / 2, -80, { hp, targetY: 110 });
       return;
     }
@@ -249,11 +332,12 @@
 
   function spawnEnemy(type, x, y, opts = {}) {
     const t = ENEMY_TYPES[type];
-    const speedMul = 1 + wave * 0.06;
+    const speedMul = 1 + wave * 0.06 * diff.growth;
+    const bonusHp = Math.floor((wave * diff.growth) / 6);
     enemies.push({
       type, x, y, w: t.w, h: t.h,
-      hp: opts.hp ?? t.hp + Math.floor(wave / 6),
-      maxHp: opts.hp ?? t.hp + Math.floor(wave / 6),
+      hp: opts.hp ?? t.hp + bonusHp,
+      maxHp: opts.hp ?? t.hp + bonusHp,
       targetY: opts.targetY ?? 80,
       baseX: x,
       phase: Math.random() * Math.PI * 2,
@@ -299,7 +383,6 @@
     explode(player.x, player.y, "#3cf2ff", 40, 260);
     player.invuln = 2.5;
     player.spread = 0; player.rapid = 0;
-    if (lives <= 0) gameOver();
   }
 
   // ---------- Update ----------
@@ -308,6 +391,9 @@
       s.y += s.v * dt * (state === "playing" ? 1.5 : 0.6);
       if (s.y > H) { s.y = 0; s.x = Math.random() * W; }
     }
+    // Screen effects keep fading after game over
+    shake = Math.max(0, shake - dt);
+    flash = Math.max(0, flash - dt);
     if (state !== "playing") return;
 
     // Player movement
@@ -326,8 +412,6 @@
     player.spread = Math.max(0, player.spread - dt);
     player.rapid = Math.max(0, player.rapid - dt);
     player.shield = Math.max(0, player.shield - dt);
-    shake = Math.max(0, shake - dt);
-    flash = Math.max(0, flash - dt);
     bannerTime = Math.max(0, bannerTime - dt);
 
     // Shooting (auto-fire on touch)
@@ -365,24 +449,25 @@
         if (e.y < e.targetY) e.y += 140 * dt;
         const amp = e.type === "zigzag" ? 50 : 22;
         e.x = e.baseX + Math.sin(e.phase * (e.type === "zigzag" ? 2.2 : 1.1)) * amp;
-        if (e.y >= e.targetY && Math.random() < 0.0015 * wave * dt * 60 / Math.max(1, enemies.length / 6)) e.diving = true;
+        if (e.y >= e.targetY && Math.random() < 0.0015 * wave * diff.dive * dt * 60 / Math.max(1, enemies.length / 6)) e.diving = true;
       }
 
       // Enemy fire
       e.fireTimer -= dt;
       if (e.fireTimer <= 0 && e.y > 0) {
-        e.fireTimer = (e.type === "boss" ? 0.9 : 2.5 + Math.random() * 3) / (1 + wave * 0.08);
+        e.fireTimer = (e.type === "boss" ? 0.9 : 2.5 + Math.random() * 3) / ((1 + wave * 0.08 * diff.growth) * diff.fire);
+        const bs = diff.bulletSpeed;
         if (e.type === "boss") {
           const n = 7;
           for (let i = 0; i < n; i++) {
             const a = Math.PI / 2 + (i - (n - 1) / 2) * 0.22 + Math.sin(e.phase) * 0.3;
-            enemyBullets.push({ x: e.x, y: e.y + e.h / 2, vx: Math.cos(a) * 220, vy: Math.sin(a) * 220, w: 8, h: 8, round: true });
+            enemyBullets.push({ x: e.x, y: e.y + e.h / 2, vx: Math.cos(a) * 220 * bs, vy: Math.sin(a) * 220 * bs, w: 8, h: 8, round: true });
           }
         } else if (e.type === "tank") {
           const ang = Math.atan2(player.y - e.y, player.x - e.x);
-          enemyBullets.push({ x: e.x, y: e.y + e.h / 2, vx: Math.cos(ang) * 240, vy: Math.sin(ang) * 240, w: 8, h: 8, round: true });
+          enemyBullets.push({ x: e.x, y: e.y + e.h / 2, vx: Math.cos(ang) * 240 * bs, vy: Math.sin(ang) * 240 * bs, w: 8, h: 8, round: true });
         } else if (Math.random() < 0.5) {
-          enemyBullets.push({ x: e.x, y: e.y + e.h / 2, vx: 0, vy: 260, w: 4, h: 12 });
+          enemyBullets.push({ x: e.x, y: e.y + e.h / 2, vx: 0, vy: 260 * bs, w: 4, h: 12 });
         }
       }
 
@@ -418,7 +503,7 @@
         if (e.type === "boss") {
           shake = 0.8; flash = 0.4;
           for (let i = 0; i < 3; i++) dropPowerup(e.x + (i - 1) * 40, e.y);
-        } else if (Math.random() < (e.type === "tank" ? 0.4 : 0.07)) {
+        } else if (Math.random() < (e.type === "tank" ? 0.4 : 0.07) * diff.drop) {
           dropPowerup(e.x, e.y);
         }
       }
@@ -453,6 +538,9 @@
     // Particles
     for (const p of particles) { p.x += p.vx * dt; p.y += p.vy * dt; p.vx *= 0.96; p.vy *= 0.96; p.life -= dt; }
     particles = particles.filter((p) => p.life > 0);
+
+    // End the game only after this frame's scoring is settled
+    if (lives <= 0) { gameOver(); return; }
 
     // Next wave
     if (enemies.length === 0 && state === "playing") {
@@ -632,6 +720,9 @@
     ctx.textAlign = "center";
     ctx.fillStyle = "#3cf2ff";
     ctx.fillText(`ONDATA ${wave}`, W / 2, 30);
+    ctx.font = "bold 12px Courier New";
+    ctx.fillStyle = diff.color;
+    ctx.fillText(diff.label, W / 2, H - 26);
 
     // Lives
     for (let i = 0; i < lives; i++) {
@@ -671,6 +762,8 @@
   }
 
   // ---------- Loop ----------
+  showTitle();
+
   let last = performance.now();
   function loop(now) {
     const dt = Math.min(0.05, (now - last) / 1000);
