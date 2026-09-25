@@ -4,7 +4,7 @@ Raccolta di giochi arcade per il browser. Ogni gioco è un singolo file HTML sen
 
 ## 🕹️ Sala Giochi — `index.html`
 
-Apri `index.html` nella cartella principale per la pagina di raccolta: mostra tutti i 14 giochi con copertina, genere, comandi e i tuoi record per ogni difficoltà (Facile, Normale, Difficile). Tocca «Gioca» per avviare un gioco; in ogni gioco il pulsante «← Sala Giochi» in alto a sinistra (visibile nei menu) riporta alla raccolta.
+Apri `index.html` nella cartella principale per la pagina di raccolta: mostra tutti i 15 giochi con copertina, genere, comandi e i tuoi record per ogni difficoltà (Facile, Normale, Difficile). Tocca «Gioca» per avviare un gioco; in ogni gioco il pulsante «← Sala Giochi» in alto a sinistra (visibile nei menu) riporta alla raccolta.
 
 ## Giochi
 
@@ -220,3 +220,17 @@ Tower defense: goblin, lupi, orchi, troll e pipistrelli marciano lungo il sentie
 - **Touch:** scegli una torre, tocca un prato libero per vedere il raggio e tocca di nuovo per costruire
 
 Per giocare apri `games/difesa-del-castello/index.html` nel browser.
+
+### ☄️ Asteroidi — `games/asteroidi/index.html`
+
+Sparatutto vettoriale in stile *Asteroids*: la tua navicella è in un campo di asteroidi e deve distruggerli tutti. I bordi dello schermo sono collegati: esci da un lato e rientri dall'altro.
+
+- **Asteroidi:** quelli grandi si spezzano in due medi, i medi in due piccoli, sempre più veloci (20, 50 e 100 punti)
+- **Dischi volanti:** quello grande spara a caso (200 punti), quello piccolo mira alla navicella (1000 punti); anche gli asteroidi possono distruggerli
+- **Iperspazio:** fa sparire la navicella e la fa ricomparire in un punto a caso, per le situazioni disperate
+- **Ondate:** a ogni ondata più asteroidi e più veloci; il battito di sottofondo accelera man mano che ne restano pochi; vita extra ogni 10.000 punti
+- **Difficoltà:** Facile (5 vite, asteroidi lenti, dischi volanti meno precisi), Normale (3 vite), Difficile (asteroidi veloci e più numerosi, dischi volanti precisissimi); ogni difficoltà ha il suo record
+- **Comandi:** `←` `→` ruota · `↑` spinta · `SPAZIO` fuoco · `SHIFT` o `H` iperspazio · `P` pausa
+- **Touch:** ⟲ ⟳ per ruotare, ▲ spinta, ● fuoco (tieni premuto per sparare di continuo), ✧ iperspazio
+
+Per giocare apri `games/asteroidi/index.html` nel browser.
