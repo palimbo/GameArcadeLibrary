@@ -32,3 +32,17 @@ Strategico in tempo reale (RTS): raccogli cristalli, costruisci la base, addestr
 - Su telefono è consigliato giocare in orizzontale
 
 Per giocare apri `games/crystal-wars/index.html` nel browser.
+
+### 🦊 Volpe Saltante — `games/volpe-saltante/index.html`
+
+Platform a scorrimento laterale in 4 livelli: Prati verdi, Colline al tramonto, Notte stellata e Il castello.
+
+- **Obiettivo:** raggiungi la bandiera in fondo a ogni livello prima che scada il tempo
+- **Nemici:** saltaci sopra per schiacciarli (tieni premuto il salto per rimbalzare più in alto); i pipistrelli volano avanti e indietro
+- **Da raccogliere:** monete (ogni 50 monete una vita extra), cuori, blocchi «?» da colpire da sotto
+- **Ostacoli e aiuti:** burroni, spine, molle che ti lanciano in alto, piattaforme mobili, checkpoint
+- **Difficoltà:** Facile (5 vite, 3 cuori, nemici lenti), Normale (3 vite, 2 cuori), Difficile (3 vite, 1 cuore, nemici veloci, niente checkpoint); record salvato per ciascuna
+- **Comandi (tastiera):** `←` `→` o `A` `D` per muoversi, `SPAZIO` / `↑` / `W` per saltare (più a lungo tieni premuto, più salti in alto), `P` pausa
+- **Comandi (touch):** pulsanti ◀ ▶ in basso a sinistra, tocca la metà destra dello schermo per saltare; meglio in orizzontale
+
+Per giocare apri `games/volpe-saltante/index.html` nel browser.
