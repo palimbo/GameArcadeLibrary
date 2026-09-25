@@ -4,7 +4,7 @@ Raccolta di giochi arcade per il browser. Ogni gioco è un singolo file HTML sen
 
 ## 🕹️ Sala Giochi — `index.html`
 
-Apri `index.html` nella cartella principale per la pagina di raccolta: mostra tutti i 15 giochi con copertina, genere, comandi e i tuoi record per ogni difficoltà (Facile, Normale, Difficile). Tocca «Gioca» per avviare un gioco; in ogni gioco il pulsante «← Sala Giochi» in alto a sinistra (visibile nei menu) riporta alla raccolta.
+Apri `index.html` nella cartella principale per la pagina di raccolta: mostra tutti i 16 giochi con copertina, genere, comandi e i tuoi record per ogni difficoltà (Facile, Normale, Difficile). Tocca «Gioca» per avviare un gioco; in ogni gioco il pulsante «← Sala Giochi» in alto a sinistra (visibile nei menu) riporta alla raccolta.
 
 ## Giochi
 
@@ -234,3 +234,19 @@ Sparatutto vettoriale in stile *Asteroids*: la tua navicella è in un campo di a
 - **Touch:** ⟲ ⟳ per ruotare, ▲ spinta, ● fuoco (tieni premuto per sparare di continuo), ✧ iperspazio
 
 Per giocare apri `games/asteroidi/index.html` nel browser.
+
+### 💣 Mattoni e Bombe — `games/mattoni-e-bombe/index.html`
+
+Battaglia a bombe in stile *Bomberman*: quattro bombaroli in un'arena piena di mattoni. Piazza le bombe per far saltare i mattoni e aprirti la strada, raccogli i potenziamenti e intrappola gli avversari nelle esplosioni, senza restarci tu. L'ultimo in piedi vince il round; vince chi arriva per primo a 3 round.
+
+- **Potenziamenti** (nascosti sotto i mattoni): 💣 una bomba in più alla volta · 🔥 esplosione più lunga · 👟 più velocità
+- **Esplosioni:** le fiamme si fermano contro i blocchi di pietra e al primo mattone; una bomba colpita dalle fiamme esplode subito, a catena
+- **Morte improvvisa:** dopo 100 secondi l'arena si chiude a spirale
+- **1 giocatore:** tu contro tre bombaroli del computer, torneo dopo torneo sempre più veloci; punti per mattoni, potenziamenti, avversari eliminati, round e tornei vinti. La partita finisce quando un avversario vince un torneo
+- **2 giocatori sullo stesso dispositivo:** voi due più due bombaroli del computer
+- **Difficoltà:** Facile (avversari lenti a reagire che a volte restano intrappolati), Normale (avversari che scappano dalle esplosioni), Difficile (avversari rapidi che ti danno la caccia); ogni difficoltà ha il suo record
+- **Comandi (1 giocatore):** frecce o `W` `A` `S` `D` per muoverti · `SPAZIO` bomba · `P` pausa
+- **Comandi (2 giocatori):** Giocatore 1 `W` `A` `S` `D` + `Q` o `SPAZIO` · Giocatore 2 frecce + `INVIO` o `L`
+- **Touch:** croce direzionale e pulsante 💣 (in 2 giocatori ognuno ha i suoi comandi)
+
+Per giocare apri `games/mattoni-e-bombe/index.html` nel browser.
