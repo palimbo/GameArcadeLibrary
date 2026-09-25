@@ -83,3 +83,16 @@ Corsa automobilistica arcade in pseudo-3D in stile *OutRun*: guida una decappott
 - **Touch:** ◀ ▶ a sinistra, GAS, FRENO e NITRO a destra; meglio in orizzontale
 
 Per giocare apri `games/corsa-al-tramonto/index.html` nel browser.
+
+### 🐭 Topo Goloso — `games/topo-goloso/index.html`
+
+Inseguimento nel labirinto in stile *Pac-Man*: guida un topolino che mangia briciole di formaggio, inseguito da quattro gatti.
+
+- **Obiettivo:** mangia tutte le briciole del labirinto per passare al livello successivo (sempre più veloce)
+- **Gatti:** ognuno ha il suo carattere, come i fantasmi dell'originale: **Rosso** ti insegue, **Rosa** ti taglia la strada, **Azzurro** lavora in coppia con il Rosso, **Arancio** è imprevedibile. Alternano fasi di caccia e di ritirata negli angoli
+- **Formaggio grande:** i gatti diventano blu e scappano; mangiali per 200, 400, 800 e 1600 punti. Quando lampeggiano stanno per tornare pericolosi
+- **Bonus:** frutta sotto la casetta dei gatti, tunnel laterali per scappare, vita extra a 10.000 punti
+- **Difficoltà:** Facile (5 vite, gatti più lenti, formaggio che dura di più), Normale, Difficile (gatti veloci, formaggio breve); record salvato per ciascuna
+- **Comandi:** frecce o WASD, `P` pausa; su telefono croce direzionale o scorrimento del dito sul labirinto (si gioca bene anche in verticale)
+
+Per giocare apri `games/topo-goloso/index.html` nel browser.
