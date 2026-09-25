@@ -4,7 +4,7 @@ Raccolta di giochi arcade per il browser. Ogni gioco è un singolo file HTML sen
 
 ## 🕹️ Sala Giochi — `index.html`
 
-Apri `index.html` nella cartella principale per la pagina di raccolta: mostra tutti i 12 giochi con copertina, genere, comandi e i tuoi record per ogni difficoltà (Facile, Normale, Difficile). Tocca «Gioca» per avviare un gioco; in ogni gioco il pulsante «← Sala Giochi» in alto a sinistra (visibile nei menu) riporta alla raccolta.
+Apri `index.html` nella cartella principale per la pagina di raccolta: mostra tutti i 13 giochi con copertina, genere, comandi e i tuoi record per ogni difficoltà (Facile, Normale, Difficile). Tocca «Gioca» per avviare un gioco; in ogni gioco il pulsante «← Sala Giochi» in alto a sinistra (visibile nei menu) riporta alla raccolta.
 
 ## Giochi
 
@@ -192,3 +192,17 @@ Puzzle in stile *Puzzle Bobble*: spara bolle colorate verso il soffitto e libera
 - **Touch:** trascina il dito per mirare e lascialo per sparare (se lo lasci in basso il tiro si annulla); tocca la bolla di riserva per scambiarla
 
 Per giocare apri `games/spara-bolle/index.html` nel browser.
+
+### 🏍️ Scie di Luce — `games/scie-di-luce/index.html`
+
+Duello di moto di luce in stile *Tron*: ogni moto lascia dietro di sé una scia che nessuno può attraversare. Chi tocca una scia (anche la propria) o il bordo dell'arena è fuori; l'ultimo in pista vince il round.
+
+- **1 giocatore:** round dopo round contro moto guidate dal computer, sempre più numerose (fino a tre) e veloci; perdi una vita quando vieni eliminato. Punti per ogni tratto percorso, per ogni avversario che si schianta e per ogni round vinto
+- **2 giocatori sullo stesso dispositivo:** sfida al meglio dei 5 round (vince chi arriva a 3)
+- **Turbo ⚡:** accelera per un attimo, poi si ricarica (barra sotto il punteggio)
+- **Difficoltà:** Facile (5 vite, moto più lente, il computer sbaglia spesso), Normale (3 vite, il computer calcola lo spazio libero prima di girare), Difficile (moto veloci, il computer prova a tagliarti la strada e usa il turbo); in 2 giocatori la difficoltà cambia la velocità
+- **Comandi (1 giocatore):** frecce o `W` `A` `S` `D` per girare · `SPAZIO` turbo · `P` pausa
+- **Comandi (2 giocatori):** Giocatore 1 `W` `A` `S` `D` + `Q` turbo · Giocatore 2 frecce + `INVIO` o `L` turbo
+- **Touch:** ⟲ ⟳ per girare e ⚡ per il turbo (in 2 giocatori ognuno ha i suoi pulsanti, a sinistra e a destra), oppure scorri il dito sull'arena
+
+Per giocare apri `games/scie-di-luce/index.html` nel browser.
