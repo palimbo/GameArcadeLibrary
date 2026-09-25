@@ -69,3 +69,17 @@ Picchiaduro a scorrimento fantasy in stile *Golden Axe*: attraversa il villaggio
 - **Touch:** levetta virtuale a sinistra (trascina il dito), pulsanti SPADA, SALTO e MAGIA a destra; meglio in orizzontale
 
 Per giocare apri `games/lama-d-oro/index.html` nel browser.
+
+### 🏎️ Corsa al Tramonto — `games/corsa-al-tramonto/index.html`
+
+Corsa automobilistica arcade in pseudo-3D in stile *OutRun*: guida una decappottabile rossa su strade con curve e saliscendi, tra il traffico, contro il tempo.
+
+- **5 tappe:** Costa del Sole, Deserto Rosso, Passo Alpino, Città di Notte e Autostrada del Tramonto, ognuna con paesaggio e colori propri
+- **Checkpoint:** a fine tappa guadagni secondi extra; se il tempo finisce la corsa è persa
+- **Guida:** fuori strada rallenti e puoi schiantarti contro palme, cactus, pini ed edifici; tamponare il traffico ti fa perdere velocità (camion compresi)
+- **Nitro:** spinta extra di velocità, in numero limitato per corsa
+- **Difficoltà:** Facile (più tempo, traffico leggero, 4 nitro), Normale (3 nitro), Difficile (poco tempo, traffico intenso e veloce, 2 nitro); miglior tempo salvato per ciascuna
+- **Tastiera:** `↑`/`W` accelera, `↓`/`S` frena, `←` `→` sterza, `SPAZIO` nitro, `P` pausa
+- **Touch:** ◀ ▶ a sinistra, GAS, FRENO e NITRO a destra; meglio in orizzontale
+
+Per giocare apri `games/corsa-al-tramonto/index.html` nel browser.
