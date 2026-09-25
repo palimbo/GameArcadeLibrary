@@ -4,7 +4,7 @@ Raccolta di giochi arcade per il browser. Ogni gioco è un singolo file HTML sen
 
 ## 🕹️ Sala Giochi — `index.html`
 
-Apri `index.html` nella cartella principale per la pagina di raccolta: mostra tutti i 13 giochi con copertina, genere, comandi e i tuoi record per ogni difficoltà (Facile, Normale, Difficile). Tocca «Gioca» per avviare un gioco; in ogni gioco il pulsante «← Sala Giochi» in alto a sinistra (visibile nei menu) riporta alla raccolta.
+Apri `index.html` nella cartella principale per la pagina di raccolta: mostra tutti i 14 giochi con copertina, genere, comandi e i tuoi record per ogni difficoltà (Facile, Normale, Difficile). Tocca «Gioca» per avviare un gioco; in ogni gioco il pulsante «← Sala Giochi» in alto a sinistra (visibile nei menu) riporta alla raccolta.
 
 ## Giochi
 
@@ -206,3 +206,17 @@ Duello di moto di luce in stile *Tron*: ogni moto lascia dietro di sé una scia 
 - **Touch:** ⟲ ⟳ per girare e ⚡ per il turbo (in 2 giocatori ognuno ha i suoi pulsanti, a sinistra e a destra), oppure scorri il dito sull'arena
 
 Per giocare apri `games/scie-di-luce/index.html` nel browser.
+
+### 🏰 Difesa del Castello — `games/difesa-del-castello/index.html`
+
+Tower defense: goblin, lupi, orchi, troll e pipistrelli marciano lungo il sentiero verso il castello. Costruisci torri sul prato, potenziale e resisti a 8 ondate su ciascuna delle tre mappe (Il Prato, Il Deserto, La Valle Innevata); all'ultima ondata di ogni mappa arriva un **drago**.
+
+- **Torri:** Arcieri (veloci, un bersaglio), Cannone (colpo ad area, non colpisce chi vola), Gelo (rallenta i nemici), Fulmine (salta da un nemico all'altro); Gelo e Fulmine ignorano l'armatura dei troll e del drago. Ogni torre si potenzia fino al livello 3 e si può vendere recuperando parte delle monete
+- **Nemici:** goblin, lupi velocissimi, orchi resistenti, troll corazzati, pipistrelli volanti e il drago; diventano più forti a ogni ondata e a ogni mappa
+- **Monete:** si guadagnano eliminando i nemici e superando le ondate; chiamare l'ondata in anticipo dà monete extra
+- **Vite:** ogni nemico che raggiunge il castello costa una vita (il drago ne costa 5)
+- **Difficoltà:** Facile (30 vite, 240 monete, nemici più deboli), Normale (20 vite, 180 monete), Difficile (15 vite, 150 monete, nemici più resistenti); ogni difficoltà ha il suo record
+- **Comandi:** scegli una torre nella barra in basso (o tasti `1`–`4`) e clicca un prato libero; clicca una torre per potenziarla (`U`) o venderla (`V`); `SPAZIO` fa partire l'ondata, `F` raddoppia la velocità, `P` pausa
+- **Touch:** scegli una torre, tocca un prato libero per vedere il raggio e tocca di nuovo per costruire
+
+Per giocare apri `games/difesa-del-castello/index.html` nel browser.
