@@ -47,3 +47,18 @@ Platform a scorrimento laterale in 4 livelli: Prati verdi, Colline al tramonto, 
 - **Comandi (touch):** pulsanti ◀ ▶ in basso a sinistra, tocca la metà destra dello schermo per saltare; meglio in orizzontale
 
 Per giocare apri `games/volpe-saltante/index.html` nel browser.
+
+### ⚔️ Lama d'Oro — `games/lama-d-oro/index.html`
+
+Picchiaduro a scorrimento fantasy in stile *Golden Axe*: un guerriero con la spada attraversa il villaggio in fiamme, la foresta oscura e il castello del Signore dell'Ascia.
+
+- **Combattimento:** combo di 3 spadate (l'ultima atterra il nemico), salto e attacco in salto
+- **Nemici:** soldati, scheletri, cavalieri corazzati e cavalieri del drago; attaccano a gruppi, gli altri aspettano il loro turno
+- **Gnomi ladri:** colpiscili per far cadere le pozioni blu. La **magia** usa tutte le pozioni: più ne hai (fino a 6), più fulmini colpiscono tutti i nemici sullo schermo
+- **Draghi:** disarciona il cavaliere e sali in sella al draghetto: invece della spada sputi fuoco (se vieni colpito cadi di sella)
+- **Boss finale:** il Signore dell'Ascia, con un'enorme ascia, cariche e rinforzi
+- **Difficoltà:** Facile (5 vite, nemici più deboli, un attaccante alla volta), Normale (3 vite), Difficile (2 vite, nemici più forti, fino a 3 attaccanti); record salvato per ciascuna
+- **Tastiera:** frecce o WASD per muoversi, `J`/`Z` spada, `K`/`X`/`SPAZIO` salto, `L`/`C` magia, `P` pausa
+- **Touch:** levetta virtuale a sinistra (trascina il dito), pulsanti SPADA, SALTO e MAGIA a destra; meglio in orizzontale
+
+Per giocare apri `games/lama-d-oro/index.html` nel browser.
