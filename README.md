@@ -4,7 +4,7 @@ Raccolta di giochi arcade per il browser. Ogni gioco è un singolo file HTML sen
 
 ## 🕹️ Sala Giochi — `index.html`
 
-Apri `index.html` nella cartella principale per la pagina di raccolta: mostra tutti i giochi con copertina, genere, comandi e i tuoi record per ogni difficoltà (Facile, Normale, Difficile). Tocca «Gioca» per avviare un gioco; in ogni gioco il pulsante «← Sala Giochi» in alto a sinistra (visibile nei menu) riporta alla raccolta.
+Apri `index.html` nella cartella principale per la pagina di raccolta: mostra tutti gli 8 giochi con copertina, genere, comandi e i tuoi record per ogni difficoltà (Facile, Normale, Difficile). Tocca «Gioca» per avviare un gioco; in ogni gioco il pulsante «← Sala Giochi» in alto a sinistra (visibile nei menu) riporta alla raccolta.
 
 ## Giochi
 
@@ -120,3 +120,17 @@ Picchiaduro a incontri uno contro uno in stile *Street Fighter*: scegli un lotta
 - **Touch:** levetta a sinistra, PUGNO, CALCIO, SPECIALE e SUPER a destra; meglio in orizzontale
 
 Per giocare apri `games/pugni-di-fuoco/index.html` nel browser.
+
+### 🧱 Blocchi Cadenti — `games/blocchi-cadenti/index.html`
+
+Puzzle a blocchi che cadono in stile *Tetris*: incastra i sette pezzi e completa le righe orizzontali per farle sparire.
+
+- **Punteggio:** singola 100, doppia 300, tripla 500, **quadrupla** 800 (per il livello); T-spin, combo e bonus «di fila» (×1,5) per quadruple e T-spin consecutivi; +2000 per livello se svuoti tutto il campo
+- **Livelli:** ogni 10 righe sali di livello e i blocchi cadono più veloci (fino al livello 20)
+- **Aiuti:** pezzo fantasma che mostra dove atterrerà, anteprima dei prossimi pezzi, **scorta** per mettere da parte un pezzo; rotazioni con i «wall kick» moderni
+- **Difficoltà:** Facile (caduta più lenta, 5 pezzi in anteprima, più tempo per appoggiare), Normale (3 in anteprima), Difficile (parti dal livello 5 e ogni tanto una fila di detriti sale dal fondo); ogni difficoltà ha il suo record
+- **Comandi (tastiera):** `←` `→` muovi · `↓` scendi · `SPAZIO` caduta istantanea · `↑` o `X` ruota · `Z` ruota al contrario · `C` scorta · `P` pausa · `M` musica
+- **Comandi (touch):** pulsanti in basso, oppure trascina sul campo per muovere, tocca per ruotare, scorri veloce in giù per far cadere; in verticale scorta e anteprima vanno sopra il campo
+- Musica di sottofondo sintetizzata (la melodia popolare russa *Korobeiniki*), attivabile e disattivabile
+
+Per giocare apri `games/blocchi-cadenti/index.html` nel browser.
