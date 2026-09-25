@@ -4,7 +4,7 @@ Raccolta di giochi arcade per il browser. Ogni gioco è un singolo file HTML sen
 
 ## 🕹️ Sala Giochi — `index.html`
 
-Apri `index.html` nella cartella principale per la pagina di raccolta: mostra tutti i 9 giochi con copertina, genere, comandi e i tuoi record per ogni difficoltà (Facile, Normale, Difficile). Tocca «Gioca» per avviare un gioco; in ogni gioco il pulsante «← Sala Giochi» in alto a sinistra (visibile nei menu) riporta alla raccolta.
+Apri `index.html` nella cartella principale per la pagina di raccolta: mostra tutti i 10 giochi con copertina, genere, comandi e i tuoi record per ogni difficoltà (Facile, Normale, Difficile). Tocca «Gioca» per avviare un gioco; in ogni gioco il pulsante «← Sala Giochi» in alto a sinistra (visibile nei menu) riporta alla raccolta.
 
 ## Giochi
 
@@ -148,3 +148,18 @@ Rompi-mattoni in stile *Arkanoid*: guida la racchetta, fai rimbalzare la pallina
 - **Touch:** trascina il dito in qualsiasi punto dello schermo per muovere la racchetta, tocca per lanciare; con il laser si spara da solo mentre tieni il dito giù. Pensato per giocare in verticale
 
 Per giocare apri `games/spaccamattoni/index.html` nel browser.
+
+### 🐸 Rana in Fuga — `games/rana-in-fuga/index.html`
+
+Gioco di attraversamento in stile *Frogger*: porta cinque ranocchie nelle tane sull'altra riva.
+
+- **La strada:** cinque corsie di auto, camion, trattori e un'auto da corsa velocissima
+- **Il fiume:** salta su tronchi e tartarughe (che ti trasportano con la corrente); alcune tartarughe si immergono, e se finisci in acqua o vieni trascinato fuori dallo schermo perdi una vita
+- **Le tane:** riempile tutte e cinque per passare al livello successivo; una mosca in una tana vale +200. Dal livello 2 un serpente striscia nell'erba a metà strada, dal livello 3 un coccodrillo si nasconde nelle tane e tutte le tartarughe si immergono; il traffico accelera a ogni livello
+- **Tempo:** ogni rana ha un tempo limite; i secondi avanzati diventano punti
+- **Punti:** 10 per ogni passo in avanti, 50 + tempo avanzato per ogni tana, 1000 per aver riempito tutte le tane; vita extra ogni 20.000 punti
+- **Difficoltà:** Facile (5 vite, traffico lento, 40 secondi), Normale (3 vite, 30 secondi), Difficile (traffico veloce, 25 secondi); ogni difficoltà ha il suo record
+- **Comandi:** frecce o `W` `A` `S` `D` per saltare · `P` pausa
+- **Touch:** croce direzionale, oppure scorri il dito nella direzione del salto; un tocco sul campo = salto in avanti
+
+Per giocare apri `games/rana-in-fuga/index.html` nel browser.
