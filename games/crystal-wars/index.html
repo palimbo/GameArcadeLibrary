@@ -34,7 +34,7 @@
   }
   #topbar .res { color: var(--crystal); }
   #topbar .spacer { flex: 1; }
-  #stage { flex: 1; min-height: 0; display: flex; align-items: center; justify-content: center; }
+  #stage { flex: 1; min-height: 0; overflow: hidden; display: flex; align-items: center; justify-content: center; }
   canvas { display: block; touch-action: none; cursor: crosshair; }
   #panel {
     display: flex; align-items: center; gap: 12px; flex-wrap: wrap;
@@ -45,6 +45,7 @@
   #info .title { font-weight: 700; }
   #info .muted { color: var(--muted); }
   #actions { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
+  #actions .group { color: var(--muted); font-size: 12px; font-weight: 600; }
   #actions .sep { width: 1px; align-self: stretch; background: var(--line); margin: 0 4px; }
   button.act, #topbar button {
     font: 600 13px system-ui, sans-serif;
@@ -68,6 +69,16 @@
   #overlay > :first-child { margin-top: auto; }
   #overlay > :last-child { margin-bottom: auto; }
   #overlay.hidden { display: none; }
+  @media (max-height: 500px) {
+    #topbar { padding: 3px 10px; font-size: 13px; }
+    #topbar button { padding: 3px 8px; }
+    #panel { min-height: 0; padding: 4px 8px; gap: 6px; }
+    #info { font-size: 12px; line-height: 1.3; }
+    #info .hint { display: none; }
+    button.act { padding: 4px 8px; font-size: 12px; }
+    button.act br { display: none; }
+    button.act .cost { margin-left: 6px; }
+  }
   #rotate { display: none; color: var(--gold); font-weight: 500; font-size: 12px; width: 100%; }
   @media (orientation: portrait) and (max-width: 700px) { #rotate { display: block; } }
   #overlay h1 { font-size: clamp(30px, 7vw, 56px); color: var(--crystal); letter-spacing: 2px; text-shadow: 0 0 18px rgba(95, 243, 224, 0.45); }
@@ -181,6 +192,8 @@
     canvas.height = Math.round(H * pxRatio);
   }
   window.addEventListener("resize", resize);
+  // The bottom panel changes height with the selection, so follow the stage size too.
+  if (window.ResizeObserver) new ResizeObserver(resize).observe(stage);
   resize();
 
   // ---------- Audio ----------
@@ -700,6 +713,17 @@
     }
   }
 
+  // Unfinished player buildings without a builder get the nearest free worker.
+  function assignPlayerBuilders() {
+    for (const b of ents) {
+      if (b.dead || b.team !== 0 || b.kind !== "building" || b.progress >= 1) continue;
+      if (ents.some((w) => !w.dead && w.team === 0 && w.kind === "unit" && w.order.type === "build" && w.order.target === b)) continue;
+      const w = ents.filter((e) => !e.dead && e.team === 0 && e.type === "worker" && e.order.type !== "build")
+        .sort((p, q) => Math.hypot(p.x - b.x, p.y - b.y) - Math.hypot(q.x - b.x, q.y - b.y))[0];
+      if (w) w.order = { type: "build", target: b };
+    }
+  }
+
   // ---------- Effects ----------
   function burst(x, y, color, n, speed) {
     for (let i = 0; i < n; i++) {
@@ -707,7 +731,7 @@
       particles.push({ x, y, vx: Math.cos(a) * v, vy: Math.sin(a) * v, life: 0.3 + Math.random() * 0.5, max: 0.8, color, size: 1.5 + Math.random() * 2.5 });
     }
   }
-  function showBanner(text, color = "#e8f0ea") { banner = { text, color, t: 2.2 }; }
+  function showBanner(text, color = "#e8f0ea", t = 2.2) { banner = { text, color, t }; }
 
   // ---------- Game flow ----------
   function startGame() {
@@ -749,7 +773,7 @@
     state = "playing";
     menu = null;
     overlay.classList.add("hidden");
-    showBanner("Raccogli cristalli e costruisci una caserma!", "#5ff3e0");
+    showBanner("Premi «Caserma» in basso, poi tocca la mappa per costruirla", "#5ff3e0", 6);
     hudSig = "";
     last = performance.now();
   }
@@ -817,7 +841,8 @@
        <p class="muted">Tocca o clicca un'unità per selezionarla, trascina per selezionarne tante (doppio tocco: tutte quelle dello stesso tipo).
        Poi tocca il terreno per muoverle, un nemico per attaccarlo, i cristalli per raccoglierli.
        Con il mouse puoi anche usare il tasto destro per dare ordini.<br>
-       Tasti: Q W E azioni · A esercito · S lavoratori inattivi · H quartier generale · Esc annulla · P pausa</p>
+       Per costruire premi «Caserma», «Torre» o «Quartier generale» nel pannello in basso e poi tocca la mappa: ci pensa un lavoratore.<br>
+       Tasti: C caserma · T torre · G quartier generale · Q W addestra · A esercito · S lavoratori inattivi · H quartier generale · Esc annulla · P pausa</p>
        ${difficultyHTML()}
        <button class="start" data-start>INIZIA</button>`
     );
@@ -916,17 +941,30 @@
 
   function startPlacing(type) {
     if (teams[0].crystals < BUILD[type].cost) { showBanner("Cristalli insufficienti", "#ff4f5e"); sfx.error(); return; }
+    if (!ents.some((e) => !e.dead && e.team === 0 && e.type === "worker")) { showBanner("Ti serve almeno un lavoratore", "#ff4f5e"); sfx.error(); return; }
     placing = { type };
+    showBanner(`Tocca la mappa dove costruire: ${BUILD[type].name}`, "#ffd34d", 3);
+    hudSig = "";
+  }
+  // Selected workers are preferred; otherwise the nearest worker that isn't already building.
+  function pickBuilder(x, y) {
+    const byDist = (a, b) => Math.hypot(a.x - x, a.y - y) - Math.hypot(b.x - x, b.y - y);
+    const selected = ownSelectedUnits().filter((u) => u.type === "worker");
+    if (selected.length) return selected.sort(byDist)[0];
+    const workers = ents.filter((e) => !e.dead && e.team === 0 && e.type === "worker");
+    const free = workers.filter((w) => w.order.type !== "build");
+    return (free.length ? free : workers).sort(byDist)[0] || null;
   }
   function tryPlace(x, y) {
     const type = placing.type;
-    const workers = ownSelectedUnits().filter((u) => u.type === "worker");
-    if (!workers.length) { placing = null; return; }
-    workers.sort((a, b) => Math.hypot(a.x - x, a.y - y) - Math.hypot(b.x - x, b.y - y));
-    const err = placeBuilding(type, 0, x, y, workers[0]);
+    const worker = pickBuilder(x, y);
+    if (!worker) { placing = null; showBanner("Ti serve almeno un lavoratore", "#ff4f5e"); sfx.error(); return; }
+    const err = placeBuilding(type, 0, x, y, worker);
     if (err) { showBanner(err, "#ff4f5e"); sfx.error(); return; }
     sfx.place();
     placing = null;
+    showBanner(`Un lavoratore va a costruire: ${BUILD[type].name}`, "#7dff9a");
+    hudSig = "";
   }
   function trainFrom(b, type) {
     const err = enqueue(b, type);
@@ -950,19 +988,22 @@
     if (placing) return [{ label: "Annulla", hot: "Esc", fn: () => { placing = null; }, enabled: true }];
     const own = ownSelected();
     const acts = [];
-    if (own.length && own.every((e) => e.kind === "unit") && own.some((e) => e.type === "worker")) {
-      ["barracks", "tower", "hq"].forEach((t, i) => acts.push({
-        label: BUILD[t].name, cost: BUILD[t].cost, hot: "QWE"[i], tip: BUILD_TIPS[t],
-        enabled: teams[0].crystals >= BUILD[t].cost, fn: () => startPlacing(t),
-      }));
-    } else if (own.length === 1 && own[0].kind === "building" && own[0].progress >= 1 && BUILD[own[0].type].trains) {
+    if (own.length === 1 && own[0].kind === "building" && own[0].progress >= 1 && BUILD[own[0].type].trains) {
       const b = own[0];
       BUILD[b.type].trains.forEach((t, i) => acts.push({
-        label: UNIT[t].name, cost: UNIT[t].cost, hot: "QWE"[i], tip: UNIT_TIPS[t],
+        label: UNIT[t].name, cost: UNIT[t].cost, hot: "QW"[i], tip: UNIT_TIPS[t],
         enabled: teams[0].crystals >= UNIT[t].cost && b.queue.length < 5, fn: () => trainFrom(b, t),
       }));
     }
     return acts;
+  }
+  const BUILD_HOTKEYS = { barracks: "C", tower: "T", hq: "G" };
+  function getBuildActions() {
+    if (placing) return [];
+    return ["barracks", "tower", "hq"].map((t) => ({
+      label: BUILD[t].name, cost: BUILD[t].cost, hot: BUILD_HOTKEYS[t], tip: BUILD_TIPS[t],
+      enabled: teams[0].crystals >= BUILD[t].cost, fn: () => startPlacing(t),
+    }));
   }
 
   // ---------- Input ----------
@@ -1013,8 +1054,10 @@
     else if (k === "s") selectIdleWorkers();
     else if (k === "h") selectHQ();
     else {
-      const i = "qwe".indexOf(k);
+      const i = "qw".indexOf(k);
       if (i >= 0) { const act = getActions()[i]; if (act && act.hot !== "Esc") act.fn(); }
+      const build = getBuildActions().find((a) => a.hot.toLowerCase() === k);
+      if (build) build.fn();
     }
   });
   window.addEventListener("blur", () => { if (state === "playing") togglePause(); });
@@ -1027,7 +1070,7 @@
   function infoHTML() {
     const sel = selection.filter(alive);
     if (placing) return `<div class="title">Posiziona: ${BUILD[placing.type].name}</div><div class="muted">Tocca un punto libero della mappa. Esc o tasto destro per annullare.</div>`;
-    if (!sel.length) return `<div class="title">Nessuna selezione</div><div class="muted">Seleziona le tue unità blu. Tocca il terreno per muoverle, un nemico per attaccarlo, i cristalli per raccoglierli.</div>`;
+    if (!sel.length) return `<div class="title">Nessuna selezione</div><div class="muted hint">Per costruire premi «Caserma» o «Torre» in basso e tocca la mappa. Seleziona le tue unità blu per muoverle o attaccare.</div>`;
     if (sel.length === 1) {
       const e = sel[0];
       const enemy = e.team === 1 ? "Nemico · " : "";
@@ -1056,12 +1099,21 @@
     el("clock").textContent = fmtTime(time);
     el("info").innerHTML = infoHTML();
     const acts = getActions();
-    const sig = JSON.stringify(acts.map((a) => [a.label, a.enabled])) + (placing ? "p" : "");
+    const builds = getBuildActions();
+    const sig = JSON.stringify([acts, builds].map((l) => l.map((a) => [a.label, a.enabled]))) + (placing ? "p" : "");
     if (sig === hudSig) return;
     hudSig = sig;
     const box = el("actions");
     box.innerHTML = "";
-    acts.forEach((a) => {
+    const addSep = () => { const s = document.createElement("div"); s.className = "sep"; box.appendChild(s); };
+    const all = acts.slice();
+    if (builds.length) {
+      if (acts.length) all.push("sep");
+      all.push("label", ...builds);
+    }
+    all.forEach((a) => {
+      if (a === "sep") { addSep(); return; }
+      if (a === "label") { const l = document.createElement("span"); l.className = "group"; l.textContent = "Costruisci:"; box.appendChild(l); return; }
       const b = document.createElement("button");
       b.type = "button";
       b.className = "act";
@@ -1071,7 +1123,7 @@
       b.addEventListener("click", () => { if (state === "playing") { a.fn(); hudSig = ""; } });
       box.appendChild(b);
     });
-    if (acts.length) { const s = document.createElement("div"); s.className = "sep"; box.appendChild(s); }
+    addSep();
     for (const [label, hot, fn] of [["Esercito", "A", selectArmy], ["Inattivi", "S", selectIdleWorkers], ["Base", "H", selectHQ]]) {
       const b = document.createElement("button");
       b.type = "button";
@@ -1094,7 +1146,7 @@
     resolveCollisions();
 
     aiTimer -= dt;
-    if (aiTimer <= 0) { aiThink(); aiTimer = 0.5; }
+    if (aiTimer <= 0) { aiThink(); assignPlayerBuilders(); aiTimer = 0.5; }
 
     for (const p of particles) { p.x += p.vx * dt; p.y += p.vy * dt; p.vx *= 0.93; p.vy *= 0.93; p.life -= dt; }
     particles = particles.filter((p) => p.life > 0);
@@ -1160,7 +1212,7 @@
     ctx.save();
     ctx.fillStyle = "rgba(0,0,0,0.35)";
     ctx.fillRect(x - w / 2 + 5, y - h / 2 + 7, w, h);
-    ctx.globalAlpha = b.progress < 1 ? 0.35 + 0.5 * b.progress : 1;
+    ctx.globalAlpha = b.progress < 1 ? 0.6 + 0.3 * b.progress : 1;
     if (b.type === "hq") {
       ctx.fillStyle = dark; ctx.fillRect(x - w / 2, y - h / 2, w, h);
       ctx.fillStyle = col; ctx.fillRect(x - w / 2 + 8, y - h / 2 + 8, w - 16, h - 16);
