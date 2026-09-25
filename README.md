@@ -4,7 +4,7 @@ Raccolta di giochi arcade per il browser. Ogni gioco è un singolo file HTML sen
 
 ## 🕹️ Sala Giochi — `index.html`
 
-Apri `index.html` nella cartella principale per la pagina di raccolta: mostra tutti gli 11 giochi con copertina, genere, comandi e i tuoi record per ogni difficoltà (Facile, Normale, Difficile). Tocca «Gioca» per avviare un gioco; in ogni gioco il pulsante «← Sala Giochi» in alto a sinistra (visibile nei menu) riporta alla raccolta.
+Apri `index.html` nella cartella principale per la pagina di raccolta: mostra tutti i 12 giochi con copertina, genere, comandi e i tuoi record per ogni difficoltà (Facile, Normale, Difficile). Tocca «Gioca» per avviare un gioco; in ogni gioco il pulsante «← Sala Giochi» in alto a sinistra (visibile nei menu) riporta alla raccolta.
 
 ## Giochi
 
@@ -178,3 +178,17 @@ Gioco di difesa in stile *Missile Command*: una pioggia di meteore sta per colpi
 - **Touch:** tocca il cielo dove vuoi far esplodere un fuoco
 
 Per giocare apri `games/pioggia-di-meteore/index.html` nel browser.
+
+### 🫧 Spara Bolle — `games/spara-bolle/index.html`
+
+Puzzle in stile *Puzzle Bobble*: spara bolle colorate verso il soffitto e liberalo prima che scenda troppo.
+
+- **Regole:** quando tre o più bolle dello stesso colore si toccano scoppiano; le bolle che restano senza appiglio al soffitto cadono e valgono ancora più punti
+- **Il soffitto:** dopo un certo numero di tiri che non fanno scoppiare nulla scende di una fila; se le bolle superano la linea tratteggiata la partita finisce
+- **Aiuti:** mirino a puntini che mostra la traiettoria (anche i rimbalzi sulle pareti) e bolla di riserva da scambiare con quella pronta; ogni colore ha anche un simbolo (cuore, stella, goccia, foglia, luna, sole) per riconoscerlo meglio
+- **Livelli:** 12 livelli con forme diverse e sempre più colori (da 3 a 6); dal livello 3 arrivano le **bombe**, che fanno esplodere tutte le bolle vicine; bonus di fine livello più alto se usi pochi tiri
+- **Difficoltà:** Facile (mirino lungo, soffitto ogni 10 tiri a vuoto, un colore in meno), Normale (mirino medio, ogni 8 tiri), Difficile (mirino corto, ogni 6 tiri, una fila in più); ogni difficoltà ha il suo record
+- **Comandi:** mouse per mirare e clic per sparare, clic destro o `C` per scambiare; oppure `←` `→` per mirare e `SPAZIO` per sparare; `P` pausa
+- **Touch:** trascina il dito per mirare e lascialo per sparare (se lo lasci in basso il tiro si annulla); tocca la bolla di riserva per scambiarla
+
+Per giocare apri `games/spara-bolle/index.html` nel browser.
