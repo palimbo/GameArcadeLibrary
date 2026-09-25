@@ -106,9 +106,11 @@ Picchiaduro a incontri uno contro uno in stile *Street Fighter*: scegli un lotta
   - **Lina** (kung fu, rapidissima): Calcio Vortice, Calcio Fulmine, super Tempesta di Calci
   - **Bruno** (lotta, lento ma devastante): Carica del Toro, Presa Atomica, super Tuffo del Vulcano
   - **Zara** (ninjutsu, sfuggente): Shuriken, Passo d'Ombra (teletrasporto), super Danza delle Ombre
+  - **Tonio** (pugilato elettrico, potente da vicino): Palla di Fulmine, Scarica Elettrica, super Tempesta Elettrica
+- **Modalità 2 giocatori (Sfida):** due persone sullo stesso dispositivo scelgono lottatore (anche il Maestro Oscuro) e arena; tastiera divisa (G1: WASD + F G H T, G2: frecce + J K L I) oppure due set di comandi touch, uno per lato dello schermo; conteggio delle vittorie e rivincita
 - **Tecnica:** tieni indietro per parare (abbassato per i colpi bassi, in piedi per i salti); pugno o calcio si concatenano in combo e possono essere annullati in speciali; avanti + pugno da vicino è una proiezione; spazzata e speciali atterrano l'avversario
 - **Barra super:** si riempie colpendo e venendo colpiti; piena, scatena la super del lottatore
-- **Arene:** Il Dojo, Il Mercato Notturno, Il Porto, Tetti della Città e Tempio del Vulcano
+- **Arene:** Il Dojo, Il Mercato Notturno, Il Porto, Tetti della Città, La Piazza e Tempio del Vulcano
 - **Difficoltà:** Facile, Normale, Difficile (cambiano riflessi, parate, antiaerei e aggressività del computer); record salvato per ciascuna
 - **Tastiera:** frecce o WASD per muoversi, `J` pugno, `K` calcio, `L` speciale (`↓` + `L` seconda speciale), `SPAZIO` super, `P` pausa
 - **Touch:** levetta a sinistra, PUGNO, CALCIO, SPECIALE e SUPER a destra; meglio in orizzontale
