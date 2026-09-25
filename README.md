@@ -4,7 +4,7 @@ Raccolta di giochi arcade per il browser. Ogni gioco è un singolo file HTML sen
 
 ## 🕹️ Sala Giochi — `index.html`
 
-Apri `index.html` nella cartella principale per la pagina di raccolta: mostra tutti gli 8 giochi con copertina, genere, comandi e i tuoi record per ogni difficoltà (Facile, Normale, Difficile). Tocca «Gioca» per avviare un gioco; in ogni gioco il pulsante «← Sala Giochi» in alto a sinistra (visibile nei menu) riporta alla raccolta.
+Apri `index.html` nella cartella principale per la pagina di raccolta: mostra tutti i 9 giochi con copertina, genere, comandi e i tuoi record per ogni difficoltà (Facile, Normale, Difficile). Tocca «Gioca» per avviare un gioco; in ogni gioco il pulsante «← Sala Giochi» in alto a sinistra (visibile nei menu) riporta alla raccolta.
 
 ## Giochi
 
@@ -134,3 +134,17 @@ Puzzle a blocchi che cadono in stile *Tetris*: incastra i sette pezzi e completa
 - Musica di sottofondo sintetizzata (la melodia popolare russa *Korobeiniki*), attivabile e disattivabile
 
 Per giocare apri `games/blocchi-cadenti/index.html` nel browser.
+
+### 🔨 Spaccamattoni — `games/spaccamattoni/index.html`
+
+Rompi-mattoni in stile *Arkanoid*: guida la racchetta, fai rimbalzare la pallina e abbatti tutti i mattoni di 9 muri, poi affronta il boss finale, **il Guardiano**.
+
+- **Muri:** Benvenuto, Scalini, Fortezza, Rombo, Cuore, Invasori, Colonne, Scacchiera, Labirinto; i mattoni argentati vanno colpiti più volte (sempre di più nei muri avanzati), quelli d'oro non si rompono
+- **Il Guardiano:** un blocco gigante che si muove, ti guarda e spara sfere di energia alla racchetta (evitale!); più è ferito, più diventa veloce e spara a ventaglio. Ogni tanto lascia cadere una capsula
+- **Capsule:** `E` Allarga · `C` Colla (la pallina si attacca alla racchetta) · `L` Laser · `S` Lento · `M` Multi (tre palline) · `V` Vita
+- **Rimbalzi:** l'angolo dipende da dove la pallina colpisce la racchetta; la pallina accelera a ogni colpo
+- **Difficoltà:** Facile (5 vite, pallina lenta, racchetta larga), Normale (3 vite), Difficile (pallina veloce, racchetta stretta, Guardiano più resistente); ogni difficoltà ha il suo record; vita extra ogni 25.000 punti
+- **Comandi:** mouse per muovere e clic per lanciare/sparare, oppure `←` `→` / `A` `D` e `SPAZIO`; `P` pausa
+- **Touch:** trascina il dito in qualsiasi punto dello schermo per muovere la racchetta, tocca per lanciare; con il laser si spara da solo mentre tieni il dito giù. Pensato per giocare in verticale
+
+Per giocare apri `games/spaccamattoni/index.html` nel browser.
