@@ -2,6 +2,10 @@
 
 Raccolta di giochi arcade per il browser. Ogni gioco è un singolo file HTML senza dipendenze: basta aprirlo.
 
+## 🕹️ Sala Giochi — `index.html`
+
+Apri `index.html` nella cartella principale per la pagina di raccolta: mostra tutti i giochi con copertina, genere, comandi e i tuoi record per ogni difficoltà (Facile, Normale, Difficile). Tocca «Gioca» per avviare un gioco; in ogni gioco il pulsante «← Sala Giochi» in alto a sinistra (visibile nei menu) riporta alla raccolta.
+
 ## Giochi
 
 ### 🚀 Space Defender — `games/space-defender/index.html`
@@ -99,7 +103,7 @@ Per giocare apri `games/topo-goloso/index.html` nel browser.
 
 ### 🔥 Pugni di Fuoco — `games/pugni-di-fuoco/index.html`
 
-Picchiaduro a incontri uno contro uno in stile *Street Fighter*: scegli un lottatore e affronta gli altri tre, poi il boss finale, il **Maestro Oscuro**. Incontri al meglio dei 3 round, 60 secondi a round.
+Picchiaduro a incontri uno contro uno in stile *Street Fighter*: scegli un lottatore e affronta gli altri quattro, poi il boss finale, il **Maestro Oscuro**. Incontri al meglio dei 3 round, 60 secondi a round.
 
 - **Lottatori:**
   - **Kenji** (karate, equilibrato): Onda del Drago, Pugno del Cielo, super Super Onda
