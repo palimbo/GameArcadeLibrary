@@ -1,0 +1,709 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no, viewport-fit=cover">
+<title>Flipper Luna Park</title>
+<style>
+  :root {
+    --bg: #120a24;
+    --fg: #fff6ea;
+    --muted: #c3b3dc;
+    --accent: #ff4fa3;
+    --gold: #ffd34d;
+    --bad: #ff5a6a;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  html, body {
+    height: 100%;
+    background: var(--bg);
+    color: var(--fg);
+    font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+    overflow: hidden;
+    user-select: none;
+    -webkit-user-select: none;
+    touch-action: none;
+  }
+  #wrap { position: fixed; inset: 0; display: flex; align-items: center; justify-content: center; }
+  canvas { display: block; touch-action: none; }
+  #pauseBtn {
+    position: fixed; z-index: 3; display: none; right: 10px; top: calc(10px + env(safe-area-inset-top, 0px));
+    font: 700 13px system-ui, sans-serif; color: var(--fg);
+    background: rgba(18, 10, 36, 0.7); border: 1px solid rgba(255, 246, 234, 0.3);
+    border-radius: 8px; padding: 6px 10px; cursor: pointer;
+  }
+  #overlay {
+    position: fixed; inset: 0; z-index: 5;
+    display: flex; flex-direction: column; align-items: center; justify-content: flex-start;
+    gap: 14px; padding: 16px; text-align: center; overflow-y: auto;
+    background: rgba(18, 10, 36, 0.9);
+  }
+  #overlay > :first-child { margin-top: auto; }
+  #overlay > :last-child { margin-bottom: auto; }
+  #overlay.hidden { display: none; }
+  #homeLink {
+    position: fixed; top: calc(10px + env(safe-area-inset-top, 0px)); left: 10px; z-index: 6;
+    font: 600 13px/1 system-ui, sans-serif; color: #fff; text-decoration: none;
+    padding: 8px 12px; border-radius: 999px; background: rgba(0,0,0,.55);
+    border: 1px solid rgba(255,255,255,.25);
+  }
+  #homeLink:hover { background: rgba(0,0,0,.8); }
+  #overlay.hidden ~ #homeLink { display: none; }
+  @media (max-width: 700px) { #overlay { padding-top: calc(52px + env(safe-area-inset-top, 0px)); } }
+  #overlay h1 {
+    font-size: clamp(36px, 9vw, 62px); line-height: 1.05; letter-spacing: 1px;
+    background: linear-gradient(90deg, #ff4fa3, #ffd34d 50%, #5fd4ff);
+    -webkit-background-clip: text; background-clip: text; color: transparent;
+    filter: drop-shadow(0 3px 0 #3a1050);
+  }
+  #overlay h2 { font-size: clamp(28px, 7vw, 44px); }
+  #overlay h2.over { color: var(--gold); }
+  #overlay p { max-width: 540px; font-size: clamp(13px, 3.4vw, 16px); line-height: 1.55; }
+  #overlay p.muted { color: var(--muted); }
+  #overlay .diff { display: flex; gap: 10px; flex-wrap: wrap; justify-content: center; }
+  #overlay button {
+    font: 800 15px system-ui, sans-serif; letter-spacing: 1px; color: var(--fg);
+    background: transparent; cursor: pointer;
+    border: 2px solid rgba(255,246,234,0.3); border-radius: 8px; padding: 8px 16px;
+  }
+  #overlay .diff button.on { border-color: var(--c); color: var(--c); box-shadow: 0 0 12px var(--c); }
+  #overlay button.start { background: var(--accent); border-color: var(--accent); color: #2a0018; padding: 10px 28px; }
+  @media (max-height: 580px) {
+    #overlay { gap: 8px; }
+    #overlay h1 { font-size: 32px; }
+    #overlay p { font-size: 13px; line-height: 1.4; }
+    #overlay .help { display: none; }
+  }
+</style>
+</head>
+<body>
+<div id="wrap"><canvas id="game"></canvas></div>
+<button id="pauseBtn" type="button" aria-label="Pausa">❚❚</button>
+<div id="overlay"></div>
+<a id="homeLink" href="../../index.html">← Sala Giochi</a>
+
+<script>
+(() => {
+  "use strict";
+
+  // ---------- Table geometry ----------
+  const W = 420, H = 720, R = 9;
+  const LANE_X = 372, LANE_R = 400, LANE_TOP = 250, PLUNGE_Y = 690;
+  const ARC_C = [210, 222], ARC_R = 190;
+  const LP = [128, 652], RP = [292, 652], FL = 74, FR = 7; // flipper pivots, length, radius
+  const BUMPERS = [{ x: 150, y: 270, r: 24 }, { x: 270, y: 270, r: 24 }, { x: 210, y: 350, r: 24 }];
+  const SAUCER = { x: 330, y: 400, r: 13 };
+  const LANES = [170, 210, 250];
+  const TARGETS = [{ x: 34, y: 330 }, { x: 34, y: 372 }, { x: 34, y: 414 }];
+
+  const DIFFICULTIES = {
+    facile:    { label: "FACILE",    color: "#7dff9a", desc: "5 palline · salvapalla di 10 secondi · tavolo meno inclinato", balls: 5, save: 10, g: 780 },
+    normale:   { label: "NORMALE",   color: "#ff4fa3", desc: "3 palline · salvapalla di 6 secondi", balls: 3, save: 6, g: 900 },
+    difficile: { label: "DIFFICILE", color: "#ff5a6a", desc: "3 palline · salvapalla di 3 secondi · tavolo più ripido", balls: 3, save: 3, g: 1020 },
+  };
+  const DIFF_IDS = Object.keys(DIFFICULTIES);
+  const DIFF_KEY = "flipper-difficulty";
+  const bestKey = (id) => `flipper-best-${id}`;
+  function store(k, v) { try { localStorage.setItem(k, v); } catch { /* ignore */ } }
+  function load(k) { try { return localStorage.getItem(k); } catch { return null; } }
+
+  // static wall segments [ax, ay, bx, by, kind]
+  const walls = [];
+  const seg = (ax, ay, bx, by, kind = "wall") => walls.push({ ax, ay, bx, by, kind });
+  function buildWalls() {
+    seg(20, 720, 20, ARC_C[1]);                        // left wall
+    seg(LANE_R, 720, LANE_R, ARC_C[1]);                // right outer wall (shooter lane)
+    // top arch
+    const n = 28;
+    for (let i = 0; i < n; i++) {
+      const a0 = Math.PI + (i / n) * Math.PI, a1 = Math.PI + ((i + 1) / n) * Math.PI;
+      seg(ARC_C[0] + Math.cos(a0) * ARC_R, ARC_C[1] + Math.sin(a0) * ARC_R, ARC_C[0] + Math.cos(a1) * ARC_R, ARC_C[1] + Math.sin(a1) * ARC_R);
+    }
+    seg(LANE_X, 720, LANE_X, LANE_TOP);                // shooter lane inner wall
+    seg(LANE_X, LANE_TOP, LANE_R, LANE_TOP - 40, "gate"); // one-way gate at the top of the lane
+    // lower funnels towards the flippers
+    seg(20, 560, LP[0], LP[1] - FR - 3);
+    seg(LANE_X, 560, RP[0], RP[1] - FR - 3);
+    // slopes from the side walls onto the slingshots, so no pocket is left behind them
+    seg(20, 468, 66, 500); seg(LANE_X, 468, LANE_X - 18, 500);
+    // slingshots (the long face kicks)
+    seg(66, 500, 66, 575); seg(66, 575, 108, 598); seg(66, 500, 108, 598, "sling");
+    seg(LANE_X - 18, 500, LANE_X - 18, 575); seg(LANE_X - 18, 575, LANE_X - 60, 598); seg(LANE_X - 18, 500, LANE_X - 60, 598, "sling");
+    // caps between the left wall and the drop targets, so the ball cannot wedge behind them
+    seg(20, 300, 42, 310); seg(20, 444, 42, 434);
+    // top lane guides
+    for (const x of [150, 190, 230, 270]) seg(x, 150, x, 196);
+    // guide above the saucer
+    seg(308, 380, 352, 372);
+  }
+  buildWalls();
+
+  // ---------- Canvas ----------
+  const canvas = document.getElementById("game");
+  const ctx = canvas.getContext("2d");
+  const overlay = document.getElementById("overlay");
+  const pauseBtn = document.getElementById("pauseBtn");
+  let pxRatio = 1, touchMode = !!(window.matchMedia && matchMedia("(pointer: coarse)").matches);
+  function resize() {
+    const s = Math.max(0.2, Math.min((window.innerWidth - 8) / W, (window.innerHeight - 8) / H));
+    pxRatio = Math.min(3, s * (window.devicePixelRatio || 1));
+    canvas.style.width = W * s + "px";
+    canvas.style.height = H * s + "px";
+    canvas.width = Math.round(W * pxRatio);
+    canvas.height = Math.round(H * pxRatio);
+  }
+  window.addEventListener("resize", () => syncControls());
+
+  // ---------- Audio ----------
+  let audioCtx = null;
+  function beep(freq, dur, type = "square", vol = 0.04, slide = 0, delay = 0) {
+    if (!audioCtx) return;
+    const t = audioCtx.currentTime + delay;
+    const osc = audioCtx.createOscillator(), gain = audioCtx.createGain();
+    osc.type = type;
+    osc.frequency.setValueAtTime(freq, t);
+    if (slide) osc.frequency.exponentialRampToValueAtTime(Math.max(20, freq + slide), t + dur);
+    gain.gain.setValueAtTime(vol, t);
+    gain.gain.exponentialRampToValueAtTime(0.0001, t + dur);
+    osc.connect(gain).connect(audioCtx.destination);
+    osc.start(t); osc.stop(t + dur + 0.02);
+  }
+  const arp = (notes, gap, d, type = "square", vol = 0.045) => notes.forEach((f, i) => beep(f, d, type, vol, 0, i * gap));
+  let sfxN = 0;
+  const lim = (fn) => (...a) => { if (sfxN++ < 5) fn(...a); };
+  const sfx = {
+    flip: lim(() => beep(180, 0.05, "square", 0.035, -60)),
+    bumper: lim((i) => beep([660, 784, 988][i % 3], 0.08, "square", 0.045, 200)),
+    sling: lim(() => beep(420, 0.06, "sawtooth", 0.035, 300)),
+    wall: lim(() => beep(120, 0.03, "triangle", 0.03)),
+    target: lim(() => beep(1046, 0.08, "triangle", 0.05, -300)),
+    lane: lim(() => beep(880, 0.06, "sine", 0.05, 400)),
+    saucer: () => arp([392, 523, 659, 784], 0.06, 0.1, "triangle", 0.05),
+    launch: () => beep(200, 0.3, "sawtooth", 0.04, 600),
+    drain: () => arp([392, 330, 262, 196], 0.12, 0.2, "triangle", 0.05),
+    save: () => arp([784, 988, 1175], 0.07, 0.1, "square", 0.04),
+    multi: () => arp([523, 659, 784, 1047, 1319, 1568], 0.07, 0.14),
+    bonus: lim(() => beep(1200, 0.04, "square", 0.025)),
+    over: () => arp([523, 415, 330, 262], 0.16, 0.25),
+  };
+
+  // ---------- State ----------
+  let difficulty = DIFFICULTIES[load(DIFF_KEY)] ? load(DIFF_KEY) : "normale";
+  let diff = DIFFICULTIES[difficulty];
+  let state = "menu", menu = null, pausedFrom = null, stateT = 0;
+  let score = 0, bestCache = 0, ballNo = 1, mult = 1, bonus = 0, saveT = 0, clock = 0;
+  let balls = [], plunge = 0, plunging = false, lanes = [false, false, false], targets = [true, true, true], targetSets = 0;
+  let flash = { bumper: [0, 0, 0], sling: [0, 0], saucer: 0, lanes: [0, 0, 0] };
+  let popups = [], tally = null, saucerHold = null, message = null;
+  const flip = {
+    L: { p: LP, a: 0.52, rest: 0.52, up: -0.45, w: 0, on: false, dir: 1 },
+    Rt: { p: RP, a: Math.PI - 0.52, rest: Math.PI - 0.52, up: Math.PI + 0.45, w: 0, on: false, dir: -1 },
+  };
+
+  const newBall = (x, y, vx = 0, vy = 0) => ({ x, y, vx, vy, inLane: x > LANE_X, trail: [], stillT: 0 });
+  function readyBall() {
+    balls = [newBall((LANE_X + LANE_R) / 2, PLUNGE_Y)];
+    plunge = 0; plunging = false;
+    state = "ready";
+  }
+
+  // ---------- Flow ----------
+  const isPlaying = () => ["ready", "play", "drain"].includes(state);
+  function startGame() {
+    if (!audioCtx) { try { audioCtx = new (window.AudioContext || window.webkitAudioContext)(); } catch { audioCtx = null; } }
+    if (audioCtx && audioCtx.state === "suspended") audioCtx.resume();
+    score = 0; ballNo = 1; targetSets = 0;
+    bestCache = parseInt(load(bestKey(difficulty)), 10) || 0;
+    startBall();
+    menu = null;
+    overlay.classList.add("hidden");
+    syncControls();
+    last = performance.now();
+  }
+  function startBall() {
+    mult = 1; bonus = 0; lanes = [false, false, false]; targets = [true, true, true];
+    saucerHold = null; tally = null;
+    readyBall();
+  }
+  function addScore(n, x, y, color = "#ffd34d") {
+    score += n;
+    if (x !== undefined) popups.push({ x, y, text: `+${n}`, color, t: 0 });
+  }
+  function say(text, color = "#ffd34d") { message = { text, color, t: 0 }; }
+  function drained() {
+    if (saveT > 0) {
+      saveT = 0;
+      say("SALVAPALLA!", "#7dff9a");
+      sfx.save();
+      readyBall();
+      return;
+    }
+    sfx.drain();
+    tally = { bonus, mult, total: bonus * mult, shown: 0, t: 0 };
+    state = "drain"; stateT = 2.6;
+  }
+  function afterDrain() {
+    score += tally.total;
+    ballNo++;
+    if (ballNo > diff.balls) { gameOver(); return; }
+    startBall();
+  }
+  function gameOver() {
+    state = "over";
+    const prev = parseInt(load(bestKey(difficulty)), 10) || 0;
+    const record = score > prev;
+    if (record) store(bestKey(difficulty), String(score));
+    const played = diff.label;
+    menu = () => showOverlay(
+      `<h2 class="over">PARTITA FINITA</h2>
+       <p>Punteggio: <b>${score.toLocaleString("it-IT")}</b> · ${played}</p>
+       ${record ? "<p style='color:var(--gold)'>★ NUOVO RECORD! ★</p>" : ""}
+       ${difficultyHTML()}
+       <button class="start" data-start>GIOCA ANCORA</button>`
+    );
+    menu();
+    sfx.over();
+    syncControls();
+  }
+  function togglePause() {
+    if (isPlaying()) {
+      pausedFrom = state; state = "paused";
+      showOverlay(`<h2>PAUSA</h2><button class="start" data-resume>CONTINUA</button><p class="muted">Premi P per continuare</p>`);
+    } else if (state === "paused") {
+      state = pausedFrom; overlay.classList.add("hidden"); last = performance.now();
+    }
+    syncControls();
+  }
+  function syncControls() {
+    pauseBtn.style.display = isPlaying() && touchMode ? "block" : "none";
+    resize();
+  }
+  pauseBtn.addEventListener("click", () => togglePause());
+  function showOverlay(html) { overlay.innerHTML = html; overlay.classList.remove("hidden"); }
+  function difficultyHTML() {
+    const buttons = DIFF_IDS.map((id) => {
+      const d = DIFFICULTIES[id];
+      return `<button type="button" data-diff="${id}" class="${id === difficulty ? "on" : ""}" style="--c:${d.color}">${d.label}</button>`;
+    }).join("");
+    const best = parseInt(load(bestKey(difficulty)), 10);
+    return `<div class="diff">${buttons}</div><p class="muted">${diff.desc}${best ? ` · Record: ${best.toLocaleString("it-IT")}` : ""}</p>`;
+  }
+  function setDifficulty(id) { if (!DIFFICULTIES[id]) return; difficulty = id; diff = DIFFICULTIES[id]; store(DIFF_KEY, id); if (menu) menu(); }
+  function showTitle() {
+    menu = showTitle;
+    showOverlay(
+      `<h1>FLIPPER LUNA PARK</h1>
+       <p>Lancia la pallina e tienila in gioco con le due palette! Colpisci i respingenti, abbatti i tre bersagli, accendi le corsie in alto per aumentare il moltiplicatore e centra la buca. Abbatti i bersagli due volte per la <b>MULTIBALL</b>!</p>
+       ${touchMode
+         ? `<p class="muted help">Tocca la metà sinistra o destra dello schermo per le palette · per lanciare tieni premuto sulla destra e lascia</p>`
+         : `<p class="muted help">← o Z paletta sinistra · → o M paletta destra · tieni premuto SPAZIO o ↓ per caricare il lancio e lascia · P pausa</p>`}
+       ${difficultyHTML()}
+       <button class="start" data-start>INIZIA</button>`
+    );
+  }
+  overlay.addEventListener("click", (e) => {
+    const d = e.target.closest("[data-diff]");
+    if (d) { setDifficulty(d.dataset.diff); return; }
+    if (e.target.closest("[data-start]")) startGame();
+    if (e.target.closest("[data-resume]")) togglePause();
+  });
+
+  // ---------- Input ----------
+  function setFlip(side, on) {
+    const f = side === "L" ? flip.L : flip.Rt;
+    if (on && !f.on) {
+      sfx.flip();
+      // pressing a flipper shifts the lit top lanes, to line them up
+      if (lanes.some(Boolean) && !lanes.every(Boolean)) lanes = side === "L" ? [lanes[1], lanes[2], lanes[0]] : [lanes[2], lanes[0], lanes[1]];
+    }
+    f.on = on;
+  }
+  function setPlunger(on) {
+    if (on) { if (state === "ready") plunging = true; return; }
+    if (plunging && state === "ready") launch();
+    plunging = false;
+  }
+  function launch() {
+    const b = balls[0];
+    if (!b) return;
+    b.vy = -(650 + 1150 * plunge);
+    plunge = 0;
+    state = "play";
+    saveT = Math.max(saveT, diff.save);
+    sfx.launch();
+  }
+  const KEYS = { arrowleft: "L", z: "L", a: "L", shift: "L", arrowright: "R", m: "R", d: "R", "/": "R", " ": "P", arrowdown: "P", enter: "P" };
+  window.addEventListener("keydown", (e) => {
+    const k = e.key.toLowerCase();
+    if ([" ", "arrowup", "arrowdown", "arrowleft", "arrowright"].includes(k)) e.preventDefault();
+    if (state === "menu" || state === "over") {
+      if (e.key === "Enter") startGame();
+      else if (["1", "2", "3"].includes(k)) setDifficulty(DIFF_IDS[+k - 1]);
+      return;
+    }
+    if (k === "p" || k === "escape") { if (!e.repeat) togglePause(); return; }
+    if (state === "paused") { if (e.key === "Enter") togglePause(); return; }
+    const a = KEYS[k];
+    if (a === "L") setFlip("L", true); else if (a === "R") setFlip("R", true); else if (a === "P") setPlunger(true);
+  });
+  window.addEventListener("keyup", (e) => {
+    const a = KEYS[e.key.toLowerCase()];
+    if (a === "L") setFlip("L", false); else if (a === "R") setFlip("R", false); else if (a === "P") setPlunger(false);
+  });
+  window.addEventListener("blur", () => { setFlip("L", false); setFlip("R", false); plunging = false; if (isPlaying()) togglePause(); });
+  // touch / mouse: left half = left flipper, right half = right flipper (or plunger while the ball waits)
+  const pointers = new Map();
+  canvas.addEventListener("pointerdown", (e) => {
+    if (e.pointerType === "touch" && !touchMode) { touchMode = true; syncControls(); }
+    if (!isPlaying()) return;
+    e.preventDefault();
+    const r = canvas.getBoundingClientRect();
+    const right = e.clientX > r.left + r.width / 2;
+    const role = right && state === "ready" ? "P" : right ? "R" : "L";
+    pointers.set(e.pointerId, role);
+    try { canvas.setPointerCapture(e.pointerId); } catch { /* ignore */ }
+    if (role === "P") setPlunger(true); else setFlip(role, true);
+  });
+  const release = (e) => {
+    const role = pointers.get(e.pointerId);
+    if (!role) return;
+    pointers.delete(e.pointerId);
+    if (role === "P") setPlunger(false);
+    else if (![...pointers.values()].includes(role)) setFlip(role, false);
+  };
+  canvas.addEventListener("pointerup", release);
+  canvas.addEventListener("pointercancel", release);
+  canvas.addEventListener("contextmenu", (e) => e.preventDefault());
+
+  // ---------- Physics ----------
+  function hitSegment(b, s, rest) {
+    const dx = s.bx - s.ax, dy = s.by - s.ay, l2 = dx * dx + dy * dy;
+    let t = ((b.x - s.ax) * dx + (b.y - s.ay) * dy) / l2;
+    t = Math.max(0, Math.min(1, t));
+    const px = s.ax + dx * t, py = s.ay + dy * t;
+    let nx = b.x - px, ny = b.y - py;
+    const d = Math.hypot(nx, ny);
+    if (d >= R || d < 1e-6) return null;
+    nx /= d; ny /= d;
+    return { nx, ny, px, py, d };
+  }
+  function bounce(b, nx, ny, rest) {
+    const vn = b.vx * nx + b.vy * ny;
+    if (vn < 0) { b.vx -= (1 + rest) * vn * nx; b.vy -= (1 + rest) * vn * ny; }
+    return -vn;
+  }
+  function flipperEnd(f) { return [f.p[0] + Math.cos(f.a) * FL, f.p[1] + Math.sin(f.a) * FL]; }
+  function stepBall(b, dt) {
+    b.vy += diff.g * dt;
+    const sp = Math.hypot(b.vx, b.vy);
+    if (sp > 2300) { b.vx *= 2300 / sp; b.vy *= 2300 / sp; }
+    b.x += b.vx * dt; b.y += b.vy * dt;
+    // walls
+    for (const s of walls) {
+      if (s.kind === "gate" && b.vy <= 0) continue;
+      const h = hitSegment(b, s);
+      if (!h) continue;
+      b.x = h.px + h.nx * R; b.y = h.py + h.ny * R;
+      if (s.kind === "sling") {
+        const vn = bounce(b, h.nx, h.ny, 0.3);
+        if (vn > 60) {
+          b.vx += h.nx * 520; b.vy += h.ny * 520;
+          const i = s.ax < 200 ? 0 : 1; flash.sling[i] = 0.12;
+          addScore(10); bonus += 10; sfx.sling();
+        }
+      } else {
+        const vn = bounce(b, h.nx, h.ny, 0.45);
+        if (vn > 250) sfx.wall();
+      }
+    }
+    // flippers: capsule collision with the flipper's own surface speed
+    for (const f of [flip.L, flip.Rt]) {
+      const [ex, ey] = flipperEnd(f);
+      const dx = ex - f.p[0], dy = ey - f.p[1];
+      let t = ((b.x - f.p[0]) * dx + (b.y - f.p[1]) * dy) / (FL * FL);
+      t = Math.max(0, Math.min(1, t));
+      const cx = f.p[0] + dx * t, cy = f.p[1] + dy * t;
+      let nx = b.x - cx, ny = b.y - cy;
+      const d = Math.hypot(nx, ny), rad = FR + 2 * (1 - t);
+      if (d >= R + rad || d < 1e-6) continue;
+      nx /= d; ny /= d;
+      b.x = cx + nx * (R + rad); b.y = cy + ny * (R + rad);
+      const rx = cx - f.p[0], ry = cy - f.p[1];
+      const fvx = -f.w * ry, fvy = f.w * rx;
+      const rvx = b.vx - fvx, rvy = b.vy - fvy, vn = rvx * nx + rvy * ny;
+      if (vn < 0) { b.vx -= 1.25 * vn * nx; b.vy -= 1.25 * vn * ny; }
+    }
+    // bumpers
+    BUMPERS.forEach((bp, i) => {
+      const dx = b.x - bp.x, dy = b.y - bp.y, d = Math.hypot(dx, dy);
+      if (d >= bp.r + R || d < 1e-6) return;
+      const nx = dx / d, ny = dy / d;
+      b.x = bp.x + nx * (bp.r + R); b.y = bp.y + ny * (bp.r + R);
+      bounce(b, nx, ny, 0.3);
+      b.vx += nx * 460; b.vy += ny * 460;
+      flash.bumper[i] = 0.15;
+      addScore(100, bp.x, bp.y - 30, "#5fd4ff"); bonus += 20;
+      sfx.bumper(i);
+    });
+    // drop targets (standing up on the left wall, facing right)
+    TARGETS.forEach((tg, i) => {
+      if (!targets[i]) return;
+      // never trap a ball behind a target that came back up
+      if (b.x < tg.x + 6 && Math.abs(b.y - tg.y) < 26) { targets[i] = false; return; }
+      const s = { ax: tg.x + 6, ay: tg.y - 16, bx: tg.x + 6, by: tg.y + 16 };
+      const h = hitSegment(b, s);
+      if (!h) return;
+      b.x = h.px + h.nx * R; b.y = h.py + h.ny * R;
+      bounce(b, h.nx, h.ny, 0.4);
+      targets[i] = false;
+      addScore(250, tg.x + 30, tg.y, "#ff4fa3"); bonus += 100;
+      sfx.target();
+      if (targets.every((x) => !x)) targetsDone();
+    });
+    // top lanes
+    LANES.forEach((lx, i) => {
+      if (Math.abs(b.x - lx) < 12 && b.y > 164 && b.y < 184 && b.vy > 0 && !lanes[i]) {
+        lanes[i] = true; flash.lanes[i] = 0.3;
+        addScore(300, lx, 150, "#ffd34d"); bonus += 100; sfx.lane();
+        if (lanes.every(Boolean)) {
+          mult = Math.min(5, mult + 1);
+          say(`BONUS ×${mult}!`);
+          addScore(1000);
+          setTimeout(() => { lanes = [false, false, false]; }, 400);
+        }
+      }
+    });
+    // saucer: a slow enough ball gets caught
+    if (!saucerHold && Math.hypot(b.x - SAUCER.x, b.y - SAUCER.y) < SAUCER.r && Math.hypot(b.vx, b.vy) < 1100) {
+      saucerHold = { b, t: 1.0 };
+      b.vx = b.vy = 0; b.x = SAUCER.x; b.y = SAUCER.y;
+      addScore(1500, SAUCER.x, SAUCER.y - 26, "#7dff9a"); bonus += 200;
+      flash.saucer = 1;
+      sfx.saucer();
+    }
+  }
+  function targetsDone() {
+    targetSets++;
+    addScore(2500);
+    bonus += 500;
+    if (targetSets % 2 === 0 && balls.length === 1) {
+      say("MULTIBALL!", "#ff4fa3");
+      sfx.multi();
+      balls.push(newBall(SAUCER.x, SAUCER.y - 30, -260, -200), newBall(210, 420, 200, -350));
+      saveT = Math.max(saveT, 8);
+    } else say("BERSAGLI ABBATTUTI!", "#ff4fa3");
+    setTimeout(() => { targets = [true, true, true]; }, 900);
+  }
+
+  function update(dt) {
+    clock += dt;
+    sfxN = 0;
+    for (const p of popups) { p.t += dt; p.y -= 30 * dt; }
+    popups = popups.filter((p) => p.t < 1);
+    if (message) { message.t += dt; if (message.t > 1.8) message = null; }
+    for (const k of ["bumper", "sling", "lanes"]) flash[k] = flash[k].map((v) => Math.max(0, v - dt));
+    flash.saucer = Math.max(0, flash.saucer - dt);
+    // flippers move even between balls
+    for (const f of [flip.L, flip.Rt]) {
+      const target = f.on ? f.up : f.rest, speed = f.on ? 26 : 16;
+      const before = f.a;
+      const da = target - f.a;
+      f.a += Math.sign(da) * Math.min(Math.abs(da), speed * dt);
+      f.w = (f.a - before) / dt;
+    }
+    if (!isPlaying()) return;
+    if (state === "drain") {
+      tally.t += dt;
+      const shown = Math.min(tally.total, Math.floor(tally.t / 1.4 * tally.total));
+      if (shown > tally.shown) { tally.shown = shown; sfx.bonus(); }
+      stateT -= dt;
+      if (stateT <= 0) afterDrain();
+      return;
+    }
+    if (state === "ready") {
+      if (plunging) plunge = Math.min(1, plunge + dt * 1.2);
+      const b = balls[0];
+      b.x = (LANE_X + LANE_R) / 2; b.y = PLUNGE_Y + plunge * 18; b.vx = b.vy = 0;
+      return;
+    }
+    saveT = Math.max(0, saveT - dt);
+    if (saucerHold) {
+      saucerHold.t -= dt;
+      if (saucerHold.t <= 0) { const b = saucerHold.b; b.vx = -380 - Math.random() * 120; b.vy = -120 - Math.random() * 160; b.y -= 4; b.x -= 6; saucerHold = { cool: 0.4, b: null }; }
+    }
+    if (saucerHold && saucerHold.cool !== undefined) { saucerHold.cool -= dt; if (saucerHold.cool <= 0) saucerHold = null; }
+    const sub = 8, sdt = dt / sub;
+    for (const b of balls) {
+      if (saucerHold && saucerHold.b === b) continue;
+      for (let i = 0; i < sub; i++) { stepBall(b, sdt); if (saucerHold && saucerHold.b === b) break; }
+      b.trail.push([b.x, b.y]); if (b.trail.length > 6) b.trail.shift();
+      // safety nudge if a ball ever comes to rest on the playfield
+      b.stillT = Math.hypot(b.vx, b.vy) < 12 && b.x < LANE_X ? b.stillT + dt : 0;
+      if (b.stillT > 4) { b.stillT = 0; b.vx += (Math.random() < 0.5 ? -1 : 1) * 160; b.vy -= 260; say("SCOSSONE!", "#c3b3dc"); }
+      // a ball resting in the shooter lane can be launched again (automatically during multiball)
+      if (b.x > LANE_X && b.y > PLUNGE_Y - 4 && Math.abs(b.vy) < 40) {
+        if (balls.length === 1) { readyBall(); return; }
+        b.vy = -1500; sfx.launch();
+      }
+      if (b.x > LANE_X && b.y > PLUNGE_Y) { b.y = PLUNGE_Y; b.vy = Math.min(0, b.vy); }
+    }
+    const before = balls.length;
+    balls = balls.filter((b) => b.y < H + 30);
+    if (balls.length < before && balls.length > 0) say(balls.length === 1 ? "FINE MULTIBALL" : "", "#c3b3dc");
+    if (!balls.length) drained();
+  }
+
+  // ---------- Drawing ----------
+  function drawTable() {
+    // playfield
+    const g = ctx.createLinearGradient(0, 0, 0, H);
+    g.addColorStop(0, "#2a1450"); g.addColorStop(0.55, "#3a1060"); g.addColorStop(1, "#1a0a30");
+    ctx.fillStyle = "#120a24"; ctx.fillRect(0, 0, W, H);
+    ctx.save();
+    ctx.beginPath();
+    ctx.moveTo(20, H); ctx.lineTo(20, ARC_C[1]); ctx.arc(ARC_C[0], ARC_C[1], ARC_R, Math.PI, 0); ctx.lineTo(LANE_R, H); ctx.closePath();
+    ctx.fillStyle = g; ctx.fill();
+    ctx.clip();
+    // carnival rays
+    ctx.globalAlpha = 0.07;
+    for (let i = 0; i < 18; i++) {
+      ctx.fillStyle = i % 2 ? "#ff4fa3" : "#ffd34d";
+      ctx.beginPath(); ctx.moveTo(210, 470);
+      ctx.arc(210, 470, 520, (i / 18) * Math.PI * 2 + clock * 0.05, ((i + 0.5) / 18) * Math.PI * 2 + clock * 0.05); ctx.fill();
+    }
+    ctx.globalAlpha = 1;
+    // centre logo
+    ctx.textAlign = "center"; ctx.fillStyle = "rgba(255,246,234,0.1)"; ctx.font = "900 34px system-ui, sans-serif";
+    ctx.fillText("LUNA", 210, 470); ctx.fillText("PARK", 210, 506);
+    // lights around the logo
+    for (let i = 0; i < 12; i++) {
+      const a = (i / 12) * Math.PI * 2, on = Math.floor(clock * 6 + i) % 3 === 0;
+      ctx.fillStyle = on ? "#ffd34d" : "rgba(255,211,77,0.25)";
+      ctx.beginPath(); ctx.arc(210 + Math.cos(a) * 80, 486 + Math.sin(a) * 50, 3.5, 0, Math.PI * 2); ctx.fill();
+    }
+    // multiplier lights
+    for (let i = 1; i <= 5; i++) {
+      ctx.fillStyle = mult >= i ? "#ff4fa3" : "rgba(255,79,163,0.2)";
+      ctx.beginPath(); ctx.arc(150 + (i - 1) * 30, 585, 9, 0, Math.PI * 2); ctx.fill();
+      ctx.fillStyle = mult >= i ? "#fff" : "rgba(255,255,255,0.3)"; ctx.font = "800 9px system-ui, sans-serif";
+      ctx.fillText(`${i}×`, 150 + (i - 1) * 30, 588);
+    }
+    // shooter lane floor
+    ctx.fillStyle = "rgba(0,0,0,0.25)"; ctx.fillRect(LANE_X, LANE_TOP, LANE_R - LANE_X, H);
+    ctx.restore();
+
+    // walls
+    ctx.lineCap = "round";
+    for (const s of walls) {
+      if (s.kind === "sling") continue;
+      ctx.strokeStyle = s.kind === "gate" ? "rgba(255,246,234,0.5)" : "#c9a7ff";
+      ctx.lineWidth = s.kind === "gate" ? 2 : 4;
+      ctx.beginPath(); ctx.moveTo(s.ax, s.ay); ctx.lineTo(s.bx, s.by); ctx.stroke();
+    }
+    // slingshots
+    [[66, 500, 66, 575, 108, 598], [LANE_X - 18, 500, LANE_X - 18, 575, LANE_X - 60, 598]].forEach((t, i) => {
+      ctx.fillStyle = flash.sling[i] > 0 ? "#ffffff" : "#ff4fa3";
+      ctx.beginPath(); ctx.moveTo(t[0], t[1]); ctx.lineTo(t[2], t[3]); ctx.lineTo(t[4], t[5]); ctx.closePath(); ctx.fill();
+      ctx.strokeStyle = "#ffd34d"; ctx.lineWidth = 3; ctx.beginPath(); ctx.moveTo(t[0], t[1]); ctx.lineTo(t[4], t[5]); ctx.stroke();
+    });
+    // top lanes lights
+    LANES.forEach((lx, i) => {
+      ctx.fillStyle = lanes[i] ? "#ffd34d" : "rgba(255,211,77,0.2)";
+      if (flash.lanes[i] > 0) ctx.fillStyle = "#fff";
+      ctx.beginPath(); ctx.moveTo(lx, 186); ctx.lineTo(lx - 7, 174); ctx.lineTo(lx + 7, 174); ctx.closePath(); ctx.fill();
+    });
+    // bumpers
+    BUMPERS.forEach((bp, i) => {
+      const f = flash.bumper[i] > 0;
+      ctx.fillStyle = "rgba(0,0,0,0.3)"; ctx.beginPath(); ctx.arc(bp.x + 3, bp.y + 4, bp.r, 0, Math.PI * 2); ctx.fill();
+      ctx.fillStyle = f ? "#ffffff" : ["#5fd4ff", "#ff4fa3", "#ffd34d"][i];
+      ctx.beginPath(); ctx.arc(bp.x, bp.y, bp.r, 0, Math.PI * 2); ctx.fill();
+      ctx.fillStyle = "#fff6ea"; ctx.beginPath(); ctx.arc(bp.x, bp.y, bp.r * 0.62, 0, Math.PI * 2); ctx.fill();
+      ctx.fillStyle = f ? "#ffd34d" : "#3a1060"; ctx.font = "900 11px system-ui, sans-serif"; ctx.textAlign = "center"; ctx.fillText("100", bp.x, bp.y + 4);
+    });
+    // drop targets
+    TARGETS.forEach((tg, i) => {
+      if (targets[i]) { ctx.fillStyle = "#ff4fa3"; ctx.fillRect(tg.x, tg.y - 16, 8, 32); ctx.fillStyle = "#fff"; ctx.fillRect(tg.x + 5, tg.y - 14, 2, 28); }
+      else { ctx.fillStyle = "rgba(255,79,163,0.25)"; ctx.fillRect(tg.x, tg.y - 16, 3, 32); }
+    });
+    // saucer
+    ctx.fillStyle = "#0a0414"; ctx.beginPath(); ctx.arc(SAUCER.x, SAUCER.y, SAUCER.r + 2, 0, Math.PI * 2); ctx.fill();
+    ctx.strokeStyle = flash.saucer > 0 && Math.floor(clock * 12) % 2 ? "#ffffff" : "#7dff9a"; ctx.lineWidth = 3;
+    ctx.beginPath(); ctx.arc(SAUCER.x, SAUCER.y, SAUCER.r + 3, 0, Math.PI * 2); ctx.stroke();
+    // flippers
+    for (const f of [flip.L, flip.Rt]) {
+      const [ex, ey] = flipperEnd(f);
+      ctx.strokeStyle = "#ffffff"; ctx.lineWidth = FR * 2 + 2; ctx.lineCap = "round";
+      ctx.beginPath(); ctx.moveTo(f.p[0], f.p[1]); ctx.lineTo(ex, ey); ctx.stroke();
+      ctx.strokeStyle = "#ff4fa3"; ctx.lineWidth = FR * 2 - 5;
+      ctx.beginPath(); ctx.moveTo(f.p[0], f.p[1]); ctx.lineTo(ex, ey); ctx.stroke();
+      ctx.fillStyle = "#ffd34d"; ctx.beginPath(); ctx.arc(f.p[0], f.p[1], 4, 0, Math.PI * 2); ctx.fill();
+    }
+    // plunger
+    const py = PLUNGE_Y + R + 2 + plunge * 18;
+    ctx.fillStyle = "#c9a7ff"; ctx.fillRect(LANE_X + 6, py, LANE_R - LANE_X - 12, 6);
+    ctx.fillStyle = "#6a4aa0";
+    for (let y = py + 8; y < H; y += 6) ctx.fillRect(LANE_X + 9, y, LANE_R - LANE_X - 18, 3);
+    if (state === "ready") {
+      ctx.fillStyle = `rgba(255,211,77,${0.5 + 0.5 * Math.sin(clock * 6)})`; ctx.font = "800 10px system-ui, sans-serif"; ctx.textAlign = "center";
+      ctx.save(); ctx.translate((LANE_X + LANE_R) / 2, 610); ctx.rotate(-Math.PI / 2); ctx.fillText("LANCIA ▶", 0, 4); ctx.restore();
+    }
+  }
+  function draw() {
+    ctx.setTransform(pxRatio, 0, 0, pxRatio, 0, 0);
+    drawTable();
+    for (const b of balls) {
+      b.trail.forEach(([x, y], i) => { ctx.globalAlpha = (i + 1) / b.trail.length * 0.25; ctx.fillStyle = "#c9a7ff"; ctx.beginPath(); ctx.arc(x, y, R * 0.8, 0, Math.PI * 2); ctx.fill(); });
+      ctx.globalAlpha = 1;
+      const g = ctx.createRadialGradient(b.x - 3, b.y - 3, 1, b.x, b.y, R);
+      g.addColorStop(0, "#ffffff"); g.addColorStop(0.5, "#d8d8e8"); g.addColorStop(1, "#7a7a90");
+      ctx.fillStyle = g; ctx.beginPath(); ctx.arc(b.x, b.y, R, 0, Math.PI * 2); ctx.fill();
+    }
+    for (const p of popups) {
+      ctx.globalAlpha = 1 - p.t;
+      ctx.textAlign = "center"; ctx.font = "900 13px system-ui, sans-serif";
+      ctx.lineWidth = 3; ctx.strokeStyle = "rgba(18,10,36,0.9)"; ctx.strokeText(p.text, p.x, p.y);
+      ctx.fillStyle = p.color; ctx.fillText(p.text, p.x, p.y);
+    }
+    ctx.globalAlpha = 1;
+    // score panel inside the arch
+    ctx.textAlign = "center";
+    ctx.fillStyle = "#fff6ea"; ctx.font = "900 26px system-ui, sans-serif";
+    ctx.fillText(score.toLocaleString("it-IT"), 210, 64);
+    ctx.fillStyle = "#c3b3dc"; ctx.font = "700 11px system-ui, sans-serif";
+    ctx.fillText(state === "menu" ? `RECORD ${bestCache.toLocaleString("it-IT")}` : `PALLA ${Math.min(ballNo, diff.balls)}/${diff.balls} · BONUS ×${mult} · RECORD ${Math.max(score, bestCache).toLocaleString("it-IT")}`, 210, 82);
+    if (saveT > 0 && state === "play") { ctx.fillStyle = Math.floor(clock * 6) % 2 ? "#7dff9a" : "rgba(125,255,154,0.4)"; ctx.font = "800 11px system-ui, sans-serif"; ctx.fillText("SALVAPALLA ATTIVO", 210, 640); }
+    if (message && message.text) {
+      ctx.globalAlpha = Math.min(1, (1.8 - message.t) * 2);
+      ctx.font = "900 28px system-ui, sans-serif"; ctx.lineWidth = 6; ctx.strokeStyle = "rgba(18,10,36,0.9)";
+      ctx.strokeText(message.text, 210, 440); ctx.fillStyle = message.color; ctx.fillText(message.text, 210, 440);
+      ctx.globalAlpha = 1;
+    }
+    if (state === "drain" && tally) {
+      ctx.fillStyle = "rgba(18,10,36,0.7)"; ctx.fillRect(40, 380, 340, 110);
+      ctx.fillStyle = "#fff6ea"; ctx.font = "900 22px system-ui, sans-serif"; ctx.fillText("PALLA PERSA", 210, 414);
+      ctx.font = "800 15px system-ui, sans-serif"; ctx.fillStyle = "#c3b3dc"; ctx.fillText(`bonus ${tally.bonus} × ${tally.mult}`, 210, 442);
+      ctx.fillStyle = "#ffd34d"; ctx.font = "900 20px system-ui, sans-serif"; ctx.fillText(`+${tally.shown.toLocaleString("it-IT")}`, 210, 472);
+    }
+  }
+
+  // ---------- Loop ----------
+  const STEP = 1 / 120;
+  let last = performance.now(), acc = 0;
+  function loop(now) {
+    const dt = Math.min(0.1, (now - last) / 1000);
+    last = now;
+    if (isPlaying()) {
+      acc += dt;
+      while (acc >= STEP && isPlaying()) { update(STEP); acc -= STEP; }
+    } else { acc = 0; update(dt); }
+    draw();
+    requestAnimationFrame(loop);
+  }
+  syncControls();
+  showTitle();
+  requestAnimationFrame(loop);
+})();
+</script>
+</body>
+</html>

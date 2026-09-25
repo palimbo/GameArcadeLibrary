@@ -4,7 +4,7 @@ Raccolta di giochi arcade per il browser. Ogni gioco è un singolo file HTML sen
 
 ## 🕹️ Sala Giochi — `index.html`
 
-Apri `index.html` nella cartella principale per la pagina di raccolta: mostra tutti i 16 giochi con copertina, genere, comandi e i tuoi record per ogni difficoltà (Facile, Normale, Difficile). Tocca «Gioca» per avviare un gioco; in ogni gioco il pulsante «← Sala Giochi» in alto a sinistra (visibile nei menu) riporta alla raccolta.
+Apri `index.html` nella cartella principale per la pagina di raccolta: mostra tutti i 17 giochi con copertina, genere, comandi e i tuoi record per ogni difficoltà (Facile, Normale, Difficile). Tocca «Gioca» per avviare un gioco; in ogni gioco il pulsante «← Sala Giochi» in alto a sinistra (visibile nei menu) riporta alla raccolta.
 
 ## Giochi
 
@@ -250,3 +250,18 @@ Battaglia a bombe in stile *Bomberman*: quattro bombaroli in un'arena piena di m
 - **Touch:** croce direzionale e pulsante 💣 (in 2 giocatori ognuno ha i suoi comandi)
 
 Per giocare apri `games/mattoni-e-bombe/index.html` nel browser.
+
+### 🎡 Flipper Luna Park — `games/flipper/index.html`
+
+Flipper verticale a tema luna park: lancia la pallina con la molla e tienila in gioco con le due palette.
+
+- **Tavolo:** tre respingenti (100 punti), due fionde che rilanciano la pallina, tre bersagli abbattibili sulla sinistra, tre corsie luminose in alto e una buca che trattiene la pallina per un attimo (1.500 punti)
+- **Moltiplicatore:** accendi tutte e tre le corsie in alto per aumentare il bonus fino a ×5; premendo le palette le luci delle corsie scorrono, così puoi allinearle
+- **Bersagli:** abbattili tutti per 2.500 punti; la seconda volta scatta la **MULTIBALL** con tre palline in gioco
+- **Salvapalla:** subito dopo il lancio, se la pallina cade viene restituita
+- **Bonus di fine pallina:** tutto ciò che colpisci accumula un bonus, moltiplicato per il moltiplicatore quando perdi la pallina
+- **Difficoltà:** Facile (5 palline, salvapalla di 10 secondi, tavolo meno inclinato), Normale (3 palline, 6 secondi), Difficile (3 palline, 3 secondi, tavolo più ripido); ogni difficoltà ha il suo record
+- **Comandi:** `←` o `Z` paletta sinistra · `→` o `M` paletta destra · tieni premuto `SPAZIO` o `↓` per caricare la molla e lascia per lanciare · `P` pausa
+- **Touch:** tocca la metà sinistra o destra dello schermo per le palette; per lanciare tieni premuto sulla destra e lascia
+
+Per giocare apri `games/flipper/index.html` nel browser.
