@@ -163,6 +163,7 @@
   .play:active { transform: translateY(2px); box-shadow: 0 2px 0 rgba(0,0,0,.45); }
   .play:focus-visible, .cover:focus-visible { outline: 3px solid var(--text); outline-offset: 3px; }
 
+  .game-frame { position: fixed; inset: 0; width: 100%; height: 100%; border: 0; z-index: 50; background: #000; }
   footer { text-align: center; color: var(--muted); font-size: 14px; }
   footer p { margin: 0; }
   footer .mono { font-family: var(--mono); letter-spacing: .08em; }
@@ -233,7 +234,7 @@
   const esc = (s) => s.replace(/&/g, "&amp;").replace(/</g, "&lt;");
 
   const grid = document.getElementById("grid");
-  grid.innerHTML = GAMES.map((g) => {
+  const render = () => { grid.innerHTML = GAMES.map((g) => {
     const href = `games/${g.id}/index.html`;
     const cells = DIFFS.map(([d, short]) => {
       const v = fmt(g.rec, load(keyFor(g.rec, d)));
@@ -255,7 +256,41 @@
         <a class="play" href="${href}">▶ Gioca</a>
       </div>
     </li>`;
-  }).join("");
+  }).join(""); };
+  render();
+
+  // Games open full screen inside this page (loaded with fetch into an iframe), so they also work
+  // where leaving the page is not allowed; if loading fails we fall back to a normal link.
+  let frame = null;
+  function closeGame() {
+    if (!frame) return;
+    frame.remove(); frame = null;
+    document.documentElement.style.overflow = "";
+    render();
+  }
+  async function openGame(href) {
+    const res = await fetch(href);
+    if (!res.ok) throw new Error(res.status);
+    let html = await res.text();
+    const base = new URL(href, location.href).href;
+    html = html.replace("<head>", `<head><base href="${base}">`)
+      .replace('href="../../index.html"', 'href="#" onclick="parent.postMessage(\'sala-giochi:chiudi\', \'*\'); return false;"');
+    frame = document.createElement("iframe");
+    frame.className = "game-frame";
+    frame.title = "Gioco";
+    frame.setAttribute("allow", "autoplay; fullscreen");
+    frame.srcdoc = html;
+    document.body.appendChild(frame);
+    document.documentElement.style.overflow = "hidden";
+    frame.addEventListener("load", () => { try { frame.contentWindow.focus(); } catch { /* ignore */ } });
+  }
+  grid.addEventListener("click", (e) => {
+    const a = e.target.closest("a.play, a.cover");
+    if (!a || e.ctrlKey || e.metaKey || e.shiftKey) return;
+    e.preventDefault();
+    openGame(a.getAttribute("href")).catch(() => { closeGame(); location.href = a.getAttribute("href"); });
+  });
+  window.addEventListener("message", (e) => { if (e.data === "sala-giochi:chiudi") closeGame(); });
 })();
 </script>
 </body>
