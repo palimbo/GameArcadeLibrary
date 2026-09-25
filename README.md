@@ -4,7 +4,7 @@ Raccolta di giochi arcade per il browser. Ogni gioco è un singolo file HTML sen
 
 ## 🕹️ Sala Giochi — `index.html`
 
-Apri `index.html` nella cartella principale per la pagina di raccolta: mostra tutti i 10 giochi con copertina, genere, comandi e i tuoi record per ogni difficoltà (Facile, Normale, Difficile). Tocca «Gioca» per avviare un gioco; in ogni gioco il pulsante «← Sala Giochi» in alto a sinistra (visibile nei menu) riporta alla raccolta.
+Apri `index.html` nella cartella principale per la pagina di raccolta: mostra tutti gli 11 giochi con copertina, genere, comandi e i tuoi record per ogni difficoltà (Facile, Normale, Difficile). Tocca «Gioca» per avviare un gioco; in ogni gioco il pulsante «← Sala Giochi» in alto a sinistra (visibile nei menu) riporta alla raccolta.
 
 ## Giochi
 
@@ -163,3 +163,18 @@ Gioco di attraversamento in stile *Frogger*: porta cinque ranocchie nelle tane s
 - **Touch:** croce direzionale, oppure scorri il dito nella direzione del salto; un tocco sul campo = salto in avanti
 
 Per giocare apri `games/rana-in-fuga/index.html` nel browser.
+
+### ☄️ Pioggia di Meteore — `games/pioggia-di-meteore/index.html`
+
+Gioco di difesa in stile *Missile Command*: una pioggia di meteore sta per colpire sei città, e tu le difendi con i fuochi d'artificio lanciati da tre postazioni.
+
+- **Come funziona:** mira un punto del cielo e il fuoco esplode lì; ogni meteora che attraversa lo scoppio viene distrutta e a sua volta esplode, con possibili reazioni a catena. Anticipa la traiettoria: il fuoco impiega un po' ad arrivare (quello della postazione centrale è più veloce)
+- **Fuochi contati:** ogni postazione ne ha un numero limitato per ondata; una postazione colpita resta fuori uso fino all'ondata dopo
+- **Ondate:** sempre più meteore e più veloci; poi arrivano meteore che si dividono in volo, comete azzurre che schivano i fuochi e dischi volanti che sganciano meteore
+- **Punti:** meteora 25, cometa 125, disco volante 100, moltiplicati per il livello dell'ondata (fino a ×6); a fine ondata bonus per ogni fuoco avanzato e ogni città salva; una città bonus ogni 10.000 punti ricostruisce una città distrutta
+- **Fine partita:** quando tutte le città sono state colpite
+- **Difficoltà:** Facile (meteore lente, 12 fuochi per postazione), Normale (10 fuochi), Difficile (meteore veloci, 9 fuochi, divisioni già dalla 2ª ondata); ogni difficoltà ha il suo record
+- **Comandi:** mouse per mirare e clic per sparare dalla postazione più vicina; `A` `S` `D` sparano dalla postazione sinistra, centrale o destra; senza mouse, frecce per mirare e `SPAZIO` per sparare; `P` pausa
+- **Touch:** tocca il cielo dove vuoi far esplodere un fuoco
+
+Per giocare apri `games/pioggia-di-meteore/index.html` nel browser.

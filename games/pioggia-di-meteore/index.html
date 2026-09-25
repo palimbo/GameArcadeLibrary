@@ -1,0 +1,671 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no, viewport-fit=cover">
+<title>Pioggia di Meteore</title>
+<style>
+  :root {
+    --bg: #070a1c;
+    --fg: #f1f3ff;
+    --muted: #a8aed0;
+    --accent: #ffb03a;
+    --cyan: #5ee7ff;
+    --bad: #ff5a6a;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  html, body {
+    height: 100%;
+    background: var(--bg);
+    color: var(--fg);
+    font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+    overflow: hidden;
+    user-select: none;
+    -webkit-user-select: none;
+    touch-action: none;
+  }
+  #wrap { position: fixed; inset: 0; display: flex; align-items: center; justify-content: center; }
+  canvas { display: block; touch-action: none; cursor: none; }
+  #pauseBtn {
+    position: fixed; z-index: 3; display: none; right: 10px; top: calc(10px + env(safe-area-inset-top, 0px));
+    font: 700 13px system-ui, sans-serif; color: var(--fg);
+    background: rgba(7, 10, 28, 0.7); border: 1px solid rgba(241, 243, 255, 0.3);
+    border-radius: 8px; padding: 6px 10px; cursor: pointer;
+  }
+  #overlay {
+    position: fixed; inset: 0; z-index: 5;
+    display: flex; flex-direction: column; align-items: center; justify-content: flex-start;
+    gap: 14px; padding: 16px; text-align: center; overflow-y: auto;
+    background: rgba(7, 10, 28, 0.9);
+  }
+  #overlay > :first-child { margin-top: auto; }
+  #overlay > :last-child { margin-bottom: auto; }
+  #overlay.hidden { display: none; }
+  #homeLink {
+    position: fixed; top: calc(10px + env(safe-area-inset-top, 0px)); left: 10px; z-index: 6;
+    font: 600 13px/1 system-ui, sans-serif; color: #fff; text-decoration: none;
+    padding: 8px 12px; border-radius: 999px; background: rgba(0,0,0,.55);
+    border: 1px solid rgba(255,255,255,.25);
+  }
+  #homeLink:hover { background: rgba(0,0,0,.8); }
+  #overlay.hidden ~ #homeLink { display: none; }
+  @media (max-width: 700px) { #overlay { padding-top: calc(52px + env(safe-area-inset-top, 0px)); } }
+  #overlay h1 {
+    font-size: clamp(34px, 8.5vw, 60px); letter-spacing: 2px; line-height: 1.05;
+    color: var(--accent); text-shadow: 0 0 20px rgba(255, 176, 58, 0.5), 0 4px 0 #6a3a08;
+  }
+  #overlay h2 { font-size: clamp(28px, 7vw, 46px); }
+  #overlay h2.lose { color: var(--bad); }
+  #overlay p { max-width: 540px; font-size: clamp(13px, 3.4vw, 16px); line-height: 1.55; }
+  #overlay p.muted { color: var(--muted); }
+  #overlay .diff { display: flex; gap: 10px; flex-wrap: wrap; justify-content: center; }
+  #overlay button {
+    font: 800 15px system-ui, sans-serif; letter-spacing: 1px; color: var(--fg);
+    background: transparent; cursor: pointer;
+    border: 2px solid rgba(241,243,255,0.3); border-radius: 8px; padding: 8px 16px;
+  }
+  #overlay .diff button.on { border-color: var(--c); color: var(--c); box-shadow: 0 0 12px var(--c); }
+  #overlay button.start { background: var(--accent); border-color: var(--accent); color: #2a1604; padding: 10px 28px; }
+  @media (max-height: 560px) {
+    #overlay { gap: 8px; }
+    #overlay h1 { font-size: 32px; }
+    #overlay p { font-size: 13px; line-height: 1.4; }
+    #overlay .help { display: none; }
+  }
+</style>
+</head>
+<body>
+<div id="wrap"><canvas id="game"></canvas></div>
+<button id="pauseBtn" type="button" aria-label="Pausa">❚❚</button>
+<div id="overlay"></div>
+<a id="homeLink" href="../../index.html">← Sala Giochi</a>
+
+<script>
+(() => {
+  "use strict";
+
+  // ---------- Field ----------
+  const W = 540, H = 600, HUD = 40, GROUND = 556;
+  const BATT_X = [34, 270, 506];
+  const CITY_X = [94, 146, 198, 342, 394, 446];
+  const MIN_FIRE_Y = GROUND - 44;
+
+  const DIFFICULTIES = {
+    facile:    { label: "FACILE",    color: "#7dff9a", desc: "Meteore lente · 12 fuochi per postazione · città bonus ogni 8.000 punti", speed: 0.72, ammo: 12, bonusCity: 8000, splitFrom: 4, smartFrom: 6 },
+    normale:   { label: "NORMALE",   color: "#ffb03a", desc: "10 fuochi per postazione · città bonus ogni 10.000 punti", speed: 1, ammo: 10, bonusCity: 10000, splitFrom: 3, smartFrom: 5 },
+    difficile: { label: "DIFFICILE", color: "#ff5a6a", desc: "Meteore veloci · 9 fuochi · meteore che si dividono già dalla 2ª ondata", speed: 1.25, ammo: 9, bonusCity: 12000, splitFrom: 2, smartFrom: 4 },
+  };
+  const DIFF_IDS = Object.keys(DIFFICULTIES);
+  const DIFF_KEY = "meteore-difficulty";
+  const bestKey = (id) => `meteore-best-${id}`;
+  function store(k, v) { try { localStorage.setItem(k, v); } catch { /* ignore */ } }
+  function load(k) { try { return localStorage.getItem(k); } catch { return null; } }
+  const FIREWORK = ["#ff5a6a", "#ffd34d", "#5ee7ff", "#7dff9a", "#ff7ad9", "#b98cff", "#ffffff"];
+
+  // ---------- Canvas ----------
+  const canvas = document.getElementById("game");
+  const ctx = canvas.getContext("2d");
+  const overlay = document.getElementById("overlay");
+  const pauseBtn = document.getElementById("pauseBtn");
+  let pxRatio = 1, scale = 1, touchMode = !!(window.matchMedia && matchMedia("(pointer: coarse)").matches);
+  function resize() {
+    scale = Math.max(0.2, Math.min((window.innerWidth - 8) / W, (window.innerHeight - 8) / H));
+    pxRatio = Math.min(3, scale * (window.devicePixelRatio || 1));
+    canvas.style.width = W * scale + "px";
+    canvas.style.height = H * scale + "px";
+    canvas.width = Math.round(W * pxRatio);
+    canvas.height = Math.round(H * pxRatio);
+  }
+  window.addEventListener("resize", () => syncControls());
+
+  // ---------- Audio ----------
+  let audioCtx = null;
+  function beep(freq, dur, type = "square", vol = 0.04, slide = 0, delay = 0) {
+    if (!audioCtx) return;
+    const t = audioCtx.currentTime + delay;
+    const osc = audioCtx.createOscillator(), gain = audioCtx.createGain();
+    osc.type = type;
+    osc.frequency.setValueAtTime(freq, t);
+    if (slide) osc.frequency.exponentialRampToValueAtTime(Math.max(20, freq + slide), t + dur);
+    gain.gain.setValueAtTime(vol, t);
+    gain.gain.exponentialRampToValueAtTime(0.0001, t + dur);
+    osc.connect(gain).connect(audioCtx.destination);
+    osc.start(t); osc.stop(t + dur + 0.02);
+  }
+  const arp = (notes, gap, d, type = "square", vol = 0.045) => notes.forEach((f, i) => beep(f, d, type, vol, 0, i * gap));
+  const sfx = {
+    launch: () => beep(300, 0.18, "sawtooth", 0.025, 700),
+    pop: () => { beep(160 + Math.random() * 80, 0.25, "sawtooth", 0.04, -100); beep(1200 + Math.random() * 600, 0.1, "triangle", 0.025, -400); },
+    kill: () => beep(700 + Math.random() * 300, 0.08, "square", 0.03, 300),
+    impact: () => { beep(90, 0.5, "sawtooth", 0.07, -50); beep(60, 0.6, "square", 0.05, -20, 0.05); },
+    empty: () => beep(120, 0.08, "square", 0.03),
+    ufo: () => beep(500, 0.15, "sine", 0.02, 200),
+    wave: () => arp([392, 523, 659, 784], 0.1, 0.14),
+    tally: () => beep(880, 0.05, "square", 0.03),
+    city: () => arp([659, 880, 1175], 0.08, 0.14, "triangle", 0.06),
+    over: () => arp([523, 415, 330, 262, 196], 0.18, 0.3),
+  };
+
+  // ---------- State ----------
+  let difficulty = DIFFICULTIES[load(DIFF_KEY)] ? load(DIFF_KEY) : "normale";
+  let diff = DIFFICULTIES[difficulty];
+  let state = "menu", menu = null, pausedFrom = null, stateT = 0;
+  let wave = 1, score = 0, bestCache = 0, nextBonus = 10000, spareCities = 0;
+  let cities = [], batteries = [], meteors = [], shots = [], blasts = [], sparks = [], popups = [], ufo = null;
+  let toSpawn = 0, spawnT = 0, ufoT = 0, clock = 0, tally = null;
+  let aim = { x: W / 2, y: H / 2 }, keysDown = {};
+  const stars = Array.from({ length: 90 }, () => ({ x: Math.random() * W, y: Math.random() * (GROUND - 60), s: Math.random() * 1.6 + 0.4, p: Math.random() * 6 }));
+
+  const mult = () => Math.min(6, 1 + Math.floor((wave - 1) / 2));
+  const meteorSpeed = () => (34 + Math.min(wave, 16) * 7) * diff.speed;
+
+  function resetWorld() {
+    cities = CITY_X.map((x, i) => ({ x, alive: true, style: i }));
+    batteries = BATT_X.map((x) => ({ x, alive: true, ammo: diff.ammo }));
+  }
+  function targets() { return [...cities.map((c) => ({ x: c.x, alive: c.alive })), ...batteries.map((b) => ({ x: b.x, alive: b.alive }))]; }
+  function pickTarget() {
+    const all = targets(), alive = all.filter((t) => t.alive);
+    const pool = alive.length && Math.random() < 0.8 ? alive : all;
+    const t = pool[Math.floor(Math.random() * pool.length)];
+    return t.x + (Math.random() - 0.5) * 14;
+  }
+  function spawnMeteor(x0, y0, opts = {}) {
+    const tx = opts.tx ?? pickTarget();
+    const sp = meteorSpeed() * (opts.smart ? 0.8 : 1) * (0.85 + Math.random() * 0.3);
+    const dx = tx - x0, dy = GROUND - 4 - y0, d = Math.hypot(dx, dy);
+    meteors.push({
+      x0, y0, x: x0, y: y0, tx, vx: (dx / d) * sp, vy: (dy / d) * sp, sp,
+      split: !opts.child && wave >= diff.splitFrom && Math.random() < 0.18 + wave * 0.01, splitY: 150 + Math.random() * 170,
+      smart: !!opts.smart, alive: true, trailHue: 20 + Math.random() * 25,
+    });
+  }
+
+  // ---------- Flow ----------
+  const isPlaying = () => ["intro", "playing", "tally"].includes(state);
+  function startGame() {
+    if (!audioCtx) { try { audioCtx = new (window.AudioContext || window.webkitAudioContext)(); } catch { audioCtx = null; } }
+    if (audioCtx && audioCtx.state === "suspended") audioCtx.resume();
+    wave = 1; score = 0; spareCities = 0; nextBonus = diff.bonusCity;
+    bestCache = parseInt(load(bestKey(difficulty)), 10) || 0;
+    resetWorld();
+    startWave();
+    menu = null;
+    overlay.classList.add("hidden");
+    syncControls();
+  }
+  function startWave() {
+    for (const b of batteries) { b.alive = true; b.ammo = diff.ammo; }
+    meteors = []; shots = []; blasts = []; ufo = null; tally = null;
+    toSpawn = Math.min(34, 10 + wave * 2);
+    spawnT = 1.6; ufoT = wave >= 2 ? 6 + Math.random() * 6 : 1e9;
+    state = "intro"; stateT = 2;
+    sfx.wave();
+    last = performance.now();
+  }
+  function endWave() {
+    const m = mult();
+    const ammo = batteries.reduce((s, b) => s + (b.alive ? b.ammo : 0), 0);
+    const alive = cities.filter((c) => c.alive).length;
+    tally = { ammo, alive, ammoPts: ammo * 5 * m, cityPts: alive * 100 * m, shownAmmo: 0, shownCity: 0, t: 0, restored: false };
+    state = "tally"; stateT = 3.2;
+  }
+  function finishTally() {
+    score += tally.ammoPts + tally.cityPts;
+    checkBonus();
+    if (cities.every((c) => !c.alive) && spareCities === 0) { gameOver(); return; }
+    // restore destroyed cities with spare ones
+    for (const c of cities) if (!c.alive && spareCities > 0) { c.alive = true; spareCities--; sfx.city(); }
+    wave++;
+    startWave();
+  }
+  function checkBonus() {
+    while (score >= nextBonus) { spareCities++; nextBonus += diff.bonusCity; popups.push({ x: W / 2, y: 200, text: "CITTÀ BONUS!", color: "#7dff9a", t: 0 }); sfx.city(); }
+  }
+  function addScore(n, x, y, color = "#ffd34d") {
+    score += n;
+    popups.push({ x, y, text: `+${n}`, color, t: 0 });
+    checkBonus();
+  }
+  function gameOver() {
+    state = "over";
+    const prev = parseInt(load(bestKey(difficulty)), 10) || 0;
+    const record = score > prev;
+    if (record) store(bestKey(difficulty), String(score));
+    const played = diff.label, reached = wave;
+    menu = () => showOverlay(
+      `<h2 class="lose">LA FINE</h2>
+       <p>Tutte le città sono state colpite. Hai resistito fino all'ondata ${reached}.</p>
+       <p>Punteggio: <b>${score.toLocaleString("it-IT")}</b> · ${played}</p>
+       ${record ? "<p style='color:var(--accent)'>★ NUOVO RECORD! ★</p>" : ""}
+       ${difficultyHTML()}
+       <button class="start" data-start>GIOCA ANCORA</button>`
+    );
+    menu();
+    sfx.over();
+    syncControls();
+  }
+  function togglePause() {
+    if (isPlaying()) {
+      pausedFrom = state; state = "paused";
+      showOverlay(`<h2>PAUSA</h2><button class="start" data-resume>CONTINUA</button><p class="muted">Premi P per continuare</p>`);
+    } else if (state === "paused") {
+      state = pausedFrom; overlay.classList.add("hidden"); last = performance.now();
+    }
+    syncControls();
+  }
+  function syncControls() {
+    pauseBtn.style.display = isPlaying() && touchMode ? "block" : "none";
+    resize();
+  }
+  pauseBtn.addEventListener("click", () => togglePause());
+  function showOverlay(html) { overlay.innerHTML = html; overlay.classList.remove("hidden"); }
+  function difficultyHTML() {
+    const buttons = DIFF_IDS.map((id) => {
+      const d = DIFFICULTIES[id];
+      return `<button type="button" data-diff="${id}" class="${id === difficulty ? "on" : ""}" style="--c:${d.color}">${d.label}</button>`;
+    }).join("");
+    const best = parseInt(load(bestKey(difficulty)), 10);
+    return `<div class="diff">${buttons}</div><p class="muted">${diff.desc}${best ? ` · Record: ${best.toLocaleString("it-IT")}` : ""}</p>`;
+  }
+  function setDifficulty(id) {
+    if (!DIFFICULTIES[id]) return;
+    difficulty = id; diff = DIFFICULTIES[id];
+    store(DIFF_KEY, id);
+    if (menu) menu();
+  }
+  function showTitle() {
+    menu = showTitle;
+    showOverlay(
+      `<h1>PIOGGIA DI METEORE</h1>
+       <p>Una pioggia di meteore sta per colpire sei città! Dalle tre postazioni lancia fuochi d'artificio: esplodono dove miri e distruggono le meteore che attraversano lo scoppio. Anticipa la traiettoria e prendine tante con un colpo solo, ma occhio: i fuochi sono contati.</p>
+       <p class="muted">Dalle ondate avanzate: meteore che si dividono, comete azzurre che schivano i fuochi e dischi volanti che sganciano meteore</p>
+       ${touchMode
+         ? `<p class="muted help">Tocca il cielo dove vuoi far esplodere un fuoco: parte dalla postazione più vicina</p>`
+         : `<p class="muted help">Mouse per mirare, clic per sparare (dalla postazione più vicina) · A S D spara da sinistra, centro o destra · frecce + SPAZIO senza mouse · P pausa</p>`}
+       ${difficultyHTML()}
+       <button class="start" data-start>INIZIA</button>`
+    );
+  }
+  overlay.addEventListener("click", (e) => {
+    const d = e.target.closest("[data-diff]");
+    if (d) { setDifficulty(d.dataset.diff); return; }
+    if (e.target.closest("[data-start]")) startGame();
+    if (e.target.closest("[data-resume]")) togglePause();
+  });
+
+  // ---------- Firing ----------
+  function fire(x, y, which) {
+    if (state !== "playing" && state !== "intro") return false;
+    y = Math.min(y, MIN_FIRE_Y);
+    y = Math.max(y, HUD + 10);
+    x = Math.max(8, Math.min(W - 8, x));
+    let b = null;
+    if (which !== undefined) { const c = batteries[which]; if (c.alive && c.ammo > 0) b = c; }
+    else {
+      let best = 1e9;
+      for (const c of batteries) if (c.alive && c.ammo > 0 && Math.abs(c.x - x) < best) { best = Math.abs(c.x - x); b = c; }
+    }
+    if (!b) { sfx.empty(); return false; }
+    b.ammo--;
+    const sx = b.x, sy = GROUND - 30;
+    const sp = b === batteries[1] ? 820 : 560;
+    const d = Math.hypot(x - sx, y - sy);
+    shots.push({ sx, sy, x: sx, y: sy, tx: x, ty: y, vx: ((x - sx) / d) * sp, vy: ((y - sy) / d) * sp, left: d });
+    sfx.launch();
+    return true;
+  }
+  function blast(x, y, friendly, maxR = 38) {
+    blasts.push({ x, y, t: 0, maxR, friendly, hue: Math.floor(Math.random() * FIREWORK.length) });
+    if (friendly) for (let i = 0; i < 14; i++) {
+      const a = Math.random() * Math.PI * 2, s = 60 + Math.random() * 130;
+      sparks.push({ x, y, vx: Math.cos(a) * s, vy: Math.sin(a) * s, t: 0, life: 0.6 + Math.random() * 0.5, color: FIREWORK[Math.floor(Math.random() * FIREWORK.length)] });
+    }
+  }
+  // Radius over time: grow 0.45s, hold 0.2s, shrink 0.4s.
+  function blastR(b) {
+    const t = b.t;
+    if (t < 0.45) return b.maxR * (t / 0.45);
+    if (t < 0.65) return b.maxR;
+    if (t < 1.05) return b.maxR * (1 - (t - 0.65) / 0.4);
+    return 0;
+  }
+
+  // ---------- Input ----------
+  const toField = (clientX, clientY) => {
+    const r = canvas.getBoundingClientRect();
+    return { x: ((clientX - r.left) / r.width) * W, y: ((clientY - r.top) / r.height) * H };
+  };
+  window.addEventListener("pointermove", (e) => {
+    if (e.pointerType !== "mouse") return;
+    const f = toField(e.clientX, e.clientY);
+    aim.x = f.x; aim.y = f.y;
+  });
+  canvas.addEventListener("pointerdown", (e) => {
+    if (e.pointerType === "touch" && !touchMode) { touchMode = true; syncControls(); }
+    const f = toField(e.clientX, e.clientY);
+    aim.x = f.x; aim.y = f.y;
+    fire(f.x, f.y);
+  });
+  window.addEventListener("keydown", (e) => {
+    const k = e.key.toLowerCase();
+    if ([" ", "arrowup", "arrowdown", "arrowleft", "arrowright"].includes(k)) e.preventDefault();
+    if (state === "menu" || state === "over") {
+      if (e.key === "Enter") startGame();
+      else if (k === "arrowleft") setDifficulty(DIFF_IDS[(DIFF_IDS.indexOf(difficulty) + 2) % 3]);
+      else if (k === "arrowright") setDifficulty(DIFF_IDS[(DIFF_IDS.indexOf(difficulty) + 1) % 3]);
+      else if (["1", "2", "3"].includes(k)) setDifficulty(DIFF_IDS[+k - 1]);
+      return;
+    }
+    if (k === "p" || k === "escape") { if (!e.repeat) togglePause(); return; }
+    if (state === "paused" && e.key === "Enter") { togglePause(); return; }
+    keysDown[k] = true;
+    if (e.repeat) return;
+    if (k === " " || k === "enter") fire(aim.x, aim.y);
+    else if (k === "a" || k === "1") fire(aim.x, aim.y, 0);
+    else if (k === "s" || k === "2") fire(aim.x, aim.y, 1);
+    else if (k === "d" || k === "3") fire(aim.x, aim.y, 2);
+  });
+  window.addEventListener("keyup", (e) => { keysDown[e.key.toLowerCase()] = false; });
+  window.addEventListener("blur", () => { if (isPlaying()) togglePause(); });
+
+  // ---------- Update ----------
+  function update(dt) {
+    clock += dt;
+    for (const s of sparks) { s.t += dt; s.x += s.vx * dt; s.y += s.vy * dt; s.vy += 90 * dt; s.vx *= 0.98; }
+    sparks = sparks.filter((s) => s.t < s.life);
+    for (const p of popups) { p.t += dt; p.y -= 26 * dt; }
+    popups = popups.filter((p) => p.t < 1.1);
+    if (!isPlaying()) return;
+
+    // crosshair by keyboard
+    const kx = (keysDown["arrowleft"] ? -1 : 0) + (keysDown["arrowright"] ? 1 : 0);
+    const ky = (keysDown["arrowup"] ? -1 : 0) + (keysDown["arrowdown"] ? 1 : 0);
+    if (kx || ky) { aim.x = Math.max(8, Math.min(W - 8, aim.x + kx * 380 * dt)); aim.y = Math.max(HUD + 10, Math.min(MIN_FIRE_Y, aim.y + ky * 380 * dt)); }
+
+    if (state === "tally") {
+      tally.t += dt;
+      const ta = Math.min(tally.ammo, Math.floor(tally.t / 0.07));
+      if (ta > tally.shownAmmo) { tally.shownAmmo = ta; sfx.tally(); }
+      const tc = tally.t > 1.2 ? Math.min(tally.alive, Math.floor((tally.t - 1.2) / 0.2) + 1) : 0;
+      if (tc > tally.shownCity) { tally.shownCity = tc; beep(660, 0.08, "triangle", 0.04); }
+      stateT -= dt;
+      if (stateT <= 0) finishTally();
+      return;
+    }
+    if (state === "intro") { stateT -= dt; if (stateT <= 0) state = "playing"; }
+
+    // spawn
+    if (state === "playing" && toSpawn > 0) {
+      spawnT -= dt;
+      if (spawnT <= 0) {
+        const n = Math.min(toSpawn, 1 + Math.floor(Math.random() * Math.min(4, 1 + wave / 2)));
+        for (let i = 0; i < n; i++) spawnMeteor(20 + Math.random() * (W - 40), HUD, { smart: wave >= diff.smartFrom && Math.random() < 0.12 });
+        toSpawn -= n;
+        spawnT = Math.max(1.1, 3.2 - wave * 0.16) * (0.7 + Math.random() * 0.6);
+      }
+    }
+    // UFO
+    ufoT -= dt;
+    if (!ufo && ufoT <= 0 && toSpawn > 0 && state === "playing") {
+      const dir = Math.random() < 0.5 ? 1 : -1;
+      ufo = { x: dir > 0 ? -30 : W + 30, y: 150 + Math.random() * 110, dir, dropT: 1.2, alive: true };
+      ufoT = 10 + Math.random() * 8;
+    }
+    if (ufo) {
+      ufo.x += ufo.dir * 70 * dt;
+      ufo.dropT -= dt;
+      if (Math.floor(clock * 4) % 2 === 0 && Math.random() < 0.05) sfx.ufo();
+      if (ufo.dropT <= 0 && ufo.x > 30 && ufo.x < W - 30) { spawnMeteor(ufo.x, ufo.y + 8, { child: true }); ufo.dropT = 2 + Math.random(); }
+      if (ufo.x < -40 || ufo.x > W + 40) ufo = null;
+    }
+
+    // shots
+    for (const s of shots) {
+      const step = Math.hypot(s.vx, s.vy) * dt;
+      if (step >= s.left) { s.x = s.tx; s.y = s.ty; s.done = true; blast(s.x, s.y, true); sfx.pop(); }
+      else { s.x += s.vx * dt; s.y += s.vy * dt; s.left -= step; }
+    }
+    shots = shots.filter((s) => !s.done);
+
+    // meteors
+    for (const m of meteors) {
+      if (!m.alive) continue;
+      if (m.smart) {
+        // steer away from nearby blasts
+        let ax = 0;
+        for (const b of blasts) {
+          if (!b.friendly) continue;
+          const dx = m.x - b.x, dy = m.y - b.y, d = Math.hypot(dx, dy);
+          if (d < 90 && dy < 40) ax += (dx >= 0 ? 1 : -1) * (90 - d) * 6;
+        }
+        m.vx += ax * dt;
+        m.vx += ((m.tx - m.x) * 0.4 - m.vx) * dt * 0.8;
+        const s = Math.hypot(m.vx, m.vy);
+        m.vx = (m.vx / s) * m.sp; m.vy = Math.max(m.sp * 0.4, (m.vy / s) * m.sp);
+      }
+      m.x += m.vx * dt; m.y += m.vy * dt;
+      if (m.x < 4 || m.x > W - 4) { m.vx = -m.vx; m.x = Math.max(4, Math.min(W - 4, m.x)); }
+      if (m.split && m.y > m.splitY) {
+        m.split = false;
+        const k = 1 + Math.floor(Math.random() * 2);
+        for (let i = 0; i < k; i++) spawnMeteor(m.x, m.y, { child: true });
+        beep(400, 0.1, "square", 0.02, -200);
+      }
+      if (m.y >= GROUND - 4) { m.alive = false; impact(m.x); }
+    }
+    meteors = meteors.filter((m) => m.alive);
+
+    // blasts
+    for (const b of blasts) {
+      b.t += dt;
+      const r = blastR(b);
+      if (r <= 2 || !b.friendly) continue;
+      for (const m of meteors) {
+        if (m.alive && Math.hypot(m.x - b.x, m.y - b.y) < r + 3) {
+          m.alive = false;
+          addScore((m.smart ? 125 : 25) * mult(), m.x, m.y - 8, m.smart ? "#5ee7ff" : "#ffd34d");
+          blast(m.x, m.y, true, 24);
+          sfx.kill();
+        }
+      }
+      if (ufo && Math.hypot(ufo.x - b.x, ufo.y - b.y) < r + 12) {
+        addScore(100 * mult(), ufo.x, ufo.y - 12, "#7dff9a");
+        blast(ufo.x, ufo.y, true, 30);
+        ufo = null;
+        sfx.kill();
+      }
+    }
+    meteors = meteors.filter((m) => m.alive);
+    blasts = blasts.filter((b) => b.t < 1.05);
+
+    if (state === "playing" && toSpawn === 0 && !meteors.length && !shots.length && !blasts.length && !ufo) endWave();
+  }
+  function impact(x) {
+    blast(x, GROUND - 4, false, 30);
+    sfx.impact();
+    for (const c of cities) if (c.alive && Math.abs(c.x - x) < 22) c.alive = false;
+    for (const b of batteries) if (b.alive && Math.abs(b.x - x) < 24) { b.alive = false; b.ammo = 0; }
+  }
+
+  // ---------- Drawing ----------
+  function drawCity(c) {
+    const x = c.x, y = GROUND;
+    if (!c.alive) {
+      ctx.fillStyle = "#3a3448";
+      for (let i = 0; i < 6; i++) ctx.fillRect(x - 18 + i * 6, y - 4 - ((i * 7) % 5), 5, 4 + ((i * 7) % 5));
+      return;
+    }
+    const shapes = [
+      [[-20, 18, 14], [-7, 28, 10], [4, 22, 14], [-2, 34, 4]],
+      [[-19, 20, 12], [-8, 14, 18], [9, 26, 10]],
+      [[-20, 16, 10], [-10, 24, 10], [0, 30, 8], [8, 18, 12]],
+    ][c.style % 3];
+    for (const [ox, h, w] of shapes) {
+      ctx.fillStyle = "#4a5a9a"; ctx.fillRect(x + ox, y - h, w, h);
+      ctx.fillStyle = "#ffe08a";
+      for (let wy = y - h + 4; wy < y - 4; wy += 6) for (let wx = x + ox + 2; wx < x + ox + w - 2; wx += 4) if ((wx * 7 + wy * 3) % 5 < 3) ctx.fillRect(wx, wy, 2, 3);
+    }
+    if (c.style % 3 === 0) { ctx.fillStyle = "#4a5a9a"; ctx.beginPath(); ctx.arc(x - 2, y - 34, 6, Math.PI, 0); ctx.fill(); }
+  }
+  function drawBattery(b, i) {
+    const x = b.x, y = GROUND;
+    ctx.fillStyle = "#6a4a2a";
+    ctx.beginPath(); ctx.moveTo(x - 34, y); ctx.quadraticCurveTo(x, y - 46, x + 34, y); ctx.fill();
+    if (!b.alive) {
+      ctx.fillStyle = "#3a3448"; ctx.fillRect(x - 10, y - 24, 20, 6);
+      return;
+    }
+    ctx.fillStyle = i === 1 ? "#5ee7ff" : "#ffb03a";
+    ctx.beginPath(); ctx.arc(x, y - 28, 8, Math.PI, 0); ctx.fill();
+    // ammo pips
+    for (let k = 0; k < b.ammo; k++) {
+      const row = Math.floor(k / 4), col = k % 4;
+      ctx.fillStyle = "#f1f3ff";
+      ctx.fillRect(x - 9 + col * 5 - row * 2.5 + (row > 0 ? 2.5 : 0), y - 16 + row * 5, 2, 4);
+    }
+    if (b.ammo === 0) { ctx.fillStyle = "#ff5a6a"; ctx.font = "800 9px system-ui, sans-serif"; ctx.textAlign = "center"; ctx.fillText("VUOTA", x, y - 8); }
+    else if (b.ammo <= 3) { ctx.fillStyle = "#ffd34d"; ctx.font = "800 9px system-ui, sans-serif"; ctx.textAlign = "center"; ctx.fillText("POCHI", x, y - 40); }
+  }
+
+  function draw() {
+    ctx.setTransform(pxRatio, 0, 0, pxRatio, 0, 0);
+    const hue = [232, 262, 208, 290, 245, 320, 220, 275][(wave - 1) % 8];
+    const sky = ctx.createLinearGradient(0, 0, 0, GROUND);
+    sky.addColorStop(0, `hsl(${hue}, 60%, 7%)`);
+    sky.addColorStop(1, `hsl(${(hue + 30) % 360}, 55%, 20%)`);
+    ctx.fillStyle = sky; ctx.fillRect(0, 0, W, H);
+    for (const s of stars) {
+      ctx.globalAlpha = 0.5 + 0.5 * Math.sin(clock * 2 + s.p);
+      ctx.fillStyle = "#fff"; ctx.fillRect(s.x, s.y, s.s, s.s);
+    }
+    ctx.globalAlpha = 1;
+    ctx.fillStyle = "#f4f0d8"; ctx.beginPath(); ctx.arc(W - 70, 90, 20, 0, Math.PI * 2); ctx.fill();
+    ctx.fillStyle = `hsl(${hue}, 60%, 9%)`; ctx.beginPath(); ctx.arc(W - 62, 84, 18, 0, Math.PI * 2); ctx.fill();
+
+    // ground
+    ctx.fillStyle = "#3d2e22"; ctx.fillRect(0, GROUND, W, H - GROUND);
+    ctx.fillStyle = "#5a4430"; ctx.fillRect(0, GROUND, W, 4);
+    batteries.forEach(drawBattery);
+    cities.forEach(drawCity);
+
+    // meteors
+    for (const m of meteors) {
+      const g = ctx.createLinearGradient(m.x0, m.y0, m.x, m.y);
+      g.addColorStop(0, "rgba(255,120,40,0)");
+      g.addColorStop(1, m.smart ? "rgba(140,230,255,0.9)" : `hsla(${m.trailHue}, 100%, 60%, 0.85)`);
+      ctx.strokeStyle = g; ctx.lineWidth = 2;
+      ctx.beginPath(); ctx.moveTo(m.x0, m.y0); ctx.lineTo(m.x, m.y); ctx.stroke();
+      const fl = 1 + Math.sin(clock * 30 + m.x) * 0.25;
+      ctx.fillStyle = m.smart ? "#bff4ff" : "#ffd08a";
+      ctx.shadowColor = m.smart ? "#5ee7ff" : "#ff7a2a"; ctx.shadowBlur = 12;
+      if (m.smart) { ctx.beginPath(); ctx.moveTo(m.x, m.y - 6); ctx.lineTo(m.x + 5, m.y); ctx.lineTo(m.x, m.y + 6); ctx.lineTo(m.x - 5, m.y); ctx.closePath(); ctx.fill(); }
+      else { ctx.beginPath(); ctx.arc(m.x, m.y, 3.5 * fl, 0, Math.PI * 2); ctx.fill(); }
+      ctx.shadowBlur = 0;
+    }
+    // UFO
+    if (ufo) {
+      ctx.fillStyle = "#9fe8b0"; ctx.beginPath(); ctx.ellipse(ufo.x, ufo.y - 4, 8, 7, 0, Math.PI, 0); ctx.fill();
+      ctx.fillStyle = "#8a90b0"; ctx.beginPath(); ctx.ellipse(ufo.x, ufo.y, 20, 6, 0, 0, Math.PI * 2); ctx.fill();
+      for (let i = -1; i <= 1; i++) { ctx.fillStyle = Math.floor(clock * 6 + i) % 2 ? "#ffd34d" : "#ff5a6a"; ctx.beginPath(); ctx.arc(ufo.x + i * 10, ufo.y + 1, 2, 0, Math.PI * 2); ctx.fill(); }
+    }
+    // shots
+    for (const s of shots) {
+      ctx.strokeStyle = "rgba(200,240,255,0.65)"; ctx.lineWidth = 1.5;
+      ctx.beginPath(); ctx.moveTo(s.sx, s.sy); ctx.lineTo(s.x, s.y); ctx.stroke();
+      ctx.fillStyle = "#fff"; ctx.fillRect(s.x - 1.5, s.y - 1.5, 3, 3);
+      ctx.strokeStyle = "#5ee7ff"; ctx.lineWidth = 1.5;
+      ctx.beginPath(); ctx.moveTo(s.tx - 4, s.ty - 4); ctx.lineTo(s.tx + 4, s.ty + 4); ctx.moveTo(s.tx + 4, s.ty - 4); ctx.lineTo(s.tx - 4, s.ty + 4); ctx.stroke();
+    }
+    // blasts
+    for (const b of blasts) {
+      const r = blastR(b);
+      if (r <= 0) continue;
+      if (b.friendly) {
+        const c = FIREWORK[(b.hue + Math.floor(clock * 14)) % FIREWORK.length];
+        const g = ctx.createRadialGradient(b.x, b.y, 0, b.x, b.y, r);
+        g.addColorStop(0, "#ffffff"); g.addColorStop(0.35, c); g.addColorStop(1, "rgba(255,255,255,0)");
+        ctx.fillStyle = g; ctx.beginPath(); ctx.arc(b.x, b.y, r, 0, Math.PI * 2); ctx.fill();
+        ctx.strokeStyle = c; ctx.lineWidth = 1.5; ctx.globalAlpha = 0.6; ctx.beginPath(); ctx.arc(b.x, b.y, r, 0, Math.PI * 2); ctx.stroke(); ctx.globalAlpha = 1;
+      } else {
+        const g = ctx.createRadialGradient(b.x, b.y, 0, b.x, b.y, r);
+        g.addColorStop(0, "#fff3c0"); g.addColorStop(0.4, "#ff7a2a"); g.addColorStop(1, "rgba(120,20,10,0)");
+        ctx.fillStyle = g; ctx.beginPath(); ctx.arc(b.x, b.y, r, 0, Math.PI * 2); ctx.fill();
+      }
+    }
+    for (const s of sparks) {
+      ctx.globalAlpha = 1 - s.t / s.life; ctx.fillStyle = s.color; ctx.fillRect(s.x - 1.5, s.y - 1.5, 3, 3);
+    }
+    ctx.globalAlpha = 1;
+    for (const p of popups) {
+      ctx.globalAlpha = Math.min(1, (1.1 - p.t) * 3);
+      ctx.textAlign = "center"; ctx.font = "800 13px system-ui, sans-serif";
+      ctx.lineWidth = 3; ctx.strokeStyle = "rgba(7,10,28,0.9)"; ctx.strokeText(p.text, p.x, p.y);
+      ctx.fillStyle = p.color; ctx.fillText(p.text, p.x, p.y);
+    }
+    ctx.globalAlpha = 1;
+
+    // crosshair (mouse / keyboard)
+    if ((state === "playing" || state === "intro") && !touchMode) {
+      ctx.strokeStyle = "#f1f3ff"; ctx.lineWidth = 1.5;
+      ctx.beginPath(); ctx.arc(aim.x, aim.y, 9, 0, Math.PI * 2);
+      ctx.moveTo(aim.x - 15, aim.y); ctx.lineTo(aim.x - 5, aim.y); ctx.moveTo(aim.x + 5, aim.y); ctx.lineTo(aim.x + 15, aim.y);
+      ctx.moveTo(aim.x, aim.y - 15); ctx.lineTo(aim.x, aim.y - 5); ctx.moveTo(aim.x, aim.y + 5); ctx.lineTo(aim.x, aim.y + 15);
+      ctx.stroke();
+    }
+
+    // HUD
+    ctx.fillStyle = "rgba(7,10,28,0.8)"; ctx.fillRect(0, 0, W, HUD);
+    ctx.textAlign = "left"; ctx.font = "700 11px system-ui, sans-serif"; ctx.fillStyle = "#a8aed0";
+    ctx.fillText("PUNTI", 12, 15);
+    ctx.font = "800 18px system-ui, sans-serif"; ctx.fillStyle = "#f1f3ff";
+    ctx.fillText(score.toLocaleString("it-IT"), 12, 34);
+    ctx.textAlign = "center"; ctx.font = "700 11px system-ui, sans-serif"; ctx.fillStyle = "#a8aed0";
+    ctx.fillText(`ONDATA ${wave}`, W / 2, 15);
+    ctx.font = "800 16px system-ui, sans-serif"; ctx.fillStyle = "#ffb03a";
+    ctx.fillText(`PUNTI ×${mult()}${spareCities ? ` · CITTÀ +${spareCities}` : ""}`, W / 2, 33);
+    if (!(touchMode && isPlaying())) {
+      ctx.textAlign = "right"; ctx.font = "700 11px system-ui, sans-serif"; ctx.fillStyle = "#a8aed0";
+      ctx.fillText("RECORD", W - 12, 15);
+      ctx.font = "800 18px system-ui, sans-serif"; ctx.fillStyle = "#ffd34d";
+      ctx.fillText(Math.max(score, bestCache).toLocaleString("it-IT"), W - 12, 34);
+    }
+
+    const text = (t, y, size, color) => {
+      ctx.textAlign = "center"; ctx.font = `900 ${size}px system-ui, sans-serif`;
+      ctx.lineWidth = 5; ctx.strokeStyle = "rgba(7,10,28,0.9)"; ctx.strokeText(t, W / 2, y);
+      ctx.fillStyle = color; ctx.fillText(t, W / 2, y);
+    };
+    if (state === "intro") {
+      text(`ONDATA ${wave}`, 250, 36, "#ffb03a");
+      text(`punti ×${mult()} · difendi le città!`, 282, 16, "#f1f3ff");
+    }
+    if (state === "tally" && tally) {
+      text("ONDATA SUPERATA", 200, 30, "#7dff9a");
+      text(`Fuochi avanzati: ${tally.shownAmmo} × ${5 * mult()}`, 245, 17, "#f1f3ff");
+      text(`Città salve: ${tally.shownCity} × ${100 * mult()}`, 272, 17, "#f1f3ff");
+      text(`+${(tally.shownAmmo * 5 + tally.shownCity * 100) * mult()}`, 306, 22, "#ffd34d");
+    }
+  }
+
+  // ---------- Loop ----------
+  const STEP = 1 / 120;
+  let last = performance.now(), acc = 0;
+  function loop(now) {
+    const dt = Math.min(0.1, (now - last) / 1000);
+    last = now;
+    if (isPlaying()) {
+      acc += dt;
+      while (acc >= STEP && isPlaying()) { update(STEP); acc -= STEP; }
+    } else { acc = 0; update(dt); }
+    draw();
+    requestAnimationFrame(loop);
+  }
+  resetWorld();
+  syncControls();
+  showTitle();
+  requestAnimationFrame(loop);
+})();
+</script>
+</body>
+</html>
