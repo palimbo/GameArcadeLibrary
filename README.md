@@ -4,7 +4,7 @@ Raccolta di giochi arcade per il browser. Ogni gioco è un singolo file HTML sen
 
 ## 🕹️ Sala Giochi — `index.html`
 
-Apri `index.html` nella cartella principale per la pagina di raccolta: mostra tutti i 23 giochi con copertina, genere, comandi e i tuoi record per ogni difficoltà (Facile, Normale, Difficile). Tocca «Gioca» per avviare un gioco; in ogni gioco il pulsante «← Sala Giochi» in alto a sinistra (visibile nei menu) riporta alla raccolta.
+Apri `index.html` nella cartella principale per la pagina di raccolta: mostra tutti i 24 giochi con copertina, genere, comandi e i tuoi record per ogni difficoltà (Facile, Normale, Difficile). Tocca «Gioca» per avviare un gioco; in ogni gioco il pulsante «← Sala Giochi» in alto a sinistra (visibile nei menu) riporta alla raccolta.
 
 ## Giochi
 
@@ -361,3 +361,19 @@ Duelli in volo in stile *Joust*: in sella a uno struzzo volante sbatti le ali pe
 - **Touch:** ◀ ▶ e ▲; in due, ognuno ha i suoi tasti ai lati
 
 Per giocare apri `games/giostra-volante/index.html` nel browser.
+
+### 🦍 Scimmione — `games/scimmione/index.html`
+
+Piattaforme in stile *Donkey Kong*: lo Scimmione ha rapito Paolina e la tiene in cima a un cantiere. Sali lungo travi e scale per salvarla.
+
+- **Le travi (25 m):** lo Scimmione lancia barili che rotolano giù per le travi inclinate e a volte scendono dalle scale. Saltali (100 punti) e arriva in cima da Paolina. I barili che finiscono nel bidone dell'olio fanno nascere dei fuochi che girano per il cantiere
+- **I bulloni (100 m):** cammina sui bulloni gialli per toglierli (100 punti ciascuno); quando li hai tolti tutti e otto la struttura cede e lo Scimmione precipita. Dove hai tolto un bullone resta un buco da saltare. I fuochi ti inseguono tra i piani
+- **Martello:** afferralo per spaccare barili (300, 500 o 800 punti) e fuochi (500) per qualche secondo; col martello in mano non puoi saltare né salire le scale
+- **Cadute:** cadere da troppo in alto è fatale, e le scale rotte non si possono salire
+- **Bonus:** il bonus tempo scende di continuo; quello che resta a fine schema si aggiunge al punteggio, e se arriva a zero perdi una vita
+- **Livelli:** dopo i due schemi si ricomincia più veloci; vita extra a 10.000 punti e poi ogni 20.000
+- **Difficoltà:** Facile (5 vite, barili lenti, più tempo), Normale (3 vite), Difficile (3 vite, barili veloci, più fuochi, meno tempo); ogni difficoltà ha il suo record
+- **Comandi:** `←` `→` cammina · `↑` `↓` sali e scendi le scale · `SPAZIO` salta · `P` pausa
+- **Touch:** croce direzionale a sinistra e tasto SALTA a destra
+
+Per giocare apri `games/scimmione/index.html` nel browser.
