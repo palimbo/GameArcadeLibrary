@@ -251,17 +251,19 @@ Battaglia a bombe in stile *Bomberman*: quattro bombaroli in un'arena piena di m
 
 Per giocare apri `games/mattoni-e-bombe/index.html` nel browser.
 
-### 🎡 Flipper Luna Park — `games/flipper/index.html`
+### 🎡 Flipper — `games/flipper/index.html`
 
-Flipper verticale a tema luna park: lancia la pallina con la molla e tienila in gioco con le due palette.
+Flipper verticale con tre tavoli da scegliere nel menu: lancia la pallina con la molla e tienila in gioco con le due palette.
 
-- **Tavolo:** tre respingenti (100 punti), due fionde che rilanciano la pallina, tre bersagli abbattibili sulla sinistra, tre corsie luminose in alto e una buca che trattiene la pallina per un attimo (1.500 punti)
-- **Moltiplicatore:** accendi tutte e tre le corsie in alto per aumentare il bonus fino a ×5; premendo le palette le luci delle corsie scorrono, così puoi allinearle
+- **Luna Park:** tre respingenti (100 punti), tre bersagli abbattibili sulla sinistra e una buca che trattiene la pallina per un attimo (1.500 punti)
+- **Abissi Marini:** quattro meduse-respingenti, bersagli sulla destra, la conchiglia che trattiene la pallina e il **vortice** al centro, che fa girare la pallina e dà punti finché ci resta dentro
+- **Galassia:** pianeti con gli anelli, una **cometa** che attraversa il tavolo (500 punti) e il **buco nero**, che inghiotte la pallina e la fa uscire dal buco bianco (1.000 punti; ogni tre viaggi **SUPERNOVA** da 5.000). Dopo ogni viaggio il buco nero resta chiuso per qualche secondo
+- **In tutti i tavoli:** due fionde, tre corsie luminose in alto e il moltiplicatore fino a ×5; premendo le palette le luci delle corsie scorrono, così puoi allinearle
 - **Bersagli:** abbattili tutti per 2.500 punti; la seconda volta scatta la **MULTIBALL** con tre palline in gioco
 - **Salvapalla:** subito dopo il lancio, se la pallina cade viene restituita
 - **Bonus di fine pallina:** tutto ciò che colpisci accumula un bonus, moltiplicato per il moltiplicatore quando perdi la pallina
-- **Difficoltà:** Facile (5 palline, salvapalla di 10 secondi, tavolo meno inclinato), Normale (3 palline, 6 secondi), Difficile (3 palline, 3 secondi, tavolo più ripido); ogni difficoltà ha il suo record
-- **Comandi:** `←` o `Z` paletta sinistra · `→` o `M` paletta destra · tieni premuto `SPAZIO` o `↓` per caricare la molla e lascia per lanciare · `P` pausa
+- **Difficoltà:** Facile (5 palline, salvapalla di 10 secondi, tavolo meno inclinato), Normale (3 palline, 6 secondi), Difficile (3 palline, 3 secondi, tavolo più ripido); ogni tavolo ha un record per difficoltà, e la Sala Giochi mostra il migliore
+- **Comandi:** `←` o `Z` paletta sinistra · `→` o `M` paletta destra · tieni premuto `SPAZIO` o `↓` per caricare la molla e lascia per lanciare · `P` pausa; nel menu `←` `→` cambiano tavolo
 - **Touch:** tocca la metà sinistra o destra dello schermo per le palette; per lanciare tieni premuto sulla destra e lascia
 
 Per giocare apri `games/flipper/index.html` nel browser.
