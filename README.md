@@ -4,7 +4,7 @@ Raccolta di giochi arcade per il browser. Ogni gioco è un singolo file HTML sen
 
 ## 🕹️ Sala Giochi — `index.html`
 
-Apri `index.html` nella cartella principale per la pagina di raccolta: mostra tutti i 32 giochi con copertina, genere, comandi e i tuoi record per ogni difficoltà (Facile, Normale, Difficile). Tocca «Gioca» per avviare un gioco; in ogni gioco il pulsante «← Sala Giochi» in alto a sinistra (visibile nei menu) riporta alla raccolta.
+Apri `index.html` nella cartella principale per la pagina di raccolta: mostra tutti i 33 giochi con copertina, genere, comandi e i tuoi record per ogni difficoltà (Facile, Normale, Difficile). Tocca «Gioca» per avviare un gioco; in ogni gioco il pulsante «← Sala Giochi» in alto a sinistra (visibile nei menu) riporta alla raccolta.
 
 ## Giochi
 
@@ -498,3 +498,18 @@ Il classico *Snake* con otto labirinti: guida il serpente affamato senza sbatter
 - **Touch:** frecce sullo schermo oppure scorri il dito sul gioco
 
 Per giocare apri `games/serpentone/index.html` nel browser.
+
+### 🏢 Scalagrattacieli — `games/scalagrattacieli/index.html`
+
+Arrampicata in stile *Crazy Climber*: scala a mani nude la facciata dei grattacieli fino all'elicottero che ti aspetta sul tetto.
+
+- **Finestre:** puoi salire o spostarti solo verso una finestra aperta. Le tapparelle che scendono (rosse) avvisano che si sta chiudendo: se si chiude mentre la tieni scivoli giù di un piano, se si chiude mentre ci arrivi torni indietro
+- **Pericoli:** gli inquilini arrabbiati lanciano vasi di fiori, le travi d'acciaio cadono dall'alto (un «!» rosso avvisa su quali colonne) e i piccioni sganciano i loro regalini
+- **Palloncino:** ogni tanto ne sale uno accanto a te; afferralo per 1.000 punti e un passaggio di 5 piani
+- **4 edifici:** il Palazzo degli Uffici (24 piani), l'Hotel al Tramonto (30), la Torre di Vetro (36) e il Grattacielo dei Record (42), sempre più stretti verso la cima
+- **Punti:** 20 per ogni piano nuovo; in cima bonus di 1.000 × edificio più il bonus tempo che scende mentre sali
+- **Difficoltà:** Facile (5 vite, poche finestre dispettose e pochi oggetti), Normale, Difficile; record separati per ogni difficoltà
+- **Comandi:** tieni premuto ↑ o `W` per salire · ← → per spostarti di finestra · ↓ per scendere · `P` pausa
+- **Touch:** ◀ ▶ a sinistra, ▲ ▼ a destra in orizzontale; croce sotto il gioco in verticale
+
+Per giocare apri `games/scalagrattacieli/index.html` nel browser.
