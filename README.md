@@ -4,7 +4,7 @@ Raccolta di giochi arcade per il browser. Ogni gioco è un singolo file HTML sen
 
 ## 🕹️ Sala Giochi — `index.html`
 
-Apri `index.html` nella cartella principale per la pagina di raccolta: mostra tutti i 21 giochi con copertina, genere, comandi e i tuoi record per ogni difficoltà (Facile, Normale, Difficile). Tocca «Gioca» per avviare un gioco; in ogni gioco il pulsante «← Sala Giochi» in alto a sinistra (visibile nei menu) riporta alla raccolta.
+Apri `index.html` nella cartella principale per la pagina di raccolta: mostra tutti i 22 giochi con copertina, genere, comandi e i tuoi record per ogni difficoltà (Facile, Normale, Difficile). Tocca «Gioca» per avviare un gioco; in ogni gioco il pulsante «← Sala Giochi» in alto a sinistra (visibile nei menu) riporta alla raccolta.
 
 ## Giochi
 
@@ -329,3 +329,18 @@ Sparatutto in stile *Centipede*: un millepiedi scende a zigzag in un campo di fu
 - **Touch:** trascina il dito ovunque sullo schermo per muoverti, come una trackball; finché il dito è appoggiato spari
 
 Per giocare apri `games/millepiedi/index.html` nel browser.
+
+### 🟧 Saltacubi — `games/saltacubi/index.html`
+
+Gioco isometrico in stile *Q\*bert*: salta di cubo in cubo lungo una piramide di 28 cubi e cambia il colore di tutte le facce superiori.
+
+- **Livelli:** livello 1, basta un salto per cubo; livello 2, servono due salti (c'è un colore intermedio); livello 3, risaltare su un cubo finito lo fa tornare indietro; livello 4, due salti e il ritorno indietro. Ogni livello ha quattro giri con colori diversi, poi si ricomincia più veloci
+- **Nemici:** le palle rosse rimbalzano giù dalla cima; la palla viola arrivata in fondo diventa **Coily**, il serpente che ti insegue
+- **Dischi volanti:** ai lati della piramide; saltaci sopra per tornare in cima. Se Coily ti sta inseguendo, ti segue nel vuoto (500 punti). I dischi non usati valgono 50 punti a fine giro
+- **Amici e disturbatori:** la palla verde congela tutti i nemici per qualche secondo; **Sam** rimette i colori com'erano, ma se lo prendi vale 300 punti
+- **Punti:** 25 per cubo colorato, bonus a fine giro che cresce di giro in giro, vita extra a 8.000 punti e poi ogni 14.000
+- **Difficoltà:** Facile (5 vite, nemici lenti e meno numerosi), Normale (3 vite), Difficile (3 vite, nemici veloci e numerosi); ogni difficoltà ha il suo record
+- **Comandi:** le frecce sono ruotate di 45° come nel cabinato: `↑` su a destra, `→` giù a destra, `↓` giù a sinistra, `←` su a sinistra; in alternativa `Q` `E` `Z` `C` o il tastierino `7` `9` `1` `3` · `P` pausa
+- **Touch:** quattro tasti in diagonale, oppure tocca lo schermo dalla parte verso cui vuoi saltare
+
+Per giocare apri `games/saltacubi/index.html` nel browser.
