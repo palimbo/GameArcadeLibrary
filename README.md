@@ -4,7 +4,7 @@ Raccolta di giochi arcade per il browser. Ogni gioco è un singolo file HTML sen
 
 ## 🕹️ Sala Giochi — `index.html`
 
-Apri `index.html` nella cartella principale per la pagina di raccolta: mostra tutti i 35 giochi con copertina, genere, comandi e i tuoi record per ogni difficoltà (Facile, Normale, Difficile). Tocca «Gioca» per avviare un gioco; in ogni gioco il pulsante «← Sala Giochi» in alto a sinistra (visibile nei menu) riporta alla raccolta.
+Apri `index.html` nella cartella principale per la pagina di raccolta: mostra tutti i 36 giochi con copertina, genere, comandi e i tuoi record per ogni difficoltà (Facile, Normale, Difficile). Tocca «Gioca» per avviare un gioco; in ogni gioco il pulsante «← Sala Giochi» in alto a sinistra (visibile nei menu) riporta alla raccolta.
 
 **Iniziali del record:** quando batti un record compare la schermata da sala giochi per inserire le tue tre iniziali (frecce ↑ ↓ per cambiare lettera, ← → per spostarti, oppure scrivile direttamente; su telefono i tasti ▲ ▼ e OK). Le iniziali vengono salvate insieme al record e compaiono nei menu del gioco e nella Sala Giochi. Il codice è condiviso da tutti i giochi in `shared/iniziali.js`.
 
@@ -548,3 +548,20 @@ Sparatutto vettoriale in stile *Tempest*: la tua navicella ad artiglio gira sul 
 - **Touch:** ⟲ ⟳ a sinistra, ZAP e FUOCO a destra
 
 Per giocare apri `games/vortice/index.html` nel browser.
+
+### 🚙 Pattuglia Lunare — `games/pattuglia-lunare/index.html`
+
+Corsa e spari a scorrimento in stile *Moon Patrol*: guida il fuoristrada lunare lungo la strada dal punto A al punto Z.
+
+- **Il cannone:** spara insieme in avanti (contro massi e carri armati) e verso l'alto (contro dischi volanti e bombe)
+- **Ostacoli:** crateri piccoli e grandi e mine da saltare; massi da saltare o distruggere (quelli grandi vogliono due colpi); carri armati che sparano proiettili radenti
+- **Dal cielo:** dischi volanti che sganciano bombe e bombardieri arancioni le cui bombe aprono nuovi crateri sulla strada
+- **Velocità:** accelera o rallenta per saltare al momento giusto e schivare le bombe
+- **Punti di controllo:** una lettera ogni tratto; se perdi una vita riparti dall'ultima. Ogni 5 lettere finisce una fase con bonus tempo
+- **4 ambientazioni:** il Mare della Tranquillità, il Cratere Copernico, il Lato Oscuro e la Base Nemica, sempre più pericolose
+- **Punti:** 50 per ogni salto di un ostacolo, 100 un masso (200 quello grande), 200 un disco volante, 300 un bombardiere, 500 un carro armato
+- **Difficoltà:** Facile (5 vite, meno ostacoli e nemici), Normale, Difficile; record separati per ogni difficoltà
+- **Comandi:** ← → per rallentare e accelerare · ↑ o `SPAZIO` per saltare · `Z` o `X` per sparare · `P` pausa
+- **Touch:** ◀ ▶ a sinistra, FUOCO e SALTA a destra
+
+Per giocare apri `games/pattuglia-lunare/index.html` nel browser.
