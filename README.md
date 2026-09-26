@@ -4,7 +4,7 @@ Raccolta di giochi arcade per il browser. Ogni gioco è un singolo file HTML sen
 
 ## 🕹️ Sala Giochi — `index.html`
 
-Apri `index.html` nella cartella principale per la pagina di raccolta: mostra tutti i 34 giochi con copertina, genere, comandi e i tuoi record per ogni difficoltà (Facile, Normale, Difficile). Tocca «Gioca» per avviare un gioco; in ogni gioco il pulsante «← Sala Giochi» in alto a sinistra (visibile nei menu) riporta alla raccolta.
+Apri `index.html` nella cartella principale per la pagina di raccolta: mostra tutti i 35 giochi con copertina, genere, comandi e i tuoi record per ogni difficoltà (Facile, Normale, Difficile). Tocca «Gioca» per avviare un gioco; in ogni gioco il pulsante «← Sala Giochi» in alto a sinistra (visibile nei menu) riporta alla raccolta.
 
 ## Giochi
 
@@ -529,3 +529,20 @@ Consegne in bici in stile *Paperboy*: ogni mattina pedali lungo Via dei Tigli e 
 - **Touch:** croce a sinistra e tasto LANCIA a destra
 
 Per giocare apri `games/strillone/index.html` nel browser.
+
+### 🌀 Vortice — `games/vortice/index.html`
+
+Sparatutto vettoriale in stile *Tempest*: la tua navicella ad artiglio gira sul bordo di un tunnel al neon e spara giù per le corsie.
+
+- **Farfalle (rosse):** salgono cambiando corsia; arrivate in cima ti inseguono lungo il bordo e ti afferrano (150 punti)
+- **Cisterne (viola):** colpite o arrivate in cima si dividono in due farfalle (100 punti)
+- **Spinosi (verdi):** salgono lasciando una punta nella loro corsia e poi tornano giù (50 punti); le punte si accorciano sparandoci sopra
+- **Colpi nemici:** salgono lungo la corsia; si possono abbattere
+- **Superzapper:** uno per livello, distrugge tutti i nemici nel tunnel
+- **Il tuffo:** quando il tunnel è vuoto ti tuffi nel successivo (bonus 500 × livello): cambia corsia per evitare le punte verdi!
+- **8 tunnel:** Cerchio, Quadrato, Croce, V, Stella, Pianura, Triangolo e Onda, poi si ricomincia più veloci
+- **Difficoltà:** Facile (5 vite, nemici lenti), Normale, Difficile; record separati per ogni difficoltà
+- **Comandi:** ← → per girare sul bordo · `SPAZIO` o `Z` per sparare (tieni premuto) · `X` o ↓ superzapper · `P` pausa
+- **Touch:** ⟲ ⟳ a sinistra, ZAP e FUOCO a destra
+
+Per giocare apri `games/vortice/index.html` nel browser.
