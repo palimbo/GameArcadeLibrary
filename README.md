@@ -6,6 +6,8 @@ Raccolta di giochi arcade per il browser. Ogni gioco è un singolo file HTML sen
 
 Apri `index.html` nella cartella principale per la pagina di raccolta: mostra tutti i 35 giochi con copertina, genere, comandi e i tuoi record per ogni difficoltà (Facile, Normale, Difficile). Tocca «Gioca» per avviare un gioco; in ogni gioco il pulsante «← Sala Giochi» in alto a sinistra (visibile nei menu) riporta alla raccolta.
 
+**Iniziali del record:** quando batti un record compare la schermata da sala giochi per inserire le tue tre iniziali (frecce ↑ ↓ per cambiare lettera, ← → per spostarti, oppure scrivile direttamente; su telefono i tasti ▲ ▼ e OK). Le iniziali vengono salvate insieme al record e compaiono nei menu del gioco e nella Sala Giochi. Il codice è condiviso da tutti i giochi in `shared/iniziali.js`.
+
 ## Giochi
 
 ### 🚀 Space Defender — `games/space-defender/index.html`
