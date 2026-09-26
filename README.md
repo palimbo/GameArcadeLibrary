@@ -4,7 +4,7 @@ Raccolta di giochi arcade per il browser. Ogni gioco è un singolo file HTML sen
 
 ## 🕹️ Sala Giochi — `index.html`
 
-Apri `index.html` nella cartella principale per la pagina di raccolta: mostra tutti i 30 giochi con copertina, genere, comandi e i tuoi record per ogni difficoltà (Facile, Normale, Difficile). Tocca «Gioca» per avviare un gioco; in ogni gioco il pulsante «← Sala Giochi» in alto a sinistra (visibile nei menu) riporta alla raccolta.
+Apri `index.html` nella cartella principale per la pagina di raccolta: mostra tutti i 31 giochi con copertina, genere, comandi e i tuoi record per ogni difficoltà (Facile, Normale, Difficile). Tocca «Gioca» per avviare un gioco; in ogni gioco il pulsante «← Sala Giochi» in alto a sinistra (visibile nei menu) riporta alla raccolta.
 
 ## Giochi
 
@@ -468,3 +468,18 @@ Piattaforme a salti in stile *Bomb Jack*: un supereroe col mantello deve raccogl
 - **Comandi:** ← → per muoverti, SPAZIO/↑/Z per saltare, P per la pausa; su telefono pulsanti ◀ ▶ e SALTA
 
 Per giocare apri `games/capitan-miccia/index.html` nel browser.
+
+### 🍔 Mastro Panino — `games/mastro-panino/index.html`
+
+Piattaforme e scale in stile *Burger Time*: un cuoco deve comporre quattro panini giganti facendo cadere gli ingredienti fino ai piatti.
+
+- **Ingredienti:** cammina da un capo all'altro di pane, insalata, hamburger o fondo del panino per farlo cadere di un piano (50 punti). Se cade su un altro ingrediente, anche quello scende: a catena fino ai piatti
+- **Nemici:** wurstel, uova e cetriolini ti inseguono per scale e piani. Schiacciali facendogli cadere addosso un ingrediente (500 punti) o falli salire su un ingrediente prima che cada: vengono portati giù (1.000, 2.000, 4.000…)
+- **Pepe:** una spruzzata stordisce per 3 secondi i nemici davanti a te (100 punti), ma le dosi sono contate; ogni livello completato ne regala una
+- **Tazzina di caffè:** compare a metà livello; prendila per un pepe in più e fino a 1.500 punti
+- **3 cucine:** il Chiosco, la Tavola Calda e il Grand Hotel, con scale e piani diversi; i nemici aumentano a ogni livello
+- **Difficoltà:** Facile (5 vite, 7 pepi, nemici lenti e meno numerosi), Normale, Difficile (nemici veloci e numerosi); record separati per ogni difficoltà
+- **Comandi:** frecce o `W` `A` `S` `D` per camminare e salire le scale · `SPAZIO` o `Z` per il pepe · `P` pausa
+- **Touch:** croce a sinistra e tasto PEPE a destra
+
+Per giocare apri `games/mastro-panino/index.html` nel browser.
