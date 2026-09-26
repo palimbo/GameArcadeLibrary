@@ -4,7 +4,7 @@ Raccolta di giochi arcade per il browser. Ogni gioco è un singolo file HTML sen
 
 ## 🕹️ Sala Giochi — `index.html`
 
-Apri `index.html` nella cartella principale per la pagina di raccolta: mostra tutti i 26 giochi con copertina, genere, comandi e i tuoi record per ogni difficoltà (Facile, Normale, Difficile). Tocca «Gioca» per avviare un gioco; in ogni gioco il pulsante «← Sala Giochi» in alto a sinistra (visibile nei menu) riporta alla raccolta.
+Apri `index.html` nella cartella principale per la pagina di raccolta: mostra tutti i 27 giochi con copertina, genere, comandi e i tuoi record per ogni difficoltà (Facile, Normale, Difficile). Tocca «Gioca» per avviare un gioco; in ogni gioco il pulsante «← Sala Giochi» in alto a sinistra (visibile nei menu) riporta alla raccolta.
 
 ## Giochi
 
@@ -408,3 +408,19 @@ Gioco del barista in stile *Tapper*: quattro banconi, clienti assetati che avanz
 - **Touch:** croce a sinistra e tasto SERVI a destra
 
 Per giocare apri `games/saloon/index.html` nel browser.
+
+### ✈️ Incursione — `games/incursione/index.html`
+
+Sparatutto a scorrimento orizzontale in stile *Scramble*: voli a bassa quota oltre le linee nemiche fino alla base segreta.
+
+- **Armi:** il laser spara in avanti, le bombe cadono ad arco sui bersagli a terra (al massimo due in aria)
+- **Carburante:** si consuma di continuo; colpisci i serbatoi FUEL per fare rifornimento (150 punti). Se si esaurisce, l'aereo perde quota e precipita
+- **Sei settori:** Montagne (missili che decollano), Dischi volanti, Pioggia di meteore (indistruttibili: vanno schivati), Caverna, Labirinto (gallerie strette) e Base nemica. La barra in alto mostra a che punto sei
+- **Bersagli:** missili 50 (80 se colpiti in volo), bersagli ? da 100 a 300, dischi volanti 100, base nemica 800 e missione compiuta. Se manchi la base, l'ultimo settore ricomincia
+- **Vite:** toccare il terreno, un missile, un disco o una meteora costa una vita e si riparte dall'inizio del settore; vita extra a 10.000 punti e poi ogni 20.000
+- **Missioni:** dopo la base si riparte con una nuova missione, più veloce e con un paesaggio diverso
+- **Difficoltà:** Facile (5 vite, più carburante, meno missili), Normale (3 vite), Difficile (3 vite, più veloce, il carburante finisce in fretta); ogni difficoltà ha il suo record
+- **Comandi:** frecce o `W` `A` `S` `D` per volare · `SPAZIO` o `Z` spara · `X` o `B` bomba · `P` pausa
+- **Touch:** croce a sinistra, tasti BOMBA e FUOCO a destra
+
+Per giocare apri `games/incursione/index.html` nel browser.
