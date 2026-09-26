@@ -4,7 +4,7 @@ Raccolta di giochi arcade per il browser. Ogni gioco è un singolo file HTML sen
 
 ## 🕹️ Sala Giochi — `index.html`
 
-Apri `index.html` nella cartella principale per la pagina di raccolta: mostra tutti i 19 giochi con copertina, genere, comandi e i tuoi record per ogni difficoltà (Facile, Normale, Difficile). Tocca «Gioca» per avviare un gioco; in ogni gioco il pulsante «← Sala Giochi» in alto a sinistra (visibile nei menu) riporta alla raccolta.
+Apri `index.html` nella cartella principale per la pagina di raccolta: mostra tutti i 20 giochi con copertina, genere, comandi e i tuoi record per ogni difficoltà (Facile, Normale, Difficile). Tocca «Gioca» per avviare un gioco; in ogni gioco il pulsante «← Sala Giochi» in alto a sinistra (visibile nei menu) riporta alla raccolta.
 
 ## Giochi
 
@@ -299,3 +299,16 @@ Simulatore di atterraggio in stile *Lunar Lander*: porta il modulo sulle piazzol
 - **Touch:** ⟲ ⟳ per ruotare, ◎ per raddrizzare, ▲ per il razzo
 
 Per giocare apri `games/allunaggio/index.html` nel browser.
+
+### 🏒 Hockey da Tavolo — `games/hockey-da-tavolo/index.html`
+
+L'air hockey delle sale giochi su un tavolo verticale: il disco scivola sul cuscino d'aria, rimbalza sulle sponde e va mandato nella porta avversaria.
+
+- **Contro il computer:** tre difficoltà (Facile, Normale, Difficile). Il computer attacca quando il disco è nella sua metà, prova i tiri di sponda, mira dal lato lasciato scoperto e difende la porta prevedendo i rimbalzi
+- **2 giocatori:** sullo stesso dispositivo; su tablet o telefono ognuno trascina la sua racchetta nella sua metà del tavolo, e le scritte si girano verso chi gioca in alto
+- **Opzioni:** partite a 5, 7 o 9 gol e la modalità **2 dischi**, con due dischi in gioco contemporaneamente
+- **Record:** contro il computer ogni partita vinta dà punti in base allo scarto, ai gol segnati e alla velocità; ogni difficoltà ha il suo record
+- **Comandi:** mouse (senza bisogno di cliccare), oppure frecce o `W` `A` `S` `D` · in 2 giocatori il blu usa le frecce e il rosso `W` `A` `S` `D` · `P` pausa
+- **Touch:** trascina il dito per muovere la racchetta
+
+Per giocare apri `games/hockey-da-tavolo/index.html` nel browser.
