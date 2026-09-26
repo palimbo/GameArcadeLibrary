@@ -4,7 +4,7 @@ Raccolta di giochi arcade per il browser. Ogni gioco è un singolo file HTML sen
 
 ## 🕹️ Sala Giochi — `index.html`
 
-Apri `index.html` nella cartella principale per la pagina di raccolta: mostra tutti i 22 giochi con copertina, genere, comandi e i tuoi record per ogni difficoltà (Facile, Normale, Difficile). Tocca «Gioca» per avviare un gioco; in ogni gioco il pulsante «← Sala Giochi» in alto a sinistra (visibile nei menu) riporta alla raccolta.
+Apri `index.html` nella cartella principale per la pagina di raccolta: mostra tutti i 23 giochi con copertina, genere, comandi e i tuoi record per ogni difficoltà (Facile, Normale, Difficile). Tocca «Gioca» per avviare un gioco; in ogni gioco il pulsante «← Sala Giochi» in alto a sinistra (visibile nei menu) riporta alla raccolta.
 
 ## Giochi
 
@@ -344,3 +344,20 @@ Gioco isometrico in stile *Q\*bert*: salta di cubo in cubo lungo una piramide di
 - **Touch:** quattro tasti in diagonale, oppure tocca lo schermo dalla parte verso cui vuoi saltare
 
 Per giocare apri `games/saltacubi/index.html` nel browser.
+
+### 🦤 Giostra Volante — `games/giostra-volante/index.html`
+
+Duelli in volo in stile *Joust*: in sella a uno struzzo volante sbatti le ali per salire e sfidi i cavalieri nemici sopra un lago di lava.
+
+- **La giostra:** quando due cavalieri si scontrano vince chi ha la lancia più in alto; alla stessa altezza si rimbalza entrambi
+- **Nemici:** Predone rosso (500), Cacciatore grigio (750) e Signore Oscuro blu (1500), sempre più veloci e furbi
+- **Uova:** ogni nemico disarcionato diventa un uovo. Raccoglilo (250, 500, 750, 1000 punti di fila, più 500 se lo prendi al volo) prima che si schiuda: altrimenti ne esce un cavaliere di grado superiore
+- **Pericoli:** la lava sul fondo; dall'ondata 3 la mano del troll esce dalla lava e afferra chi vola basso; se un'ondata dura troppo arriva lo pterodattilo, che si abbatte solo colpendolo dritto nel becco
+- **Ondate speciali:** ogni cinque ondate c'è l'ondata delle uova, e alcune ondate di sopravvivenza danno 3.000 punti se nessuno perde una vita
+- **Schermo:** i bordi sono collegati, uscendo da un lato si rientra dall'altro
+- **2 giocatori:** in cooperativa sullo stesso dispositivo, ognuno con il suo punteggio e le sue vite; vita extra ogni 20.000 punti
+- **Difficoltà:** Facile (6 vite, nemici più lenti), Normale (4 vite), Difficile (3 vite, nemici veloci, uova che si schiudono in fretta); ogni difficoltà ha il suo record
+- **Comandi:** 1 giocatore: `←` `→` o `A` `D` per girarti e correre, `SPAZIO`, `↑` o `W` per sbattere le ali (tieni premuto per continuare a volare) · 2 giocatori: giocatore 1 `A` `D` e `W`, giocatore 2 `←` `→` e `↑` · `P` pausa
+- **Touch:** ◀ ▶ e ▲; in due, ognuno ha i suoi tasti ai lati
+
+Per giocare apri `games/giostra-volante/index.html` nel browser.
