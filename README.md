@@ -4,7 +4,7 @@ Raccolta di giochi arcade per il browser. Ogni gioco è un singolo file HTML sen
 
 ## 🕹️ Sala Giochi — `index.html`
 
-Apri `index.html` nella cartella principale per la pagina di raccolta: mostra tutti i 37 giochi con copertina, genere, comandi e i tuoi record per ogni difficoltà (Facile, Normale, Difficile). Tocca «Gioca» per avviare un gioco; in ogni gioco il pulsante «← Sala Giochi» in alto a sinistra (visibile nei menu) riporta alla raccolta.
+Apri `index.html` nella cartella principale per la pagina di raccolta: mostra tutti i 38 giochi con copertina, genere, comandi e i tuoi record per ogni difficoltà (Facile, Normale, Difficile). Tocca «Gioca» per avviare un gioco; in ogni gioco il pulsante «← Sala Giochi» in alto a sinistra (visibile nei menu) riporta alla raccolta.
 
 **Iniziali del record:** quando batti un record compare la schermata da sala giochi per inserire le tue tre iniziali (frecce ↑ ↓ per cambiare lettera, ← → per spostarti, oppure scrivile direttamente; su telefono i tasti ▲ ▼ e OK). Le iniziali vengono salvate insieme al record e compaiono nei menu del gioco e nella Sala Giochi. Il codice è condiviso da tutti i giochi in `shared/iniziali.js`.
 
@@ -581,3 +581,19 @@ Sparatutto a due levette in stile *Robotron*: ti muovi in una direzione e spari 
 - **Touch:** levetta sinistra per muoverti, levetta destra per sparare in qualsiasi direzione
 
 Per giocare apri `games/assalto-robotico/index.html` nel browser.
+
+### 🥋 Torre del Kung Fu — `games/torre-kung-fu/index.html`
+
+Picchiaduro a piani in stile *Kung-Fu Master*: sali la pagoda un piano alla volta, a pugni e calci, contro orde di scagnozzi.
+
+- **Attacchi:** pugno (veloce) e calcio (più lungo); da accovacciato colpiscono in basso, in salto a mezz'aria
+- **Afferratori (viola):** ti bloccano e ti tolgono energia; scuotili di dosso premendo più volte ◀ ▶ (100 punti)
+- **Nani saltellanti (verdi):** piccoli e rapidi, si colpiscono solo da accovacciati (300)
+- **Lanciatori di coltelli (rossi):** tengono le distanze e lanciano coltelli alti (abbassati) o bassi (salta); due colpi per abbatterli (500). I coltelli si possono anche respingere
+- **I maestri:** in fondo a ogni piano un boss con la sua barra di energia: il Maestro del Bastone, il Lanciatore di Boomerang, il Gigante, il Mago delle Ombre e il Signore della Torre. Quando lampeggia sta per colpire: abbassati se il colpo è alto, salta se è basso (2.000 × piano)
+- **Tempo ed energia:** 90 secondi per piano; il tempo e l'energia avanzati diventano bonus
+- **Difficoltà:** Facile (5 vite, nemici lenti, colpi meno dolorosi), Normale, Difficile; record separati per ogni difficoltà
+- **Comandi:** ← → per camminare · ↑ salta · ↓ abbassati · `Z` pugno · `X` calcio · `P` pausa
+- **Touch:** croce a sinistra, PUGNO e CALCIO a destra
+
+Per giocare apri `games/torre-kung-fu/index.html` nel browser.
