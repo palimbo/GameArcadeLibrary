@@ -4,7 +4,7 @@ Raccolta di giochi arcade per il browser. Ogni gioco è un singolo file HTML sen
 
 ## 🕹️ Sala Giochi — `index.html`
 
-Apri `index.html` nella cartella principale per la pagina di raccolta: mostra tutti i 36 giochi con copertina, genere, comandi e i tuoi record per ogni difficoltà (Facile, Normale, Difficile). Tocca «Gioca» per avviare un gioco; in ogni gioco il pulsante «← Sala Giochi» in alto a sinistra (visibile nei menu) riporta alla raccolta.
+Apri `index.html` nella cartella principale per la pagina di raccolta: mostra tutti i 37 giochi con copertina, genere, comandi e i tuoi record per ogni difficoltà (Facile, Normale, Difficile). Tocca «Gioca» per avviare un gioco; in ogni gioco il pulsante «← Sala Giochi» in alto a sinistra (visibile nei menu) riporta alla raccolta.
 
 **Iniziali del record:** quando batti un record compare la schermata da sala giochi per inserire le tue tre iniziali (frecce ↑ ↓ per cambiare lettera, ← → per spostarti, oppure scrivile direttamente; su telefono i tasti ▲ ▼ e OK). Le iniziali vengono salvate insieme al record e compaiono nei menu del gioco e nella Sala Giochi. Il codice è condiviso da tutti i giochi in `shared/iniziali.js`.
 
@@ -565,3 +565,19 @@ Corsa e spari a scorrimento in stile *Moon Patrol*: guida il fuoristrada lunare 
 - **Touch:** ◀ ▶ a sinistra, FUOCO e SALTA a destra
 
 Per giocare apri `games/pattuglia-lunare/index.html` nel browser.
+
+### 🤖 Assalto Robotico — `games/assalto-robotico/index.html`
+
+Sparatutto a due levette in stile *Robotron*: ti muovi in una direzione e spari in un'altra, nell'arena invasa dai robot.
+
+- **Robot rossi:** marciano verso di te, sempre più veloci a ogni ondata (100 punti)
+- **Giganti verdi:** indistruttibili; i colpi li respingono soltanto. Vagano per l'arena e schiacciano gli umani
+- **Sfere:** fluttuano e generano droni che ti inseguono sparando scintille rimbalzanti (sfera 1.000, drone 150)
+- **Ostacoli elettrici:** fermi ma letali al tocco; si possono distruggere (25)
+- **La famiglia:** papà, mamma e bimbo vagano chiedendo aiuto; raggiungili per salvarli: 1.000, 2.000… fino a 5.000 punti ciascuno
+- **Ondate:** finiscono quando restano solo i giganti e gli ostacoli; bonus 1.000 × ondata
+- **Difficoltà:** Facile (5 vite, robot lenti e meno numerosi), Normale, Difficile; record separati per ogni difficoltà
+- **Comandi:** `W` `A` `S` `D` per muoverti · frecce per sparare in 8 direzioni, oppure tieni premuto il mouse per mirare · `P` pausa
+- **Touch:** levetta sinistra per muoverti, levetta destra per sparare in qualsiasi direzione
+
+Per giocare apri `games/assalto-robotico/index.html` nel browser.
