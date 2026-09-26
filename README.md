@@ -4,7 +4,7 @@ Raccolta di giochi arcade per il browser. Ogni gioco è un singolo file HTML sen
 
 ## 🕹️ Sala Giochi — `index.html`
 
-Apri `index.html` nella cartella principale per la pagina di raccolta: mostra tutti i 33 giochi con copertina, genere, comandi e i tuoi record per ogni difficoltà (Facile, Normale, Difficile). Tocca «Gioca» per avviare un gioco; in ogni gioco il pulsante «← Sala Giochi» in alto a sinistra (visibile nei menu) riporta alla raccolta.
+Apri `index.html` nella cartella principale per la pagina di raccolta: mostra tutti i 34 giochi con copertina, genere, comandi e i tuoi record per ogni difficoltà (Facile, Normale, Difficile). Tocca «Gioca» per avviare un gioco; in ogni gioco il pulsante «← Sala Giochi» in alto a sinistra (visibile nei menu) riporta alla raccolta.
 
 ## Giochi
 
@@ -513,3 +513,19 @@ Arrampicata in stile *Crazy Climber*: scala a mani nude la facciata dei grattaci
 - **Touch:** ◀ ▶ a sinistra, ▲ ▼ a destra in orizzontale; croce sotto il gioco in verticale
 
 Per giocare apri `games/scalagrattacieli/index.html` nel browser.
+
+### 📰 Lo Strillone — `games/strillone/index.html`
+
+Consegne in bici in stile *Paperboy*: ogni mattina pedali lungo Via dei Tigli e lanci il giornale verso le case a sinistra.
+
+- **Abbonati:** le case colorate (con la bandierina rossa sulla cassetta) aspettano il giornale. Nella cassetta vale 250 punti, sullo zerbino 100
+- **Disdette:** a fine giornata chi è rimasto senza giornale, o si ritrova un vetro rotto, disdice. Se nessuno disdice arriva un bonus di 3.000 punti e un nuovo abbonato; se non resta nessun abbonato è game over
+- **Case grigie:** non sono abbonate; romperne i vetri vale 100 punti, rovesciare i bidoni 150
+- **Pericoli:** idranti, buche, lavori in corso, auto parcheggiate e in arrivo, cani che ti rincorrono e skater che attraversano (un giornale ben tirato li ferma)
+- **Giornali:** ne hai 10; raccogli i pacchi sulla strada per rifornirti
+- **La settimana:** dal lunedì alla domenica e poi si ricomincia, con sempre più traffico
+- **Difficoltà:** Facile (5 vite, strade tranquille), Normale, Difficile (traffico e cani ovunque); record separati per ogni difficoltà
+- **Comandi:** ← → per sterzare · ↑ ↓ per accelerare e frenare · `SPAZIO` o `Z` per lanciare · `P` pausa
+- **Touch:** croce a sinistra e tasto LANCIA a destra
+
+Per giocare apri `games/strillone/index.html` nel browser.
