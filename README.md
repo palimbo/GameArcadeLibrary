@@ -4,7 +4,7 @@ Raccolta di giochi arcade per il browser. Ogni gioco è un singolo file HTML sen
 
 ## 🕹️ Sala Giochi — `index.html`
 
-Apri `index.html` nella cartella principale per la pagina di raccolta: mostra tutti i 20 giochi con copertina, genere, comandi e i tuoi record per ogni difficoltà (Facile, Normale, Difficile). Tocca «Gioca» per avviare un gioco; in ogni gioco il pulsante «← Sala Giochi» in alto a sinistra (visibile nei menu) riporta alla raccolta.
+Apri `index.html` nella cartella principale per la pagina di raccolta: mostra tutti i 21 giochi con copertina, genere, comandi e i tuoi record per ogni difficoltà (Facile, Normale, Difficile). Tocca «Gioca» per avviare un gioco; in ogni gioco il pulsante «← Sala Giochi» in alto a sinistra (visibile nei menu) riporta alla raccolta.
 
 ## Giochi
 
@@ -312,3 +312,20 @@ L'air hockey delle sale giochi su un tavolo verticale: il disco scivola sul cusc
 - **Touch:** trascina il dito per muovere la racchetta
 
 Per giocare apri `games/hockey-da-tavolo/index.html` nel browser.
+
+### 🐛 Millepiedi — `games/millepiedi/index.html`
+
+Sparatutto in stile *Centipede*: un millepiedi scende a zigzag in un campo di funghi e tu, in fondo allo schermo, gli spari contro.
+
+- **Il millepiedi:** avanza in orizzontale e ogni volta che sbatte contro un fungo o il bordo scende di una fila. Ogni segmento colpito diventa un fungo e spezza il millepiedi in due: il pezzo dietro prosegue con una testa nuova (testa 100 punti, segmento 10)
+- **Funghi:** servono quattro colpi per distruggerli (1 punto). Quando perdi una vita, i funghi danneggiati vengono riparati e valgono 5 punti l'uno
+- **Ragno:** rimbalza a zigzag nella tua zona e mangia i funghi; vale 300, 600 o 900 punti a seconda di quanto è vicino quando lo colpisci
+- **Pulce:** dalla seconda ondata, se nella tua zona ci sono pochi funghi, cade dall'alto seminandone di nuovi; servono due colpi (200 punti)
+- **Scorpione:** dalla terza ondata attraversa il campo e avvelena i funghi: il millepiedi che li tocca piomba dritto verso di te (1000 punti)
+- **Ondate:** a ogni ondata cambiano i colori, il millepiedi è più veloce e arrivano teste sciolte in più; se il millepiedi raggiunge il fondo, nuove teste entrano dai lati
+- **Vite:** vita extra ogni 12.000 punti
+- **Difficoltà:** Facile (5 vite, millepiedi lento), Normale (3 vite), Difficile (3 vite, millepiedi veloce, più funghi, ragni scatenati); ogni difficoltà ha il suo record
+- **Comandi:** mouse per muoverti e clic (tenuto) per sparare, oppure frecce o `W` `A` `S` `D` e `SPAZIO` · `P` pausa
+- **Touch:** trascina il dito ovunque sullo schermo per muoverti, come una trackball; finché il dito è appoggiato spari
+
+Per giocare apri `games/millepiedi/index.html` nel browser.
