@@ -4,7 +4,7 @@ Raccolta di giochi arcade per il browser. Ogni gioco è un singolo file HTML sen
 
 ## 🕹️ Sala Giochi — `index.html`
 
-Apri `index.html` nella cartella principale per la pagina di raccolta: mostra tutti i 27 giochi con copertina, genere, comandi e i tuoi record per ogni difficoltà (Facile, Normale, Difficile). Tocca «Gioca» per avviare un gioco; in ogni gioco il pulsante «← Sala Giochi» in alto a sinistra (visibile nei menu) riporta alla raccolta.
+Apri `index.html` nella cartella principale per la pagina di raccolta: mostra tutti i 28 giochi con copertina, genere, comandi e i tuoi record per ogni difficoltà (Facile, Normale, Difficile). Tocca «Gioca» per avviare un gioco; in ogni gioco il pulsante «← Sala Giochi» in alto a sinistra (visibile nei menu) riporta alla raccolta.
 
 ## Giochi
 
@@ -424,3 +424,17 @@ Sparatutto a scorrimento orizzontale in stile *Scramble*: voli a bassa quota olt
 - **Touch:** croce a sinistra, tasti BOMBA e FUOCO a destra
 
 Per giocare apri `games/incursione/index.html` nel browser.
+
+### 🟪 Conquista — `games/conquista/index.html`
+
+Gioco di territorio in stile *Qix*: conquista il campo tracciando linee, mentre il Qix rimbalza nell'area libera.
+
+- **Tracciare:** il segnalino corre lungo i bordi; tenendo premuto il tasto di tracciamento entri nell'area libera lasciando una linea. Quando la chiudi su un bordo, la zona senza Qix diventa tua
+- **Veloce o lenta:** la linea veloce vale 100 punti per ogni 1% conquistato, quella lenta il doppio ma ti lascia esposto più a lungo
+- **Pericoli:** il Qix ti distrugge se tocca la linea mentre la disegni; le scintille corrono lungo i bordi; se ti fermi a metà linea parte una miccia che la brucia fino a raggiungerti
+- **Livelli:** conquista il 75% del campo per passare al livello successivo (1000 punti per ogni punto percentuale in più); più avanti arrivano un secondo Qix e più scintille, e i colori cambiano
+- **Difficoltà:** Facile (5 vite, Qix lento), Normale (3 vite), Difficile (3 vite, Qix veloce, più scintille); ogni difficoltà ha il suo record
+- **Comandi:** frecce per muoverti · tieni premuto `SPAZIO` per tracciare veloce, `X` per tracciare lento · `P` pausa
+- **Touch:** croce a sinistra, tasti TRACCIA e LENTO a destra
+
+Per giocare apri `games/conquista/index.html` nel browser.

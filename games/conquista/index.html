@@ -1,0 +1,711 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no, viewport-fit=cover">
+<title>Conquista</title>
+<style>
+  :root {
+    --bg: #05040e;
+    --fg: #f0f0ff;
+    --muted: #9a9ac8;
+    --fast: #3d9bff;
+    --slow: #ff5a8a;
+    --gold: #ffd34d;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  html, body {
+    height: 100%;
+    background: var(--bg);
+    color: var(--fg);
+    font-family: ui-monospace, "SFMono-Regular", Menlo, Consolas, monospace;
+    overflow: hidden;
+    user-select: none;
+    -webkit-user-select: none;
+    touch-action: none;
+  }
+  #wrap { position: fixed; inset: 0; display: flex; align-items: center; justify-content: center; }
+  canvas { display: block; touch-action: none; box-shadow: 0 0 0 1px rgba(61, 155, 255, 0.3), 0 0 24px rgba(61, 155, 255, 0.1); }
+  #pauseBtn {
+    position: fixed; z-index: 3; display: none; right: 10px; top: calc(10px + env(safe-area-inset-top, 0px));
+    font: 700 13px system-ui, sans-serif; color: var(--fg);
+    background: rgba(0, 0, 0, 0.6); border: 1px solid rgba(240, 240, 255, 0.35);
+    border-radius: 8px; padding: 6px 10px; cursor: pointer;
+  }
+  #touch {
+    position: fixed; z-index: 2; display: none; left: 12px; right: 12px;
+    bottom: calc(14px + env(safe-area-inset-bottom, 0px));
+    justify-content: space-between; align-items: flex-end; pointer-events: none;
+  }
+  #touch .pad { display: grid; grid-template-columns: repeat(3, 54px); grid-template-rows: repeat(3, 54px); gap: 4px; pointer-events: auto; }
+  #touch .pad [data-a="up"] { grid-column: 2; grid-row: 1; }
+  #touch .pad [data-a="left"] { grid-column: 1; grid-row: 2; }
+  #touch .pad [data-a="right"] { grid-column: 3; grid-row: 2; }
+  #touch .pad [data-a="down"] { grid-column: 2; grid-row: 3; }
+  #touch .draw { display: flex; flex-direction: column; gap: 10px; align-items: flex-end; pointer-events: auto; }
+  #touch button {
+    width: 54px; height: 54px; border-radius: 12px; touch-action: none;
+    font: 700 20px system-ui, sans-serif; color: var(--fg);
+    border: 2px solid rgba(240, 240, 255, 0.5); background: rgba(240, 240, 255, 0.08);
+  }
+  #touch button[data-a="fast"] { width: 96px; height: 60px; border-radius: 30px; border-color: rgba(61, 155, 255, 0.9); background: rgba(61, 155, 255, 0.15); font: 700 13px ui-monospace, monospace; }
+  #touch button[data-a="slow"] { width: 96px; height: 48px; border-radius: 24px; border-color: rgba(255, 90, 138, 0.9); background: rgba(255, 90, 138, 0.12); font: 700 12px ui-monospace, monospace; }
+  #touch.small .pad { grid-template-columns: repeat(3, 44px); grid-template-rows: repeat(3, 44px); }
+  #touch.small button { width: 44px; height: 44px; font-size: 16px; }
+  #touch.small button[data-a="fast"] { width: 84px; height: 52px; }
+  #touch.small button[data-a="slow"] { width: 84px; height: 42px; }
+  #touch button.on { background: rgba(240, 240, 255, 0.4); }
+  #overlay {
+    position: fixed; inset: 0; z-index: 5;
+    display: flex; flex-direction: column; align-items: center; justify-content: flex-start;
+    gap: 14px; padding: 16px; text-align: center; overflow-y: auto;
+    background: rgba(5, 4, 14, 0.88);
+  }
+  #overlay > :first-child { margin-top: auto; }
+  #overlay > :last-child { margin-bottom: auto; }
+  #overlay.hidden { display: none; }
+  #homeLink {
+    position: fixed; top: calc(10px + env(safe-area-inset-top, 0px)); left: 10px; z-index: 6;
+    font: 600 13px/1 system-ui, sans-serif; color: #fff; text-decoration: none;
+    padding: 8px 12px; border-radius: 999px; background: rgba(0,0,0,.55);
+    border: 1px solid rgba(255,255,255,.25);
+  }
+  #homeLink:hover { background: rgba(0,0,0,.8); }
+  #overlay.hidden ~ #homeLink { display: none; }
+  @media (max-width: 700px) { #overlay { padding-top: calc(52px + env(safe-area-inset-top, 0px)); } }
+  #overlay h1 { font-size: clamp(38px, 10vw, 64px); letter-spacing: 6px; font-weight: 400; background: linear-gradient(90deg, #3d9bff, #b98cff, #ff5a8a); -webkit-background-clip: text; background-clip: text; color: transparent; filter: drop-shadow(0 0 10px rgba(185,140,255,0.5)); }
+  #overlay h2 { font-size: clamp(28px, 7vw, 44px); font-weight: 400; letter-spacing: 3px; }
+  #overlay h2.lose { color: var(--slow); }
+  #overlay p { max-width: 560px; font-size: clamp(13px, 3.4vw, 15px); line-height: 1.6; font-family: system-ui, sans-serif; }
+  #overlay p.muted { color: var(--muted); }
+  #overlay .pts { display: grid; grid-template-columns: repeat(2, auto); gap: 4px 20px; font-size: 13px; color: var(--muted); text-align: left; }
+  #overlay .pts b { color: var(--fg); font-weight: 400; }
+  #overlay .diff { display: flex; gap: 10px; flex-wrap: wrap; justify-content: center; }
+  #overlay button {
+    font: 700 15px ui-monospace, Menlo, monospace; letter-spacing: 2px; color: var(--fg);
+    background: transparent; cursor: pointer;
+    border: 2px solid rgba(240,240,255,0.35); border-radius: 4px; padding: 8px 16px;
+  }
+  #overlay .diff button.on { border-color: var(--c); color: var(--c); box-shadow: 0 0 12px var(--c); }
+  #overlay button.start { border-color: #b98cff; color: #000; background: #b98cff; padding: 10px 28px; box-shadow: 0 0 16px rgba(185,140,255,0.55); }
+  @media (max-height: 560px) {
+    #overlay { gap: 8px; }
+    #overlay h1 { font-size: 32px; }
+    #overlay p { font-size: 13px; line-height: 1.4; }
+    #overlay .help, #overlay .pts { display: none; }
+  }
+</style>
+</head>
+<body>
+<div id="wrap"><canvas id="game"></canvas></div>
+<div id="touch">
+  <div class="pad">
+    <button type="button" data-a="up" aria-label="Su">▲</button>
+    <button type="button" data-a="left" aria-label="Sinistra">◀</button>
+    <button type="button" data-a="right" aria-label="Destra">▶</button>
+    <button type="button" data-a="down" aria-label="Giù">▼</button>
+  </div>
+  <div class="draw">
+    <button type="button" data-a="slow" aria-label="Traccia lenta">LENTO ×2</button>
+    <button type="button" data-a="fast" aria-label="Traccia veloce">TRACCIA</button>
+  </div>
+</div>
+<button id="pauseBtn" type="button" aria-label="Pausa">❚❚</button>
+<div id="overlay"></div>
+<a id="homeLink" href="../../index.html">← Sala Giochi</a>
+
+<script>
+(() => {
+  "use strict";
+
+  const GW = 128, GH = 96, CS = 4;                     // the field: 128×96 cells of 4px
+  const OX = 8, OY = 40, W = GW * CS + OX * 2, H = GH * CS + OY + 8;
+  const EMPTY = 0, FAST = 1, BORDER = 2, TRAIL = 3, SLOW = 5;
+  const TARGET = 0.75;
+  const SPEED_FAST = 46, SPEED_SLOW = 23, SPARX_SPEED = 26;
+  const DIRS = { up: [0, -1], down: [0, 1], left: [-1, 0], right: [1, 0] };
+  // colours of the conquered area change every level
+  const PALETTES = [
+    { fast: [40, 90, 200], slow: [180, 50, 110], border: [200, 220, 255] },
+    { fast: [30, 140, 110], slow: [200, 120, 30], border: [220, 255, 230] },
+    { fast: [110, 60, 190], slow: [200, 60, 60], border: [240, 220, 255] },
+    { fast: [180, 130, 20], slow: [40, 120, 200], border: [255, 245, 210] },
+  ];
+
+  const DIFFICULTIES = {
+    facile:    { label: "FACILE",    color: "#7dff9a", desc: "5 vite · Qix lento · meno scintille", lives: 5, qix: 0.8, sparx: 0.8 },
+    normale:   { label: "NORMALE",   color: "#b98cff", desc: "3 vite · l'esperienza classica", lives: 3, qix: 1, sparx: 1 },
+    difficile: { label: "DIFFICILE", color: "#ff5a8a", desc: "3 vite · Qix veloce · più scintille", lives: 3, qix: 1.25, sparx: 1.2 },
+  };
+  const DIFF_IDS = Object.keys(DIFFICULTIES);
+  const DIFF_KEY = "conquista-difficulty";
+  const bestKey = (id) => `conquista-best-${id}`;
+  function store(k, v) { try { localStorage.setItem(k, v); } catch { /* ignore */ } }
+  function load(k) { try { return localStorage.getItem(k); } catch { return null; } }
+  const rnd = (a, b) => a + Math.random() * (b - a);
+
+  // ---------- Canvas ----------
+  const canvas = document.getElementById("game");
+  const ctx = canvas.getContext("2d");
+  const wrap = document.getElementById("wrap");
+  const overlay = document.getElementById("overlay");
+  const touchEl = document.getElementById("touch");
+  const pauseBtn = document.getElementById("pauseBtn");
+  const fieldCanvas = document.createElement("canvas");
+  fieldCanvas.width = GW; fieldCanvas.height = GH;
+  const fctx = fieldCanvas.getContext("2d");
+  const img = fctx.createImageData(GW, GH);
+  let pxRatio = 1, touchMode = !!(window.matchMedia && matchMedia("(pointer: coarse)").matches);
+  function resize() {
+    const portrait = window.innerHeight > window.innerWidth;
+    const showTouch = touchMode && isPlaying();
+    touchEl.style.display = showTouch ? "flex" : "none";
+    touchEl.classList.toggle("small", !portrait && window.innerHeight < 480);
+    wrap.style.paddingBottom = showTouch && portrait ? "calc(185px + env(safe-area-inset-bottom, 0px))" : "0";
+    let availW = window.innerWidth - 8, availH = window.innerHeight - 8;
+    if (showTouch && portrait) availH -= 185;
+    if (showTouch && !portrait) {
+      const side = Math.max(...[...touchEl.children].map((el) => el.offsetWidth)) + 20;
+      if (window.innerWidth - 2 * side > 300) availW = window.innerWidth - 2 * side;
+    }
+    const s = Math.max(0.2, Math.min(availW / W, availH / H));
+    pxRatio = Math.min(3, s * (window.devicePixelRatio || 1));
+    canvas.style.width = W * s + "px";
+    canvas.style.height = H * s + "px";
+    canvas.width = Math.round(W * pxRatio);
+    canvas.height = Math.round(H * pxRatio);
+  }
+  window.addEventListener("resize", () => syncControls());
+
+  // ---------- Audio ----------
+  let audioCtx = null, hum = null;
+  function beep(freq, dur, type = "square", vol = 0.04, slide = 0, delay = 0) {
+    if (!audioCtx) return;
+    const t = audioCtx.currentTime + delay;
+    const osc = audioCtx.createOscillator(), gain = audioCtx.createGain();
+    osc.type = type;
+    osc.frequency.setValueAtTime(freq, t);
+    if (slide) osc.frequency.exponentialRampToValueAtTime(Math.max(20, freq + slide), t + dur);
+    gain.gain.setValueAtTime(vol, t);
+    gain.gain.exponentialRampToValueAtTime(0.0001, t + dur);
+    osc.connect(gain).connect(audioCtx.destination);
+    osc.start(t); osc.stop(t + dur + 0.02);
+  }
+  function noise(dur, vol, freq) {
+    if (!audioCtx) return;
+    const len = Math.floor(audioCtx.sampleRate * dur), buf = audioCtx.createBuffer(1, len, audioCtx.sampleRate), d = buf.getChannelData(0);
+    for (let i = 0; i < len; i++) d[i] = (Math.random() * 2 - 1) * (1 - i / len);
+    const src = audioCtx.createBufferSource(), f = audioCtx.createBiquadFilter(), g = audioCtx.createGain();
+    src.buffer = buf; f.type = "lowpass"; f.frequency.value = freq; g.gain.value = vol;
+    src.connect(f).connect(g).connect(audioCtx.destination); src.start();
+  }
+  // the Qix hums, and the hum rises while you are drawing
+  function humSet(on, pitch) {
+    if (!audioCtx) return;
+    if (!hum) {
+      const o = audioCtx.createOscillator(), g = audioCtx.createGain();
+      o.type = "triangle"; o.frequency.value = 110; g.gain.value = 0;
+      o.connect(g).connect(audioCtx.destination); o.start();
+      hum = { o, g };
+    }
+    hum.g.gain.setTargetAtTime(on ? 0.025 : 0, audioCtx.currentTime, 0.05);
+    hum.o.frequency.setTargetAtTime(pitch, audioCtx.currentTime, 0.05);
+  }
+  const arp = (notes, gap, d, type = "square", vol = 0.04) => notes.forEach((f, i) => beep(f, d, type, vol, 0, i * gap));
+  let sfxN = 0;
+  const lim = (fn) => (...a) => { if (sfxN++ < 4) fn(...a); };
+  const sfx = {
+    claim: (pct) => { arp([523, 659, 784, 1047].slice(0, 2 + Math.min(2, Math.floor(pct / 5))), 0.05, 0.1, "square", 0.04); noise(0.25, 0.1, 3000); },
+    fuse: lim(() => beep(2000 + Math.random() * 500, 0.03, "square", 0.015)),
+    die: () => { noise(0.8, 0.4, 900); beep(600, 0.9, "sawtooth", 0.04, -540); },
+    clear: () => arp([523, 659, 784, 1047, 1319, 1568], 0.08, 0.14),
+    over: () => arp([523, 415, 330, 262], 0.18, 0.25),
+    life: () => arp([523, 784, 1047, 1319], 0.08, 0.12, "triangle", 0.05),
+  };
+
+  // ---------- State ----------
+  let difficulty = DIFFICULTIES[load(DIFF_KEY)] ? load(DIFF_KEY) : "normale";
+  let diff = DIFFICULTIES[difficulty];
+  let state = "menu", menu = null, pausedFrom = null, stateT = 0, clock = 0;
+  let score = 0, lives = 3, level = 0, bestCache = 0, nextLife = 30000, claimed = 0, interior = 0;
+  let grid = new Uint8Array(GW * GH), player = null, trail = [], qixes = [], sparxes = [], popups = [], parts = [], fuse = null, message = null, dirty = true;
+  const ctl = { up: false, down: false, left: false, right: false, fast: false, slow: false };
+  let lastDir = null;
+
+  const idx = (x, y) => y * GW + x;
+  const inside = (x, y) => x >= 0 && y >= 0 && x < GW && y < GH;
+  const at = (x, y) => (inside(x, y) ? grid[idx(x, y)] : -1);
+  const solid = (v) => v === FAST || v === SLOW || v === BORDER;
+  const pal = () => PALETTES[level % PALETTES.length];
+
+  function buildLevel() {
+    grid.fill(EMPTY);
+    for (let x = 0; x < GW; x++) { grid[idx(x, 0)] = BORDER; grid[idx(x, GH - 1)] = BORDER; }
+    for (let y = 0; y < GH; y++) { grid[idx(0, y)] = BORDER; grid[idx(GW - 1, y)] = BORDER; }
+    interior = (GW - 2) * (GH - 2); claimed = 0;
+    player = { x: GW >> 1, y: GH - 1, fx: GW >> 1, fy: GH - 1, drawing: false, slow: false, moveAcc: 0, still: 0, dir: null };
+    trail = []; fuse = null;
+    const nq = level >= 2 ? 2 : 1;
+    qixes = [];
+    for (let k = 0; k < nq; k++) qixes.push({ x: GW / 2 + (k ? 20 : -10), y: GH / 2, vx: rnd(-1, 1), vy: rnd(-1, 1), a: Math.random() * Math.PI, va: rnd(-2, 2), len: 12, hist: [], t: 0, hue: k ? 320 : 180 });
+    sparxes = [];
+    const ns = Math.min(5, 2 + Math.floor(level / 2));
+    for (let k = 0; k < ns; k++) spawnSparx(k);
+    dirty = true;
+    message = { text: `LIVELLO ${level + 1}`, sub: `Conquista il ${Math.round(TARGET * 100)}% del campo`, t: 0 };
+    state = "intro"; stateT = 1.8;
+  }
+  function spawnSparx(k) {
+    // they come in at the top edge, going both ways
+    const dir = k % 2 ? [1, 0] : [-1, 0];
+    sparxes.push({ x: GW >> 1, y: 0, px: (GW >> 1) - dir[0], py: 0, dir, acc: -k * 0.8, speed: SPARX_SPEED * diff.sparx * (1 + level * 0.06) });
+  }
+
+  // ---------- Flow ----------
+  const isPlaying = () => ["intro", "play", "dead", "clear"].includes(state);
+  function startGame() {
+    if (!audioCtx) { try { audioCtx = new (window.AudioContext || window.webkitAudioContext)(); } catch { audioCtx = null; } }
+    if (audioCtx && audioCtx.state === "suspended") audioCtx.resume();
+    score = 0; lives = diff.lives; level = 0; nextLife = 30000;
+    bestCache = parseInt(load(bestKey(difficulty)), 10) || 0;
+    buildLevel();
+    menu = null;
+    overlay.classList.add("hidden");
+    syncControls();
+    last = performance.now();
+  }
+  function addScore(n, x, y, color = "#f0f0ff") {
+    score += n;
+    if (x !== undefined) popups.push({ x, y, text: String(n), color, t: 0 });
+    if (score >= nextLife) { nextLife += 40000; lives++; sfx.life(); popups.push({ x: W / 2, y: H / 2, text: "VITA EXTRA", color: "#ffd34d", t: 0, big: true }); }
+  }
+  function die() {
+    if (state !== "play") return;
+    lives--;
+    sfx.die(); humSet(false, 110);
+    const px = OX + player.x * CS, py = OY + player.y * CS;
+    for (let k = 0; k < 30; k++) { const a = Math.random() * Math.PI * 2, s = rnd(40, 200); parts.push({ x: px, y: py, vx: Math.cos(a) * s, vy: Math.sin(a) * s, t: 0, life: rnd(0.4, 0.9), c: k % 2 ? "#ffffff" : "#ff5a8a" }); }
+    state = "dead"; stateT = 1.6;
+  }
+  function afterDeath() {
+    if (lives <= 0) { gameOver(); return; }
+    // the unfinished line disappears and the marker goes back to where it started
+    if (trail.length) { player.x = trail[0].sx; player.y = trail[0].sy; }
+    for (const t of trail) grid[idx(t.x, t.y)] = EMPTY;
+    trail = []; fuse = null; player.drawing = false;
+    // sparks near the marker are moved away
+    for (const s of sparxes) if (Math.abs(s.x - player.x) + Math.abs(s.y - player.y) < 30) { s.x = GW >> 1; s.y = 0; s.px = s.x - s.dir[0]; s.py = 0; }
+    if (!solid(at(player.x, player.y))) relocatePlayer();
+    dirty = true;
+    state = "play";
+  }
+  function levelCleared() {
+    const pct = claimed / interior;
+    const extra = Math.max(0, Math.floor((pct - TARGET) * 100));
+    const bonus = extra * 1000;
+    if (bonus) addScore(bonus);
+    message = { text: "CAMPO CONQUISTATO!", sub: `${Math.floor(pct * 100)}%${bonus ? ` · bonus ${bonus.toLocaleString("it-IT")}` : ""}`, t: 0 };
+    sfx.clear(); humSet(false, 110);
+    state = "clear"; stateT = 2.6;
+  }
+  function gameOver() {
+    state = "over";
+    humSet(false, 110);
+    const prev = parseInt(load(bestKey(difficulty)), 10) || 0;
+    const record = score > prev;
+    if (record) store(bestKey(difficulty), String(score));
+    const played = diff.label, lv = level + 1, pct = Math.floor(claimed / interior * 100);
+    menu = () => showOverlay(
+      `<h2 class="lose">GAME OVER</h2>
+       <p>Punteggio: <b>${score.toLocaleString("it-IT")}</b> · Livello ${lv} (${pct}% conquistato) · ${played}</p>
+       ${record ? "<p style='color:var(--gold)'>★ NUOVO RECORD! ★</p>" : ""}
+       ${difficultyHTML()}
+       <button class="start" data-start>GIOCA ANCORA</button>`
+    );
+    menu();
+    sfx.over();
+    syncControls();
+  }
+  function togglePause() {
+    if (isPlaying()) {
+      pausedFrom = state; state = "paused"; humSet(false, 110);
+      showOverlay(`<h2>PAUSA</h2><button class="start" data-resume>CONTINUA</button><p class="muted">Premi P per continuare</p>`);
+    } else if (state === "paused") {
+      state = pausedFrom; overlay.classList.add("hidden"); last = performance.now();
+    }
+    syncControls();
+  }
+  function syncControls() {
+    const portrait = window.innerHeight > window.innerWidth;
+    pauseBtn.style.display = isPlaying() && touchMode ? "block" : "none";
+    Object.assign(pauseBtn.style, portrait
+      ? { top: "auto", bottom: "calc(150px + env(safe-area-inset-bottom, 0px))", right: "auto", left: "calc(50% - 20px)" }
+      : { top: "calc(10px + env(safe-area-inset-top, 0px))", bottom: "auto", right: "10px", left: "auto" });
+    resize();
+  }
+  pauseBtn.addEventListener("click", () => togglePause());
+  function showOverlay(html) { overlay.innerHTML = html; overlay.classList.remove("hidden"); }
+  function difficultyHTML() {
+    const buttons = DIFF_IDS.map((id) => {
+      const d = DIFFICULTIES[id];
+      return `<button type="button" data-diff="${id}" class="${id === difficulty ? "on" : ""}" style="--c:${d.color}">${d.label}</button>`;
+    }).join("");
+    const best = parseInt(load(bestKey(difficulty)), 10);
+    return `<div class="diff">${buttons}</div><p class="muted">${diff.desc}${best ? ` · Record: ${best.toLocaleString("it-IT")}` : ""}</p>`;
+  }
+  function setDifficulty(id) { if (!DIFFICULTIES[id]) return; difficulty = id; diff = DIFFICULTIES[id]; store(DIFF_KEY, id); if (menu) menu(); }
+  function showTitle() {
+    menu = showTitle;
+    showOverlay(
+      `<h1>CONQUISTA</h1>
+       <p>Il tuo segnalino corre lungo i bordi del campo. Tieni premuto il tasto per tracciare una linea nell'area libera e chiudila su un bordo: la zona dove non c'è il Qix diventa tua. Conquista il 75% per passare di livello! Il Qix ti distrugge se tocca la linea mentre la disegni, le scintille corrono lungo i bordi e, se ti fermi a metà linea, parte la miccia.</p>
+       <div class="pts">
+         <span><b>Linea veloce</b></span><span>100 punti per ogni 1% conquistato</span>
+         <span><b>Linea lenta</b></span><span>punti doppi, ma è più rischiosa</span>
+         <span><b>Oltre il 75%</b></span><span>1000 per ogni punto percentuale in più</span>
+       </div>
+       ${touchMode
+         ? `<p class="muted help">Croce per muoverti · tieni premuto TRACCIA (o LENTO) mentre ti muovi per disegnare</p>`
+         : `<p class="muted help">Frecce per muoverti · tieni premuto SPAZIO per tracciare veloce, X per tracciare lento · P pausa</p>`}
+       ${difficultyHTML()}
+       <button class="start" data-start>INIZIA</button>`
+    );
+  }
+  overlay.addEventListener("click", (e) => {
+    const d = e.target.closest("[data-diff]");
+    if (d) { setDifficulty(d.dataset.diff); return; }
+    if (e.target.closest("[data-start]")) startGame();
+    if (e.target.closest("[data-resume]")) togglePause();
+  });
+
+  // ---------- Input ----------
+  const KEYS = { arrowup: "up", w: "up", arrowdown: "down", s: "down", arrowleft: "left", a: "left", arrowright: "right", d: "right", " ": "fast", z: "fast", x: "slow", shift: "slow" };
+  window.addEventListener("keydown", (e) => {
+    const k = e.key.toLowerCase();
+    if ([" ", "arrowup", "arrowdown", "arrowleft", "arrowright"].includes(k)) e.preventDefault();
+    if (state === "menu" || state === "over") {
+      if (e.key === "Enter") startGame();
+      else if (["1", "2", "3"].includes(k)) setDifficulty(DIFF_IDS[+k - 1]);
+      return;
+    }
+    if (k === "p" || k === "escape") { if (!e.repeat) togglePause(); return; }
+    if (state === "paused") { if (e.key === "Enter") togglePause(); return; }
+    const a = KEYS[k];
+    if (!a) return;
+    ctl[a] = true;
+    if (DIRS[a]) lastDir = a;
+  });
+  window.addEventListener("keyup", (e) => { const a = KEYS[e.key.toLowerCase()]; if (a) ctl[a] = false; });
+  window.addEventListener("blur", () => { for (const k in ctl) ctl[k] = false; if (isPlaying()) togglePause(); });
+  for (const btn of touchEl.querySelectorAll("button")) {
+    const a = btn.dataset.a;
+    btn.addEventListener("pointerdown", (e) => {
+      e.preventDefault(); btn.classList.add("on"); ctl[a] = true;
+      if (DIRS[a]) lastDir = a;
+      try { btn.setPointerCapture(e.pointerId); } catch { /* ignore */ }
+    });
+    for (const ev of ["pointerup", "pointercancel", "lostpointercapture"]) btn.addEventListener(ev, () => { btn.classList.remove("on"); ctl[a] = false; });
+  }
+  window.addEventListener("pointerdown", (e) => { if (e.pointerType === "touch" && !touchMode) { touchMode = true; syncControls(); if (menu) menu(); } }, true);
+
+  // ---------- Claiming ----------
+  function recomputeBorders() {
+    for (let y = 0; y < GH; y++) for (let x = 0; x < GW; x++) {
+      const v = grid[idx(x, y)];
+      if (!solid(v)) continue;
+      let open = false;
+      for (let dy = -1; dy <= 1 && !open; dy++) for (let dx = -1; dx <= 1; dx++) { const w = at(x + dx, y + dy); if (w === EMPTY || w === TRAIL) { open = true; break; } }
+      if (open) grid[idx(x, y)] = BORDER;
+      else if (v === BORDER) grid[idx(x, y)] = FAST_OR_SLOW(x, y);
+    }
+  }
+  // a border cell that is now fully enclosed takes the colour of a claimed neighbour
+  function FAST_OR_SLOW(x, y) {
+    for (let dy = -1; dy <= 1; dy++) for (let dx = -1; dx <= 1; dx++) { const w = at(x + dx, y + dy); if (w === SLOW) return SLOW; }
+    return FAST;
+  }
+  function closeTrail() {
+    const slow = player.slow;
+    for (const t of trail) grid[idx(t.x, t.y)] = BORDER;
+    // flood the free area from each Qix: whatever they cannot reach is conquered
+    const seen = new Uint8Array(GW * GH);
+    const stack = [];
+    for (const q of qixes) {
+      // seed from the Qix, or from the nearest free cell if it sits right on the new line
+      let qx = Math.round(q.x), qy = Math.round(q.y);
+      if (at(qx, qy) !== EMPTY) {
+        search: for (let r = 1; r <= 4; r++) for (let dy = -r; dy <= r; dy++) for (let dx = -r; dx <= r; dx++) if (at(qx + dx, qy + dy) === EMPTY) { qx += dx; qy += dy; q.x = qx; q.y = qy; break search; }
+      }
+      if (at(qx, qy) === EMPTY && !seen[idx(qx, qy)]) { stack.push(idx(qx, qy)); seen[idx(qx, qy)] = 1; }
+    }
+    while (stack.length) {
+      const i = stack.pop(), x = i % GW, y = (i / GW) | 0;
+      for (const [dx, dy] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) {
+        const nx = x + dx, ny = y + dy;
+        if (!inside(nx, ny)) continue;
+        const j = idx(nx, ny);
+        if (!seen[j] && grid[j] === EMPTY) { seen[j] = 1; stack.push(j); }
+      }
+    }
+    let gained = trail.length, sx = 0, sy = 0;
+    for (let i = 0; i < GW * GH; i++) if (grid[i] === EMPTY && !seen[i]) { grid[i] = slow ? SLOW : FAST; gained++; sx += i % GW; sy += (i / GW) | 0; }
+    recomputeBorders();
+    trail = []; fuse = null; player.drawing = false;
+    // recount the conquered cells
+    let n = 0;
+    for (let y = 1; y < GH - 1; y++) for (let x = 1; x < GW - 1; x++) if (grid[idx(x, y)] !== EMPTY) n++;
+    const before = claimed;
+    claimed = n;
+    const pct = (claimed - before) / interior * 100;
+    const pts = Math.round(pct * 100 * (slow ? 2 : 1));
+    const cx = gained ? OX + (sx / Math.max(1, gained)) * CS : OX + player.x * CS, cy = gained ? OY + (sy / Math.max(1, gained)) * CS : OY + player.y * CS;
+    if (pts > 0) addScore(pts, cx, cy, slow ? "#ff5a8a" : "#3d9bff");
+    sfx.claim(pct);
+    dirty = true;
+    // sparks and the marker must stay on a border
+    for (const s of sparxes) if (at(s.x, s.y) !== BORDER) relocate(s);
+    if (at(player.x, player.y) !== BORDER) relocatePlayer();
+    if (claimed / interior >= TARGET) levelCleared();
+  }
+  function nearestBorder(x, y) {
+    let best = null, bd = 1e9;
+    for (let yy = 0; yy < GH; yy++) for (let xx = 0; xx < GW; xx++) if (grid[idx(xx, yy)] === BORDER) { const d = Math.abs(xx - x) + Math.abs(yy - y); if (d < bd) { bd = d; best = [xx, yy]; } }
+    return best;
+  }
+  function relocate(s) { const b = nearestBorder(s.x, s.y); if (b) { s.x = b[0]; s.y = b[1]; s.px = s.x; s.py = s.y; } }
+  function relocatePlayer() { const b = nearestBorder(player.x, player.y); if (b) { player.x = b[0]; player.y = b[1]; } }
+
+  // ---------- Update ----------
+  function wantedDir() {
+    if (lastDir && ctl[lastDir]) return lastDir;
+    return ["up", "down", "left", "right"].find((k) => ctl[k]) || null;
+  }
+  function stepPlayer() {
+    const p = player;
+    const want = wantedDir();
+    if (!want) return false;
+    const [dx, dy] = DIRS[want];
+    const nx = p.x + dx, ny = p.y + dy, v = at(nx, ny);
+    const drawKey = ctl.fast || ctl.slow;
+    if (!p.drawing) {
+      if (v === BORDER) { p.x = nx; p.y = ny; return true; }
+      // start a new line into the free area
+      if (v === EMPTY && drawKey) {
+        p.drawing = true; p.slow = ctl.slow && !ctl.fast;
+        trail = [{ x: nx, y: ny, sx: p.x, sy: p.y }];
+        grid[idx(nx, ny)] = TRAIL;
+        p.x = nx; p.y = ny;
+        return true;
+      }
+      return false;
+    }
+    // drawing: you cannot cross your own line
+    if (v === EMPTY) {
+      grid[idx(nx, ny)] = TRAIL;
+      trail.push({ x: nx, y: ny });
+      p.x = nx; p.y = ny;
+      return true;
+    }
+    if (v === BORDER) { p.x = nx; p.y = ny; closeTrail(); return true; }
+    return false;
+  }
+  function updateQix(q, dt) {
+    const sp = (18 + level * 2) * diff.qix;
+    q.t += dt;
+    // wanders with sudden turns
+    if (Math.random() < dt * 1.5) { const a = Math.random() * Math.PI * 2; q.vx = Math.cos(a); q.vy = Math.sin(a); }
+    q.a += q.va * dt * 3; if (Math.random() < dt) q.va = rnd(-2.5, 2.5);
+    q.len = 15 + Math.sin(q.t * 2) * 6;
+    const nx = q.x + q.vx * sp * dt, ny = q.y + q.vy * sp * dt;
+    const v = at(Math.round(nx), Math.round(q.y)), w = at(Math.round(q.x), Math.round(ny));
+    if (v === EMPTY || v === TRAIL) q.x = nx; else q.vx = -q.vx;
+    if (w === EMPTY || w === TRAIL) q.y = ny; else q.vy = -q.vy;
+    q.hist.unshift({ x: q.x, y: q.y, a: q.a, len: q.len });
+    if (q.hist.length > 8) q.hist.pop();
+    // the line touches the trail or the marker while drawing
+    if (player.drawing) {
+      const ca = Math.cos(q.a), sa = Math.sin(q.a);
+      for (let k = -q.len / 2; k <= q.len / 2; k += 0.7) {
+        const x = Math.round(q.x + ca * k), y = Math.round(q.y + sa * k);
+        if (at(x, y) === TRAIL || (Math.abs(x - player.x) <= 1 && Math.abs(y - player.y) <= 1)) { die(); return; }
+        // the line itself stays inside the free area
+        const c = at(x, y);
+        if (c !== EMPTY && c !== TRAIL) break;
+      }
+    }
+  }
+  function updateSparx(s, dt) {
+    s.acc += s.speed * dt;
+    while (s.acc >= 1) {
+      s.acc -= 1;
+      const [dx, dy] = s.dir;
+      // try to keep going; otherwise turn; never back unless trapped
+      const opts = [[dx, dy], [-dy, dx], [dy, -dx], [-dx, -dy]];
+      let moved = false;
+      for (const [ox, oy] of opts) {
+        const nx = s.x + ox, ny = s.y + oy;
+        if (at(nx, ny) !== BORDER) continue;
+        if (nx === s.px && ny === s.py && !(ox === -dx && oy === -dy)) continue;
+        s.px = s.x; s.py = s.y; s.x = nx; s.y = ny; s.dir = [ox, oy]; moved = true; break;
+      }
+      if (!moved) { s.dir = [-dx, -dy]; }
+      if (Math.abs(s.x - player.x) <= 1 && Math.abs(s.y - player.y) <= 1) { die(); return; }
+    }
+  }
+  function update(dt) {
+    clock += dt;
+    sfxN = 0;
+    for (const q of parts) { q.t += dt; q.x += q.vx * dt; q.y += q.vy * dt; }
+    parts = parts.filter((q) => q.t < q.life);
+    for (const q of popups) { q.t += dt; q.y -= 20 * dt; }
+    popups = popups.filter((q) => q.t < (q.big ? 1.6 : 1.2));
+    if (message) { message.t += dt; if (message.t > 2.2) message = null; }
+    if (!isPlaying()) return;
+    if (state === "intro") { stateT -= dt; if (stateT <= 0) state = "play"; return; }
+    if (state === "dead") { stateT -= dt; if (stateT <= 0) afterDeath(); return; }
+    if (state === "clear") { stateT -= dt; if (stateT <= 0) { level++; buildLevel(); } return; }
+
+    const p = player;
+    humSet(true, p.drawing ? 180 + trail.length * 2 : 90);
+    // movement: one cell at a time, slower while drawing slowly
+    const speed = p.drawing ? (p.slow ? SPEED_SLOW : SPEED_FAST) : SPEED_FAST * 1.1;
+    p.moveAcc += speed * dt;
+    let moved = false;
+    while (p.moveAcc >= 1) { p.moveAcc -= 1; if (stepPlayer()) moved = true; else { p.moveAcc = 0; break; } if (state !== "play") return; }
+    // standing still halfway through a line lights the fuse
+    if (p.drawing) {
+      if (moved) { p.still = 0; fuse = null; }
+      else {
+        p.still += dt;
+        if (p.still > 0.35) {
+          if (!fuse) fuse = { i: 0, acc: 0 };
+          fuse.acc += 22 * dt;
+          while (fuse.acc >= 1) { fuse.acc -= 1; fuse.i++; sfx.fuse(); }
+          if (fuse.i >= trail.length) { die(); return; }
+        }
+      }
+    }
+    for (const q of qixes) { updateQix(q, dt); if (state !== "play") return; }
+    for (const s of sparxes) { updateSparx(s, dt); if (state !== "play") return; }
+  }
+
+  // ---------- Drawing ----------
+  function paintField() {
+    const P = pal(), d = img.data;
+    for (let i = 0; i < GW * GH; i++) {
+      const v = grid[i], x = i % GW, y = (i / GW) | 0;
+      let c;
+      if (v === EMPTY) c = [6, 6, 18];
+      else if (v === BORDER) c = P.border;
+      else if (v === TRAIL) c = [255, 255, 255];
+      else {
+        const base = v === SLOW ? P.slow : P.fast;
+        // a woven pattern on the conquered land
+        const k = ((x + y) % 4 === 0 || (x - y + 400) % 4 === 0) ? 1.25 : 1;
+        c = [Math.min(255, base[0] * k), Math.min(255, base[1] * k), Math.min(255, base[2] * k)];
+      }
+      d[i * 4] = c[0]; d[i * 4 + 1] = c[1]; d[i * 4 + 2] = c[2]; d[i * 4 + 3] = 255;
+    }
+    fctx.putImageData(img, 0, 0);
+    dirty = false;
+  }
+  function draw() {
+    ctx.setTransform(pxRatio, 0, 0, pxRatio, 0, 0);
+    ctx.fillStyle = "#05040e"; ctx.fillRect(0, 0, W, H);
+    if (!player) return;
+    if (dirty || trail.length) paintField();
+    ctx.imageSmoothingEnabled = false;
+    ctx.drawImage(fieldCanvas, OX, OY, GW * CS, GH * CS);
+    ctx.imageSmoothingEnabled = true;
+    // the trail, in the colour of the drawing speed
+    if (trail.length) {
+      ctx.strokeStyle = player.slow ? "#ff5a8a" : "#3d9bff"; ctx.lineWidth = 3; ctx.lineJoin = "round";
+      ctx.beginPath(); ctx.moveTo(OX + trail[0].sx * CS + 2, OY + trail[0].sy * CS + 2);
+      for (const t of trail) ctx.lineTo(OX + t.x * CS + 2, OY + t.y * CS + 2);
+      ctx.stroke();
+      if (fuse) {
+        const t = trail[Math.min(trail.length - 1, fuse.i)];
+        ctx.fillStyle = Math.floor(clock * 20) % 2 ? "#ffd34d" : "#ff8a1a";
+        ctx.beginPath(); ctx.arc(OX + t.x * CS + 2, OY + t.y * CS + 2, 4, 0, Math.PI * 2); ctx.fill();
+      }
+    }
+    // the Qix: a dancing bundle of coloured lines
+    for (const q of qixes) {
+      q.hist.forEach((h, i) => {
+        const ca = Math.cos(h.a), sa = Math.sin(h.a);
+        ctx.strokeStyle = `hsla(${(q.hue + clock * 120 + i * 18) % 360}, 90%, 62%, ${1 - i / q.hist.length})`;
+        ctx.lineWidth = 2;
+        ctx.beginPath();
+        ctx.moveTo(OX + (h.x - ca * h.len / 2) * CS + 2, OY + (h.y - sa * h.len / 2) * CS + 2);
+        ctx.lineTo(OX + (h.x + ca * h.len / 2) * CS + 2, OY + (h.y + sa * h.len / 2) * CS + 2);
+        ctx.stroke();
+      });
+    }
+    // sparks
+    for (const s of sparxes) {
+      const x = OX + s.x * CS + 2, y = OY + s.y * CS + 2;
+      ctx.strokeStyle = Math.floor(clock * 16) % 2 ? "#ffd34d" : "#ffffff"; ctx.lineWidth = 1.5;
+      for (let k = 0; k < 4; k++) { const a = clock * 10 + k * Math.PI / 2; ctx.beginPath(); ctx.moveTo(x, y); ctx.lineTo(x + Math.cos(a) * 6, y + Math.sin(a) * 6); ctx.stroke(); }
+    }
+    // the marker
+    if (state !== "menu" && !(state === "dead")) {
+      const x = OX + player.x * CS + 2, y = OY + player.y * CS + 2;
+      ctx.fillStyle = player.drawing ? (player.slow ? "#ff5a8a" : "#3d9bff") : "#ffffff";
+      ctx.beginPath(); ctx.moveTo(x, y - 6); ctx.lineTo(x + 6, y); ctx.lineTo(x, y + 6); ctx.lineTo(x - 6, y); ctx.closePath(); ctx.fill();
+      ctx.strokeStyle = "#000"; ctx.lineWidth = 1; ctx.stroke();
+    }
+    for (const q of parts) { ctx.globalAlpha = Math.max(0, 1 - q.t / q.life); ctx.fillStyle = q.c; ctx.fillRect(q.x - 1.5, q.y - 1.5, 3, 3); }
+    ctx.globalAlpha = 1;
+    for (const q of popups) {
+      ctx.globalAlpha = Math.max(0, 1 - q.t / (q.big ? 1.6 : 1.2));
+      ctx.textAlign = "center"; ctx.font = q.big ? "700 22px ui-monospace, Menlo, monospace" : "700 14px ui-monospace, Menlo, monospace";
+      ctx.lineWidth = 4; ctx.strokeStyle = "#000"; ctx.strokeText(q.text, q.x, q.y); ctx.fillStyle = q.color; ctx.fillText(q.text, q.x, q.y);
+    }
+    ctx.globalAlpha = 1;
+    // status: score, lives, percentage towards the target
+    ctx.textBaseline = "middle"; ctx.textAlign = "left"; ctx.font = "700 15px ui-monospace, Menlo, monospace"; ctx.fillStyle = "#f0f0ff";
+    ctx.fillText(score.toLocaleString("it-IT"), OX, 20);
+    ctx.font = "700 10px ui-monospace, Menlo, monospace"; ctx.fillStyle = "#9a9ac8";
+    ctx.fillText(`REC ${Math.max(bestCache, score).toLocaleString("it-IT")} · LIV ${level + 1}`, OX + 100, 20);
+    const pct = claimed / interior, bx = W - 210, bw = 150;
+    ctx.strokeStyle = "#9a9ac8"; ctx.lineWidth = 1; ctx.strokeRect(bx, 13, bw, 14);
+    ctx.fillStyle = pct >= TARGET ? "#7dff5a" : "#b98cff"; ctx.fillRect(bx + 1, 14, (bw - 2) * Math.min(1, pct), 12);
+    ctx.fillStyle = "#ffd34d"; ctx.fillRect(bx + bw * TARGET, 10, 2, 20);
+    ctx.fillStyle = "#f0f0ff"; ctx.textAlign = "right"; ctx.font = "700 12px ui-monospace, Menlo, monospace";
+    ctx.fillText(`${Math.floor(pct * 100)}%`, bx - 6, 20);
+    for (let i = 0; i < Math.min(lives - (state === "dead" ? 0 : 1), 6); i++) {
+      const x = W - 46 + i * 12, y = 20;
+      ctx.fillStyle = "#fff"; ctx.beginPath(); ctx.moveTo(x, y - 5); ctx.lineTo(x + 5, y); ctx.lineTo(x, y + 5); ctx.lineTo(x - 5, y); ctx.fill();
+    }
+    ctx.textBaseline = "alphabetic";
+    if (message) {
+      ctx.globalAlpha = Math.min(1, (2.2 - message.t) * 2);
+      ctx.fillStyle = "rgba(5,4,14,0.75)"; ctx.fillRect(0, H / 2 - 40, W, message.sub ? 70 : 50);
+      ctx.textAlign = "center"; ctx.font = "400 24px ui-monospace, Menlo, monospace"; ctx.fillStyle = "#b98cff";
+      ctx.fillText(message.text, W / 2, H / 2 - 8);
+      if (message.sub) { ctx.font = "700 13px system-ui, sans-serif"; ctx.fillStyle = "#f0f0ff"; ctx.fillText(message.sub, W / 2, H / 2 + 18); }
+      ctx.globalAlpha = 1;
+    }
+  }
+
+  // ---------- Loop ----------
+  const STEP = 1 / 120;
+  let last = performance.now(), acc = 0;
+  function loop(now) {
+    const dt = Math.min(0.1, (now - last) / 1000);
+    last = now;
+    if (isPlaying()) {
+      acc += dt;
+      while (acc >= STEP && isPlaying()) { update(STEP); acc -= STEP; }
+    } else { acc = 0; update(dt); }
+    draw();
+    requestAnimationFrame(loop);
+  }
+  syncControls();
+  buildLevel(); state = "menu"; message = null;
+  showTitle();
+  requestAnimationFrame(loop);
+})();
+</script>
+</body>
+</html>
