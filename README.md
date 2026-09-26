@@ -4,7 +4,7 @@ Raccolta di giochi arcade per il browser. Ogni gioco è un singolo file HTML sen
 
 ## 🕹️ Sala Giochi — `index.html`
 
-Apri `index.html` nella cartella principale per la pagina di raccolta: mostra tutti i 17 giochi con copertina, genere, comandi e i tuoi record per ogni difficoltà (Facile, Normale, Difficile). Tocca «Gioca» per avviare un gioco; in ogni gioco il pulsante «← Sala Giochi» in alto a sinistra (visibile nei menu) riporta alla raccolta.
+Apri `index.html` nella cartella principale per la pagina di raccolta: mostra tutti i 18 giochi con copertina, genere, comandi e i tuoi record per ogni difficoltà (Facile, Normale, Difficile). Tocca «Gioca» per avviare un gioco; in ogni gioco il pulsante «← Sala Giochi» in alto a sinistra (visibile nei menu) riporta alla raccolta.
 
 ## Giochi
 
@@ -267,3 +267,20 @@ Flipper verticale con tre tavoli da scegliere nel menu: lancia la pallina con la
 - **Touch:** tocca la metà sinistra o destra dello schermo per le palette; per lanciare tieni premuto sulla destra e lascia
 
 Per giocare apri `games/flipper/index.html` nel browser.
+
+### 🎈 Scoppia Palloni — `games/scoppia-palloni/index.html`
+
+Sparatutto in stile *Pang*: palloni giganti rimbalzano davanti ai monumenti di tutto il mondo e tu li fai scoppiare con un arpione sparato verso l'alto.
+
+- **Palloni:** ogni pallone colpito si divide in due più piccoli (quattro misure, da 50 a 200 punti); i più piccoli scoppiano. Se un pallone ti tocca perdi una vita e il livello ricomincia
+- **Giro del mondo:** 15 livelli in cinque luoghi (Monte Fuji, Colosseo, Piramidi, Torre Eiffel, Torre di Pisa), ognuno con il suo sfondo e il suo colore dei palloni
+- **Piattaforme:** quelle di pietra fermano l'arpione, quelle di vetro si rompono (100 punti)
+- **Tempo:** ogni livello ha un tempo limite; i secondi che avanzano valgono 20 punti l'uno
+- **Sorprese:** a volte un pallone lascia cadere un oggetto: doppio arpione, arpione fisso (resta appeso al soffitto), pistola a raffica, orologio (ferma i palloni per 5 secondi), scudo (para un colpo), dinamite (divide tutti i palloni fino ai più piccoli), frutta e vita extra
+- **2 giocatori:** si gioca in coppia sullo stesso dispositivo, ognuno con il suo punteggio e le sue vite
+- **Difficoltà:** Facile (5 vite, palloni più lenti, più tempo e più sorprese), Normale (3 vite), Difficile (3 vite, palloni più veloci, meno tempo); ogni difficoltà ha il suo record
+- **Comandi (1 giocatore):** `←` `→` o `A` `D` per muoverti · `SPAZIO`, `↑` o `W` per sparare · `P` pausa
+- **Comandi (2 giocatori):** giocatore 1 `A` `D` e `W` o `SPAZIO` · giocatore 2 `←` `→` e `↑` o `INVIO`
+- **Touch:** pulsanti ◀ ▶ e ● sullo schermo; in due, ognuno ha i suoi pulsanti ai lati
+
+Per giocare apri `games/scoppia-palloni/index.html` nel browser.
