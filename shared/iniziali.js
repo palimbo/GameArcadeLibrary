@@ -111,6 +111,12 @@
       document.removeEventListener("keydown", onKey, true);
       window.removeEventListener("keydown", onKey, true);
       modal.remove(); modal = null;
+      // on phones the tap on OK is followed by a click at the same spot: it must not reach
+      // the "play again" button of the game over screen underneath
+      const until = performance.now() + 700;
+      const eat = (e) => { if (performance.now() < until) { e.stopImmediatePropagation(); e.preventDefault(); } };
+      for (const ev of ["click", "mousedown", "mouseup"]) window.addEventListener(ev, eat, true);
+      setTimeout(() => { for (const ev of ["click", "mousedown", "mouseup"]) window.removeEventListener(ev, eat, true); }, 750);
       markNewRecord(name);
       decorate();
     }
