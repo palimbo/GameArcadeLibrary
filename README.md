@@ -4,7 +4,7 @@ Raccolta di giochi arcade per il browser. Ogni gioco è un singolo file HTML sen
 
 ## 🕹️ Sala Giochi — `index.html`
 
-Apri `index.html` nella cartella principale per la pagina di raccolta: mostra tutti i 24 giochi con copertina, genere, comandi e i tuoi record per ogni difficoltà (Facile, Normale, Difficile). Tocca «Gioca» per avviare un gioco; in ogni gioco il pulsante «← Sala Giochi» in alto a sinistra (visibile nei menu) riporta alla raccolta.
+Apri `index.html` nella cartella principale per la pagina di raccolta: mostra tutti i 25 giochi con copertina, genere, comandi e i tuoi record per ogni difficoltà (Facile, Normale, Difficile). Tocca «Gioca» per avviare un gioco; in ogni gioco il pulsante «← Sala Giochi» in alto a sinistra (visibile nei menu) riporta alla raccolta.
 
 ## Giochi
 
@@ -377,3 +377,19 @@ Piattaforme in stile *Donkey Kong*: lo Scimmione ha rapito Paolina e la tiene in
 - **Touch:** croce direzionale a sinistra e tasto SALTA a destra
 
 Per giocare apri `games/scimmione/index.html` nel browser.
+
+### ⛏️ Scavatore — `games/scavatore/index.html`
+
+Gioco in stile *Dig Dug*: scava gallerie nel sottosuolo e liberalo dai mostri.
+
+- **Scavare:** muovendoti nella terra apri nuove gallerie (10 punti per ogni tratto nuovo); gli strati di terreno cambiano colore con la profondità
+- **La pompa:** si spara lungo le gallerie; quando aggancia un nemico continua a premere per gonfiarlo finché scoppia. Se smetti di pompare, si sgonfia e riparte. Più in basso scoppia, più vale (da 200 a 500 punti)
+- **Nemici:** Pooka (rosso con gli occhialoni) e Fygar, il drago verde che si ferma e sputa fuoco attraverso la terra; colpito di fianco vale il doppio. Ogni tanto diventano fantasmi e attraversano la terra per raggiungerti. L'ultimo nemico rimasto prova a scappare in superficie
+- **Massi:** scava sotto un masso e dopo qualche istante cade: schiaccia i nemici (1.000 punti per uno, 2.500 per due e così via), ma anche te
+- **Verdura bonus:** dopo due massi caduti appare al centro una verdura da raccogliere
+- **Round:** ogni round ha più nemici e più draghi, e i nemici sono più veloci; vita extra a 10.000 punti e poi ogni 20.000
+- **Difficoltà:** Facile (5 vite, nemici lenti), Normale (3 vite), Difficile (3 vite, nemici veloci, fantasmi frequenti); ogni difficoltà ha il suo record
+- **Comandi:** frecce o `W` `A` `S` `D` per scavare e muoverti · `SPAZIO` pompa (premi più volte per gonfiare) · `P` pausa
+- **Touch:** croce direzionale e tasto POMPA
+
+Per giocare apri `games/scavatore/index.html` nel browser.

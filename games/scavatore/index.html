@@ -1,0 +1,827 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no, viewport-fit=cover">
+<title>Scavatore</title>
+<style>
+  :root {
+    --bg: #0a0604;
+    --fg: #fff6e8;
+    --muted: #c8b098;
+    --accent: #3dd6ff;
+    --gold: #ffd34d;
+    --bad: #ff4f6a;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  html, body {
+    height: 100%;
+    background: var(--bg);
+    color: var(--fg);
+    font-family: system-ui, -apple-system, "Segoe UI", sans-serif;
+    overflow: hidden;
+    user-select: none;
+    -webkit-user-select: none;
+    touch-action: none;
+  }
+  #wrap { position: fixed; inset: 0; display: flex; align-items: center; justify-content: center; }
+  canvas { display: block; touch-action: none; border-radius: 4px; box-shadow: 0 0 0 2px #2a1a10, 0 10px 40px rgba(0,0,0,0.6); }
+  #pauseBtn {
+    position: fixed; z-index: 3; display: none; right: 10px; top: calc(10px + env(safe-area-inset-top, 0px));
+    font: 700 13px system-ui, sans-serif; color: var(--fg);
+    background: rgba(0, 0, 0, 0.6); border: 1px solid rgba(255, 246, 232, 0.35);
+    border-radius: 8px; padding: 6px 10px; cursor: pointer;
+  }
+  #touch {
+    position: fixed; z-index: 2; display: none; left: 12px; right: 12px;
+    bottom: calc(14px + env(safe-area-inset-bottom, 0px));
+    justify-content: space-between; align-items: flex-end; pointer-events: none;
+  }
+  #touch .pad { display: grid; grid-template-columns: repeat(3, 56px); grid-template-rows: repeat(3, 56px); gap: 4px; pointer-events: auto; }
+  #touch .pad [data-a="up"] { grid-column: 2; grid-row: 1; }
+  #touch .pad [data-a="left"] { grid-column: 1; grid-row: 2; }
+  #touch .pad [data-a="right"] { grid-column: 3; grid-row: 2; }
+  #touch .pad [data-a="down"] { grid-column: 2; grid-row: 3; }
+  #touch button {
+    width: 56px; height: 56px; border-radius: 14px; touch-action: none;
+    font: 700 22px system-ui, sans-serif; color: var(--fg);
+    border: 2px solid rgba(255, 246, 232, 0.5); background: rgba(255, 246, 232, 0.08);
+  }
+  #touch button[data-a="pump"] { width: 90px; height: 90px; border-radius: 50%; border-color: rgba(61, 214, 255, 0.85); background: rgba(61, 214, 255, 0.14); font-size: 15px; letter-spacing: 1px; pointer-events: auto; }
+  #touch.small .pad { grid-template-columns: repeat(3, 44px); grid-template-rows: repeat(3, 44px); }
+  #touch.small button { width: 44px; height: 44px; font-size: 17px; }
+  #touch.small button[data-a="pump"] { width: 70px; height: 70px; font-size: 13px; }
+  #touch button.on { background: rgba(255, 246, 232, 0.4); }
+  #overlay {
+    position: fixed; inset: 0; z-index: 5;
+    display: flex; flex-direction: column; align-items: center; justify-content: flex-start;
+    gap: 14px; padding: 16px; text-align: center; overflow-y: auto;
+    background: rgba(10, 6, 4, 0.88);
+  }
+  #overlay > :first-child { margin-top: auto; }
+  #overlay > :last-child { margin-bottom: auto; }
+  #overlay.hidden { display: none; }
+  #homeLink {
+    position: fixed; top: calc(10px + env(safe-area-inset-top, 0px)); left: 10px; z-index: 6;
+    font: 600 13px/1 system-ui, sans-serif; color: #fff; text-decoration: none;
+    padding: 8px 12px; border-radius: 999px; background: rgba(0,0,0,.55);
+    border: 1px solid rgba(255,255,255,.25);
+  }
+  #homeLink:hover { background: rgba(0,0,0,.8); }
+  #overlay.hidden ~ #homeLink { display: none; }
+  @media (max-width: 700px) { #overlay { padding-top: calc(52px + env(safe-area-inset-top, 0px)); } }
+  #overlay h1 { font-size: clamp(38px, 10vw, 64px); font-weight: 900; letter-spacing: 3px; color: var(--gold); text-shadow: 3px 3px 0 #b8501a, 6px 6px 0 #5a2a0a; }
+  #overlay h2 { font-size: clamp(28px, 7vw, 44px); font-weight: 900; letter-spacing: 2px; }
+  #overlay h2.lose { color: var(--bad); }
+  #overlay p { max-width: 540px; font-size: clamp(13px, 3.4vw, 16px); line-height: 1.55; }
+  #overlay p.muted { color: var(--muted); }
+  #overlay .pts { display: grid; grid-template-columns: repeat(2, auto); gap: 4px 18px; font-size: 13px; color: var(--muted); text-align: left; }
+  #overlay .pts b { color: var(--fg); }
+  #overlay .diff { display: flex; gap: 10px; flex-wrap: wrap; justify-content: center; }
+  #overlay button {
+    font: 800 15px system-ui, sans-serif; letter-spacing: 1.5px; color: var(--fg);
+    background: transparent; cursor: pointer;
+    border: 2px solid rgba(255,246,232,0.3); border-radius: 10px; padding: 9px 16px;
+  }
+  #overlay .diff button.on { border-color: var(--c); color: var(--c); box-shadow: 0 0 12px var(--c); }
+  #overlay button.start { border-color: var(--gold); color: #1a0a00; background: var(--gold); padding: 11px 30px; box-shadow: 0 4px 0 #8a5a00; }
+  @media (max-height: 560px) {
+    #overlay { gap: 8px; }
+    #overlay h1 { font-size: 32px; }
+    #overlay p { font-size: 13px; line-height: 1.4; }
+    #overlay .help, #overlay .pts { display: none; }
+  }
+</style>
+</head>
+<body>
+<div id="wrap"><canvas id="game"></canvas></div>
+<div id="touch">
+  <div class="pad">
+    <button type="button" data-a="up" aria-label="Su">▲</button>
+    <button type="button" data-a="left" aria-label="Sinistra">◀</button>
+    <button type="button" data-a="right" aria-label="Destra">▶</button>
+    <button type="button" data-a="down" aria-label="Giù">▼</button>
+  </div>
+  <button type="button" data-a="pump" aria-label="Pompa">POMPA</button>
+</div>
+<button id="pauseBtn" type="button" aria-label="Pausa">❚❚</button>
+<div id="overlay"></div>
+<a id="homeLink" href="../../index.html">← Sala Giochi</a>
+
+<script>
+(() => {
+  "use strict";
+
+  const CELL = 32, COLS = 14, ROWS = 17, W = COLS * CELL, H = ROWS * CELL;
+  const SURFACE = 1, START = { c: 6, r: 8 };
+  const PSPEED = 76, PUMP_LEN = 3 * CELL;
+  const DIRS = { up: [0, -1], down: [0, 1], left: [-1, 0], right: [1, 0] };
+  const LAYERS = [
+    { rows: [2, 5], col: "#e8b84a", dot: "#c8903a" },
+    { rows: [6, 9], col: "#d8843a", dot: "#b8602a" },
+    { rows: [10, 12], col: "#b8502a", dot: "#8a3a1a" },
+    { rows: [13, 16], col: "#8a2a1a", dot: "#5a1a10" },
+  ];
+  const layerOf = (r) => Math.max(0, LAYERS.findIndex((l) => r >= l.rows[0] && r <= l.rows[1]));
+
+  const DIFFICULTIES = {
+    facile:    { label: "FACILE",    color: "#7dff9a", desc: "5 vite · nemici lenti · diventano fantasmi più di rado", lives: 5, speed: 0.8, ghost: 1.4 },
+    normale:   { label: "NORMALE",   color: "#ffd34d", desc: "3 vite · l'esperienza classica", lives: 3, speed: 1, ghost: 1 },
+    difficile: { label: "DIFFICILE", color: "#ff4f6a", desc: "3 vite · nemici veloci · fantasmi frequenti", lives: 3, speed: 1.2, ghost: 0.7 },
+  };
+  const DIFF_IDS = Object.keys(DIFFICULTIES);
+  const DIFF_KEY = "scavatore-difficulty";
+  const bestKey = (id) => `scavatore-best-${id}`;
+  function store(k, v) { try { localStorage.setItem(k, v); } catch { /* ignore */ } }
+  function load(k) { try { return localStorage.getItem(k); } catch { return null; } }
+  const rnd = (a, b) => a + Math.random() * (b - a);
+  const cx = (c) => c * CELL + CELL / 2, cy = (r) => r * CELL + CELL / 2;
+  const inGrid = (c, r) => c >= 0 && c < COLS && r >= SURFACE && r < ROWS;
+
+  // ---------- Canvas ----------
+  const canvas = document.getElementById("game");
+  const ctx = canvas.getContext("2d");
+  const wrap = document.getElementById("wrap");
+  const overlay = document.getElementById("overlay");
+  const touchEl = document.getElementById("touch");
+  const pauseBtn = document.getElementById("pauseBtn");
+  let pxRatio = 1, touchMode = !!(window.matchMedia && matchMedia("(pointer: coarse)").matches);
+  function resize() {
+    const portrait = window.innerHeight > window.innerWidth;
+    const showTouch = touchMode && isPlaying();
+    touchEl.style.display = showTouch ? "flex" : "none";
+    touchEl.classList.toggle("small", !portrait && window.innerHeight < 480);
+    wrap.style.paddingBottom = showTouch && portrait ? "calc(190px + env(safe-area-inset-bottom, 0px))" : "0";
+    let availW = window.innerWidth - 8, availH = window.innerHeight - 8;
+    if (showTouch && portrait) availH -= 190;
+    if (showTouch && !portrait) {
+      const side = Math.max(...[...touchEl.children].map((el) => el.offsetWidth)) + 20;
+      if (window.innerWidth - 2 * side > 260) availW = window.innerWidth - 2 * side;
+    }
+    const s = Math.max(0.2, Math.min(availW / W, availH / H));
+    pxRatio = Math.min(3, s * (window.devicePixelRatio || 1));
+    canvas.style.width = W * s + "px";
+    canvas.style.height = H * s + "px";
+    canvas.width = Math.round(W * pxRatio);
+    canvas.height = Math.round(H * pxRatio);
+  }
+  window.addEventListener("resize", () => syncControls());
+
+  // ---------- Audio ----------
+  let audioCtx = null;
+  function beep(freq, dur, type = "square", vol = 0.04, slide = 0, delay = 0) {
+    if (!audioCtx) return;
+    const t = audioCtx.currentTime + delay;
+    const osc = audioCtx.createOscillator(), gain = audioCtx.createGain();
+    osc.type = type;
+    osc.frequency.setValueAtTime(freq, t);
+    if (slide) osc.frequency.exponentialRampToValueAtTime(Math.max(20, freq + slide), t + dur);
+    gain.gain.setValueAtTime(vol, t);
+    gain.gain.exponentialRampToValueAtTime(0.0001, t + dur);
+    osc.connect(gain).connect(audioCtx.destination);
+    osc.start(t); osc.stop(t + dur + 0.02);
+  }
+  function noise(dur, vol, freq) {
+    if (!audioCtx) return;
+    const len = Math.floor(audioCtx.sampleRate * dur), buf = audioCtx.createBuffer(1, len, audioCtx.sampleRate), d = buf.getChannelData(0);
+    for (let i = 0; i < len; i++) d[i] = (Math.random() * 2 - 1) * (1 - i / len);
+    const src = audioCtx.createBufferSource(), f = audioCtx.createBiquadFilter(), g = audioCtx.createGain();
+    src.buffer = buf; f.type = "lowpass"; f.frequency.value = freq; g.gain.value = vol;
+    src.connect(f).connect(g).connect(audioCtx.destination); src.start();
+  }
+  const arp = (notes, gap, d, type = "square", vol = 0.04) => notes.forEach((f, i) => beep(f, d, type, vol, 0, i * gap));
+  let sfxN = 0;
+  const lim = (fn) => (...a) => { if (sfxN++ < 4) fn(...a); };
+  const sfx = {
+    dig: lim(() => noise(0.04, 0.06, 500)),
+    walk: lim((hi) => beep(hi ? 660 : 523, 0.05, "square", 0.018)),
+    shoot: lim(() => beep(900, 0.1, "square", 0.03, 600)),
+    pump: lim((k) => beep(200 + k * 120, 0.12, "sawtooth", 0.04, 200)),
+    pop: () => { noise(0.2, 0.4, 2000); arp([784, 1047], 0.05, 0.1); },
+    wobble: lim(() => beep(120, 0.08, "square", 0.03)),
+    rock: () => { noise(0.5, 0.4, 400); beep(90, 0.4, "sawtooth", 0.05, -40); },
+    crush: () => arp([523, 659, 784, 1047, 1319], 0.06, 0.1),
+    fire: lim(() => noise(0.5, 0.3, 1200)),
+    veg: () => arp([1047, 1319, 1568], 0.06, 0.1, "triangle", 0.05),
+    die: () => arp([784, 740, 698, 659, 622, 587, 554, 523, 494, 466], 0.07, 0.08),
+    escape: () => arp([659, 523, 392], 0.1, 0.12),
+    clear: () => arp([523, 659, 784, 1047, 784, 1047, 1319], 0.1, 0.16),
+    over: () => arp([523, 415, 330, 262], 0.18, 0.25),
+    life: () => arp([523, 784, 1047, 1319], 0.08, 0.12, "triangle", 0.05),
+  };
+
+  // ---------- State ----------
+  let difficulty = DIFFICULTIES[load(DIFF_KEY)] ? load(DIFF_KEY) : "normale";
+  let diff = DIFFICULTIES[difficulty];
+  let state = "menu", menu = null, pausedFrom = null, stateT = 0, clock = 0;
+  let score = 0, lives = 3, round = 0, bestCache = 0, nextLife = 10000, rocksDropped = 0;
+  let dug = [], hEdge = [], vEdge = [], rocks = [], foes = [], hero = null, pump = null, veg = null, parts = [], popups = [], message = null;
+  const ctl = { up: false, down: false, left: false, right: false, pump: false };
+  let pumpPressed = false, lastDir = null;
+
+  const grid = (v) => Array.from({ length: ROWS }, () => Array(COLS).fill(v));
+  const speedMul = () => diff.speed * (1 + Math.min(0.5, round * 0.05));
+  function rockAt(c, r) { return rocks.find((k) => !k.gone && k.c === c && k.r === r && k.state !== "fall"); }
+  // is there an open tunnel between two neighbouring cells?
+  function open(c, r, dc, dr) {
+    const nc = c + dc, nr = r + dr;
+    if (!inGrid(nc, nr) || !inGrid(c, r)) return false;
+    if (rockAt(nc, nr)) return false;
+    if (dr === 0) return hEdge[r][Math.min(c, nc)];
+    return vEdge[Math.min(r, nr)][c];
+  }
+  function digEdge(c, r, nc, nr) {
+    dug[nr][nc] = true;
+    if (r === nr) hEdge[r][Math.min(c, nc)] = true; else vEdge[Math.min(r, nr)][c] = true;
+  }
+
+  function buildRound() {
+    dug = grid(false); hEdge = grid(false); vEdge = grid(false);
+    // the surface is open air
+    for (let c = 0; c < COLS; c++) { dug[SURFACE][c] = true; if (c < COLS - 1) hEdge[SURFACE][c] = true; }
+    // the shaft from the surface to the middle
+    for (let r = SURFACE; r < START.r; r++) digEdge(START.c, r, START.c, r + 1);
+    // little tunnels with an enemy inside each
+    foes = [];
+    const n = Math.min(8, 4 + Math.floor(round / 2));
+    const taken = [];
+    let tries = 0;
+    while (foes.length < n && tries++ < 400) {
+      const horiz = Math.random() < 0.5, len = 3 + Math.floor(Math.random() * 2);
+      const c0 = Math.floor(rnd(0, COLS - (horiz ? len : 1))), r0 = Math.floor(rnd(3, ROWS - (horiz ? 1 : len)));
+      const cells = [];
+      for (let k = 0; k < len; k++) cells.push(horiz ? [c0 + k, r0] : [c0, r0 + k]);
+      // keep clear of the start and of other tunnels
+      if (cells.some(([c, r]) => Math.abs(c - START.c) + Math.abs(r - START.r) < 4 || c === START.c && r <= START.r + 1 || taken.some(([tc, tr]) => Math.abs(tc - c) + Math.abs(tr - r) < 3))) continue;
+      cells.forEach(([c, r], k) => { dug[r][c] = true; if (k) digEdge(cells[k - 1][0], cells[k - 1][1], c, r); taken.push([c, r]); });
+      const [fc, fr] = cells[Math.floor(len / 2)];
+      const fygar = Math.random() < Math.min(0.5, 0.2 + round * 0.05);
+      foes.push({ type: fygar ? "fygar" : "pooka", c: fc, r: fr, x: cx(fc), y: cy(fr), home: [fc, fr], dir: horiz ? [1, 0] : [0, 1], tc: fc, tr: fr, inflate: 0, deflateT: 0, ghostT: rnd(8, 16) * diff.ghost, ghost: false, ghostDur: 0, fireT: rnd(3, 6), breath: 0, breathCharge: 0, face: 1, gone: false, flee: false });
+    }
+    // rocks sitting in solid dirt with dirt under them
+    rocks = [];
+    tries = 0;
+    while (rocks.length < 3 + Math.min(2, Math.floor(round / 3)) && tries++ < 300) {
+      const c = Math.floor(rnd(0, COLS)), r = Math.floor(rnd(3, ROWS - 3));
+      if (dug[r][c] || dug[r + 1][c] || rocks.some((k) => Math.abs(k.c - c) + Math.abs(k.r - r) < 3) || (c === START.c)) continue;
+      rocks.push({ c, r, x: cx(c), y: cy(r), state: "rest", t: 0, vy: 0, victims: [], gone: false });
+    }
+    rocksDropped = 0; veg = null;
+    resetHero();
+    message = { text: `ROUND ${round + 1}`, t: 0 };
+    state = "intro"; stateT = 1.6;
+  }
+  function resetHero() {
+    hero = { c: START.c, r: START.r, tc: START.c, tr: START.r, x: cx(START.c), y: cy(START.r), dir: [0, 1], face: 1, moving: false, walk: 0, from: null, dead: false, deathT: 0 };
+    pump = null;
+  }
+
+  // ---------- Flow ----------
+  const isPlaying = () => ["intro", "play", "dead", "clear"].includes(state);
+  function startGame() {
+    if (!audioCtx) { try { audioCtx = new (window.AudioContext || window.webkitAudioContext)(); } catch { audioCtx = null; } }
+    if (audioCtx && audioCtx.state === "suspended") audioCtx.resume();
+    score = 0; lives = diff.lives; round = 0; nextLife = 10000;
+    bestCache = parseInt(load(bestKey(difficulty)), 10) || 0;
+    buildRound();
+    menu = null;
+    overlay.classList.add("hidden");
+    syncControls();
+    last = performance.now();
+  }
+  function addScore(n, x, y, color = "#fff6e8") {
+    score += n;
+    if (x !== undefined) popups.push({ x, y, text: String(n), color, t: 0 });
+    if (score >= nextLife) { nextLife += 20000; lives++; sfx.life(); popups.push({ x: W / 2, y: 90, text: "VITA EXTRA", color: "#ffd34d", t: 0, big: true }); }
+  }
+  function burst(x, y, color, n = 10, sp = 120) {
+    for (let k = 0; k < n; k++) {
+      const a = Math.random() * Math.PI * 2, s = sp * (0.3 + Math.random() * 0.8);
+      parts.push({ x, y, vx: Math.cos(a) * s, vy: Math.sin(a) * s, t: 0, life: 0.3 + Math.random() * 0.4, c: color });
+    }
+  }
+  function killHero() {
+    if (state !== "play" || hero.dead) return;
+    hero.dead = true; pump = null;
+    lives--;
+    sfx.die();
+    state = "dead"; stateT = 2;
+  }
+  function afterDeath() {
+    if (lives <= 0) { gameOver(); return; }
+    resetHero();
+    // enemies go back to where they started
+    for (const f of foes) {
+      if (f.gone) continue;
+      Object.assign(f, { c: f.home[0], r: f.home[1], x: cx(f.home[0]), y: cy(f.home[1]), tc: f.home[0], tr: f.home[1], ghost: false, inflate: 0, breath: 0, breathCharge: 0, ghostT: rnd(8, 16) * diff.ghost });
+      // a home cell buried under a fallen rock: pick any tunnel cell far from the hero
+      if (!dug[f.r][f.c]) f.ghost = true;
+    }
+    state = "play";
+  }
+  function roundCleared() {
+    message = { text: "ROUND COMPLETATO!", t: 0 };
+    sfx.clear();
+    state = "clear"; stateT = 2.4;
+  }
+  function gameOver() {
+    state = "over";
+    const prev = parseInt(load(bestKey(difficulty)), 10) || 0;
+    const record = score > prev;
+    if (record) store(bestKey(difficulty), String(score));
+    const played = diff.label, rd = round + 1;
+    menu = () => showOverlay(
+      `<h2 class="lose">GAME OVER</h2>
+       <p>Punteggio: <b>${score.toLocaleString("it-IT")}</b> · Round ${rd} · ${played}</p>
+       ${record ? "<p style='color:var(--gold)'>★ NUOVO RECORD! ★</p>" : ""}
+       ${difficultyHTML()}
+       <button class="start" data-start>GIOCA ANCORA</button>`
+    );
+    menu();
+    sfx.over();
+    syncControls();
+  }
+  function togglePause() {
+    if (isPlaying()) {
+      pausedFrom = state; state = "paused";
+      showOverlay(`<h2>PAUSA</h2><button class="start" data-resume>CONTINUA</button><p class="muted">Premi P per continuare</p>`);
+    } else if (state === "paused") {
+      state = pausedFrom; overlay.classList.add("hidden"); last = performance.now();
+    }
+    syncControls();
+  }
+  function syncControls() {
+    const portrait = window.innerHeight > window.innerWidth;
+    pauseBtn.style.display = isPlaying() && touchMode ? "block" : "none";
+    Object.assign(pauseBtn.style, portrait
+      ? { top: "auto", bottom: "calc(130px + env(safe-area-inset-bottom, 0px))", right: "30px", left: "auto" }
+      : { top: "calc(10px + env(safe-area-inset-top, 0px))", bottom: "auto", right: "10px", left: "auto" });
+    resize();
+  }
+  pauseBtn.addEventListener("click", () => togglePause());
+  function showOverlay(html) { overlay.innerHTML = html; overlay.classList.remove("hidden"); }
+  function difficultyHTML() {
+    const buttons = DIFF_IDS.map((id) => {
+      const d = DIFFICULTIES[id];
+      return `<button type="button" data-diff="${id}" class="${id === difficulty ? "on" : ""}" style="--c:${d.color}">${d.label}</button>`;
+    }).join("");
+    const best = parseInt(load(bestKey(difficulty)), 10);
+    return `<div class="diff">${buttons}</div><p class="muted">${diff.desc}${best ? ` · Record: ${best.toLocaleString("it-IT")}` : ""}</p>`;
+  }
+  function setDifficulty(id) { if (!DIFFICULTIES[id]) return; difficulty = id; diff = DIFFICULTIES[id]; store(DIFF_KEY, id); if (menu) menu(); }
+  function showTitle() {
+    menu = showTitle;
+    showOverlay(
+      `<h1>SCAVATORE</h1>
+       <p>Scava gallerie nel terreno e libera il sottosuolo dai mostri! Colpiscili con la pompa e continua a pompare finché non scoppiano, oppure fai cadere un masso scavando sotto di lui. Attento: i nemici sanno trasformarsi in fantasmi e attraversare la terra, e il drago sputa fuoco.</p>
+       <div class="pts">
+         <span><b>Pooka</b> (rosso)</span><span>200–500, più in basso vale di più</span>
+         <span><b>Fygar</b> (drago verde)</span><span>il doppio se colpito di fianco</span>
+         <span><b>Masso</b></span><span>1000 per un nemico, 2500 per due…</span>
+         <span><b>Verdura bonus</b></span><span>appare dopo due massi caduti</span>
+       </div>
+       ${touchMode
+         ? `<p class="muted help">Croce per scavare e muoverti · POMPA per sparare e pompare (tocca più volte)</p>`
+         : `<p class="muted help">Frecce o W A S D per scavare · SPAZIO per la pompa (premi più volte per gonfiare) · P pausa</p>`}
+       ${difficultyHTML()}
+       <button class="start" data-start>INIZIA</button>`
+    );
+  }
+  overlay.addEventListener("click", (e) => {
+    const d = e.target.closest("[data-diff]");
+    if (d) { setDifficulty(d.dataset.diff); return; }
+    if (e.target.closest("[data-start]")) startGame();
+    if (e.target.closest("[data-resume]")) togglePause();
+  });
+
+  // ---------- Input ----------
+  const KEYS = { arrowup: "up", w: "up", arrowdown: "down", s: "down", arrowleft: "left", a: "left", arrowright: "right", d: "right", " ": "pump", z: "pump", x: "pump" };
+  window.addEventListener("keydown", (e) => {
+    const k = e.key.toLowerCase();
+    if ([" ", "arrowup", "arrowdown", "arrowleft", "arrowright"].includes(k)) e.preventDefault();
+    if (state === "menu" || state === "over") {
+      if (e.key === "Enter") startGame();
+      else if (["1", "2", "3"].includes(k)) setDifficulty(DIFF_IDS[+k - 1]);
+      else if (k === "arrowleft") setDifficulty(DIFF_IDS[(DIFF_IDS.indexOf(difficulty) + 2) % 3]);
+      else if (k === "arrowright") setDifficulty(DIFF_IDS[(DIFF_IDS.indexOf(difficulty) + 1) % 3]);
+      return;
+    }
+    if (k === "p" || k === "escape") { if (!e.repeat) togglePause(); return; }
+    if (state === "paused") { if (e.key === "Enter") togglePause(); return; }
+    const a = KEYS[k];
+    if (!a) return;
+    ctl[a] = true;
+    if (a === "pump" && !e.repeat) pumpPressed = true;
+    if (a !== "pump") lastDir = a;
+  });
+  window.addEventListener("keyup", (e) => { const a = KEYS[e.key.toLowerCase()]; if (a) ctl[a] = false; });
+  window.addEventListener("blur", () => { for (const k in ctl) ctl[k] = false; if (isPlaying()) togglePause(); });
+  for (const btn of touchEl.querySelectorAll("button")) {
+    const a = btn.dataset.a;
+    btn.addEventListener("pointerdown", (e) => {
+      e.preventDefault(); btn.classList.add("on"); ctl[a] = true;
+      if (a === "pump") pumpPressed = true; else lastDir = a;
+      try { btn.setPointerCapture(e.pointerId); } catch { /* ignore */ }
+    });
+    for (const ev of ["pointerup", "pointercancel", "lostpointercapture"]) btn.addEventListener(ev, () => { btn.classList.remove("on"); ctl[a] = false; });
+  }
+  window.addEventListener("pointerdown", (e) => { if (e.pointerType === "touch" && !touchMode) { touchMode = true; syncControls(); if (menu) menu(); } }, true);
+
+  // ---------- Hero ----------
+  function wantedDir() {
+    // the most recently pressed direction that is still held, otherwise any held one
+    if (lastDir && ctl[lastDir]) return lastDir;
+    return ["up", "down", "left", "right"].find((k) => ctl[k]) || null;
+  }
+  function updateHero(dt) {
+    const h = hero;
+    // pumping: stay put while the pump is out
+    if (pump) { updatePump(dt); return; }
+    if (pumpPressed) {
+      pumpPressed = false;
+      pump = { len: 0, dir: h.dir.slice(), target: null, holdT: 0 };
+      sfx.shoot();
+      return;
+    }
+    const want = wantedDir();
+    h.moving = false;
+    if (!want) return;
+    const [dx, dy] = DIRS[want];
+    const atCentre = h.tc === h.c && h.tr === h.r;
+    if (atCentre) {
+      if (dx) h.face = dx;
+      h.dir = [dx, dy];
+      const nc = h.c + dx, nr = h.r + dy;
+      if (!inGrid(nc, nr) || rockAt(nc, nr)) return;
+      h.tc = nc; h.tr = nr;
+    } else {
+      // between two cells you can only go on or turn back; a turn waits for the next cell
+      const back = dx === -h.dir[0] && dy === -h.dir[1];
+      if (back) { [h.c, h.tc] = [h.tc, h.c]; [h.r, h.tr] = [h.tr, h.r]; h.dir = [dx, dy]; if (dx) h.face = dx; }
+    }
+    h.moving = true;
+    h.walk += dt * 8;
+    const tx = cx(h.tc), ty = cy(h.tr), ddx = tx - h.x, ddy = ty - h.y, dist = Math.hypot(ddx, ddy), step = PSPEED * dt;
+    if (dist > step) { h.x += ddx / dist * step; h.y += ddy / dist * step; }
+    else {
+      h.x = tx; h.y = ty;
+      const fresh = !dug[h.tr][h.tc] || !(h.tr === h.r ? hEdge[h.r][Math.min(h.c, h.tc)] : vEdge[Math.min(h.r, h.tr)][h.c]);
+      digEdge(h.c, h.r, h.tc, h.tr);
+      h.c = h.tc; h.r = h.tr;
+      if (fresh) { addScore(10); sfx.dig(); }
+    }
+    if (Math.floor(h.walk) % 2 !== Math.floor(h.walk - dt * 8) % 2) sfx.walk(Math.floor(h.walk) % 2);
+    // the bonus vegetable
+    if (veg && Math.hypot(h.x - veg.x, h.y - veg.y) < 16) { addScore(veg.pts, veg.x, veg.y - 16, "#7dff5a"); sfx.veg(); veg = null; }
+  }
+  function updatePump(dt) {
+    const h = hero, p = pump;
+    if (p.target) {
+      const f = p.target;
+      if (f.gone) { pump = null; return; }
+      // every press pumps a bit more; letting go for a while releases the enemy
+      p.holdT += dt;
+      if (pumpPressed) {
+        pumpPressed = false; p.holdT = 0;
+        f.inflate = Math.min(4, f.inflate + 1); f.deflateT = 0.9;
+        sfx.pump(f.inflate);
+        if (f.inflate >= 4) popFoe(f);
+      }
+      if (p.holdT > 0.9 || wantedDir()) { pump = null; }
+      return;
+    }
+    p.len += 320 * dt;
+    // the pump flies along tunnels only
+    const [dx, dy] = p.dir;
+    const tipX = h.x + dx * p.len, tipY = h.y + dy * p.len;
+    const cells = Math.floor((p.len + CELL / 2) / CELL);
+    let blocked = false;
+    for (let k = 0; k < cells; k++) if (!open(h.c + dx * k, h.r + dy * k, dx, dy)) { blocked = k === 0 ? p.len > CELL * 0.45 : true; break; }
+    for (const f of foes) {
+      if (f.gone || f.ghost) continue;
+      if (Math.hypot(f.x - tipX, f.y - tipY) < 14) {
+        p.target = f; p.len = Math.hypot(f.x - h.x, f.y - h.y);
+        f.inflate = Math.max(1, f.inflate); f.deflateT = 0.9; f.breath = 0; f.breathCharge = 0;
+        p.side = dy === 0; // hit from the side (for the dragon bonus)
+        sfx.pump(1);
+        return;
+      }
+    }
+    if (blocked || p.len >= PUMP_LEN) pump = null;
+    pumpPressed = false;
+  }
+  function popFoe(f) {
+    f.gone = true;
+    const layer = layerOf(f.r);
+    let pts = [200, 300, 400, 500][layer];
+    if (f.type === "fygar" && pump && pump.side) pts *= 2;
+    addScore(pts, f.x, f.y - 20, "#ffd34d");
+    burst(f.x, f.y, f.type === "fygar" ? "#5ad84a" : "#ff4f4f", 16, 150);
+    sfx.pop();
+    pump = null;
+    checkLastFoe();
+  }
+  function checkLastFoe() {
+    const alive = foes.filter((f) => !f.gone);
+    if (!alive.length) { roundCleared(); return; }
+    // the last one makes a run for it
+    if (alive.length === 1 && !alive[0].flee) { alive[0].flee = true; alive[0].ghostT = 0.5; }
+  }
+
+  // ---------- Enemies ----------
+  function foeSpeed(f) { return (f.ghost ? 34 : f.flee ? 70 : 52) * speedMul(); }
+  function chooseDir(f) {
+    const goal = f.flee ? [0, SURFACE] : [hero.c, hero.r];
+    const opts = [];
+    for (const d of [[1, 0], [-1, 0], [0, 1], [0, -1]]) {
+      if (!open(f.c, f.r, d[0], d[1])) continue;
+      const back = d[0] === -f.dir[0] && d[1] === -f.dir[1];
+      const dist = Math.abs(f.c + d[0] - goal[0]) + Math.abs(f.r + d[1] - goal[1]);
+      opts.push({ d, score: dist + (back ? 3 : 0) + Math.random() * 2.5 });
+    }
+    if (!opts.length) return null;
+    opts.sort((a, b) => a.score - b.score);
+    return opts[0].d;
+  }
+  function updateFoe(f, dt) {
+    if (f.inflate > 0) {
+      // stuck while inflated; slowly shrinks back unless pumped
+      if (!(pump && pump.target === f)) { f.deflateT -= dt; if (f.deflateT <= 0) { f.inflate--; f.deflateT = 0.6; } }
+      return;
+    }
+    // the dragon stops and breathes fire at a hero on the same row
+    if (f.type === "fygar" && !f.ghost) {
+      if (f.breath > 0) { f.breath -= dt; return; }
+      if (f.breathCharge > 0) { f.breathCharge -= dt; if (f.breathCharge <= 0) { f.breath = 0.7; sfx.fire(); } return; }
+      f.fireT -= dt;
+      if (f.fireT <= 0 && Math.abs(hero.y - f.y) < 10 && Math.abs(hero.x - f.x) < CELL * 4 && Math.abs(f.y - cy(f.r)) < 1 && Math.abs(f.x - cx(f.c)) < 1) {
+        f.face = Math.sign(hero.x - f.x) || f.face; f.breathCharge = 0.55; f.fireT = rnd(3, 6); return;
+      }
+    }
+    const sp = foeSpeed(f) * dt;
+    if (f.ghost) {
+      // eyes drifting through the dirt towards the hero (or the exit)
+      const gx = f.flee ? cx(0) : hero.x, gy = f.flee ? cy(SURFACE) : hero.y;
+      const dx = gx - f.x, dy = gy - f.y, d = Math.hypot(dx, dy) || 1;
+      f.x += dx / d * sp; f.y += dy / d * sp; if (dx) f.face = Math.sign(dx);
+      f.ghostDur += dt;
+      const c = Math.round((f.x - CELL / 2) / CELL), r = Math.round((f.y - CELL / 2) / CELL);
+      // turns solid again as soon as it is back inside a tunnel
+      if (f.ghostDur > 1.2 && inGrid(c, r) && dug[r][c] && !rockAt(c, r) && Math.hypot(f.x - cx(c), f.y - cy(r)) < 6) {
+        Object.assign(f, { ghost: false, c, r, x: cx(c), y: cy(r), tc: c, tr: r, ghostT: rnd(8, 16) * diff.ghost / (1 + round * 0.08) });
+      }
+      if (f.flee) checkEscape(f);
+      return;
+    }
+    f.ghostT -= dt;
+    // walking between cell centres
+    const tx = cx(f.tc), ty = cy(f.tr);
+    const dx = tx - f.x, dy = ty - f.y, d = Math.hypot(dx, dy);
+    if (d > sp) { f.x += dx / d * sp; f.y += dy / d * sp; return; }
+    f.x = tx; f.y = ty; f.c = f.tc; f.r = f.tr;
+    if (f.flee) { checkEscape(f); if (f.gone) return; }
+    if (f.ghostT <= 0) { f.ghost = true; f.ghostDur = 0; return; }
+    const nd = chooseDir(f);
+    if (!nd) { f.ghostT = Math.min(f.ghostT, 0.6); return; }
+    f.dir = nd; if (nd[0]) f.face = nd[0];
+    f.tc = f.c + nd[0]; f.tr = f.r + nd[1];
+  }
+  function checkEscape(f) {
+    if (f.y < cy(SURFACE) + 4 && f.x < cx(0) + 4) {
+      f.gone = true; sfx.escape();
+      popups.push({ x: 40, y: 40, text: "SCAPPATO!", color: "#ff4f6a", t: 0 });
+      checkLastFoe();
+    }
+  }
+
+  // ---------- Rocks ----------
+  function updateRock(k, dt) {
+    if (k.state === "rest") {
+      // starts to wobble once the dirt under it is dug away and the hero is not right under it
+      if (k.r + 1 < ROWS && dug[k.r + 1][k.c] && !(hero.c === k.c && hero.r === k.r + 1 && !hero.dead)) { k.state = "wobble"; k.t = 0.8; }
+      return;
+    }
+    if (k.state === "wobble") {
+      k.t -= dt;
+      if (Math.floor(k.t * 10) % 2 === 0) sfx.wobble();
+      if (k.t <= 0) { k.state = "fall"; k.vy = 0; }
+      return;
+    }
+    if (k.state === "fall") {
+      k.vy = Math.min(260, k.vy + 600 * dt);
+      k.y += k.vy * dt;
+      // crushes whatever is under it
+      for (const f of foes) if (!f.gone && !f.ghost && Math.abs(f.x - k.x) < 16 && f.y > k.y - 6 && f.y < k.y + 22 && !k.victims.includes(f)) { k.victims.push(f); f.inflate = 0; }
+      for (const f of k.victims) { f.x = k.x; f.y = k.y + 14; }
+      if (!hero.dead && Math.abs(hero.x - k.x) < 14 && hero.y > k.y && hero.y < k.y + 24) killHero();
+      // stops when the dirt below its bottom edge has not been dug
+      const nextR = Math.floor((k.y + CELL / 2) / CELL);
+      if (nextR >= ROWS || !dug[nextR][k.c]) {
+        k.state = "break"; k.t = 0.5; k.y = cy(nextR - 1);
+        sfx.rock();
+        rocksDropped++;
+        if (k.victims.length) {
+          const pts = [0, 1000, 2500, 4000, 6000, 8000, 10000, 12000, 15000][Math.min(8, k.victims.length)];
+          for (const f of k.victims) { f.gone = true; burst(f.x, f.y, "#fff", 8, 80); }
+          addScore(pts, k.x, k.y - 20, "#ffd34d"); sfx.crush();
+          checkLastFoe();
+        }
+        if (rocksDropped === 2 && !veg) veg = { x: cx(START.c), y: cy(START.r), t: 10, pts: [400, 600, 800, 1000, 2000, 3000, 4000, 5000][Math.min(7, round)], kind: round % 4 };
+      }
+      return;
+    }
+    if (k.state === "break") { k.t -= dt; if (k.t <= 0) k.gone = true; }
+  }
+
+  function update(dt) {
+    clock += dt;
+    sfxN = 0;
+    for (const q of parts) { q.t += dt; q.x += q.vx * dt; q.y += q.vy * dt; q.vy += 200 * dt; }
+    parts = parts.filter((q) => q.t < q.life);
+    for (const q of popups) { q.t += dt; q.y -= 22 * dt; }
+    popups = popups.filter((q) => q.t < (q.big ? 1.6 : 1));
+    if (message) { message.t += dt; if (message.t > 2) message = null; }
+    if (!isPlaying()) return;
+    if (state === "intro") { stateT -= dt; if (stateT <= 0) state = "play"; return; }
+    if (state === "dead") { stateT -= dt; hero.deathT += dt; if (stateT <= 0) afterDeath(); return; }
+    if (state === "clear") { stateT -= dt; if (stateT <= 0) { round++; buildRound(); } return; }
+
+    updateHero(dt);
+    if (state !== "play") return;
+    for (const f of foes) if (!f.gone) updateFoe(f, dt);
+    for (const k of rocks) if (!k.gone) updateRock(k, dt);
+    if (state !== "play") return;
+    if (veg) { veg.t -= dt; if (veg.t <= 0) veg = null; }
+    // touching an enemy or its fire
+    for (const f of foes) {
+      if (f.gone || f.inflate > 0) continue;
+      if (Math.hypot(f.x - hero.x, f.y - hero.y) < 20) { killHero(); return; }
+      if (f.breath > 0) {
+        const x0 = f.x + f.face * 14, x1 = f.x + f.face * (14 + 70 * Math.min(1, (0.7 - f.breath) * 4 + 0.3));
+        if (Math.abs(hero.y - f.y) < 12 && hero.x > Math.min(x0, x1) - 8 && hero.x < Math.max(x0, x1) + 8) { killHero(); return; }
+      }
+    }
+  }
+
+  // ---------- Drawing ----------
+  function drawDirt() {
+    // sky and surface
+    ctx.fillStyle = "#06061a"; ctx.fillRect(0, 0, W, CELL * 2);
+    ctx.fillStyle = "#3a8aff"; ctx.fillRect(0, CELL, W, CELL);
+    // flowers count the rounds
+    for (let i = 0; i < Math.min(round + 1, 12); i++) { const x = W - 20 - i * 18; ctx.fillStyle = "#3aa84a"; ctx.fillRect(x - 1, CELL * 2 - 12, 2, 10); ctx.fillStyle = i % 5 === 4 ? "#ffd34d" : "#ffffff"; ctx.beginPath(); ctx.arc(x, CELL * 2 - 14, 4, 0, Math.PI * 2); ctx.fill(); }
+    for (const L of LAYERS) {
+      const y0 = L.rows[0] * CELL, h = (L.rows[1] - L.rows[0] + 1) * CELL;
+      ctx.fillStyle = L.col; ctx.fillRect(0, y0, W, h);
+      ctx.fillStyle = L.dot;
+      for (let y = y0 + 6; y < y0 + h; y += 12) for (let x = ((y / 12) % 2) * 8 + 4; x < W; x += 16) ctx.fillRect(x, y, 3, 3);
+    }
+    // tunnels
+    ctx.fillStyle = "#000";
+    const T = 26;
+    for (let r = SURFACE + 1; r < ROWS; r++) for (let c = 0; c < COLS; c++) {
+      if (dug[r][c]) ctx.fillRect(cx(c) - T / 2, cy(r) - T / 2, T, T);
+      if (c < COLS - 1 && hEdge[r][c]) ctx.fillRect(cx(c), cy(r) - T / 2, CELL, T);
+      if (r < ROWS - 1 && vEdge[r][c]) ctx.fillRect(cx(c) - T / 2, cy(r), T, CELL);
+    }
+    // the shaft through the surface strip
+    for (let c = 0; c < COLS; c++) if (vEdge[SURFACE][c]) ctx.fillRect(cx(c) - T / 2, cy(SURFACE), T, CELL);
+    // the tunnel being dug right now
+    if (hero && !hero.dead) ctx.fillRect(hero.x - T / 2, hero.y - T / 2, T, T);
+  }
+  function drawHero() {
+    const h = hero;
+    ctx.save(); ctx.translate(h.x, h.y);
+    if (h.dead) { const s = Math.max(0, 1 - h.deathT / 1.5); ctx.scale(1, s); ctx.rotate(h.deathT * 6); }
+    // face the way we are going (vertical moves rotate the sprite)
+    const [dx, dy] = h.dir;
+    if (dy) ctx.rotate(dy * Math.PI / 2 * h.face);
+    ctx.scale(h.face, 1);
+    const step = h.moving ? Math.sin(h.walk * 2) * 2 : 0;
+    ctx.fillStyle = "#3d7bff"; ctx.fillRect(-9, -2, 18, 10);            // blue suit
+    ctx.fillStyle = "#ffffff"; ctx.fillRect(-10, -12, 18, 11);           // white helmet
+    ctx.fillStyle = "#1a2a5a"; ctx.fillRect(1, -9, 6, 5);                // visor
+    ctx.fillStyle = "#ffffff"; ctx.fillRect(-8, 8, 5, 4 + step); ctx.fillRect(2, 8, 5, 4 - step);
+    ctx.fillStyle = "#ff4f4f"; ctx.fillRect(-10, -14, 6, 3);             // tube on the helmet
+    ctx.restore();
+  }
+  function drawPump() {
+    const p = pump, h = hero, [dx, dy] = p.dir;
+    const ex = h.x + dx * p.len, ey = h.y + dy * p.len;
+    ctx.strokeStyle = "#ffffff"; ctx.lineWidth = 2; ctx.setLineDash([4, 3]);
+    ctx.beginPath(); ctx.moveTo(h.x + dx * 10, h.y + dy * 10); ctx.lineTo(ex, ey); ctx.stroke(); ctx.setLineDash([]);
+    ctx.fillStyle = "#c8c8d8"; ctx.beginPath();
+    ctx.moveTo(ex + dx * 6, ey + dy * 6); ctx.lineTo(ex - dy * 5 - dx * 2, ey + dx * 5 - dy * 2); ctx.lineTo(ex + dy * 5 - dx * 2, ey - dx * 5 - dy * 2); ctx.fill();
+  }
+  function drawFoe(f) {
+    const s = 1 + f.inflate * 0.28;
+    ctx.save(); ctx.translate(f.x, f.y);
+    if (f.ghost) {
+      // just the eyes, blinking through the dirt
+      ctx.globalAlpha = 0.6 + 0.4 * Math.sin(clock * 12);
+      ctx.fillStyle = "#fff"; ctx.beginPath(); ctx.ellipse(-5, 0, 4, 5, 0, 0, Math.PI * 2); ctx.ellipse(5, 0, 4, 5, 0, 0, Math.PI * 2); ctx.fill();
+      ctx.fillStyle = "#000"; ctx.fillRect(-5 + f.face * 2 - 1, -1, 2.5, 3); ctx.fillRect(5 + f.face * 2 - 1, -1, 2.5, 3);
+      ctx.restore(); return;
+    }
+    ctx.scale(f.face * s, s);
+    const bob = Math.sin(clock * 10 + f.x) * 1.5;
+    if (f.type === "pooka") {
+      ctx.fillStyle = "#ff3d3d"; ctx.beginPath(); ctx.arc(0, bob, 12, 0, Math.PI * 2); ctx.fill();
+      // goggles
+      ctx.fillStyle = "#ffd34d"; ctx.fillRect(-2, -6 + bob, 13, 8);
+      ctx.fillStyle = "#fff"; ctx.fillRect(0, -5 + bob, 4, 5); ctx.fillRect(6, -5 + bob, 4, 5);
+      ctx.fillStyle = "#000"; ctx.fillRect(2, -4 + bob, 2, 3); ctx.fillRect(8, -4 + bob, 2, 3);
+      ctx.fillStyle = "#fff"; ctx.fillRect(-8, 9, 5, 3); ctx.fillRect(3, 9, 5, 3);
+    } else {
+      const charging = f.breathCharge > 0 && Math.floor(clock * 16) % 2;
+      ctx.fillStyle = charging ? "#ffffff" : "#3ac84a";
+      ctx.beginPath(); ctx.ellipse(-2, 2 + bob, 12, 9, 0, 0, Math.PI * 2); ctx.fill();
+      ctx.beginPath(); ctx.ellipse(8, -5 + bob, 7, 6, 0, 0, Math.PI * 2); ctx.fill();
+      ctx.fillStyle = "#ffd34d"; ctx.beginPath(); ctx.moveTo(-10, -4 + bob); ctx.lineTo(-6, -12 + bob); ctx.lineTo(-2, -4 + bob); ctx.fill();
+      ctx.fillStyle = "#fff"; ctx.fillRect(8, -9 + bob, 4, 4); ctx.fillStyle = "#c81a1a"; ctx.fillRect(10, -8 + bob, 2, 2);
+      ctx.fillStyle = "#1a6a2a"; ctx.fillRect(-10, 9, 5, 3); ctx.fillRect(1, 9, 5, 3);
+    }
+    ctx.restore();
+    // the dragon's fire
+    if (f.breath > 0) {
+      const len = 70 * Math.min(1, (0.7 - f.breath) * 4 + 0.3);
+      const x0 = f.x + f.face * 14;
+      for (let k = 0; k < 3; k++) {
+        ctx.fillStyle = ["#ff3d1a", "#ff8a1a", "#ffd34d"][k];
+        ctx.beginPath(); ctx.ellipse(x0 + f.face * len * (0.35 + k * 0.1), f.y, len * (0.5 - k * 0.12), 8 - k * 2 + Math.sin(clock * 30) * 1.5, 0, 0, Math.PI * 2); ctx.fill();
+      }
+    }
+  }
+  function drawRock(k) {
+    let x = k.x, y = k.y;
+    if (k.state === "wobble") x += Math.sin(clock * 40) * 2;
+    ctx.save(); ctx.translate(x, y);
+    if (k.state === "break") { ctx.globalAlpha = k.t / 0.5; ctx.fillStyle = "#8a8a9a"; for (let i = 0; i < 4; i++) ctx.fillRect(-12 + i * 7, 6 - (0.5 - k.t) * 20 * (i % 2 ? 1 : 0.5), 6, 6); ctx.restore(); return; }
+    ctx.fillStyle = "#6a6a7a"; ctx.beginPath(); ctx.moveTo(-14, 12); ctx.lineTo(-13, -4); ctx.lineTo(-6, -13); ctx.lineTo(8, -12); ctx.lineTo(14, -2); ctx.lineTo(13, 12); ctx.closePath(); ctx.fill();
+    ctx.fillStyle = "#9a9aaa"; ctx.beginPath(); ctx.moveTo(-10, -4); ctx.lineTo(-5, -10); ctx.lineTo(4, -9); ctx.lineTo(-2, -2); ctx.fill();
+    ctx.restore();
+  }
+  function drawVeg(v) {
+    ctx.save(); ctx.translate(v.x, v.y);
+    if (v.t < 3 && Math.floor(clock * 8) % 2) { ctx.restore(); return; }
+    if (v.kind === 0) { ctx.fillStyle = "#ff8a1a"; ctx.beginPath(); ctx.moveTo(-4, -6); ctx.lineTo(4, -6); ctx.lineTo(0, 12); ctx.fill(); ctx.fillStyle = "#3ac84a"; ctx.fillRect(-4, -12, 3, 7); ctx.fillRect(1, -12, 3, 7); }
+    else if (v.kind === 1) { ctx.fillStyle = "#ff3d3d"; ctx.beginPath(); ctx.arc(0, 2, 8, 0, Math.PI * 2); ctx.fill(); ctx.fillStyle = "#3ac84a"; ctx.fillRect(-4, -8, 8, 3); }
+    else if (v.kind === 2) { ctx.fillStyle = "#a05aff"; ctx.beginPath(); ctx.ellipse(0, 3, 6, 9, 0.3, 0, Math.PI * 2); ctx.fill(); ctx.fillStyle = "#3ac84a"; ctx.fillRect(-3, -9, 6, 4); }
+    else { ctx.fillStyle = "#e8e8c0"; ctx.beginPath(); ctx.arc(0, 3, 8, 0, Math.PI * 2); ctx.fill(); ctx.fillStyle = "#3ac84a"; ctx.fillRect(-2, -12, 4, 8); }
+    ctx.restore();
+  }
+  function draw() {
+    ctx.setTransform(pxRatio, 0, 0, pxRatio, 0, 0);
+    ctx.fillStyle = "#000"; ctx.fillRect(0, 0, W, H);
+    if (!dug.length) return;
+    drawDirt();
+    if (veg) drawVeg(veg);
+    for (const k of rocks) if (!k.gone) drawRock(k);
+    for (const f of foes) if (!f.gone) drawFoe(f);
+    if (pump && hero) drawPump();
+    if (hero && state !== "menu" && !(hero.dead && hero.deathT > 1.6)) drawHero();
+    for (const q of parts) { ctx.globalAlpha = Math.max(0, 1 - q.t / q.life); ctx.fillStyle = q.c; ctx.fillRect(q.x - 2, q.y - 2, 4, 4); }
+    ctx.globalAlpha = 1;
+    for (const q of popups) {
+      ctx.globalAlpha = Math.max(0, 1 - q.t / (q.big ? 1.6 : 1));
+      ctx.textAlign = "center"; ctx.font = q.big ? "900 22px system-ui, sans-serif" : "900 13px system-ui, sans-serif";
+      ctx.lineWidth = 4; ctx.strokeStyle = "#000"; ctx.strokeText(q.text, q.x, q.y); ctx.fillStyle = q.color; ctx.fillText(q.text, q.x, q.y);
+    }
+    ctx.globalAlpha = 1;
+    // status bar
+    ctx.textBaseline = "middle"; ctx.textAlign = "left"; ctx.font = "900 15px system-ui, sans-serif"; ctx.fillStyle = "#fff6e8";
+    ctx.fillText(score.toLocaleString("it-IT"), 10, 16);
+    ctx.font = "700 11px system-ui, sans-serif"; ctx.fillStyle = "#c8b098";
+    ctx.fillText(`RECORD ${Math.max(bestCache, score).toLocaleString("it-IT")}`, 100, 16);
+    ctx.textAlign = "right"; ctx.fillStyle = "#ffd34d"; ctx.fillText(`ROUND ${round + 1}`, W - 10, 16);
+    for (let i = 0; i < Math.min(lives - (state === "dead" ? 0 : 1), 6); i++) { ctx.fillStyle = "#fff"; ctx.fillRect(W - 110 - i * 14, 11, 9, 7); ctx.fillStyle = "#3d7bff"; ctx.fillRect(W - 110 - i * 14, 18, 9, 4); }
+    ctx.textBaseline = "alphabetic";
+    if (message) {
+      ctx.globalAlpha = Math.min(1, (2 - message.t) * 2);
+      ctx.textAlign = "center"; ctx.font = "900 28px system-ui, sans-serif"; ctx.lineWidth = 6; ctx.strokeStyle = "#000";
+      ctx.strokeText(message.text, W / 2, H / 2 - 40); ctx.fillStyle = "#ffd34d"; ctx.fillText(message.text, W / 2, H / 2 - 40);
+      ctx.globalAlpha = 1;
+    }
+  }
+
+  // ---------- Loop ----------
+  const STEP = 1 / 120;
+  let last = performance.now(), acc = 0;
+  function loop(now) {
+    const dt = Math.min(0.1, (now - last) / 1000);
+    last = now;
+    if (isPlaying()) {
+      acc += dt;
+      while (acc >= STEP && isPlaying()) { update(STEP); acc -= STEP; }
+    } else { acc = 0; update(dt); }
+    draw();
+    requestAnimationFrame(loop);
+  }
+  syncControls();
+  buildRound(); state = "menu"; message = null;
+  showTitle();
+  requestAnimationFrame(loop);
+})();
+</script>
+</body>
+</html>
