@@ -4,7 +4,7 @@ Raccolta di giochi arcade per il browser. Ogni gioco è un singolo file HTML sen
 
 ## 🕹️ Sala Giochi — `index.html`
 
-Apri `index.html` nella cartella principale per la pagina di raccolta: mostra tutti i 28 giochi con copertina, genere, comandi e i tuoi record per ogni difficoltà (Facile, Normale, Difficile). Tocca «Gioca» per avviare un gioco; in ogni gioco il pulsante «← Sala Giochi» in alto a sinistra (visibile nei menu) riporta alla raccolta.
+Apri `index.html` nella cartella principale per la pagina di raccolta: mostra tutti i 29 giochi con copertina, genere, comandi e i tuoi record per ogni difficoltà (Facile, Normale, Difficile). Tocca «Gioca» per avviare un gioco; in ogni gioco il pulsante «← Sala Giochi» in alto a sinistra (visibile nei menu) riporta alla raccolta.
 
 ## Giochi
 
@@ -438,3 +438,19 @@ Gioco di territorio in stile *Qix*: conquista il campo tracciando linee, mentre 
 - **Touch:** croce a sinistra, tasti TRACCIA e LENTO a destra
 
 Per giocare apri `games/conquista/index.html` nel browser.
+
+### 🐧 Pinguino di Ghiaccio — `games/pinguino/index.html`
+
+Labirinto di ghiaccio in stile *Pengo*: un pinguino contro le api delle nevi, a colpi di blocchi di ghiaccio.
+
+- **Spingere:** un blocco con spazio libero davanti scivola finché non urta qualcosa e schiaccia le api sul suo cammino (400, 1600, 3200, 6400 punti in un colpo solo). Un blocco bloccato si frantuma (30 punti)
+- **Uova:** alcune api dormono dentro uova nascoste nel ghiaccio (lampeggiano all'inizio del livello). Rompendo il blocco distruggi l'uovo (500 punti); ogni volta che un'ape muore ne nasce un'altra da un uovo
+- **Il recinto:** spingendo il bordo elettrico stordisci le api che lo toccano; toccando un'ape stordita la elimini (100 punti)
+- **Tre diamanti:** metti in fila i tre blocchi di diamante per 10.000 punti (5.000 se toccano il bordo) e stordire tutte le api
+- **Api:** inseguono il pinguino e a volte mangiano il ghiaccio per aprirsi la strada; dopo un minuto diventano più veloci
+- **Livelli:** finiscono quando tutte le api e le uova sono eliminate; più sei veloce, più bonus prendi (fino a 5.000 sotto i 20 secondi)
+- **Difficoltà:** Facile (5 vite, api lente), Normale (3 vite), Difficile (3 vite, api veloci che rompono spesso il ghiaccio); ogni difficoltà ha il suo record
+- **Comandi:** frecce o `W` `A` `S` `D` per muoverti · `SPAZIO` per spingere · `P` pausa
+- **Touch:** croce a sinistra e tasto SPINGI a destra
+
+Per giocare apri `games/pinguino/index.html` nel browser.
