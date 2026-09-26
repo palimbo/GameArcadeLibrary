@@ -4,7 +4,7 @@ Raccolta di giochi arcade per il browser. Ogni gioco è un singolo file HTML sen
 
 ## 🕹️ Sala Giochi — `index.html`
 
-Apri `index.html` nella cartella principale per la pagina di raccolta: mostra tutti i 25 giochi con copertina, genere, comandi e i tuoi record per ogni difficoltà (Facile, Normale, Difficile). Tocca «Gioca» per avviare un gioco; in ogni gioco il pulsante «← Sala Giochi» in alto a sinistra (visibile nei menu) riporta alla raccolta.
+Apri `index.html` nella cartella principale per la pagina di raccolta: mostra tutti i 26 giochi con copertina, genere, comandi e i tuoi record per ogni difficoltà (Facile, Normale, Difficile). Tocca «Gioca» per avviare un gioco; in ogni gioco il pulsante «← Sala Giochi» in alto a sinistra (visibile nei menu) riporta alla raccolta.
 
 ## Giochi
 
@@ -393,3 +393,18 @@ Gioco in stile *Dig Dug*: scava gallerie nel sottosuolo e liberalo dai mostri.
 - **Touch:** croce direzionale e tasto POMPA
 
 Per giocare apri `games/scavatore/index.html` nel browser.
+
+### 🍺 Saloon — `games/saloon/index.html`
+
+Gioco del barista in stile *Tapper*: quattro banconi, clienti assetati che avanzano dalla porta e bibite alla spina da far scivolare verso di loro.
+
+- **Servire:** alla spina riempi il boccale e lo lanci lungo il bancone. Il primo cliente assetato lo prende e viene spinto indietro; se esce dalla porta è servito (50 punti), altrimenti beve e torna avanti
+- **Boccali vuoti:** chi ha finito di bere rilancia il boccale vuoto verso la spina: prendilo (100 punti) prima che cada dal bancone
+- **Mance:** a volte un cliente lascia una moneta sul bancone: raccoglila camminando lungo il bancone (1500 punti) e arrivano le ballerine, che distraggono tutti i clienti per qualche secondo
+- **Errori:** perdi una vita se un cliente arriva alla spina, se lanci una bibita che nessuno prende o se cade un boccale vuoto
+- **Round:** ogni round ha più clienti, più veloci; ogni quattro round il locale cambia (saloon, stadio, locale rock, stazione spaziale)
+- **Difficoltà:** Facile (5 vite, clienti lenti), Normale (3 vite), Difficile (3 vite, clienti veloci e numerosi); ogni difficoltà ha il suo record
+- **Comandi:** `↑` `↓` cambia bancone · `←` `→` cammina lungo il bancone · `SPAZIO` riempi e lancia · `P` pausa
+- **Touch:** croce a sinistra e tasto SERVI a destra
+
+Per giocare apri `games/saloon/index.html` nel browser.
