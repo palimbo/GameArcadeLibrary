@@ -4,7 +4,7 @@ Raccolta di giochi arcade per il browser. Ogni gioco è un singolo file HTML sen
 
 ## 🕹️ Sala Giochi — `index.html`
 
-Apri `index.html` nella cartella principale per la pagina di raccolta: mostra tutti i 38 giochi con copertina, genere, comandi e i tuoi record per ogni difficoltà (Facile, Normale, Difficile). Tocca «Gioca» per avviare un gioco; in ogni gioco il pulsante «← Sala Giochi» in alto a sinistra (visibile nei menu) riporta alla raccolta.
+Apri `index.html` nella cartella principale per la pagina di raccolta: mostra tutti i 39 giochi con copertina, genere, comandi e i tuoi record per ogni difficoltà (Facile, Normale, Difficile). Tocca «Gioca» per avviare un gioco; in ogni gioco il pulsante «← Sala Giochi» in alto a sinistra (visibile nei menu) riporta alla raccolta.
 
 **Iniziali del record:** quando batti un record compare la schermata da sala giochi per inserire le tue tre iniziali (frecce ↑ ↓ per cambiare lettera, ← → per spostarti, oppure scrivile direttamente; su telefono i tasti ▲ ▼ e OK). Le iniziali vengono salvate insieme al record e compaiono nei menu del gioco e nella Sala Giochi. Il codice è condiviso da tutti i giochi in `shared/iniziali.js`.
 
@@ -597,3 +597,20 @@ Picchiaduro a piani in stile *Kung-Fu Master*: sali la pagoda un piano alla volt
 - **Touch:** croce a sinistra, PUGNO e CALCIO a destra
 
 Per giocare apri `games/torre-kung-fu/index.html` nel browser.
+
+### 🐉 Bolle di Drago — `games/bolle-di-drago/index.html`
+
+Piattaforme e bolle in stile *Bubble Bobble*: un draghetto soffia bolle per catturare i mostri.
+
+- **Bolle:** una bolla appena soffiata che colpisce un mostro lo intrappola; poi sale verso il soffitto. Toccala per farla scoppiare: il mostro diventa frutta da raccogliere
+- **Catene:** le bolle che si toccano scoppiano insieme; ogni mostro della catena vale il doppio (1.000, 2.000, 4.000…) e dà frutta più preziosa, dalle ciliegie al diamante
+- **Rimbalzi:** tieni premuto SALTA cadendo su una bolla vuota per rimbalzarci sopra e raggiungere i piani alti
+- **Piattaforme:** si attraversano saltando dal basso; cadendo dal buco nel pavimento si rientra dall'alto
+- **Mostri:** robottini a carica e fantasmi incappucciati che lanciano sassi. Se restano troppo nella bolla scappano, rossi e più veloci
+- **Sbrigati:** se ci metti troppo i mostri si arrabbiano e poi arriva un fantasma invincibile
+- **6 livelli** che poi ricominciano più difficili
+- **Difficoltà:** Facile (5 vite, mostri lenti, bolle che tengono di più), Normale, Difficile; record separati per ogni difficoltà
+- **Comandi:** ← → per camminare · ↑ o `SPAZIO` per saltare · `Z` o `X` per soffiare · `P` pausa
+- **Touch:** ◀ ▶ a sinistra, BOLLA e SALTA a destra
+
+Per giocare apri `games/bolle-di-drago/index.html` nel browser.
