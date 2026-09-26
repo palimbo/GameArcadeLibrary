@@ -4,7 +4,7 @@ Raccolta di giochi arcade per il browser. Ogni gioco è un singolo file HTML sen
 
 ## 🕹️ Sala Giochi — `index.html`
 
-Apri `index.html` nella cartella principale per la pagina di raccolta: mostra tutti i 18 giochi con copertina, genere, comandi e i tuoi record per ogni difficoltà (Facile, Normale, Difficile). Tocca «Gioca» per avviare un gioco; in ogni gioco il pulsante «← Sala Giochi» in alto a sinistra (visibile nei menu) riporta alla raccolta.
+Apri `index.html` nella cartella principale per la pagina di raccolta: mostra tutti i 19 giochi con copertina, genere, comandi e i tuoi record per ogni difficoltà (Facile, Normale, Difficile). Tocca «Gioca» per avviare un gioco; in ogni gioco il pulsante «← Sala Giochi» in alto a sinistra (visibile nei menu) riporta alla raccolta.
 
 ## Giochi
 
@@ -284,3 +284,18 @@ Sparatutto in stile *Pang*: palloni giganti rimbalzano davanti ai monumenti di t
 - **Touch:** pulsanti ◀ ▶ e ● sullo schermo; in due, ognuno ha i suoi pulsanti ai lati
 
 Per giocare apri `games/scoppia-palloni/index.html` nel browser.
+
+### 🚀 Allunaggio — `games/allunaggio/index.html`
+
+Simulatore di atterraggio in stile *Lunar Lander*: porta il modulo sulle piazzole senza schiantarti, dosando il razzo e il carburante.
+
+- **Pilotaggio:** il razzo spinge nella direzione in cui è inclinato il modulo; ruota per correggere la deriva orizzontale e raddrizzati prima di toccare il suolo
+- **Atterraggio:** entrambi i piedi sulla piazzola, modulo quasi dritto e velocità basse (gli indicatori in alto diventano rossi quando sei troppo veloce o inclinato). Vicino al suolo la visuale fa uno zoom automatico
+- **Punti:** 50 × il moltiplicatore della piazzola (×2, ×3, ×4, ×5: le piazzole piccole valgono di più); l'atterraggio perfetto vale il doppio e dà più carburante
+- **Carburante:** è la tua unica risorsa: ogni atterraggio ne restituisce un po', ogni schianto ne costa 150. Quando finisce la missione è chiusa
+- **Quattro mondi:** Luna (nessun vento), Marte (vento leggero), Io (gravità forte, con Giove nel cielo) e Titano (raffiche forti, con Saturno), tre stage ciascuno; poi il giro ricomincia con la gravità più forte
+- **Difficoltà:** Facile (1.500 di carburante, gravità ridotta), Normale (1.000), Difficile (800, gravità più forte, atterraggi più delicati); ogni difficoltà ha il suo record
+- **Comandi:** `←` `→` o `A` `D` ruota · `↑`, `W` o `SPAZIO` razzo · `↓` o `S` raddrizza il modulo · `P` pausa
+- **Touch:** ⟲ ⟳ per ruotare, ◎ per raddrizzare, ▲ per il razzo
+
+Per giocare apri `games/allunaggio/index.html` nel browser.
