@@ -4,7 +4,7 @@ Raccolta di giochi arcade per il browser. Ogni gioco è un singolo file HTML sen
 
 ## 🕹️ Sala Giochi — `index.html`
 
-Apri `index.html` nella cartella principale per la pagina di raccolta: mostra tutti i 29 giochi con copertina, genere, comandi e i tuoi record per ogni difficoltà (Facile, Normale, Difficile). Tocca «Gioca» per avviare un gioco; in ogni gioco il pulsante «← Sala Giochi» in alto a sinistra (visibile nei menu) riporta alla raccolta.
+Apri `index.html` nella cartella principale per la pagina di raccolta: mostra tutti i 30 giochi con copertina, genere, comandi e i tuoi record per ogni difficoltà (Facile, Normale, Difficile). Tocca «Gioca» per avviare un gioco; in ogni gioco il pulsante «← Sala Giochi» in alto a sinistra (visibile nei menu) riporta alla raccolta.
 
 ## Giochi
 
@@ -454,3 +454,17 @@ Labirinto di ghiaccio in stile *Pengo*: un pinguino contro le api delle nevi, a 
 - **Touch:** croce a sinistra e tasto SPINGI a destra
 
 Per giocare apri `games/pinguino/index.html` nel browser.
+
+### 💣 Capitan Miccia — `games/capitan-miccia/index.html`
+
+Piattaforme a salti in stile *Bomb Jack*: un supereroe col mantello deve raccogliere tutte le 24 bombe di ogni schermo.
+
+- **Salti e planata:** tieni premuto per saltare altissimo; in aria premi di nuovo e tieni per planare lentamente
+- **Miccia accesa:** una bomba alla volta ha la miccia accesa (200 punti invece di 100); prendendola si accende la successiva. Con almeno 20 micce accese nel round arriva un bonus da 10.000 a 50.000 punti
+- **Nemici:** mummie che cadono sulle piattaforme e dopo un po' si trasformano in uccelli che ti inseguono in volo
+- **Sfera P:** per 6 secondi trasforma i nemici in monete da 100, 200, 300… punti; la rara **sfera E** regala una vita
+- **5 scenari:** Egitto, Grecia, Castello, Metropoli e Luna, ognuno con le sue piattaforme; i nemici accelerano a ogni round
+- **Difficoltà:** Facile (5 vite, nemici lenti e meno numerosi), Normale, Difficile (nemici veloci e numerosi); record separati per ogni difficoltà
+- **Comandi:** ← → per muoverti, SPAZIO/↑/Z per saltare, P per la pausa; su telefono pulsanti ◀ ▶ e SALTA
+
+Per giocare apri `games/capitan-miccia/index.html` nel browser.
