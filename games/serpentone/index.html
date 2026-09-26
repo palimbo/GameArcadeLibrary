@@ -1,0 +1,683 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no, viewport-fit=cover">
+<title>Serpentone</title>
+<style>
+  :root {
+    --bg: #04120a;
+    --fg: #eaffef;
+    --muted: #9ac8a8;
+    --snake: #5aff7a;
+    --apple: #ff4a5a;
+    --gold: #ffd34d;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  html, body {
+    height: 100%;
+    background: var(--bg);
+    color: var(--fg);
+    font-family: system-ui, -apple-system, "Segoe UI", sans-serif;
+    overflow: hidden;
+    user-select: none;
+    -webkit-user-select: none;
+    touch-action: none;
+  }
+  #wrap { position: fixed; inset: 0; display: flex; align-items: center; justify-content: center; }
+  canvas { display: block; touch-action: none; border-radius: 6px; box-shadow: 0 0 0 2px #1a4a2a, 0 10px 40px rgba(0,0,0,0.6); }
+  #pauseBtn {
+    position: fixed; z-index: 3; display: none; right: 10px; top: calc(10px + env(safe-area-inset-top, 0px));
+    font: 700 13px system-ui, sans-serif; color: var(--fg);
+    background: rgba(0, 0, 0, 0.6); border: 1px solid rgba(234, 255, 239, 0.35);
+    border-radius: 8px; padding: 6px 10px; cursor: pointer;
+  }
+  #touch {
+    position: fixed; z-index: 2; display: none; left: 12px; right: 12px;
+    bottom: calc(14px + env(safe-area-inset-bottom, 0px));
+    justify-content: center; align-items: flex-end; pointer-events: none;
+  }
+  #touch .pad { display: grid; grid-template-columns: repeat(3, 60px); grid-template-rows: repeat(3, 56px); gap: 4px; pointer-events: auto; }
+  #touch .pad [data-a="up"] { grid-column: 2; grid-row: 1; }
+  #touch .pad [data-a="left"] { grid-column: 1; grid-row: 2; }
+  #touch .pad [data-a="right"] { grid-column: 3; grid-row: 2; }
+  #touch .pad [data-a="down"] { grid-column: 2; grid-row: 3; }
+  #touch button {
+    width: 60px; height: 56px; border-radius: 14px; touch-action: none;
+    font: 700 22px system-ui, sans-serif; color: var(--fg);
+    border: 2px solid rgba(90, 255, 122, 0.6); background: rgba(90, 255, 122, 0.08);
+  }
+  /* in landscape the pad is split: left/right on one side, up/down on the other */
+  #touch.split { justify-content: space-between; }
+  #touch.split .pad { display: contents; }
+  #touch.split .side { display: flex; gap: 8px; pointer-events: auto; }
+  #touch.split .side.v { flex-direction: column; }
+  #touch.small button { width: 50px; height: 48px; font-size: 18px; }
+  #touch button.on { background: rgba(234, 255, 239, 0.4); }
+  #overlay {
+    position: fixed; inset: 0; z-index: 5;
+    display: flex; flex-direction: column; align-items: center; justify-content: flex-start;
+    gap: 14px; padding: 16px; text-align: center; overflow-y: auto;
+    background: rgba(4, 18, 10, 0.9);
+  }
+  #overlay > :first-child { margin-top: auto; }
+  #overlay > :last-child { margin-bottom: auto; }
+  #overlay.hidden { display: none; }
+  #homeLink {
+    position: fixed; top: calc(10px + env(safe-area-inset-top, 0px)); left: 10px; z-index: 6;
+    font: 600 13px/1 system-ui, sans-serif; color: #fff; text-decoration: none;
+    padding: 8px 12px; border-radius: 999px; background: rgba(0,0,0,.55);
+    border: 1px solid rgba(255,255,255,.25);
+  }
+  #homeLink:hover { background: rgba(0,0,0,.8); }
+  #overlay.hidden ~ #homeLink { display: none; }
+  @media (max-width: 700px) { #overlay { padding-top: calc(52px + env(safe-area-inset-top, 0px)); } }
+  #overlay h1 { font-size: clamp(36px, 10vw, 64px); font-weight: 900; letter-spacing: 2px; color: var(--snake); text-shadow: 0 0 18px rgba(90,255,122,0.6), 4px 4px 0 #0a4a1a; }
+  #overlay h2 { font-size: clamp(28px, 7vw, 44px); font-weight: 900; letter-spacing: 2px; }
+  #overlay h2.lose { color: var(--apple); }
+  #overlay p { max-width: 540px; font-size: clamp(13px, 3.4vw, 16px); line-height: 1.55; }
+  #overlay p.muted { color: var(--muted); }
+  #overlay .pts { display: grid; grid-template-columns: repeat(2, auto); gap: 4px 18px; font-size: 13px; color: var(--muted); text-align: left; }
+  #overlay .pts b { color: var(--fg); }
+  #overlay .diff { display: flex; gap: 10px; flex-wrap: wrap; justify-content: center; }
+  #overlay button {
+    font: 800 15px system-ui, sans-serif; letter-spacing: 1.5px; color: var(--fg);
+    background: transparent; cursor: pointer;
+    border: 2px solid rgba(234,255,239,0.3); border-radius: 10px; padding: 9px 16px;
+  }
+  #overlay .diff button.on { border-color: var(--c); color: var(--c); box-shadow: 0 0 12px var(--c); }
+  #overlay button.start { border-color: var(--snake); color: #04200c; background: var(--snake); padding: 11px 30px; box-shadow: 0 4px 0 #1a8a3a; }
+  @media (max-height: 560px) {
+    #overlay { gap: 8px; }
+    #overlay h1 { font-size: 32px; }
+    #overlay p { font-size: 13px; line-height: 1.4; }
+    #overlay .help, #overlay .pts { display: none; }
+  }
+</style>
+</head>
+<body>
+<div id="wrap"><canvas id="game"></canvas></div>
+<div id="touch">
+  <div class="pad">
+    <div class="side h" style="display:contents">
+      <button type="button" data-a="left" aria-label="Sinistra">◀</button>
+      <button type="button" data-a="right" aria-label="Destra">▶</button>
+    </div>
+    <div class="side v" style="display:contents">
+      <button type="button" data-a="up" aria-label="Su">▲</button>
+      <button type="button" data-a="down" aria-label="Giù">▼</button>
+    </div>
+  </div>
+</div>
+<button id="pauseBtn" type="button" aria-label="Pausa">❚❚</button>
+<div id="overlay"></div>
+<a id="homeLink" href="../../index.html">← Sala Giochi</a>
+
+<script>
+(() => {
+  "use strict";
+
+  const CELL = 16, COLS = 32, ROWS = 24, TOP = 32, W = COLS * CELL, H = ROWS * CELL + TOP;
+  const FRUITS_PER_LEVEL = 12, GROW = 3;
+  const DIRS = { up: [0, -1], down: [0, 1], left: [-1, 0], right: [1, 0] };
+  const OPP = { up: "down", down: "up", left: "right", right: "left" };
+  const FRUIT_KINDS = ["mela", "ciliegie", "banana", "uva", "fragola"];
+
+  // the mazes: each is a list of wall rectangles [x, y, w, h] inside the border.
+  // "open" borders have a gap in the middle of each side that wraps around.
+  const MAZES = [
+    { name: "IL PRATO", color: "#3a9a4a", open: false, rects: [] },
+    { name: "I QUATTRO SASSI", color: "#8a7a5a", open: false, rects: [[6, 4, 4, 3], [22, 4, 4, 3], [6, 17, 4, 3], [22, 17, 4, 3]] },
+    { name: "IL PASSAGGIO", color: "#4a7aca", open: true, rects: [[5, 6, 22, 1], [5, 17, 22, 1]] },
+    { name: "LA CROCE", color: "#ca5a4a", open: true, rects: [[15, 3, 2, 6], [15, 15, 2, 6], [4, 11, 7, 2], [21, 11, 7, 2]] },
+    { name: "LE COLONNE", color: "#aa6aca", open: false, rects: [[6, 1, 1, 8], [12, 15, 1, 8], [19, 1, 1, 8], [25, 15, 1, 8], [6, 15, 1, 5], [25, 4, 1, 5]] },
+    { name: "LE STANZE", color: "#ca9a3a", open: true, rects: [[1, 8, 8, 1], [12, 8, 8, 1], [23, 8, 8, 1], [1, 15, 8, 1], [12, 15, 8, 1], [23, 15, 8, 1], [10, 1, 1, 5], [21, 18, 1, 5]] },
+    { name: "LA SPIRALE", color: "#3acaca", open: false, rects: [[4, 3, 24, 1], [27, 3, 1, 16], [8, 19, 20, 1], [8, 7, 1, 12], [8, 7, 15, 1], [22, 7, 1, 8]] },
+    { name: "IL LABIRINTO", color: "#ca3a8a", open: true, rects: [[4, 3, 1, 6], [4, 15, 1, 6], [27, 3, 1, 6], [27, 15, 1, 6], [9, 5, 14, 1], [9, 18, 14, 1], [14, 9, 1, 6], [17, 9, 1, 6], [9, 9, 3, 1], [20, 14, 3, 1]] },
+  ];
+
+  const DIFFICULTIES = {
+    facile:    { label: "FACILE",    color: "#7dff9a", desc: "5 vite · serpente lento", lives: 5, step: 0.16, min: 0.1 },
+    normale:   { label: "NORMALE",   color: "#ffd34d", desc: "3 vite · l'esperienza classica", lives: 3, step: 0.13, min: 0.075 },
+    difficile: { label: "DIFFICILE", color: "#ff4a5a", desc: "3 vite · serpente velocissimo", lives: 3, step: 0.1, min: 0.058 },
+  };
+  const DIFF_IDS = Object.keys(DIFFICULTIES);
+  const DIFF_KEY = "serpente-difficulty";
+  const bestKey = (id) => `serpente-best-${id}`;
+  function store(k, v) { try { localStorage.setItem(k, v); } catch { /* ignore */ } }
+  function load(k) { try { return localStorage.getItem(k); } catch { return null; } }
+
+  // ---------- Canvas ----------
+  const canvas = document.getElementById("game");
+  const ctx = canvas.getContext("2d");
+  const wrap = document.getElementById("wrap");
+  const overlay = document.getElementById("overlay");
+  const touchEl = document.getElementById("touch");
+  const pauseBtn = document.getElementById("pauseBtn");
+  let pxRatio = 1, touchMode = !!(window.matchMedia && matchMedia("(pointer: coarse)").matches);
+  let bgCache = null, bgKey = "";
+  function resize() {
+    const portrait = window.innerHeight > window.innerWidth;
+    const showTouch = touchMode && isPlaying();
+    touchEl.style.display = showTouch ? "flex" : "none";
+    touchEl.classList.toggle("split", !portrait);
+    touchEl.classList.toggle("small", !portrait && window.innerHeight < 480);
+    for (const s of touchEl.querySelectorAll(".side")) s.style.display = portrait ? "contents" : "flex";
+    wrap.style.paddingBottom = showTouch && portrait ? "calc(190px + env(safe-area-inset-bottom, 0px))" : "0";
+    let availW = window.innerWidth - 8, availH = window.innerHeight - 8;
+    if (showTouch && portrait) availH -= 190;
+    if (showTouch && !portrait) {
+      const side = Math.max(...[...touchEl.querySelectorAll(".side")].map((el) => el.offsetWidth)) + 20;
+      if (window.innerWidth - 2 * side > 300) availW = window.innerWidth - 2 * side;
+    }
+    const s = Math.max(0.2, Math.min(availW / W, availH / H));
+    pxRatio = Math.min(3, s * (window.devicePixelRatio || 1));
+    canvas.style.width = W * s + "px";
+    canvas.style.height = H * s + "px";
+    canvas.width = Math.round(W * pxRatio);
+    canvas.height = Math.round(H * pxRatio);
+    bgKey = "";
+  }
+  window.addEventListener("resize", () => syncControls());
+
+  // ---------- Audio ----------
+  let audioCtx = null;
+  function beep(freq, dur, type = "square", vol = 0.04, slide = 0, delay = 0) {
+    if (!audioCtx) return;
+    const t = audioCtx.currentTime + delay;
+    const osc = audioCtx.createOscillator(), gain = audioCtx.createGain();
+    osc.type = type;
+    osc.frequency.setValueAtTime(freq, t);
+    if (slide) osc.frequency.exponentialRampToValueAtTime(Math.max(20, freq + slide), t + dur);
+    gain.gain.setValueAtTime(vol, t);
+    gain.gain.exponentialRampToValueAtTime(0.0001, t + dur);
+    osc.connect(gain).connect(audioCtx.destination);
+    osc.start(t); osc.stop(t + dur + 0.02);
+  }
+  function noise(dur, vol, freq) {
+    if (!audioCtx) return;
+    const len = Math.floor(audioCtx.sampleRate * dur), buf = audioCtx.createBuffer(1, len, audioCtx.sampleRate), d = buf.getChannelData(0);
+    for (let i = 0; i < len; i++) d[i] = (Math.random() * 2 - 1) * (1 - i / len);
+    const src = audioCtx.createBufferSource(), f = audioCtx.createBiquadFilter(), g = audioCtx.createGain();
+    src.buffer = buf; f.type = "lowpass"; f.frequency.value = freq; g.gain.value = vol;
+    src.connect(f).connect(g).connect(audioCtx.destination); src.start();
+  }
+  const arp = (notes, gap, d, type = "square", vol = 0.04) => notes.forEach((f, i) => beep(f, d, type, vol, 0, i * gap));
+  const sfx = {
+    eat: (k) => arp([523 + k * 40, 784 + k * 40], 0.04, 0.08, "square", 0.04),
+    gold: () => arp([784, 988, 1175, 1568], 0.05, 0.1, "triangle", 0.05),
+    turn: () => beep(220, 0.03, "triangle", 0.015),
+    die: () => { noise(0.4, 0.25, 700); arp([392, 330, 262, 196], 0.12, 0.16, "sawtooth", 0.035); },
+    clear: () => arp([523, 659, 784, 1047, 784, 1047, 1319, 1568], 0.09, 0.14),
+    over: () => arp([523, 415, 330, 262], 0.18, 0.25),
+    life: () => arp([523, 784, 1047, 1319], 0.08, 0.12, "triangle", 0.05),
+    door: () => arp([392, 523, 659], 0.08, 0.12, "triangle", 0.05),
+  };
+
+  // ---------- State ----------
+  let difficulty = DIFFICULTIES[load(DIFF_KEY)] ? load(DIFF_KEY) : "normale";
+  let diff = DIFFICULTIES[difficulty];
+  let state = "menu", menu = null, pausedFrom = null, stateT = 0, clock = 0;
+  let score = 0, lives = 3, level = 0, bestCache = 0, nextLife = 20000;
+  let walls = [], snake = [], prevSnake = [], dir = "right", queue = [], grow = 0, stepT = 0, stepLen = 0.13;
+  let fruit = null, gold = null, eaten = 0, streak = 0, door = null, parts = [], popups = [], message = null, levelT = 0;
+  let deadAt = null;
+
+  const M = () => MAZES[level % MAZES.length];
+  const key = (c, r) => r * COLS + c;
+  const isWall = (c, r) => walls[key(c, r)] === 1;
+
+  function buildMaze() {
+    const m = M();
+    walls = new Array(COLS * ROWS).fill(0);
+    for (let c = 0; c < COLS; c++) { walls[key(c, 0)] = 1; walls[key(c, ROWS - 1)] = 1; }
+    for (let r = 0; r < ROWS; r++) { walls[key(0, r)] = 1; walls[key(COLS - 1, r)] = 1; }
+    if (m.open) {
+      for (let c = 14; c <= 17; c++) { walls[key(c, 0)] = 0; walls[key(c, ROWS - 1)] = 0; }
+      for (let r = 10; r <= 13; r++) { walls[key(0, r)] = 0; walls[key(COLS - 1, r)] = 0; }
+    }
+    for (const [x, y, w, h] of m.rects) for (let r = y; r < y + h; r++) for (let c = x; c < x + w; c++) walls[key(c, r)] = 1;
+    bgKey = "";
+  }
+  function startLevel(fresh) {
+    if (fresh) { buildMaze(); eaten = 0; door = null; }
+    // the snake starts on the left, heading right, on the row nearest the middle with room ahead
+    let sr = 12;
+    for (const r of [12, 13, 11, 14, 10, 15, 9, 16, 8]) {
+      let ok = true;
+      for (let c = 2; c <= 14; c++) if (isWall(c, r)) ok = false;
+      if (ok) { sr = r; break; }
+    }
+    snake = [[6, sr], [5, sr], [4, sr], [3, sr]];
+    prevSnake = snake.map((s) => s.slice());
+    dir = "right"; queue = []; grow = 0; stepT = 0; streak = 0;
+    stepLen = Math.max(diff.min, diff.step - level * 0.006);
+    gold = null; deadAt = null;
+    if (!door && !fruit) placeFruit();
+    if (fresh) { levelT = 0; message = { text: `LIVELLO ${level + 1}`, sub: M().name, t: 0 }; }
+    state = "intro"; stateT = 1.4;
+  }
+  const wrapC = (c) => (c + COLS) % COLS, wrapR = (r) => (r + ROWS) % ROWS;
+  function reachable() {
+    // cells the snake can reach from its head (ignoring its own body)
+    const seen = new Uint8Array(COLS * ROWS), q = [snake[0]];
+    seen[key(...snake[0])] = 1;
+    for (let i = 0; i < q.length; i++) {
+      const [c, r] = q[i];
+      for (const d in DIRS) {
+        const nc = wrapC(c + DIRS[d][0]), nr = wrapR(r + DIRS[d][1]), k = key(nc, nr);
+        if (!seen[k] && !walls[k]) { seen[k] = 1; q.push([nc, nr]); }
+      }
+    }
+    return seen;
+  }
+  function freeCell(minDist = 4) {
+    const ok = reachable(), cells = [];
+    const busy = new Set(snake.map(([c, r]) => key(c, r)));
+    if (fruit) busy.add(key(fruit.c, fruit.r));
+    if (gold) busy.add(key(gold.c, gold.r));
+    for (let r = 1; r < ROWS - 1; r++) for (let c = 1; c < COLS - 1; c++) {
+      const k = key(c, r);
+      if (!ok[k] || walls[k] || busy.has(k)) continue;
+      if (Math.abs(c - snake[0][0]) + Math.abs(r - snake[0][1]) < minDist) continue;
+      cells.push([c, r]);
+    }
+    return cells.length ? cells[Math.floor(Math.random() * cells.length)] : null;
+  }
+  function placeFruit() {
+    const p = freeCell(6);
+    fruit = p ? { c: p[0], r: p[1], kind: FRUIT_KINDS[eaten % FRUIT_KINDS.length], born: clock } : null;
+  }
+
+  // ---------- Flow ----------
+  const isPlaying = () => ["intro", "play", "dead", "clear"].includes(state);
+  function startGame() {
+    if (!audioCtx) { try { audioCtx = new (window.AudioContext || window.webkitAudioContext)(); } catch { audioCtx = null; } }
+    if (audioCtx && audioCtx.state === "suspended") audioCtx.resume();
+    score = 0; lives = diff.lives; level = 0; nextLife = 20000;
+    bestCache = parseInt(load(bestKey(difficulty)), 10) || 0;
+    fruit = null;
+    startLevel(true);
+    menu = null;
+    overlay.classList.add("hidden");
+    syncControls();
+    last = performance.now();
+  }
+  function addScore(n, x, y, color = "#eaffef") {
+    score += n;
+    if (x !== undefined) popups.push({ x, y, text: String(n), color, t: 0 });
+    if (score >= nextLife) { nextLife += 40000; lives++; sfx.life(); popups.push({ x: W / 2, y: H / 2, text: "VITA EXTRA", color: "#ffd34d", t: 0, big: true }); }
+  }
+  function burst(x, y, color, n = 12, sp = 120) {
+    for (let k = 0; k < n; k++) {
+      const a = Math.random() * Math.PI * 2, s = sp * (0.3 + Math.random() * 0.8);
+      parts.push({ x, y, vx: Math.cos(a) * s, vy: Math.sin(a) * s, t: 0, life: 0.3 + Math.random() * 0.5, c: color });
+    }
+  }
+  const px = (c) => c * CELL + CELL / 2, py = (r) => TOP + r * CELL + CELL / 2;
+  function crash() {
+    lives--;
+    sfx.die();
+    deadAt = snake[0];
+    snake.forEach(([c, r], i) => { if (i % 2 === 0) burst(px(c), py(r), i ? "#5aff7a" : "#ffd34d", 3, 90); });
+    state = "dead"; stateT = 1.8;
+  }
+  function gameOver() {
+    state = "over";
+    const prev = parseInt(load(bestKey(difficulty)), 10) || 0;
+    const record = score > prev;
+    if (record) store(bestKey(difficulty), String(score));
+    const played = diff.label, lv = level + 1;
+    menu = () => showOverlay(
+      `<h2 class="lose">GAME OVER</h2>
+       <p>Punteggio: <b>${score.toLocaleString("it-IT")}</b> · Livello ${lv} · ${played}</p>
+       ${record ? "<p style='color:var(--gold)'>★ NUOVO RECORD! ★</p>" : ""}
+       ${difficultyHTML()}
+       <button class="start" data-start>GIOCA ANCORA</button>`
+    );
+    menu();
+    sfx.over();
+    syncControls();
+  }
+  function togglePause() {
+    if (isPlaying()) {
+      pausedFrom = state; state = "paused";
+      showOverlay(`<h2>PAUSA</h2><button class="start" data-resume>CONTINUA</button><p class="muted">Premi P per continuare</p>`);
+    } else if (state === "paused") {
+      state = pausedFrom; overlay.classList.add("hidden"); last = performance.now();
+    }
+    syncControls();
+  }
+  function syncControls() {
+    const portrait = window.innerHeight > window.innerWidth;
+    pauseBtn.style.display = isPlaying() && touchMode ? "block" : "none";
+    Object.assign(pauseBtn.style, portrait
+      ? { top: "auto", bottom: "calc(40px + env(safe-area-inset-bottom, 0px))", right: "calc(12px + env(safe-area-inset-right, 0px))", left: "auto" }
+      : { top: "calc(10px + env(safe-area-inset-top, 0px))", bottom: "auto", right: "10px", left: "auto" });
+    resize();
+  }
+  pauseBtn.addEventListener("click", () => togglePause());
+  function showOverlay(html) { overlay.innerHTML = html; overlay.classList.remove("hidden"); }
+  function difficultyHTML() {
+    const buttons = DIFF_IDS.map((id) => {
+      const d = DIFFICULTIES[id];
+      return `<button type="button" data-diff="${id}" class="${id === difficulty ? "on" : ""}" style="--c:${d.color}">${d.label}</button>`;
+    }).join("");
+    const best = parseInt(load(bestKey(difficulty)), 10);
+    return `<div class="diff">${buttons}</div><p class="muted">${diff.desc}${best ? ` · Record: ${best.toLocaleString("it-IT")}` : ""}</p>`;
+  }
+  function setDifficulty(id) { if (!DIFFICULTIES[id]) return; difficulty = id; diff = DIFFICULTIES[id]; store(DIFF_KEY, id); if (menu) menu(); }
+  function showTitle() {
+    menu = showTitle;
+    showOverlay(
+      `<h1>SERPENTONE</h1>
+       <p>Guida il serpente affamato attraverso otto giardini, uno più intricato dell'altro. Ogni frutto lo fa crescere: non sbattere contro i muri e non morderti la coda! Dopo ${FRUITS_PER_LEVEL} frutti si apre la tana che porta al giardino successivo.</p>
+       <div class="pts">
+         <span><b>Frutto</b></span><span>50 + 10 per livello, di più se li prendi in fretta</span>
+         <span><b>Stella d'oro</b></span><span>500 e più, sparisce presto</span>
+         <span><b>Entrare nella tana</b></span><span>1.000 × livello</span>
+         <span><b>Varchi nel bordo</b></span><span>ti portano dall'altra parte</span>
+       </div>
+       ${touchMode
+         ? `<p class="muted help">Usa le frecce sullo schermo oppure scorri il dito sul gioco per girare</p>`
+         : `<p class="muted help">Frecce o W A S D per girare · P pausa</p>`}
+       ${difficultyHTML()}
+       <button class="start" data-start>INIZIA</button>`
+    );
+  }
+  overlay.addEventListener("click", (e) => {
+    const d = e.target.closest("[data-diff]");
+    if (d) { setDifficulty(d.dataset.diff); return; }
+    if (e.target.closest("[data-start]")) startGame();
+    if (e.target.closest("[data-resume]")) togglePause();
+  });
+
+  // ---------- Input ----------
+  function turn(d) {
+    if (!isPlaying() || state === "dead" || state === "clear") return;
+    // up to two turns are remembered, so quick zig-zags work
+    const lastD = queue.length ? queue[queue.length - 1] : dir;
+    if (d === lastD || d === OPP[lastD] || queue.length >= 2) return;
+    queue.push(d);
+  }
+  const KEYS = { arrowup: "up", w: "up", arrowdown: "down", s: "down", arrowleft: "left", a: "left", arrowright: "right", d: "right" };
+  window.addEventListener("keydown", (e) => {
+    const k = e.key.toLowerCase();
+    if ([" ", "arrowup", "arrowdown", "arrowleft", "arrowright"].includes(k)) e.preventDefault();
+    if (state === "menu" || state === "over") {
+      if (e.key === "Enter") startGame();
+      else if (["1", "2", "3"].includes(k)) setDifficulty(DIFF_IDS[+k - 1]);
+      return;
+    }
+    if (k === "p" || k === "escape") { if (!e.repeat) togglePause(); return; }
+    if (state === "paused") { if (e.key === "Enter") togglePause(); return; }
+    if (KEYS[k] && !e.repeat) turn(KEYS[k]);
+  });
+  window.addEventListener("blur", () => { if (isPlaying()) togglePause(); });
+  for (const btn of touchEl.querySelectorAll("button")) {
+    const a = btn.dataset.a;
+    btn.addEventListener("pointerdown", (e) => {
+      e.preventDefault(); btn.classList.add("on"); turn(a);
+      try { btn.setPointerCapture(e.pointerId); } catch { /* ignore */ }
+    });
+    for (const ev of ["pointerup", "pointercancel", "lostpointercapture"]) btn.addEventListener(ev, () => btn.classList.remove("on"));
+  }
+  // swipes on the playing field
+  let swipe = null;
+  canvas.addEventListener("pointerdown", (e) => { swipe = { x: e.clientX, y: e.clientY, id: e.pointerId }; });
+  window.addEventListener("pointermove", (e) => {
+    if (!swipe || e.pointerId !== swipe.id) return;
+    const dx = e.clientX - swipe.x, dy = e.clientY - swipe.y;
+    if (Math.max(Math.abs(dx), Math.abs(dy)) < 22) return;
+    turn(Math.abs(dx) > Math.abs(dy) ? (dx > 0 ? "right" : "left") : (dy > 0 ? "down" : "up"));
+    swipe.x = e.clientX; swipe.y = e.clientY;
+  });
+  window.addEventListener("pointerup", () => { swipe = null; });
+  window.addEventListener("pointerdown", (e) => { if (e.pointerType === "touch" && !touchMode) { touchMode = true; syncControls(); if (menu) menu(); } }, true);
+
+  // ---------- Game ----------
+  function step() {
+    prevSnake = snake.map((s) => s.slice());
+    if (queue.length) { dir = queue.shift(); sfx.turn(); }
+    const [dx, dy] = DIRS[dir];
+    const head = [wrapC(snake[0][0] + dx), wrapR(snake[0][1] + dy)];
+    // the tail moves out of the way this step unless the snake is growing
+    const body = grow > 0 ? snake : snake.slice(0, -1);
+    if (isWall(...head) || body.some(([c, r]) => c === head[0] && r === head[1])) { crash(); return; }
+    snake.unshift(head);
+    if (grow > 0) grow--; else snake.pop();
+    const [hc, hr] = head;
+    if (fruit && hc === fruit.c && hr === fruit.r) {
+      eaten++; grow += GROW;
+      // a quick bite is worth more
+      const fast = clock - fruit.born < 6;
+      streak = fast ? streak + 1 : 0;
+      const pts = (50 + 10 * level) * (fast ? Math.min(4, 1 + streak) : 1);
+      addScore(pts, px(hc), py(hr) - 12, fast ? "#ffd34d" : "#eaffef");
+      burst(px(hc), py(hr), "#ff4a5a", 10, 100);
+      sfx.eat(Math.min(6, streak));
+      fruit = null;
+      if (eaten >= FRUITS_PER_LEVEL) openDoor();
+      else {
+        placeFruit();
+        if (!gold && eaten % 4 === 2) { const p = freeCell(8); if (p) gold = { c: p[0], r: p[1], t: 7 }; }
+      }
+    }
+    if (gold && hc === gold.c && hr === gold.r) {
+      const pts = 500 + 100 * level;
+      addScore(pts, px(hc), py(hr) - 12, "#ffd34d"); burst(px(hc), py(hr), "#ffd34d", 16, 140); sfx.gold();
+      gold = null;
+    }
+    if (door && hc === door.c && hr === door.r) {
+      addScore(1000 * (level + 1), px(hc), py(hr) - 12, "#7dff9a");
+      state = "clear"; stateT = 2.4;
+      message = { text: "GIARDINO SUPERATO!", sub: `Bonus ${(1000 * (level + 1)).toLocaleString("it-IT")}`, t: 0 };
+      sfx.clear();
+    }
+  }
+  function openDoor() {
+    const p = freeCell(8);
+    door = p ? { c: p[0], r: p[1] } : { c: snake[0][0], r: snake[0][1] };
+    gold = null;
+    message = { text: "LA TANA È APERTA!", sub: "Entraci per il prossimo giardino", t: 0 };
+    sfx.door();
+  }
+
+  function update(dt) {
+    clock += dt;
+    for (const q of parts) { q.t += dt; q.x += q.vx * dt; q.y += q.vy * dt; q.vy += 160 * dt; }
+    parts = parts.filter((q) => q.t < q.life);
+    for (const q of popups) { q.t += dt; q.y -= 22 * dt; }
+    popups = popups.filter((q) => q.t < (q.big ? 1.6 : 0.9));
+    if (message) { message.t += dt; if (message.t > 2.4) message = null; }
+    if (!isPlaying()) return;
+    if (state === "intro") { stateT -= dt; if (stateT <= 0) state = "play"; return; }
+    if (state === "dead") {
+      stateT -= dt;
+      if (stateT <= 0) { if (lives <= 0) gameOver(); else startLevel(false); }
+      return;
+    }
+    if (state === "clear") { stateT -= dt; if (stateT <= 0) { level++; fruit = null; startLevel(true); } return; }
+
+    levelT += dt;
+    if (gold) { gold.t -= dt; if (gold.t <= 0) gold = null; }
+    stepT += dt;
+    while (stepT >= stepLen && state === "play") { stepT -= stepLen; step(); }
+  }
+
+  // ---------- Drawing ----------
+  function buildBackground() {
+    const k = level % MAZES.length + ":" + pxRatio;
+    if (bgKey === k && bgCache) return;
+    bgKey = k;
+    bgCache = document.createElement("canvas");
+    bgCache.width = Math.round(W * pxRatio); bgCache.height = Math.round(H * pxRatio);
+    const c = bgCache.getContext("2d");
+    c.setTransform(pxRatio, 0, 0, pxRatio, 0, 0);
+    const m = M();
+    c.fillStyle = "#0a2a14"; c.fillRect(0, 0, W, H);
+    // grass checkerboard
+    for (let r = 0; r < ROWS; r++) for (let col = 0; col < COLS; col++) {
+      c.fillStyle = (r + col) % 2 ? "#123a1c" : "#0f3318";
+      c.fillRect(col * CELL, TOP + r * CELL, CELL, CELL);
+    }
+    for (let i = 0; i < 90; i++) { c.fillStyle = "rgba(120,220,120,0.12)"; c.fillRect((i * 173) % W, TOP + (i * 97) % (ROWS * CELL), 1, 3); }
+    // walls: stone blocks in the maze colour
+    for (let r = 0; r < ROWS; r++) for (let col = 0; col < COLS; col++) {
+      if (!isWall(col, r)) continue;
+      const x = col * CELL, y = TOP + r * CELL;
+      c.fillStyle = m.color; c.fillRect(x, y, CELL, CELL);
+      c.fillStyle = "rgba(255,255,255,0.22)"; c.fillRect(x, y, CELL, 2); c.fillRect(x, y, 2, CELL);
+      c.fillStyle = "rgba(0,0,0,0.3)"; c.fillRect(x, y + CELL - 2, CELL, 2); c.fillRect(x + CELL - 2, y, 2, CELL);
+    }
+    // arrows in the wrap-around gaps
+    if (m.open) {
+      c.fillStyle = "rgba(255,255,255,0.18)"; c.font = "900 12px system-ui, sans-serif"; c.textAlign = "center"; c.textBaseline = "middle";
+      for (let col = 14; col <= 17; col++) { c.fillText("↕", px(col), py(0)); c.fillText("↕", px(col), py(ROWS - 1)); }
+      for (let r = 10; r <= 13; r++) { c.fillText("↔", px(0), py(r)); c.fillText("↔", px(COLS - 1), py(r)); }
+    }
+  }
+  function drawFruit(f) {
+    const x = px(f.c), y = py(f.r), s = 1 + Math.sin(clock * 6) * 0.06;
+    ctx.save(); ctx.translate(x, y); ctx.scale(s, s);
+    const k = f.kind;
+    if (k === "mela") {
+      ctx.fillStyle = "#ff3a4a"; ctx.beginPath(); ctx.arc(-2, 1, 5.5, 0, Math.PI * 2); ctx.arc(2, 1, 5.5, 0, Math.PI * 2); ctx.fill();
+      ctx.fillStyle = "#6a3a1a"; ctx.fillRect(-0.7, -7, 1.5, 4);
+      ctx.fillStyle = "#5ad84a"; ctx.beginPath(); ctx.ellipse(3, -5, 3, 1.5, -0.5, 0, Math.PI * 2); ctx.fill();
+      ctx.fillStyle = "rgba(255,255,255,0.5)"; ctx.fillRect(-4, -2, 2, 2);
+    } else if (k === "ciliegie") {
+      ctx.strokeStyle = "#4a8a2a"; ctx.lineWidth = 1.2; ctx.beginPath(); ctx.moveTo(-4, 2); ctx.quadraticCurveTo(-2, -6, 2, -7); ctx.moveTo(4, 3); ctx.quadraticCurveTo(3, -4, 2, -7); ctx.stroke();
+      ctx.fillStyle = "#e81a3a"; ctx.beginPath(); ctx.arc(-4, 3, 4, 0, Math.PI * 2); ctx.arc(4, 4, 4, 0, Math.PI * 2); ctx.fill();
+      ctx.fillStyle = "rgba(255,255,255,0.5)"; ctx.fillRect(-6, 1, 1.5, 1.5); ctx.fillRect(2, 2, 1.5, 1.5);
+    } else if (k === "banana") {
+      ctx.strokeStyle = "#ffd34d"; ctx.lineWidth = 4.5; ctx.lineCap = "round"; ctx.beginPath(); ctx.arc(0, -4, 8, 0.5, 2.6); ctx.stroke();
+      ctx.strokeStyle = "#6a4a1a"; ctx.lineWidth = 1.5; ctx.beginPath(); ctx.moveTo(6.5, 0); ctx.lineTo(7.5, -1); ctx.stroke();
+    } else if (k === "uva") {
+      ctx.fillStyle = "#9a4aea";
+      for (const [dx, dy] of [[-4, -2], [0, -2], [4, -2], [-2, 2], [2, 2], [0, 6]]) { ctx.beginPath(); ctx.arc(dx, dy, 2.8, 0, Math.PI * 2); ctx.fill(); }
+      ctx.fillStyle = "#5ad84a"; ctx.fillRect(-1, -8, 2, 3);
+    } else {
+      ctx.fillStyle = "#ff3a5a"; ctx.beginPath(); ctx.moveTo(-6, -3); ctx.quadraticCurveTo(0, -6, 6, -3); ctx.quadraticCurveTo(4, 5, 0, 7); ctx.quadraticCurveTo(-4, 5, -6, -3); ctx.fill();
+      ctx.fillStyle = "#5ad84a"; ctx.beginPath(); ctx.moveTo(-4, -4); ctx.lineTo(0, -7); ctx.lineTo(4, -4); ctx.lineTo(0, -3); ctx.fill();
+      ctx.fillStyle = "#ffd34d"; for (const [dx, dy] of [[-3, 0], [1, -1], [3, 2], [-1, 3]]) ctx.fillRect(dx, dy, 1, 1);
+    }
+    ctx.restore();
+  }
+  function drawSnake() {
+    const t = state === "play" ? Math.min(1, stepT / stepLen) : state === "intro" ? 0 : 1;
+    const pts = snake.map(([c, r], i) => {
+      const p = prevSnake[Math.min(i, prevSnake.length - 1)];
+      // no sliding across a wrap-around jump
+      if (!p || Math.abs(p[0] - c) > 1 || Math.abs(p[1] - r) > 1) return [px(c), py(r), true];
+      return [px(p[0] + (c - p[0]) * t), py(p[1] + (r - p[1]) * t), false];
+    });
+    const dead = state === "dead";
+    const hide = dead && Math.floor(clock * 10) % 2;
+    if (hide) return;
+    // body: a thick rounded line, split where it wraps around the screen
+    const pass = (width, color) => {
+      ctx.lineCap = "round"; ctx.lineJoin = "round"; ctx.lineWidth = width; ctx.strokeStyle = color;
+      ctx.beginPath();
+      pts.forEach(([x, y], i) => {
+        if (i === 0 || Math.abs(x - pts[i - 1][0]) > CELL * 1.5 || Math.abs(y - pts[i - 1][1]) > CELL * 1.5) ctx.moveTo(x, y); else ctx.lineTo(x, y);
+      });
+      if (pts.length === 1) ctx.lineTo(pts[0][0] + 0.1, pts[0][1]);
+      ctx.stroke();
+    };
+    pass(14, dead ? "#4a4a4a" : "#0a6a2a");
+    pass(10, dead ? "#8a8a8a" : "#5aff7a");
+    // spots along the back
+    ctx.fillStyle = dead ? "#6a6a6a" : "#ffd34d";
+    for (let i = 2; i < pts.length; i += 3) { ctx.beginPath(); ctx.arc(pts[i][0], pts[i][1], 2, 0, Math.PI * 2); ctx.fill(); }
+    // head
+    const [hx, hy] = pts[0], [dx, dy] = DIRS[dir];
+    ctx.save(); ctx.translate(hx, hy); ctx.rotate(Math.atan2(dy, dx));
+    ctx.fillStyle = dead ? "#8a8a8a" : "#5aff7a"; ctx.beginPath(); ctx.ellipse(1, 0, 9, 7.5, 0, 0, Math.PI * 2); ctx.fill();
+    ctx.strokeStyle = dead ? "#4a4a4a" : "#0a6a2a"; ctx.lineWidth = 1.5; ctx.stroke();
+    if (!dead && Math.sin(clock * 5) > 0.3) { ctx.strokeStyle = "#ff3a4a"; ctx.lineWidth = 1.5; ctx.beginPath(); ctx.moveTo(9, 0); ctx.lineTo(14, 0); ctx.lineTo(16, -2); ctx.moveTo(14, 0); ctx.lineTo(16, 2); ctx.stroke(); }
+    for (const s of [-1, 1]) {
+      ctx.fillStyle = "#fff"; ctx.beginPath(); ctx.arc(3, s * 3.5, 2.8, 0, Math.PI * 2); ctx.fill();
+      ctx.fillStyle = "#000";
+      if (dead) { ctx.fillRect(1.5, s * 3.5 - 0.5, 3, 1); } else { ctx.beginPath(); ctx.arc(4, s * 3.5, 1.4, 0, Math.PI * 2); ctx.fill(); }
+    }
+    ctx.restore();
+  }
+  function draw() {
+    ctx.setTransform(pxRatio, 0, 0, pxRatio, 0, 0);
+    if (!walls.length) { ctx.fillStyle = "#04120a"; ctx.fillRect(0, 0, W, H); return; }
+    buildBackground();
+    ctx.drawImage(bgCache, 0, 0, W, H);
+    if (door) {
+      const x = px(door.c), y = py(door.r), p = 1 + Math.sin(clock * 6) * 0.15;
+      const gl = ctx.createRadialGradient(x, y, 2, x, y, 20 * p);
+      gl.addColorStop(0, "rgba(125,255,154,0.8)"); gl.addColorStop(1, "rgba(125,255,154,0)");
+      ctx.fillStyle = gl; ctx.beginPath(); ctx.arc(x, y, 20 * p, 0, Math.PI * 2); ctx.fill();
+      ctx.fillStyle = "#1a0a04"; ctx.beginPath(); ctx.ellipse(x, y + 1, 7, 6, 0, 0, Math.PI * 2); ctx.fill();
+      ctx.strokeStyle = "#8a5a2a"; ctx.lineWidth = 2; ctx.stroke();
+    }
+    if (fruit) drawFruit(fruit);
+    if (gold && !(gold.t < 2 && Math.floor(clock * 10) % 2)) {
+      const x = px(gold.c), y = py(gold.r);
+      ctx.save(); ctx.translate(x, y); ctx.rotate(clock * 2);
+      ctx.fillStyle = "#ffd34d"; ctx.beginPath();
+      for (let i = 0; i < 10; i++) { const a = i * Math.PI / 5, rr = i % 2 ? 3.5 : 8; ctx.lineTo(Math.cos(a) * rr, Math.sin(a) * rr); }
+      ctx.closePath(); ctx.fill(); ctx.strokeStyle = "#fff"; ctx.lineWidth = 1; ctx.stroke();
+      ctx.restore();
+    }
+    if (state !== "menu" && snake.length) drawSnake();
+    for (const q of parts) { ctx.globalAlpha = Math.max(0, 1 - q.t / q.life); ctx.fillStyle = q.c; ctx.fillRect(q.x - 2, q.y - 2, 4, 4); }
+    ctx.globalAlpha = 1;
+    for (const q of popups) {
+      ctx.globalAlpha = Math.max(0, 1 - q.t / (q.big ? 1.6 : 0.9));
+      ctx.textAlign = "center"; ctx.font = q.big ? "900 22px system-ui, sans-serif" : "900 13px system-ui, sans-serif";
+      ctx.lineWidth = 3; ctx.strokeStyle = "#000"; ctx.strokeText(q.text, q.x, q.y); ctx.fillStyle = q.color; ctx.fillText(q.text, q.x, q.y);
+    }
+    ctx.globalAlpha = 1;
+    // status bar
+    ctx.fillStyle = "#04120a"; ctx.fillRect(0, 0, W, TOP);
+    ctx.textBaseline = "middle"; ctx.textAlign = "left"; ctx.font = "900 15px system-ui, sans-serif"; ctx.fillStyle = "#eaffef";
+    ctx.fillText(score.toLocaleString("it-IT"), 10, 16);
+    ctx.font = "700 11px system-ui, sans-serif"; ctx.fillStyle = "#9ac8a8";
+    ctx.fillText(`REC ${Math.max(bestCache, score).toLocaleString("it-IT")}`, 96, 16);
+    ctx.textAlign = "center"; ctx.font = "800 12px system-ui, sans-serif"; ctx.fillStyle = "#ff7a8a";
+    ctx.fillText(door ? "TANA APERTA" : `FRUTTI ${eaten}/${FRUITS_PER_LEVEL}`, W / 2 + 14, 16);
+    ctx.textAlign = "right"; ctx.fillStyle = "#5aff7a";
+    ctx.fillText(`LIVELLO ${level + 1}`, W - 10, 16);
+    for (let i = 0; i < Math.min(lives - (state === "dead" ? 0 : 1), 6); i++) {
+      const x = W - 100 - i * 14;
+      ctx.fillStyle = "#5aff7a"; ctx.beginPath(); ctx.arc(x, 16, 5, 0, Math.PI * 2); ctx.fill();
+      ctx.fillStyle = "#000"; ctx.fillRect(x + 1, 14, 2, 2);
+    }
+    ctx.textBaseline = "alphabetic";
+    if (message) {
+      ctx.globalAlpha = Math.min(1, (2.4 - message.t) * 2);
+      ctx.fillStyle = "rgba(4,18,10,0.8)"; ctx.fillRect(0, H / 2 - 40, W, message.sub ? 72 : 50);
+      ctx.textAlign = "center"; ctx.font = "900 26px system-ui, sans-serif"; ctx.fillStyle = "#5aff7a";
+      ctx.fillText(message.text, W / 2, H / 2 - 6);
+      if (message.sub) { ctx.font = "700 13px system-ui, sans-serif"; ctx.fillStyle = "#eaffef"; ctx.fillText(message.sub, W / 2, H / 2 + 20); }
+      ctx.globalAlpha = 1;
+    }
+  }
+
+  // ---------- Loop ----------
+  const STEP = 1 / 120;
+  let last = performance.now(), acc = 0;
+  function loop(now) {
+    const dt = Math.min(0.1, (now - last) / 1000);
+    last = now;
+    if (isPlaying()) {
+      acc += dt;
+      while (acc >= STEP && isPlaying()) { update(STEP); acc -= STEP; }
+    } else { acc = 0; update(dt); }
+    draw();
+    requestAnimationFrame(loop);
+  }
+  syncControls();
+  buildMaze(); startLevel(false); state = "menu"; message = null;
+  showTitle();
+  requestAnimationFrame(loop);
+})();
+</script>
+</body>
+</html>

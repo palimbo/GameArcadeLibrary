@@ -4,7 +4,7 @@ Raccolta di giochi arcade per il browser. Ogni gioco è un singolo file HTML sen
 
 ## 🕹️ Sala Giochi — `index.html`
 
-Apri `index.html` nella cartella principale per la pagina di raccolta: mostra tutti i 31 giochi con copertina, genere, comandi e i tuoi record per ogni difficoltà (Facile, Normale, Difficile). Tocca «Gioca» per avviare un gioco; in ogni gioco il pulsante «← Sala Giochi» in alto a sinistra (visibile nei menu) riporta alla raccolta.
+Apri `index.html` nella cartella principale per la pagina di raccolta: mostra tutti i 32 giochi con copertina, genere, comandi e i tuoi record per ogni difficoltà (Facile, Normale, Difficile). Tocca «Gioca» per avviare un gioco; in ogni gioco il pulsante «← Sala Giochi» in alto a sinistra (visibile nei menu) riporta alla raccolta.
 
 ## Giochi
 
@@ -483,3 +483,18 @@ Piattaforme e scale in stile *Burger Time*: un cuoco deve comporre quattro panin
 - **Touch:** croce a sinistra e tasto PEPE a destra
 
 Per giocare apri `games/mastro-panino/index.html` nel browser.
+
+### 🐍 Serpentone — `games/serpentone/index.html`
+
+Il classico *Snake* con otto labirinti: guida il serpente affamato senza sbattere contro i muri o morderti la coda.
+
+- **Frutti:** mele, ciliegie, banane, uva e fragole; ognuno allunga il serpente di 3. Valgono 50 + 10 punti per livello, fino a 4 volte tanto se li mangi uno dopo l'altro in fretta
+- **Stella d'oro:** compare ogni tanto per pochi secondi e vale 500 punti e più
+- **La tana:** dopo 12 frutti si apre una tana; entrandoci passi al giardino successivo con un bonus di 1.000 × livello
+- **8 giardini:** il Prato, i Quattro Sassi, il Passaggio, la Croce, le Colonne, le Stanze, la Spirale e il Labirinto. In alcuni i varchi nel bordo ti portano dall'altra parte dello schermo
+- **Velocità:** il serpente accelera a ogni livello
+- **Difficoltà:** Facile (5 vite, lento), Normale, Difficile (velocissimo); record separati per ogni difficoltà
+- **Comandi:** frecce o `W` `A` `S` `D` per girare (si possono memorizzare due svolte di fila) · `P` pausa
+- **Touch:** frecce sullo schermo oppure scorri il dito sul gioco
+
+Per giocare apri `games/serpentone/index.html` nel browser.
