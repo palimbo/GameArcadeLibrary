@@ -4,7 +4,7 @@ Raccolta di giochi arcade per il browser. Ogni gioco è un singolo file HTML sen
 
 ## 🕹️ Sala Giochi — `index.html`
 
-Apri `index.html` nella cartella principale per la pagina di raccolta: mostra tutti i 43 giochi con copertina, genere, comandi e i tuoi record per ogni difficoltà (Facile, Normale, Difficile). Tocca «Gioca» per avviare un gioco; in ogni gioco il pulsante «← Sala Giochi» in alto a sinistra (visibile nei menu) riporta alla raccolta.
+Apri `index.html` nella cartella principale per la pagina di raccolta: mostra tutti i 44 giochi con copertina, genere, comandi e i tuoi record per ogni difficoltà (Facile, Normale, Difficile). Tocca «Gioca» per avviare un gioco; in ogni gioco il pulsante «← Sala Giochi» in alto a sinistra (visibile nei menu) riporta alla raccolta.
 
 **Iniziali del record:** quando batti un record compare la schermata da sala giochi per inserire le tue tre iniziali (frecce ↑ ↓ per cambiare lettera, ← → per spostarti, oppure scrivile direttamente; su telefono i tasti ▲ ▼ e OK). Le iniziali vengono salvate insieme al record e compaiono nei menu del gioco e nella Sala Giochi. Il codice è condiviso da tutti i giochi in `shared/iniziali.js`.
 
@@ -678,3 +678,19 @@ Tiro con l'arco in stile *Pooyan*: mamma porcellina sale e scende nella cesta de
 - **Touch:** levetta a sinistra (conta solo su e giù; più la spingi, più la cesta va veloce) e tasto TIRA a destra
 
 Per giocare apri `games/porcellina-arciera/index.html` nel browser.
+
+### 🐭 Villa dei Gatti — `games/villa-dei-gatti/index.html`
+
+Piattaforme con trampolini in stile *Mappy*: il topo poliziotto deve recuperare la refurtiva nascosta nei cinque piani della villa dei gatti.
+
+- **Trampolini:** si sale e si scende solo rimbalzando nei tre pozzi; mentre rimbalzi, tieni premuta una direzione per saltare giù al piano che stai attraversando. Al quarto rimbalzo di fila il trampolino si rompe (il colore passa da verde a blu, giallo e rosso)
+- **Gatti:** sui trampolini non ti prendono, sui pavimenti sì. Ti inseguono piano per piano e saltano giù dove sei tu
+- **Porte:** si aprono e chiudono col tasto PORTA; le porte chiuse fermano i gatti. Aprirla in faccia a un gatto lo stordisce (50 punti)
+- **Porte blu:** aprendole parte un'onda che spazza via tutti i gatti del piano: 200, 400, 800… punti
+- **Refurtiva:** radio 100, TV 200, computer 300, quadro 400, cassaforte 500; due oggetti uguali presi di fila valgono doppio. Raccoglili tutti per finire il round (bonus per round e tempo)
+- **Sbrigati:** dopo un po' arriva un gatto in più e tutti corrono più veloci
+- **Difficoltà:** Facile (5 vite, gatti lenti e meno numerosi), Normale, Difficile; record separati per ogni difficoltà
+- **Comandi:** frecce ←→ o `A` `D` per correre e per saltare giù dal trampolino · `SPAZIO` o `Z` apre e chiude la porta · `P` pausa
+- **Touch:** levetta a sinistra (conta solo destra e sinistra) e tasto PORTA a destra
+
+Per giocare apri `games/villa-dei-gatti/index.html` nel browser.
