@@ -211,7 +211,7 @@
   let walls = null, rocks = new Set(), flags = [], car = null, enemies = [], smokes = [], fuel = 100, flagValue = 100, doubled = false;
   let parts = [], popups = [], message = null, roundT = 0, distMap = null, distT = 0, lowWarned = false, camX = 0, camY = 0, smokeT = 0;
   const ctl = { up: false, down: false, left: false, right: false, smoke: false };
-  let lastDir = null, smokePressed = false;
+  let lastDir = null, pendingDir = null, smokePressed = false;
 
   const TH = () => THEMES[round % THEMES.length];
   const key = (c, r) => r * COLS + c;
@@ -261,7 +261,7 @@
   function makeCar(c, r, speed, dir) { return { c, r, tc: c, tr: r, x: cx(c), y: cx(r), speed, dir, face: dir, stun: 0 }; }
   function resetCars() {
     car = makeCar(START[0], START[1], 4.3 * CELL, "up");
-    car.inv = 1.5; car.dead = false;
+    car.inv = 1.5; car.dead = false; pendingDir = null;
     const n = clamp(3 + Math.floor(round / 2) + diff.cars, 2, 8);
     enemies = [];
     for (let i = 0; i < n; i++) {
@@ -405,19 +405,33 @@
     if (!a) return;
     ctl[a] = true;
     if (a === "smoke" && !e.repeat) smokePressed = true;
-    if (DIRS[a] && !e.repeat) lastDir = a;
+    if (DIRS[a] && !e.repeat) { lastDir = a; pendingDir = a; }
   });
   window.addEventListener("keyup", (e) => { const a = KEYS[e.key.toLowerCase()]; if (a) ctl[a] = false; });
   window.addEventListener("blur", () => { for (const k in ctl) ctl[k] = false; if (isPlaying()) togglePause(); });
-  for (const btn of touchEl.querySelectorAll("button")) {
-    const a = btn.dataset.a;
-    btn.addEventListener("pointerdown", (e) => {
-      e.preventDefault(); btn.classList.add("on"); ctl[a] = true;
-      if (a === "smoke") smokePressed = true; else lastDir = a;
-      try { btn.setPointerCapture(e.pointerId); } catch { /* ignore */ }
-    });
-    for (const ev of ["pointerup", "pointercancel", "lostpointercapture"]) btn.addEventListener(ev, () => { btn.classList.remove("on"); ctl[a] = false; });
+  const smokeBtn = touchEl.querySelector('[data-a="smoke"]');
+  smokeBtn.addEventListener("pointerdown", (e) => { e.preventDefault(); smokeBtn.classList.add("on"); ctl.smoke = true; smokePressed = true; });
+  for (const ev of ["pointerup", "pointercancel", "pointerleave"]) smokeBtn.addEventListener(ev, () => { smokeBtn.classList.remove("on"); ctl.smoke = false; });
+  // the whole cross works like a small joystick: the direction is where the thumb is from the centre,
+  // so the gaps between the arrows count too and sliding from one arrow to another switches direction
+  const pad = touchEl.querySelector(".pad"), padBtns = {};
+  for (const b of pad.querySelectorAll("button")) padBtns[b.dataset.a] = b;
+  let padId = null;
+  function padAt(e) {
+    const r = pad.getBoundingClientRect(), dx = e.clientX - (r.left + r.width / 2), dy = e.clientY - (r.top + r.height / 2);
+    if (Math.hypot(dx, dy) < 10) return;
+    const d = Math.abs(dx) > Math.abs(dy) ? (dx > 0 ? "right" : "left") : (dy > 0 ? "down" : "up");
+    for (const k in DIRS) { ctl[k] = k === d; padBtns[k].classList.toggle("on", k === d); }
+    if (d !== lastDir) { lastDir = d; pendingDir = d; }
   }
+  const padEnd = (e) => { if (e.pointerId !== padId) return; padId = null; for (const k in DIRS) { ctl[k] = false; padBtns[k].classList.remove("on"); } };
+  pad.addEventListener("pointerdown", (e) => {
+    e.preventDefault(); padId = e.pointerId; lastDir = null;
+    try { pad.setPointerCapture(e.pointerId); } catch { /* ignore */ }
+    padAt(e);
+  });
+  pad.addEventListener("pointermove", (e) => { if (e.pointerId === padId) padAt(e); });
+  for (const ev of ["pointerup", "pointercancel", "lostpointercapture"]) pad.addEventListener(ev, padEnd);
   window.addEventListener("pointerdown", (e) => { if (e.pointerType === "touch" && !touchMode) { touchMode = true; syncControls(); if (menu) menu(); } }, true);
 
   // ---------- Driving on the grid ----------
@@ -453,8 +467,10 @@
   function chooseCar(a) {
     // steer where asked when possible, otherwise keep going; at a wall turn by itself
     const held = Object.keys(DIRS).filter((d) => ctl[d]);
-    const want = held.includes(lastDir) ? lastDir : held[0];
-    if (want && canGo(a.c, a.r, want)) { if (want !== a.dir) sfx.turn(); return want; }
+    // a quick tap is remembered and taken at the first crossing where it is possible
+    const want = held.includes(lastDir) ? lastDir : held[0] || pendingDir;
+    if (want && canGo(a.c, a.r, want)) { if (want !== a.dir) sfx.turn(); if (want === pendingDir) pendingDir = null; return want; }
+    if (pendingDir === a.dir) pendingDir = null;
     if (canGo(a.c, a.r, a.dir)) return a.dir;
     const side = Object.keys(DIRS).filter((d) => d !== a.dir && d !== OPP[a.dir] && canGo(a.c, a.r, d));
     if (side.length) return side[Math.floor(Math.random() * side.length)];
@@ -495,6 +511,11 @@
     // fuel runs down; an empty tank makes the car crawl
     fuel = Math.max(0, fuel - dt * 100 / (80 * diff.fuel));
     if (fuel < 20 && !lowWarned) { lowWarned = true; sfx.low(); message = { text: "CARBURANTE IN RISERVA!", t: 0 }; }
+    const back = OPP[car.dir];
+    if ((pendingDir === back || ctl[back]) && (car.tc !== car.c || car.tr !== car.r)) {
+      [car.c, car.tc] = [car.tc, car.c]; [car.r, car.tr] = [car.tr, car.r];
+      car.dir = car.face = back; if (pendingDir === back) pendingDir = null; sfx.turn();
+    }
     advance(car, dt, car.speed * (fuel > 0 ? 1 : 0.45), chooseCar);
     if (state !== "play") return;
     smokeT -= dt;
