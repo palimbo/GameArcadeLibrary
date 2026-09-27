@@ -1,0 +1,780 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no, viewport-fit=cover">
+<title>Porcellina Arciera</title>
+<style>
+  :root {
+    --bg: #0c0a14;
+    --fg: #fff6f0;
+    --muted: #c0a8b8;
+    --pink: #ff9ac0;
+    --gold: #ffd34d;
+    --red: #ff4a5a;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  html, body {
+    height: 100%;
+    background: var(--bg);
+    color: var(--fg);
+    font-family: system-ui, -apple-system, "Segoe UI", sans-serif;
+    overflow: hidden;
+    user-select: none;
+    -webkit-user-select: none;
+    touch-action: none;
+  }
+  #wrap { position: fixed; inset: 0; display: flex; align-items: center; justify-content: center; }
+  canvas { display: block; touch-action: none; border-radius: 6px; box-shadow: 0 0 0 2px #2e2438, 0 10px 40px rgba(0,0,0,0.6); }
+  #pauseBtn {
+    position: fixed; z-index: 3; display: none; right: 10px; top: calc(10px + env(safe-area-inset-top, 0px));
+    font: 700 13px system-ui, sans-serif; color: var(--fg);
+    background: rgba(0, 0, 0, 0.6); border: 1px solid rgba(255, 246, 240, 0.35);
+    border-radius: 8px; padding: 6px 10px; cursor: pointer;
+  }
+  #touch {
+    position: fixed; z-index: 2; display: none; left: 12px; right: 12px;
+    bottom: calc(14px + env(safe-area-inset-bottom, 0px));
+    justify-content: space-between; align-items: flex-end; pointer-events: none;
+  }
+  /* thumb stick (only up and down count) and a fire button */
+  #touch .stick { position: relative; width: 136px; height: 136px; border-radius: 50%; pointer-events: auto; touch-action: none;
+    border: 2px solid rgba(255, 154, 192, 0.6); background: radial-gradient(circle, rgba(255,154,192,0.16), rgba(255,154,192,0.05)); }
+  #touch .stick .knob { position: absolute; left: 50%; top: 50%; width: 58px; height: 58px; margin: -29px 0 0 -29px; border-radius: 50%;
+    background: rgba(255, 154, 192, 0.5); border: 2px solid rgba(255,255,255,0.7); box-shadow: 0 4px 10px rgba(0,0,0,0.4); pointer-events: none; }
+  #touch .stick i { position: absolute; left: 50%; transform: translateX(-50%); font: 900 14px system-ui, sans-serif; font-style: normal; color: rgba(255,246,240,0.35); pointer-events: none; }
+  #touch .stick i.on { color: var(--gold); }
+  #touch .stick i[data-d="up"] { top: 6px; }
+  #touch .stick i[data-d="down"] { bottom: 6px; }
+  #touch .fire { width: 92px; height: 92px; border-radius: 50%; pointer-events: auto; touch-action: none; color: var(--fg);
+    font: 800 13px system-ui, sans-serif; letter-spacing: 1px; line-height: 1.2;
+    border: 2px solid rgba(255, 211, 77, 0.9); background: rgba(255, 211, 77, 0.18); }
+  #touch .fire b { display: block; font-size: 20px; }
+  #touch .fire.on { background: rgba(255, 211, 77, 0.5); }
+  #touch.small .stick { width: 112px; height: 112px; }
+  #touch.small .stick .knob { width: 48px; height: 48px; margin: -24px 0 0 -24px; }
+  #touch.small .fire { width: 76px; height: 76px; font-size: 11px; }
+  #overlay {
+    position: fixed; inset: 0; z-index: 5;
+    display: flex; flex-direction: column; align-items: center; justify-content: flex-start;
+    gap: 14px; padding: 16px; text-align: center; overflow-y: auto;
+    background: rgba(12, 10, 20, 0.9);
+  }
+  #overlay > :first-child { margin-top: auto; }
+  #overlay > :last-child { margin-bottom: auto; }
+  #overlay.hidden { display: none; }
+  #homeLink {
+    position: fixed; top: calc(10px + env(safe-area-inset-top, 0px)); left: 10px; z-index: 6;
+    font: 600 13px/1 system-ui, sans-serif; color: #fff; text-decoration: none;
+    padding: 8px 12px; border-radius: 999px; background: rgba(0,0,0,.55);
+    border: 1px solid rgba(255,255,255,.25);
+  }
+  #homeLink:hover { background: rgba(0,0,0,.8); }
+  #overlay.hidden ~ #homeLink { display: none; }
+  @media (max-width: 700px) { #overlay { padding-top: calc(52px + env(safe-area-inset-top, 0px)); } }
+  #overlay h1 { font-size: clamp(30px, 9vw, 58px); font-weight: 900; letter-spacing: 1px; color: var(--pink); text-shadow: 0 3px 0 #a0406a, 0 0 22px rgba(255,154,192,0.45); }
+  #overlay h2 { font-size: clamp(28px, 7vw, 44px); font-weight: 900; letter-spacing: 2px; }
+  #overlay h2.lose { color: var(--red); }
+  #overlay p { max-width: 540px; font-size: clamp(13px, 3.4vw, 16px); line-height: 1.55; }
+  #overlay p.muted { color: var(--muted); }
+  #overlay .pts { display: grid; grid-template-columns: repeat(2, auto); gap: 4px 18px; font-size: 13px; color: var(--muted); text-align: left; }
+  #overlay .pts b { color: var(--fg); }
+  #overlay .diff { display: flex; gap: 10px; flex-wrap: wrap; justify-content: center; }
+  #overlay button {
+    font: 800 15px system-ui, sans-serif; letter-spacing: 1.5px; color: var(--fg);
+    background: transparent; cursor: pointer;
+    border: 2px solid rgba(255,246,240,0.3); border-radius: 10px; padding: 9px 16px;
+  }
+  #overlay .diff button.on { border-color: var(--c); color: var(--c); box-shadow: 0 0 12px var(--c); }
+  #overlay button.start { border-color: var(--pink); color: #3a0a20; background: var(--pink); padding: 11px 30px; box-shadow: 0 4px 0 #a0406a; }
+  @media (max-height: 560px) {
+    #overlay { gap: 8px; }
+    #overlay h1 { font-size: 30px; }
+    #overlay p { font-size: 13px; line-height: 1.4; }
+    #overlay .help, #overlay .pts { display: none; }
+  }
+</style>
+</head>
+<body>
+<div id="wrap"><canvas id="game"></canvas></div>
+<div id="touch">
+  <div class="stick" aria-label="Levetta"><i data-d="up">▲</i><i data-d="down">▼</i><div class="knob"></div></div>
+  <button type="button" class="fire" aria-label="Tira"><b>➶</b>TIRA</button>
+</div>
+<button id="pauseBtn" type="button" aria-label="Pausa">❚❚</button>
+<div id="overlay"></div>
+<a id="homeLink" href="../../index.html">← Sala Giochi</a>
+
+<script>
+(() => {
+  "use strict";
+
+  const W = 360, H = 460, HUD = 26, TAU = Math.PI * 2;
+  const GROUND = 430, LEDGE = 92, LEDGE_X = 180;
+  const TOP_Y = 118, BOT_Y = 400, BASKET_X = 318;
+  const LEVELS = [170, 240, 310, 380];       // platforms of the scaffold where landed wolves wait
+  const BALLOONS = ["#ff4a5a", "#ffd34d", "#5ad8ff", "#7dff7a", "#ff8ad8", "#ffa04a"];
+
+  const DIFFICULTIES = {
+    facile:    { label: "FACILE",    color: "#7dff9a", desc: "5 vite · lupi lenti, pochi sassi", lives: 5, speed: 0.85, fire: 0.55, crowd: 5 },
+    normale:   { label: "NORMALE",   color: "#ff9ac0", desc: "3 vite · l'esperienza classica", lives: 3, speed: 1, fire: 1, crowd: 6 },
+    difficile: { label: "DIFFICILE", color: "#ff4a5a", desc: "3 vite · lupi veloci e tanti sassi", lives: 3, speed: 1.15, fire: 1.4, crowd: 7 },
+  };
+  const DIFF_IDS = Object.keys(DIFFICULTIES);
+  const DIFF_KEY = "porcellina-difficulty";
+  const bestKey = (id) => `porcellina-best-${id}`;
+  function store(k, v) { try { localStorage.setItem(k, v); } catch { /* ignore */ } }
+  function load(k) { try { return localStorage.getItem(k); } catch { return null; } }
+  const rnd = (a, b) => a + Math.random() * (b - a);
+  const pick = (a) => a[Math.floor(Math.random() * a.length)];
+
+  // ---------- Canvas ----------
+  const canvas = document.getElementById("game");
+  const ctx = canvas.getContext("2d");
+  const wrap = document.getElementById("wrap");
+  const overlay = document.getElementById("overlay");
+  const touchEl = document.getElementById("touch");
+  const pauseBtn = document.getElementById("pauseBtn");
+  let pxRatio = 1, touchMode = !!(window.matchMedia && matchMedia("(pointer: coarse)").matches);
+  function resize() {
+    const portrait = window.innerHeight > window.innerWidth;
+    const showTouch = touchMode && isPlaying();
+    touchEl.style.display = showTouch ? "flex" : "none";
+    touchEl.classList.toggle("small", !portrait && window.innerHeight < 480);
+    wrap.style.paddingBottom = showTouch && portrait ? "calc(170px + env(safe-area-inset-bottom, 0px))" : "0";
+    let availW = window.innerWidth - 8, availH = window.innerHeight - 8;
+    if (showTouch && portrait) availH -= 170;
+    if (showTouch && !portrait) {
+      const side = Math.max(...[...touchEl.children].map((el) => el.offsetWidth)) + 20;
+      if (window.innerWidth - 2 * side > 200) availW = window.innerWidth - 2 * side;
+    }
+    const s = Math.max(0.2, Math.min(availW / W, availH / H));
+    pxRatio = Math.min(3, s * (window.devicePixelRatio || 1));
+    canvas.style.width = W * s + "px";
+    canvas.style.height = H * s + "px";
+    canvas.width = Math.round(W * pxRatio);
+    canvas.height = Math.round(H * pxRatio);
+  }
+  window.addEventListener("resize", () => syncControls());
+
+  // ---------- Audio ----------
+  let audioCtx = null;
+  function beep(freq, dur, type = "square", vol = 0.04, slide = 0, delay = 0) {
+    if (!audioCtx) return;
+    const t = audioCtx.currentTime + delay;
+    const osc = audioCtx.createOscillator(), gain = audioCtx.createGain();
+    osc.type = type;
+    osc.frequency.setValueAtTime(freq, t);
+    if (slide) osc.frequency.exponentialRampToValueAtTime(Math.max(20, freq + slide), t + dur);
+    gain.gain.setValueAtTime(vol, t);
+    gain.gain.exponentialRampToValueAtTime(0.0001, t + dur);
+    osc.connect(gain).connect(audioCtx.destination);
+    osc.start(t); osc.stop(t + dur + 0.02);
+  }
+  function noise(dur, vol, freq) {
+    if (!audioCtx) return;
+    const len = Math.floor(audioCtx.sampleRate * dur), buf = audioCtx.createBuffer(1, len, audioCtx.sampleRate), d = buf.getChannelData(0);
+    for (let i = 0; i < len; i++) d[i] = (Math.random() * 2 - 1) * (1 - i / len);
+    const src = audioCtx.createBufferSource(), f = audioCtx.createBiquadFilter(), g = audioCtx.createGain();
+    src.buffer = buf; f.type = "highpass"; f.frequency.value = freq; g.gain.value = vol;
+    src.connect(f).connect(g).connect(audioCtx.destination); src.start();
+  }
+  const arp = (notes, gap, d, type = "square", vol = 0.04) => notes.forEach((f, i) => beep(f, d, type, vol, 0, i * gap));
+  let sfxN = 0;
+  const lim = (fn) => (...a) => { if (sfxN++ < 5) fn(...a); };
+  const sfx = {
+    shoot: lim(() => beep(900, 0.08, "triangle", 0.035, -500)),
+    pop: lim(() => { noise(0.08, 0.25, 2000); beep(1200, 0.05, "square", 0.02, -600); }),
+    fall: lim(() => beep(700, 0.5, "triangle", 0.03, -550)),
+    thud: lim(() => beep(90, 0.15, "square", 0.04, -40)),
+    clink: lim(() => beep(1800, 0.04, "square", 0.02)),
+    rock: lim(() => beep(300, 0.1, "square", 0.02, 200)),
+    meat: () => arp([523, 659, 784, 1047], 0.05, 0.1, "square", 0.04),
+    chain: lim((n) => beep(600 + n * 150, 0.1, "square", 0.035)),
+    bossHit: lim(() => beep(260, 0.08, "sawtooth", 0.03, -80)),
+    clear: () => arp([523, 659, 784, 1047, 784, 1047, 1319], 0.09, 0.14),
+    die: () => arp([784, 622, 523, 415, 330], 0.12, 0.16, "sawtooth", 0.035),
+    over: () => arp([523, 415, 330, 262], 0.18, 0.25),
+    life: () => arp([523, 784, 1047, 1319], 0.08, 0.12, "triangle", 0.05),
+    move: lim(() => beep(160, 0.02, "square", 0.01)),
+  };
+
+  // ---------- State ----------
+  let difficulty = DIFFICULTIES[load(DIFF_KEY)] ? load(DIFF_KEY) : "normale";
+  let diff = DIFFICULTIES[difficulty];
+  let state = "menu", menu = null, pausedFrom = null, stateT = 0, clock = 0;
+  let score = 0, lives = 3, round = 0, bestCache = 0, nextLife = 15000;
+  let by = 260, bvy = 0, inv = 0, cool = 0, hasMeat = false, meatT = 0, meatOut = false;
+  let wolves = [], arrows = [], rocks = [], meats = [], parts = [], popups = [], message = null;
+  let toSpawn = 0, spawnT = 0, bossSpawned = false, popped = 0, total = 0, lostThisRound = false;
+  let axis = 0, fireHeld = false;
+  const keys = { up: false, down: false };
+
+  const kind = () => (round % 2 === 0 ? "down" : "up");
+  const cycle = () => Math.floor(round / 2);
+  const wolfSpeed = () => diff.speed * (1 + Math.min(1, cycle() * 0.18));
+
+  // ---------- Flow ----------
+  const isPlaying = () => ["intro", "play", "dead", "clear"].includes(state);
+  function startGame() {
+    if (!audioCtx) { try { audioCtx = new (window.AudioContext || window.webkitAudioContext)(); } catch { audioCtx = null; } }
+    if (audioCtx && audioCtx.state === "suspended") audioCtx.resume();
+    score = 0; lives = diff.lives; round = 0; nextLife = 15000;
+    bestCache = parseInt(load(bestKey(difficulty)), 10) || 0;
+    beginRound();
+    menu = null;
+    overlay.classList.add("hidden");
+    syncControls();
+    last = performance.now();
+  }
+  function beginRound() {
+    wolves = []; arrows = []; rocks = []; meats = []; parts = [];
+    total = (kind() === "down" ? 18 : 14) + cycle() * 2;
+    toSpawn = total; spawnT = 1.2; bossSpawned = kind() === "down"; popped = 0; lostThisRound = false;
+    by = 260; bvy = 0; hasMeat = false; meatT = rnd(10, 16); meatOut = false;
+    message = kind() === "down"
+      ? { text: `ROUND ${round + 1}`, sub: "I lupi scendono: non farli arrivare a terra!", t: 0 }
+      : { text: `ROUND ${round + 1}`, sub: "I lupi salgono: fermali prima della cima!", t: 0 };
+    state = "intro"; stateT = 1.8;
+  }
+  function addScore(n, x, y, color = "#fff6f0") {
+    score += n;
+    if (x !== undefined) popups.push({ x, y, text: String(n), color, t: 0 });
+    if (score >= nextLife) {
+      nextLife += 30000; if (lives < 9) lives++; sfx.life();
+      popups.push({ x: W / 2, y: H / 2, text: "VITA EXTRA", color: "#ffd34d", t: 0, big: true });
+    }
+  }
+  function burst(x, y, color, n = 10, sp = 110, life = 0.5) {
+    for (let k = 0; k < n; k++) {
+      const a = Math.random() * TAU, s = sp * (0.3 + Math.random() * 0.8);
+      parts.push({ x, y, vx: Math.cos(a) * s, vy: Math.sin(a) * s, t: 0, life: life * (0.5 + Math.random()), c: color });
+    }
+  }
+  function killPig(why) {
+    if (state !== "play" || inv > 0) return;
+    lives--; lostThisRound = true;
+    sfx.die(); burst(BASKET_X, by, "#ff9ac0", 18, 130, 0.7);
+    message = { text: why, t: 0 };
+    state = "dead"; stateT = 2.2;
+  }
+  function afterDeath() {
+    if (lives <= 0) { gameOver(); return; }
+    // the wolves that reached the scaffold or the cliff top run off; the airborne ones stay
+    wolves = wolves.filter((w) => w.st === "air" || w.st === "fall");
+    rocks = []; meats = [];
+    by = 260; bvy = 0; inv = 2;
+    // nobody throws right away at a fresh basket
+    for (const w of wolves) w.cool = Math.max(w.cool, 1.2);
+    state = "play";
+  }
+  function gameOver() {
+    state = "over";
+    const prev = parseInt(load(bestKey(difficulty)), 10) || 0;
+    const record = score > prev;
+    if (record) store(bestKey(difficulty), String(score));
+    const played = diff.label, rd = round + 1;
+    menu = () => showOverlay(
+      `<h2 class="lose">GAME OVER</h2>
+       <p>Punteggio: <b>${score.toLocaleString("it-IT")}</b> · Round ${rd} · ${played}</p>
+       ${record ? "<p style='color:var(--gold)'>★ NUOVO RECORD! ★</p>" : ""}
+       ${difficultyHTML()}
+       <button class="start" data-start>GIOCA ANCORA</button>`
+    );
+    menu();
+    sfx.over();
+    syncControls();
+  }
+  function togglePause() {
+    if (isPlaying()) {
+      pausedFrom = state; state = "paused";
+      showOverlay(`<h2>PAUSA</h2><button class="start" data-resume>CONTINUA</button><p class="muted">Premi P per continuare</p>`);
+    } else if (state === "paused") {
+      state = pausedFrom; overlay.classList.add("hidden"); last = performance.now();
+    }
+    syncControls();
+  }
+  function syncControls() {
+    const portrait = window.innerHeight > window.innerWidth;
+    pauseBtn.style.display = isPlaying() && touchMode ? "block" : "none";
+    Object.assign(pauseBtn.style, portrait
+      ? { top: "auto", bottom: "calc(40px + env(safe-area-inset-bottom, 0px))", right: "auto", left: "calc(50% - 20px)" }
+      : { top: "calc(10px + env(safe-area-inset-top, 0px))", bottom: "auto", right: "10px", left: "auto" });
+    resize();
+  }
+  pauseBtn.addEventListener("click", () => togglePause());
+  function showOverlay(html) { overlay.innerHTML = html; overlay.classList.remove("hidden"); }
+  function difficultyHTML() {
+    const buttons = DIFF_IDS.map((id) => {
+      const d = DIFFICULTIES[id];
+      return `<button type="button" data-diff="${id}" class="${id === difficulty ? "on" : ""}" style="--c:${d.color}">${d.label}</button>`;
+    }).join("");
+    const best = parseInt(load(bestKey(difficulty)), 10);
+    return `<div class="diff">${buttons}</div><p class="muted">${diff.desc}${best ? ` · Record: ${best.toLocaleString("it-IT")}` : ""}</p>`;
+  }
+  function setDifficulty(id) { if (!DIFFICULTIES[id]) return; difficulty = id; diff = DIFFICULTIES[id]; store(DIFF_KEY, id); if (menu) menu(); }
+  function showTitle() {
+    menu = showTitle;
+    showOverlay(
+      `<h1>PORCELLINA ARCIERA</h1>
+       <p>Mamma porcellina difende i suoi piccoli dalla cesta della carrucola. I lupi arrivano appesi ai palloncini: bucali con le frecce e falli precipitare! Nei round pari scendono dalla rupe e, se toccano terra, si arrampicano sull'impalcatura; nei round dispari salgono dal bosco e, se raggiungono la cima, ti bersagliano di sassi.</p>
+       <div class="pts">
+         <span><b>Lupo che scende</b></span><span>100</span>
+         <span><b>Lupo che sale</b></span><span>200</span>
+         <span><b>Sasso colpito</b></span><span>50</span>
+         <span><b>Capobranco</b></span><span>2.000 · il suo pallone regge 5 frecce</span>
+         <span><b>Bistecca</b></span><span>sali in cima per prenderla: travolge tutti i lupi che incontra (200, 400, 800…)</span>
+       </div>
+       ${touchMode
+         ? `<p class="muted help">Levetta su e giù per muovere la cesta · TIRA per scoccare le frecce (tienilo premuto per tirare di continuo)</p>`
+         : `<p class="muted help">Frecce su/giù o W/S per muovere la cesta · SPAZIO o Z per tirare · P pausa</p>`}
+       ${difficultyHTML()}
+       <button class="start" data-start>INIZIA</button>`
+    );
+  }
+  overlay.addEventListener("click", (e) => {
+    const d = e.target.closest("[data-diff]");
+    if (d) { setDifficulty(d.dataset.diff); return; }
+    if (e.target.closest("[data-start]")) startGame();
+    if (e.target.closest("[data-resume]")) togglePause();
+  });
+
+  // ---------- Input ----------
+  let firePressed = false;
+  window.addEventListener("keydown", (e) => {
+    const k = e.key.toLowerCase();
+    if ([" ", "arrowup", "arrowdown", "arrowleft", "arrowright"].includes(k)) e.preventDefault();
+    if (state === "menu" || state === "over") {
+      if (e.key === "Enter") startGame();
+      else if (["1", "2", "3"].includes(k)) setDifficulty(DIFF_IDS[+k - 1]);
+      return;
+    }
+    if (k === "p" || k === "escape") { if (!e.repeat) togglePause(); return; }
+    if (state === "paused") { if (e.key === "Enter") togglePause(); return; }
+    if (k === " " || k === "z" || k === "x") { if (!e.repeat) firePressed = true; fireHeld = true; }
+    if (k === "arrowup" || k === "w") keys.up = true;
+    if (k === "arrowdown" || k === "s") keys.down = true;
+  });
+  window.addEventListener("keyup", (e) => {
+    const k = e.key.toLowerCase();
+    if (k === " " || k === "z" || k === "x") fireHeld = false;
+    if (k === "arrowup" || k === "w") keys.up = false;
+    if (k === "arrowdown" || k === "s") keys.down = false;
+  });
+  window.addEventListener("blur", () => { keys.up = keys.down = false; axis = 0; fireHeld = false; if (isPlaying()) togglePause(); });
+  const fireBtn = touchEl.querySelector(".fire");
+  let fireId = null;
+  fireBtn.addEventListener("pointerdown", (e) => { e.preventDefault(); fireId = e.pointerId; try { fireBtn.setPointerCapture(e.pointerId); } catch { /* ignore */ } firePressed = true; fireHeld = true; fireBtn.classList.add("on"); });
+  for (const ev of ["pointerup", "pointercancel", "lostpointercapture"]) fireBtn.addEventListener(ev, (e) => { if (e.pointerId !== fireId) return; fireId = null; fireHeld = false; fireBtn.classList.remove("on"); });
+  // thumb stick: only its vertical part matters, and pushing further moves the basket faster
+  const stick = touchEl.querySelector(".stick"), knob = stick.querySelector(".knob"), marks = {};
+  for (const m of stick.querySelectorAll("i")) marks[m.dataset.d] = m;
+  let stickId = null;
+  function stickAt(e) {
+    const r = stick.getBoundingClientRect(), max = r.width / 2 - 14;
+    let dx = e.clientX - (r.left + r.width / 2), dy = e.clientY - (r.top + r.height / 2);
+    const len = Math.hypot(dx, dy);
+    if (len > max) { dx *= max / len; dy *= max / len; }
+    knob.style.transform = `translate(${dx * 0.4}px, ${dy}px)`;
+    const v = dy / max;
+    axis = Math.abs(v) < 0.2 ? 0 : Math.sign(v) * Math.min(1, (Math.abs(v) - 0.2) / 0.5);
+    marks.up.classList.toggle("on", axis < 0); marks.down.classList.toggle("on", axis > 0);
+  }
+  const stickEnd = (e) => { if (e.pointerId !== stickId) return; stickId = null; knob.style.transform = ""; axis = 0; marks.up.classList.remove("on"); marks.down.classList.remove("on"); };
+  stick.addEventListener("pointerdown", (e) => { e.preventDefault(); stickId = e.pointerId; try { stick.setPointerCapture(e.pointerId); } catch { /* ignore */ } stickAt(e); });
+  stick.addEventListener("pointermove", (e) => { if (e.pointerId === stickId) stickAt(e); });
+  for (const ev of ["pointerup", "pointercancel", "lostpointercapture"]) stick.addEventListener(ev, stickEnd);
+  window.addEventListener("pointerdown", (e) => { if (e.pointerType === "touch" && !touchMode) { touchMode = true; syncControls(); if (menu) menu(); } }, true);
+
+  // ---------- Wolves ----------
+  function spawnWolf(boss = false) {
+    const sp = wolfSpeed();
+    const w = { x: rnd(28, 160), y: 0, vx: 0, vy: 0, st: "air", color: pick(BALLOONS), t: rnd(0, 6), hp: boss ? 5 : 1, boss,
+      cool: rnd(2, 4) / diff.fire, level: -1, flash: 0, sway: rnd(0.8, 1.6), phase: rnd(0, TAU) };
+    if (kind() === "down") {
+      // jump off the cliff, then the balloon opens
+      w.y = LEDGE - 14; w.st = "jump"; w.jt = 0.5; w.vy = 32 * sp * rnd(0.85, 1.2);
+    } else {
+      w.y = GROUND + 30; w.vy = -(boss ? 22 : 30) * sp * rnd(0.85, 1.2);
+      w.x = rnd(30, 200);
+    }
+    if (boss) { w.color = "#c83aff"; w.x = 110; }
+    wolves.push(w);
+  }
+  const balloonR = (w) => (w.boss ? 13 + w.hp * 2.5 : 10);
+  const balloonY = (w) => w.y - (w.boss ? 28 + w.hp * 2 : 26);
+  function popWolf(w, byMeat = 0) {
+    w.hp = 0; w.st = "fall"; w.vy = kind() === "down" ? 40 : 10; w.spin = 0;
+    sfx.pop(); sfx.fall();
+    burst(w.x, balloonY(w), w.color, 10, 120, 0.4);
+    popped++;
+    const base = w.boss ? 2000 : kind() === "down" ? 100 : 200;
+    const pts = byMeat ? Math.max(base, 100 * 2 ** byMeat) : base;
+    addScore(pts, w.x, w.y - 20, byMeat ? "#ffd34d" : "#fff6f0");
+  }
+  function throwRock(w, fromX, fromY) {
+    // lobbed towards where the basket is now
+    const tx = BASKET_X - 4, ty = by, dx = tx - fromX, dy = ty - fromY;
+    const t = Math.max(0.9, Math.min(1.8, Math.hypot(dx, dy) / 150)), g = 140;
+    rocks.push({ x: fromX, y: fromY, vx: dx / t, vy: dy / t - 0.5 * g * t, g, t: 0 });
+    sfx.rock();
+  }
+  function freeLevel() {
+    const used = new Set(wolves.filter((w) => w.st === "climb" || w.st === "perch").map((w) => w.level));
+    const free = LEVELS.map((_, i) => i).filter((i) => !used.has(i));
+    return free.length ? pick(free) : Math.floor(Math.random() * LEVELS.length);
+  }
+  function updateWolves(dt) {
+    const sp = wolfSpeed();
+    for (const w of wolves) {
+      w.t += dt; w.flash = Math.max(0, w.flash - dt);
+      if (w.st === "jump") {
+        w.jt -= dt; w.x += 20 * dt; w.y += 50 * dt;
+        if (w.jt <= 0) w.st = "air";
+      } else if (w.st === "air") {
+        w.x += (Math.sin(w.t * w.sway + w.phase) * 16 + (kind() === "down" ? 6 : 0)) * dt;
+        w.x = Math.max(20, Math.min(214, w.x));
+        w.y += w.vy * dt;
+        // rocks from mid-air, when roughly at the basket's height
+        w.cool -= dt;
+        if (w.cool <= 0 && state === "play") {
+          w.cool = rnd(4, 7.5) / diff.fire / (1 + cycle() * 0.25) * (w.boss ? 0.5 : 1);
+          if (Math.abs(w.y - by) < 90 && w.y > HUD + 20 && w.y < GROUND - 10) throwRock(w, w.x + 8, w.y - 4);
+        }
+        if (kind() === "down" && w.y >= GROUND - 14) { w.y = GROUND - 14; w.st = "walk"; }
+        if (kind() === "up" && w.y <= LEDGE - 14) { w.y = LEDGE - 14; w.st = "top"; w.x = Math.min(w.x, LEDGE_X - 12); w.cool = rnd(1, 2.5) / diff.fire; }
+      } else if (w.st === "fall") {
+        w.vy += 420 * dt; w.y += w.vy * dt; w.spin = (w.spin || 0) + dt * 8;
+        if (w.y > GROUND + 40) { w.st = "gone"; sfx.thud(); burst(w.x, GROUND, "#8a6a4a", 6, 60, 0.4); }
+      } else if (w.st === "walk") {
+        w.x += 60 * sp * dt;
+        if (w.x >= 246) { w.x = 250; w.st = "climb"; w.level = freeLevel(); }
+      } else if (w.st === "climb") {
+        w.y -= 45 * sp * dt;
+        if (w.y <= LEVELS[w.level]) { w.y = LEVELS[w.level]; w.st = "perch"; }
+      } else if (w.st === "perch") {
+        // waiting on the scaffold: a basket passing by gets bitten
+        if (state === "play" && Math.abs(by - w.y) < 20) { w.bite = 0.5; killPig("MORSO DEL LUPO!"); }
+      } else if (w.st === "top") {
+        w.cool -= dt;
+        if (w.cool <= 0 && state === "play") { w.cool = rnd(2.2, 4) / diff.fire / (1 + cycle() * 0.25); throwRock(w, w.x + 6, LEDGE - 16); }
+      }
+      if (w.bite) w.bite = Math.max(0, w.bite - dt);
+    }
+    wolves = wolves.filter((w) => w.st !== "gone");
+  }
+
+  // ---------- Update ----------
+  function fire() {
+    if (hasMeat) {
+      hasMeat = false; meatOut = true;
+      meats.push({ x: BASKET_X - 22, y: by - 6, vx: -150, vy: -60, t: 0, chain: 0, hit: new Set() });
+      sfx.meat();
+      return;
+    }
+    if (arrows.length >= 2 || cool > 0) return;
+    cool = 0.3;
+    arrows.push({ x: BASKET_X - 22, y: by - 4, t: 0 });
+    sfx.shoot();
+  }
+  function update(dt) {
+    clock += dt;
+    sfxN = 0;
+    for (const q of parts) { q.t += dt; q.x += q.vx * dt; q.y += q.vy * dt; q.vy += 200 * dt; }
+    parts = parts.filter((q) => q.t < q.life);
+    for (const q of popups) { q.t += dt; q.y -= 22 * dt; }
+    popups = popups.filter((q) => q.t < (q.big ? 1.6 : 0.9));
+    if (message) { message.t += dt; if (message.t > 2.4) message = null; }
+    if (!isPlaying()) return;
+    if (state === "intro") { stateT -= dt; if (stateT <= 0) state = "play"; }
+    if (state === "dead") { stateT -= dt; if (stateT <= 0) { afterDeath(); if (!isPlaying()) return; } }
+    if (state === "clear") { stateT -= dt; if (stateT <= 0) { round++; beginRound(); } return; }
+
+    // the basket
+    inv = Math.max(0, inv - dt);
+    if (state === "play" || state === "intro") {
+      const dir = axis || ((keys.down ? 1 : 0) - (keys.up ? 1 : 0));
+      const target = dir * 160;
+      bvy += (target - bvy) * Math.min(1, dt * 14);
+      by += bvy * dt;
+      if (by < TOP_Y) { by = TOP_Y; bvy = 0; }
+      if (by > BOT_Y) { by = BOT_Y; bvy = 0; }
+      cool -= dt;
+      if (firePressed || fireHeld) { if (state === "play") fire(); firePressed = false; }
+      // the steak waits at the top of the rails
+      if (!hasMeat && !meatOut && meats.length === 0) {
+        meatT -= dt;
+        if (meatT <= 0 && by <= TOP_Y + 6) { hasMeat = true; meatT = rnd(14, 20); sfx.life(); }
+      }
+    }
+    if (state !== "play") { updateWolves(dt); updateShots(dt); return; }
+
+    // spawning
+    spawnT -= dt;
+    const airborne = wolves.filter((w) => w.st === "air" || w.st === "jump").length;
+    if (spawnT <= 0 && toSpawn > 0 && airborne < diff.crowd + Math.min(3, cycle())) {
+      spawnWolf(); toSpawn--; spawnT = rnd(0.9, 1.6) / diff.speed;
+    }
+    if (toSpawn === 0 && !bossSpawned && airborne === 0) { bossSpawned = true; spawnWolf(true); message = { text: "IL CAPOBRANCO!", sub: "Il suo pallone regge 5 frecce", t: 0 }; }
+    updateWolves(dt);
+    updateShots(dt);
+    if (state !== "play") return;
+
+    // round over when every wolf has been dealt with
+    const active = wolves.some((w) => w.st === "air" || w.st === "jump" || w.st === "fall" || w.st === "walk" || w.st === "climb");
+    if (toSpawn === 0 && bossSpawned && !active) {
+      const bonus = Math.min(5000, 1000 * (round + 1)) + (lostThisRound ? 0 : 1000);
+      addScore(bonus);
+      message = { text: "ROUND COMPLETATO!", sub: `Bonus ${bonus.toLocaleString("it-IT")}${lostThisRound ? "" : " (nessuna vita persa)"}`, t: 0 };
+      sfx.clear();
+      state = "clear"; stateT = 2.6;
+    }
+  }
+  function updateShots(dt) {
+    for (const a of arrows) {
+      a.x -= 360 * dt; a.t += dt;
+      for (const w of wolves) {
+        if (w.st !== "air" && w.st !== "jump") continue;
+        const r = balloonR(w);
+        if (Math.hypot(a.x - w.x, a.y - balloonY(w)) < r + 2) {
+          if (w.boss && w.hp > 1) { w.hp--; w.flash = 0.15; sfx.bossHit(); burst(a.x, a.y, "#c83aff", 4, 60, 0.3); }
+          else popWolf(w);
+          a.x = -99;
+          break;
+        }
+        if (Math.abs(a.x - w.x) < 8 && Math.abs(a.y - w.y) < 10) {
+          // arrows bounce off the wolf itself: aim at the balloon
+          sfx.clink(); burst(a.x, a.y, "#ffffff", 4, 60, 0.2); a.x = -99; break;
+        }
+      }
+      if (a.x < -20) continue;
+      for (const r of rocks) if (Math.hypot(a.x - r.x, a.y - r.y) < 8) {
+        r.t = 99; a.x = -99; addScore(50, r.x, r.y - 8, "#c0a8b8"); burst(r.x, r.y, "#8a8a8a", 6, 80, 0.3); sfx.clink(); break;
+      }
+    }
+    arrows = arrows.filter((a) => a.x > -20);
+    for (const r of rocks) {
+      r.t += dt; r.vy += r.g * dt; r.x += r.vx * dt; r.y += r.vy * dt;
+      if (state === "play" && Math.hypot(r.x - BASKET_X, r.y - by) < 16) { r.t = 99; burst(r.x, r.y, "#8a8a8a", 8, 90, 0.4); killPig("COLPITA DA UN SASSO!"); }
+      if (r.y > GROUND + 20 || r.x > W + 10) r.t = 99;
+    }
+    rocks = rocks.filter((r) => r.t < 10);
+    // the steak falls in an arc and every wolf it meets drops to grab it
+    for (const m of meats) {
+      m.t += dt; m.vy += 150 * dt; m.x += m.vx * dt; m.y += m.vy * dt;
+      for (const w of wolves) {
+        if ((w.st !== "air" && w.st !== "jump") || m.hit.has(w)) continue;
+        if (Math.hypot(m.x - w.x, m.y - w.y) < 20 || Math.hypot(m.x - w.x, m.y - balloonY(w)) < balloonR(w) + 8) {
+          m.hit.add(w); m.chain++; sfx.chain(m.chain);
+          if (w.boss && w.hp > 1) { w.hp = 1; w.flash = 0.2; } else popWolf(w, m.chain);
+        }
+      }
+      if (m.x < -20 || m.y > GROUND + 20) { m.t = 99; meatOut = false; }
+    }
+    meats = meats.filter((m) => m.t < 99);
+  }
+
+  // ---------- Drawing ----------
+  function drawScene() {
+    const dusk = cycle() % 3;
+    const skies = [["#7ac8f0", "#c8ecff"], ["#f09a6a", "#ffd8a0"], ["#2a2a5a", "#6a5a9a"]][dusk];
+    const g = ctx.createLinearGradient(0, HUD, 0, GROUND);
+    g.addColorStop(0, skies[0]); g.addColorStop(1, skies[1]);
+    ctx.fillStyle = g; ctx.fillRect(0, HUD, W, GROUND - HUD);
+    if (dusk === 2) { ctx.fillStyle = "#fff8d0"; ctx.beginPath(); ctx.arc(200, 70, 14, 0, TAU); ctx.fill(); }
+    // far hills
+    ctx.fillStyle = ["#6ab87a", "#b8806a", "#3a3a6a"][dusk];
+    ctx.beginPath(); ctx.moveTo(0, GROUND);
+    for (let x = 0; x <= W; x += 20) ctx.lineTo(x, GROUND - 60 - Math.sin(x * 0.02) * 20 - Math.sin(x * 0.05) * 8);
+    ctx.lineTo(W, GROUND); ctx.fill();
+    // clouds drifting
+    ctx.fillStyle = dusk === 2 ? "rgba(200,200,255,0.25)" : "rgba(255,255,255,0.8)";
+    for (let i = 0; i < 3; i++) {
+      const x = ((clock * (6 + i * 3) + i * 140) % (W + 120)) - 60, y = 130 + i * 70;
+      ctx.beginPath(); ctx.arc(x, y, 12, 0, TAU); ctx.arc(x + 14, y - 6, 15, 0, TAU); ctx.arc(x + 30, y, 11, 0, TAU); ctx.fill();
+    }
+    // the cliff on the left
+    // a rocky promontory sticking out from the left edge, grass on top
+    ctx.fillStyle = "#7a5a3a";
+    ctx.beginPath(); ctx.moveTo(0, LEDGE); ctx.lineTo(LEDGE_X + 6, LEDGE); ctx.lineTo(LEDGE_X - 8, LEDGE + 18);
+    ctx.lineTo(130, LEDGE + 16); ctx.lineTo(90, LEDGE + 34); ctx.lineTo(40, LEDGE + 30); ctx.lineTo(0, LEDGE + 58); ctx.fill();
+    ctx.fillStyle = "#5a4028"; for (let x = 14; x < LEDGE_X - 20; x += 30) ctx.fillRect(x, LEDGE + 8 + (x % 3) * 3, 12, 3);
+    ctx.fillStyle = "#4aa84a"; ctx.fillRect(0, LEDGE - 3, LEDGE_X + 6, 5);
+    ctx.fillStyle = "#3a8a3a"; for (let x = 4; x < LEDGE_X; x += 9) ctx.fillRect(x, LEDGE - 6, 2, 4);
+    // ground and trees
+    ctx.fillStyle = "#4a8a3a"; ctx.fillRect(0, GROUND, W, H - GROUND);
+    ctx.fillStyle = "#3a6a2a"; for (let x = 0; x < W; x += 12) ctx.fillRect(x, GROUND, 6, 3);
+    for (const [x, s] of [[20, 1], [70, 1.2], [130, 0.9], [185, 1.1]]) {
+      ctx.fillStyle = "#6a4a2a"; ctx.fillRect(x - 3 * s, GROUND - 16 * s, 6 * s, 16 * s);
+      ctx.fillStyle = "#2e7a3a"; ctx.beginPath(); ctx.arc(x, GROUND - 24 * s, 14 * s, 0, TAU); ctx.fill();
+      ctx.fillStyle = "#3a9a4a"; ctx.beginPath(); ctx.arc(x - 4 * s, GROUND - 28 * s, 8 * s, 0, TAU); ctx.fill();
+    }
+    // the scaffold with its ladder and platforms
+    ctx.fillStyle = "#8a5a2a"; ctx.fillRect(236, TOP_Y - 40, 5, GROUND - TOP_Y + 40); ctx.fillRect(270, TOP_Y - 40, 5, GROUND - TOP_Y + 40);
+    ctx.fillStyle = "#c8a070"; ctx.fillRect(243, TOP_Y - 40, 2, GROUND - TOP_Y + 40); ctx.fillRect(264, TOP_Y - 40, 2, GROUND - TOP_Y + 40);
+    for (let y = TOP_Y - 36; y < GROUND; y += 10) ctx.fillRect(243, y, 23, 2);
+    ctx.fillStyle = "#a06a3a"; for (const y of LEVELS) ctx.fillRect(234, y + 10, 44, 4);
+    // the pulley and the pigs' house on top
+    ctx.fillStyle = "#c83a3a"; ctx.beginPath(); ctx.moveTo(228, TOP_Y - 40); ctx.lineTo(W, TOP_Y - 70); ctx.lineTo(W, TOP_Y - 40); ctx.fill();
+    ctx.fillStyle = "#e8c890"; ctx.fillRect(236, TOP_Y - 40, W - 236, 10);
+    ctx.fillStyle = "#555"; ctx.beginPath(); ctx.arc(BASKET_X, TOP_Y - 30, 7, 0, TAU); ctx.fill();
+    ctx.fillStyle = "#aaa"; ctx.beginPath(); ctx.arc(BASKET_X, TOP_Y - 30, 3, 0, TAU); ctx.fill();
+    // the piglets peeking from the house
+    for (let i = 0; i < 3; i++) drawPigHead(250 + i * 16 + (i === 2 ? 0 : 0), TOP_Y - 48 + Math.sin(clock * 3 + i) * 1.5, 0.55);
+  }
+  function drawPigHead(x, y, s) {
+    ctx.save(); ctx.translate(x, y); ctx.scale(s, s);
+    ctx.fillStyle = "#ffb0c8";
+    ctx.beginPath(); ctx.moveTo(-9, -7); ctx.lineTo(-6, -15); ctx.lineTo(-2, -9); ctx.fill();
+    ctx.beginPath(); ctx.moveTo(9, -7); ctx.lineTo(6, -15); ctx.lineTo(2, -9); ctx.fill();
+    ctx.beginPath(); ctx.arc(0, 0, 10, 0, TAU); ctx.fill();
+    ctx.fillStyle = "#ff8aac"; ctx.beginPath(); ctx.ellipse(-3, 3, 5, 3.6, 0, 0, TAU); ctx.fill();
+    ctx.fillStyle = "#a03a5a"; ctx.fillRect(-5, 2, 1.5, 2); ctx.fillRect(-2, 2, 1.5, 2);
+    ctx.fillStyle = "#222"; ctx.fillRect(-5, -4, 2, 2.5); ctx.fillRect(2, -4, 2, 2.5);
+    ctx.restore();
+  }
+  function drawBasket() {
+    // rope from the pulley
+    ctx.strokeStyle = "#d8c8a0"; ctx.lineWidth = 1.5;
+    ctx.beginPath(); ctx.moveTo(BASKET_X - 7, TOP_Y - 30); ctx.lineTo(BASKET_X - 7, by - 16); ctx.moveTo(BASKET_X + 7, TOP_Y - 30); ctx.lineTo(BASKET_X + 7, by - 16); ctx.stroke();
+    if (state === "dead" && stateT < 2.0) return;
+    if (inv > 0 && Math.floor(clock * 12) % 2) return;
+    // mum pig
+    drawPigHead(BASKET_X - 2, by - 8, 1);
+    ctx.fillStyle = "#fff"; ctx.fillRect(BASKET_X - 14, by - 22, 6, 2); // a little bonnet ribbon
+    // the bow
+    ctx.strokeStyle = "#8a4a1a"; ctx.lineWidth = 2;
+    ctx.beginPath(); ctx.arc(BASKET_X - 10, by - 4, 11, Math.PI * 0.6, Math.PI * 1.4); ctx.stroke();
+    ctx.strokeStyle = "#eee"; ctx.lineWidth = 0.8;
+    const pull = cool > 0.18 ? 0 : 3;
+    ctx.beginPath(); ctx.moveTo(BASKET_X - 13, by - 14); ctx.lineTo(BASKET_X - 10 + pull, by - 4); ctx.lineTo(BASKET_X - 13, by + 6); ctx.stroke();
+    if (hasMeat) drawMeat(BASKET_X - 22, by - 12);
+    // basket
+    ctx.fillStyle = "#a06a2a"; ctx.fillRect(BASKET_X - 18, by + 2, 36, 16);
+    ctx.fillStyle = "#c88a4a"; for (let x = BASKET_X - 16; x < BASKET_X + 18; x += 6) ctx.fillRect(x, by + 3, 3, 14);
+    ctx.fillStyle = "#6a4a1a"; ctx.fillRect(BASKET_X - 19, by + 1, 38, 3);
+  }
+  function drawMeat(x, y) {
+    ctx.fillStyle = "#c84a3a"; ctx.beginPath(); ctx.ellipse(x, y, 7, 5, -0.4, 0, TAU); ctx.fill();
+    ctx.fillStyle = "#ffd8b0"; ctx.beginPath(); ctx.ellipse(x - 2, y - 1, 3, 2, -0.4, 0, TAU); ctx.fill();
+    ctx.fillStyle = "#fff"; ctx.fillRect(x + 5, y - 5, 5, 2); ctx.beginPath(); ctx.arc(x + 10, y - 4, 2, 0, TAU); ctx.fill();
+  }
+  function drawWolf(w) {
+    const x = w.x, y = w.y;
+    ctx.save(); ctx.translate(x, y);
+    if (w.st === "fall") ctx.rotate(w.spin);
+    const s = w.boss ? 1.35 : 1;
+    ctx.scale(s, s);
+    // body
+    ctx.fillStyle = w.boss ? "#5a4a6a" : "#7a6a5a";
+    ctx.beginPath(); ctx.ellipse(0, 3, 6, 8, 0, 0, TAU); ctx.fill();
+    // head
+    ctx.beginPath(); ctx.arc(1, -7, 6, 0, TAU); ctx.fill();
+    ctx.beginPath(); ctx.moveTo(-3, -11); ctx.lineTo(-2, -17); ctx.lineTo(1, -12); ctx.fill();
+    ctx.beginPath(); ctx.moveTo(2, -12); ctx.lineTo(5, -17); ctx.lineTo(6, -10); ctx.fill();
+    ctx.beginPath(); ctx.moveTo(4, -9); ctx.lineTo(11, -6); ctx.lineTo(4, -3); ctx.fill();
+    ctx.fillStyle = "#222"; ctx.beginPath(); ctx.arc(11, -6, 1.3, 0, TAU); ctx.fill();
+    ctx.fillStyle = "#ffd34d"; ctx.fillRect(2, -9, 2, 2);
+    ctx.fillStyle = "#e8d8c8"; ctx.beginPath(); ctx.ellipse(1, 5, 3, 4, 0, 0, TAU); ctx.fill();
+    // tail and legs
+    ctx.fillStyle = w.boss ? "#5a4a6a" : "#7a6a5a";
+    ctx.beginPath(); ctx.moveTo(-5, 7); ctx.lineTo(-12, 10 + Math.sin(w.t * 6) * 2); ctx.lineTo(-5, 10); ctx.fill();
+    const leg = w.st === "walk" ? Math.sin(w.t * 14) * 3 : w.st === "climb" ? Math.sin(w.t * 10) * 2 : 1;
+    ctx.fillRect(-3 + leg, 9, 2.5, 5); ctx.fillRect(1 - leg, 9, 2.5, 5);
+    // arms: up holding the string, or reaching for the basket
+    ctx.strokeStyle = w.boss ? "#5a4a6a" : "#7a6a5a"; ctx.lineWidth = 2.2; ctx.lineCap = "round";
+    ctx.beginPath();
+    if (w.st === "air" || w.st === "jump") { ctx.moveTo(-3, 0); ctx.lineTo(-1, -12); ctx.moveTo(3, 0); ctx.lineTo(1, -12); }
+    else if (w.st === "perch") { const r = w.bite ? 16 : 6 + Math.sin(w.t * 5) * 2; ctx.moveTo(3, 0); ctx.lineTo(3 + r, -2); ctx.moveTo(-2, 1); ctx.lineTo(-5, 6); }
+    else if (w.st === "top") { const r = Math.sin(w.t * 4) * 5; ctx.moveTo(3, 0); ctx.lineTo(9, -6 + r); ctx.moveTo(-3, 0); ctx.lineTo(-7, 5); }
+    else { ctx.moveTo(3, 0); ctx.lineTo(8, 5); ctx.moveTo(-3, 0); ctx.lineTo(-8, 5); }
+    ctx.stroke();
+    ctx.restore();
+    if (w.st === "air" || w.st === "jump") {
+      const bx = x, byy = balloonY(w), r = balloonR(w);
+      ctx.strokeStyle = "rgba(255,255,255,0.7)"; ctx.lineWidth = 0.8;
+      ctx.beginPath(); ctx.moveTo(x, y - 12 * s); ctx.lineTo(bx, byy + r); ctx.stroke();
+      if (w.st === "jump") return;
+      ctx.fillStyle = w.flash > 0 ? "#ffffff" : w.color;
+      ctx.beginPath(); ctx.ellipse(bx, byy, r, r * 1.12, 0, 0, TAU); ctx.fill();
+      ctx.beginPath(); ctx.moveTo(bx - 2.5, byy + r * 1.12); ctx.lineTo(bx + 2.5, byy + r * 1.12); ctx.lineTo(bx, byy + r * 1.12 + 4); ctx.fill();
+      ctx.fillStyle = "rgba(255,255,255,0.45)"; ctx.beginPath(); ctx.ellipse(bx - r * 0.35, byy - r * 0.4, r * 0.25, r * 0.35, -0.5, 0, TAU); ctx.fill();
+      if (w.boss) { ctx.fillStyle = "#fff"; ctx.font = "900 10px system-ui, sans-serif"; ctx.textAlign = "center"; ctx.fillText(String(w.hp), bx, byy + 4); }
+    }
+  }
+  function draw() {
+    ctx.setTransform(pxRatio, 0, 0, pxRatio, 0, 0);
+    ctx.fillStyle = "#0c0a14"; ctx.fillRect(0, 0, W, H);
+    drawScene();
+    if (state === "menu") return;
+    for (const w of wolves) drawWolf(w);
+    // arrows
+    for (const a of arrows) {
+      ctx.strokeStyle = "#f0e0c0"; ctx.lineWidth = 1.6;
+      ctx.beginPath(); ctx.moveTo(a.x, a.y); ctx.lineTo(a.x + 16, a.y); ctx.stroke();
+      ctx.fillStyle = "#ccc"; ctx.beginPath(); ctx.moveTo(a.x - 4, a.y); ctx.lineTo(a.x + 1, a.y - 3); ctx.lineTo(a.x + 1, a.y + 3); ctx.fill();
+      ctx.fillStyle = "#ff5a5a"; ctx.fillRect(a.x + 13, a.y - 3, 4, 2); ctx.fillRect(a.x + 13, a.y + 1, 4, 2);
+    }
+    for (const r of rocks) {
+      ctx.fillStyle = "#8a8078"; ctx.beginPath(); ctx.arc(r.x, r.y, 4.5, 0, TAU); ctx.fill();
+      ctx.fillStyle = "#b0a8a0"; ctx.fillRect(r.x - 2, r.y - 3, 2, 2);
+    }
+    for (const m of meats) drawMeat(m.x, m.y);
+    // the steak waiting at the top of the rails
+    if (!hasMeat && !meatOut && meatT <= 0) {
+      drawMeat(BASKET_X - 30, TOP_Y - 16 + Math.sin(clock * 5) * 2);
+      ctx.fillStyle = `rgba(255,211,77,${0.5 + 0.5 * Math.sin(clock * 6)})`; ctx.font = "800 8px system-ui, sans-serif"; ctx.textAlign = "center";
+      ctx.fillText("▲ SALI", BASKET_X, TOP_Y + 34);
+    }
+    drawBasket();
+    for (const q of parts) { ctx.globalAlpha = Math.max(0, 1 - q.t / q.life); ctx.fillStyle = q.c; ctx.fillRect(q.x - 1.5, q.y - 1.5, 3, 3); }
+    ctx.globalAlpha = 1;
+    for (const q of popups) {
+      ctx.globalAlpha = Math.max(0, 1 - q.t / (q.big ? 1.6 : 0.9));
+      ctx.textAlign = "center"; ctx.font = q.big ? "900 20px system-ui, sans-serif" : "900 11px system-ui, sans-serif";
+      ctx.lineWidth = 3; ctx.strokeStyle = "#000"; ctx.strokeText(q.text, q.x, q.y); ctx.fillStyle = q.color; ctx.fillText(q.text, q.x, q.y);
+    }
+    ctx.globalAlpha = 1;
+    // status bar
+    ctx.fillStyle = "#0c0a14"; ctx.fillRect(0, 0, W, HUD);
+    ctx.textBaseline = "middle"; ctx.textAlign = "left"; ctx.font = "900 14px system-ui, sans-serif"; ctx.fillStyle = "#fff6f0";
+    ctx.fillText(score.toLocaleString("it-IT"), 8, 13);
+    const sw = ctx.measureText(score.toLocaleString("it-IT")).width;
+    ctx.font = "700 9px system-ui, sans-serif"; ctx.fillStyle = "#c0a8b8";
+    ctx.fillText(`REC ${Math.max(bestCache, score).toLocaleString("it-IT")}`, 8 + Math.max(56, sw + 10), 13);
+    for (let i = 0; i < Math.min(lives - (state === "dead" ? 0 : 1), 5); i++) drawPigHead(186 + i * 14, 13, 0.5);
+    ctx.textAlign = "right"; ctx.font = "800 11px system-ui, sans-serif"; ctx.fillStyle = "#ff9ac0";
+    const left = toSpawn + wolves.filter((w) => w.st === "air" || w.st === "jump").length + (bossSpawned ? 0 : 1);
+    ctx.fillText(`ROUND ${round + 1} · LUPI ${left}`, W - 8, 13);
+    ctx.textBaseline = "alphabetic";
+    if (message) {
+      ctx.globalAlpha = Math.min(1, (2.4 - message.t) * 2);
+      ctx.fillStyle = "rgba(12,10,20,0.8)"; ctx.fillRect(0, H / 2 - 44, W, message.sub ? 52 : 36);
+      ctx.textAlign = "center"; ctx.font = "900 20px system-ui, sans-serif"; ctx.fillStyle = "#ff9ac0";
+      ctx.fillText(message.text, W / 2, H / 2 - 19);
+      if (message.sub) { ctx.font = "700 11px system-ui, sans-serif"; ctx.fillStyle = "#fff6f0"; ctx.fillText(message.sub, W / 2, H / 2); }
+      ctx.globalAlpha = 1;
+    }
+  }
+
+  // ---------- Loop ----------
+  const STEP = 1 / 120;
+  let last = performance.now(), acc = 0;
+  function loop(now) {
+    const dt = Math.min(0.1, (now - last) / 1000);
+    last = now;
+    if (isPlaying()) {
+      acc += dt;
+      while (acc >= STEP && isPlaying()) { update(STEP); acc -= STEP; }
+    } else { acc = 0; update(dt); }
+    draw();
+    requestAnimationFrame(loop);
+  }
+  syncControls();
+  showTitle();
+  requestAnimationFrame(loop);
+})();
+</script>
+<script src="../../shared/iniziali.js" data-record="porcellina-best-" data-kind="score"></script>
+</body>
+</html>

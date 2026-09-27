@@ -4,7 +4,7 @@ Raccolta di giochi arcade per il browser. Ogni gioco è un singolo file HTML sen
 
 ## 🕹️ Sala Giochi — `index.html`
 
-Apri `index.html` nella cartella principale per la pagina di raccolta: mostra tutti i 42 giochi con copertina, genere, comandi e i tuoi record per ogni difficoltà (Facile, Normale, Difficile). Tocca «Gioca» per avviare un gioco; in ogni gioco il pulsante «← Sala Giochi» in alto a sinistra (visibile nei menu) riporta alla raccolta.
+Apri `index.html` nella cartella principale per la pagina di raccolta: mostra tutti i 43 giochi con copertina, genere, comandi e i tuoi record per ogni difficoltà (Facile, Normale, Difficile). Tocca «Gioca» per avviare un gioco; in ogni gioco il pulsante «← Sala Giochi» in alto a sinistra (visibile nei menu) riporta alla raccolta.
 
 **Iniziali del record:** quando batti un record compare la schermata da sala giochi per inserire le tue tre iniziali (frecce ↑ ↓ per cambiare lettera, ← → per spostarti, oppure scrivile direttamente; su telefono i tasti ▲ ▼ e OK). Le iniziali vengono salvate insieme al record e compaiono nei menu del gioco e nella Sala Giochi. Il codice è condiviso da tutti i giochi in `shared/iniziali.js`.
 
@@ -662,3 +662,19 @@ Duelli aerei in stile *Time Pilot*: il tuo jet resta al centro dello schermo e v
 - **Touch:** levetta analogica a sinistra (spingi verso dove vuoi andare e l'aereo vira da solo) e tasto FUOCO a destra da tenere premuto
 
 Per giocare apri `games/pilota-del-tempo/index.html` nel browser.
+
+### 🐷 Porcellina Arciera — `games/porcellina-arciera/index.html`
+
+Tiro con l'arco in stile *Pooyan*: mamma porcellina sale e scende nella cesta della carrucola e scocca frecce contro i lupi appesi ai palloncini.
+
+- **Round pari, discesa:** i lupi saltano dalla rupe e scendono col palloncino. Se toccano terra si arrampicano sull'impalcatura e aspettano a un piano: se la cesta passa lì davanti, mordono
+- **Round dispari, salita:** i lupi salgono dal bosco verso la rupe; quelli che arrivano in cima ti tirano sassi. Alla fine arriva il capobranco, con un pallone che regge 5 frecce (2.000 punti)
+- **Frecce:** bucano solo i palloncini, sul lupo rimbalzano; al massimo due in volo
+- **Sassi:** i lupi li lanciano a parabola verso la cesta; schivali o abbattili con una freccia (50 punti)
+- **Bistecca:** ogni tanto compare in cima alle rotaie; sali a prenderla e il tiro successivo la lancia: ogni lupo che incontra precipita (200, 400, 800… punti)
+- **Punti:** lupo in discesa 100, in salita 200; bonus a fine round (1.000 in più se non perdi vite); vita extra a 15.000 punti e poi ogni 30.000
+- **Difficoltà:** Facile (5 vite, lupi lenti, pochi sassi), Normale, Difficile; record separati per ogni difficoltà
+- **Comandi:** frecce su/giù o `W`/`S` per muovere la cesta · `SPAZIO` o `Z` per tirare (tenuto premuto tira di continuo) · `P` pausa
+- **Touch:** levetta a sinistra (conta solo su e giù; più la spingi, più la cesta va veloce) e tasto TIRA a destra
+
+Per giocare apri `games/porcellina-arciera/index.html` nel browser.
