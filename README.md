@@ -4,7 +4,7 @@ Raccolta di giochi arcade per il browser. Ogni gioco è un singolo file HTML sen
 
 ## 🕹️ Sala Giochi — `index.html`
 
-Apri `index.html` nella cartella principale per la pagina di raccolta: mostra tutti i 47 giochi con copertina, genere, comandi e i tuoi record per ogni difficoltà (Facile, Normale, Difficile). Tocca «Gioca» per avviare un gioco; in ogni gioco il pulsante «← Sala Giochi» in alto a sinistra (visibile nei menu) riporta alla raccolta.
+Apri `index.html` nella cartella principale per la pagina di raccolta: mostra tutti i 48 giochi con copertina, genere, comandi e i tuoi record per ogni difficoltà (Facile, Normale, Difficile). Tocca «Gioca» per avviare un gioco; in ogni gioco il pulsante «← Sala Giochi» in alto a sinistra (visibile nei menu) riporta alla raccolta.
 
 **Iniziali del record:** quando batti un record compare la schermata da sala giochi per inserire le tue tre iniziali (frecce ↑ ↓ per cambiare lettera, ← → per spostarti, oppure scrivile direttamente; su telefono i tasti ▲ ▼ e OK). Le iniziali vengono salvate insieme al record e compaiono nei menu del gioco e nella Sala Giochi. Il codice è condiviso da tutti i giochi in `shared/iniziali.js`.
 
@@ -741,3 +741,19 @@ Acrobazie in stile *Circus Charlie*: il clown affronta tre numeri da 100 metri, 
 - **Touch:** levetta a sinistra (conta solo destra e sinistra) e tasto SALTA a destra
 
 Per giocare apri `games/clown-del-circo/index.html` nel browser.
+
+### 🏃 Campioni d'Atletica — `games/campioni-atletica/index.html`
+
+Gare a pulsanti in stile *Track & Field*: quattro prove allo stadio, una dopo l'altra, con la qualificazione da superare.
+
+- **Correre:** premi i due tasti uno dopo l'altro (sinistro, destro, sinistro…): più sei rapido, più vai veloce. Premere due volte lo stesso tasto fa perdere velocità
+- **100 metri:** aspetta lo sparo dopo «Pronti…»: partire prima è falsa partenza, alla terza sei squalificato. Il rivale in rosso corre sul filo della qualificazione
+- **Salto in lungo e giavellotto:** prendi velocità, poi tieni premuto SALTA/LANCIA: l'angolo sale finché non rilasci (ideale 40–45°). Superare l'asse o la linea di lancio è nullo; 3 tentativi
+- **110 ostacoli:** salta ogni ostacolo al momento giusto; se lo urti perdi metà della velocità
+- **Qualificazione:** se la manchi perdi una vita e ripeti la gara. Dopo le quattro gare si ricomincia con misure più difficili
+- **Punti:** in base al tempo o alla misura, più 500 per ogni qualificazione
+- **Difficoltà:** Facile (5 vite, qualificazioni più facili), Normale, Difficile; record separati per ogni difficoltà
+- **Comandi:** `Z` e `X` (oppure ← e →) alternati per correre · `SPAZIO` o ↑ per saltare e lanciare (tienilo premuto per l'angolo) · `P` pausa
+- **Touch:** tasti SINISTRO e DESTRO per i due pollici, e il tasto giallo al centro per saltare e lanciare
+
+Per giocare apri `games/campioni-atletica/index.html` nel browser.

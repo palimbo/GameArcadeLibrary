@@ -1,0 +1,705 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no, viewport-fit=cover">
+<title>Campioni d'Atletica</title>
+<style>
+  :root {
+    --bg: #081018;
+    --fg: #f4f8ff;
+    --muted: #a0b0c8;
+    --track: #d8583a;
+    --gold: #ffd34d;
+    --red: #ff4a5a;
+    --blue: #4a9aff;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  html, body {
+    height: 100%;
+    background: var(--bg);
+    color: var(--fg);
+    font-family: system-ui, -apple-system, "Segoe UI", sans-serif;
+    overflow: hidden;
+    user-select: none;
+    -webkit-user-select: none;
+    touch-action: none;
+  }
+  #wrap { position: fixed; inset: 0; display: flex; align-items: center; justify-content: center; }
+  canvas { display: block; touch-action: none; border-radius: 6px; box-shadow: 0 0 0 2px #1a2a3a, 0 10px 40px rgba(0,0,0,0.6); }
+  #pauseBtn {
+    position: fixed; z-index: 3; display: none; right: 10px; top: calc(10px + env(safe-area-inset-top, 0px));
+    font: 700 13px system-ui, sans-serif; color: var(--fg);
+    background: rgba(0, 0, 0, 0.6); border: 1px solid rgba(244, 248, 255, 0.35);
+    border-radius: 8px; padding: 6px 10px; cursor: pointer;
+  }
+  #touch {
+    position: fixed; z-index: 2; display: none; left: 12px; right: 12px;
+    bottom: calc(14px + env(safe-area-inset-bottom, 0px));
+    justify-content: space-between; align-items: flex-end; pointer-events: none;
+  }
+  /* two run buttons to tap in turn, one for each thumb, and the action button in the middle */
+  #touch button { pointer-events: auto; touch-action: none; border-radius: 50%; color: var(--fg); font: 800 12px system-ui, sans-serif; letter-spacing: 1px; line-height: 1.2; }
+  #touch .run { width: 104px; height: 104px; border: 2px solid rgba(74, 154, 255, 0.9); background: rgba(74, 154, 255, 0.2); }
+  #touch .run b { display: block; font-size: 22px; }
+  #touch .act { width: 84px; height: 84px; margin-bottom: 60px; border: 2px solid rgba(255, 211, 77, 0.9); background: rgba(255, 211, 77, 0.18); }
+  #touch button.on { background: rgba(244, 248, 255, 0.45); }
+  #touch.small .run { width: 88px; height: 88px; }
+  #touch.small .act { width: 70px; height: 70px; margin-bottom: 40px; }
+  #overlay {
+    position: fixed; inset: 0; z-index: 5;
+    display: flex; flex-direction: column; align-items: center; justify-content: flex-start;
+    gap: 14px; padding: 16px; text-align: center; overflow-y: auto;
+    background: rgba(8, 16, 24, 0.9);
+  }
+  #overlay > :first-child { margin-top: auto; }
+  #overlay > :last-child { margin-bottom: auto; }
+  #overlay.hidden { display: none; }
+  #homeLink {
+    position: fixed; top: calc(10px + env(safe-area-inset-top, 0px)); left: 10px; z-index: 6;
+    font: 600 13px/1 system-ui, sans-serif; color: #fff; text-decoration: none;
+    padding: 8px 12px; border-radius: 999px; background: rgba(0,0,0,.55);
+    border: 1px solid rgba(255,255,255,.25);
+  }
+  #homeLink:hover { background: rgba(0,0,0,.8); }
+  #overlay.hidden ~ #homeLink { display: none; }
+  @media (max-width: 700px) { #overlay { padding-top: calc(52px + env(safe-area-inset-top, 0px)); } }
+  #overlay h1 { font-size: clamp(30px, 9vw, 58px); font-weight: 900; letter-spacing: 1px; color: var(--gold); text-shadow: 0 3px 0 #a0402a, 0 0 22px rgba(255,211,77,0.45); }
+  #overlay h2 { font-size: clamp(28px, 7vw, 44px); font-weight: 900; letter-spacing: 2px; }
+  #overlay h2.lose { color: var(--red); }
+  #overlay p { max-width: 540px; font-size: clamp(13px, 3.4vw, 16px); line-height: 1.55; }
+  #overlay p.muted { color: var(--muted); }
+  #overlay .pts { display: grid; grid-template-columns: repeat(2, auto); gap: 4px 18px; font-size: 13px; color: var(--muted); text-align: left; }
+  #overlay .pts b { color: var(--fg); }
+  #overlay .diff { display: flex; gap: 10px; flex-wrap: wrap; justify-content: center; }
+  #overlay button {
+    font: 800 15px system-ui, sans-serif; letter-spacing: 1.5px; color: var(--fg);
+    background: transparent; cursor: pointer;
+    border: 2px solid rgba(244,248,255,0.3); border-radius: 10px; padding: 9px 16px;
+  }
+  #overlay .diff button.on { border-color: var(--c); color: var(--c); box-shadow: 0 0 12px var(--c); }
+  #overlay button.start { border-color: var(--gold); color: #3a1a00; background: var(--gold); padding: 11px 30px; box-shadow: 0 4px 0 #a0402a; }
+  @media (max-height: 560px) {
+    #overlay { gap: 8px; }
+    #overlay h1 { font-size: 30px; }
+    #overlay p { font-size: 13px; line-height: 1.4; }
+    #overlay .help, #overlay .pts { display: none; }
+  }
+</style>
+</head>
+<body>
+<div id="wrap"><canvas id="game"></canvas></div>
+<div id="touch">
+  <button type="button" class="run" data-foot="0" aria-label="Piede sinistro"><b>◀</b>SINISTRO</button>
+  <button type="button" class="act" aria-label="Salta o lancia">SALTA<br>LANCIA</button>
+  <button type="button" class="run" data-foot="1" aria-label="Piede destro"><b>▶</b>DESTRO</button>
+</div>
+<button id="pauseBtn" type="button" aria-label="Pausa">❚❚</button>
+<div id="overlay"></div>
+<a id="homeLink" href="../../index.html">← Sala Giochi</a>
+
+<script>
+(() => {
+  "use strict";
+
+  const W = 480, H = 300, HUD = 24, S = 8, TRACK_Y = 238, G = 9.8, VMAX = 12;
+  const EVENTS = [
+    { id: "100", name: "100 metri", kind: "run", len: 100, unit: "s", qual: 13.0, step: -0.35, pts: (t) => Math.round(Math.max(0, 18 - t) * 250) },
+    { id: "lungo", name: "Salto in lungo", kind: "jump", board: 30, unit: "m", qual: 5.8, step: 0.3, pts: (d) => Math.round(d * 200) },
+    { id: "giavellotto", name: "Lancio del giavellotto", kind: "throw", board: 30, unit: "m", qual: 64, step: 3, pts: (d) => Math.round(d * 20) },
+    { id: "ostacoli", name: "110 ostacoli", kind: "hurdles", len: 110, unit: "s", qual: 15.8, step: -0.4, pts: (t) => Math.round(Math.max(0, 22 - t) * 250) },
+  ];
+  const HURDLES = Array.from({ length: 10 }, (_, i) => 13.72 + i * 9.14);
+  const RECORDS = { "100": 9.58, lungo: 8.95, giavellotto: 98.48, ostacoli: 12.8 };
+
+  const DIFFICULTIES = {
+    facile:    { label: "FACILE",    color: "#7dff9a", desc: "5 vite · tempi e misure di qualificazione più facili", lives: 5, ease: 1 },
+    normale:   { label: "NORMALE",   color: "#ffd34d", desc: "3 vite · l'esperienza classica", lives: 3, ease: 0 },
+    difficile: { label: "DIFFICILE", color: "#ff4a5a", desc: "3 vite · qualificazioni da campioni", lives: 3, ease: -1 },
+  };
+  const DIFF_IDS = Object.keys(DIFFICULTIES);
+  const DIFF_KEY = "atletica-difficulty";
+  const bestKey = (id) => `atletica-best-${id}`;
+  function store(k, v) { try { localStorage.setItem(k, v); } catch { /* ignore */ } }
+  function load(k) { try { return localStorage.getItem(k); } catch { return null; } }
+  const rnd = (a, b) => a + Math.random() * (b - a);
+  const fmt = (v, unit) => unit === "s" ? v.toFixed(2).replace(".", ",") + " s" : v.toFixed(2).replace(".", ",") + " m";
+
+  // ---------- Canvas ----------
+  const canvas = document.getElementById("game");
+  const ctx = canvas.getContext("2d");
+  const wrap = document.getElementById("wrap");
+  const overlay = document.getElementById("overlay");
+  const touchEl = document.getElementById("touch");
+  const pauseBtn = document.getElementById("pauseBtn");
+  let pxRatio = 1, touchMode = !!(window.matchMedia && matchMedia("(pointer: coarse)").matches);
+  function resize() {
+    const portrait = window.innerHeight > window.innerWidth;
+    const showTouch = touchMode && isPlaying();
+    touchEl.style.display = showTouch ? "flex" : "none";
+    touchEl.classList.toggle("small", !portrait && window.innerHeight < 480);
+    wrap.style.paddingBottom = showTouch && portrait ? "calc(190px + env(safe-area-inset-bottom, 0px))" : "0";
+    let availW = window.innerWidth - 8, availH = window.innerHeight - 8;
+    if (showTouch && portrait) availH -= 190;
+    if (showTouch && !portrait) {
+      const side = Math.max(...[...touchEl.querySelectorAll(".run")].map((el) => el.offsetWidth)) + 24;
+      if (window.innerWidth - 2 * side > 280) availW = window.innerWidth - 2 * side;
+    }
+    const s = Math.max(0.2, Math.min(availW / W, availH / H));
+    pxRatio = Math.min(3, s * (window.devicePixelRatio || 1));
+    canvas.style.width = W * s + "px";
+    canvas.style.height = H * s + "px";
+    canvas.width = Math.round(W * pxRatio);
+    canvas.height = Math.round(H * pxRatio);
+  }
+  window.addEventListener("resize", () => syncControls());
+
+  // ---------- Audio ----------
+  let audioCtx = null;
+  function beep(freq, dur, type = "square", vol = 0.04, slide = 0, delay = 0) {
+    if (!audioCtx) return;
+    const t = audioCtx.currentTime + delay;
+    const osc = audioCtx.createOscillator(), gain = audioCtx.createGain();
+    osc.type = type;
+    osc.frequency.setValueAtTime(freq, t);
+    if (slide) osc.frequency.exponentialRampToValueAtTime(Math.max(20, freq + slide), t + dur);
+    gain.gain.setValueAtTime(vol, t);
+    gain.gain.exponentialRampToValueAtTime(0.0001, t + dur);
+    osc.connect(gain).connect(audioCtx.destination);
+    osc.start(t); osc.stop(t + dur + 0.02);
+  }
+  function noise(dur, vol, freq) {
+    if (!audioCtx) return;
+    const len = Math.floor(audioCtx.sampleRate * dur), buf = audioCtx.createBuffer(1, len, audioCtx.sampleRate), d = buf.getChannelData(0);
+    for (let i = 0; i < len; i++) d[i] = (Math.random() * 2 - 1) * (1 - i / len);
+    const src = audioCtx.createBufferSource(), f = audioCtx.createBiquadFilter(), g = audioCtx.createGain();
+    src.buffer = buf; f.type = "lowpass"; f.frequency.value = freq; g.gain.value = vol;
+    src.connect(f).connect(g).connect(audioCtx.destination); src.start();
+  }
+  const arp = (notes, gap, d, type = "square", vol = 0.04) => notes.forEach((f, i) => beep(f, d, type, vol, 0, i * gap));
+  let sfxN = 0;
+  const lim = (fn) => (...a) => { if (sfxN++ < 5) fn(...a); };
+  const sfx = {
+    step: lim((n) => beep(n ? 200 : 170, 0.03, "square", 0.02)),
+    ready: () => beep(660, 0.15, "square", 0.04),
+    gun: () => { noise(0.25, 0.4, 3000); beep(120, 0.15, "square", 0.04, -60); },
+    jump: lim(() => beep(300, 0.2, "triangle", 0.04, 400)),
+    land: lim(() => noise(0.2, 0.25, 500)),
+    hurdle: lim(() => { noise(0.12, 0.3, 900); beep(180, 0.1, "square", 0.03, -80); }),
+    foul: () => arp([440, 330, 220], 0.12, 0.18, "sawtooth", 0.04),
+    whistle: () => { beep(2400, 0.35, "sine", 0.04); beep(2600, 0.35, "sine", 0.02); },
+    cheer: () => { noise(1.2, 0.18, 1800); arp([523, 659, 784, 1047], 0.08, 0.14, "square", 0.035); },
+    fail: () => arp([523, 415, 330], 0.15, 0.2, "sawtooth", 0.035),
+    over: () => arp([523, 415, 330, 262], 0.18, 0.25),
+    angle: lim((a) => beep(300 + a * 12, 0.03, "square", 0.015)),
+  };
+
+  // ---------- State ----------
+  let difficulty = DIFFICULTIES[load(DIFF_KEY)] ? load(DIFF_KEY) : "normale";
+  let diff = DIFFICULTIES[difficulty];
+  let state = "menu", menu = null, pausedFrom = null, stateT = 0, clock = 0;
+  let score = 0, lives = 3, evIdx = 0, round = 0, bestCache = 0;
+  let a = null, cpu = null, camX = 0, phase = "ready", phaseT = 0, falseStarts = 0, attempt = 0, best = 0, results = [];
+  let hurdles = [], jav = null, mark = null, message = null, popups = [], parts = [], runT = 0, readyStep = 0;
+  let actionHeld = false, actionPressed = false, actionReleased = false;
+
+  const EV = () => EVENTS[evIdx];
+  // the qualifying mark for the current event, tougher every lap of the four events
+  function qualMark(ev = EV()) {
+    const lap = ev.step * round, easier = diff.ease * Math.abs(ev.step) * 1.5;
+    return +(ev.qual + lap + (ev.unit === "s" ? easier : -easier)).toFixed(2);
+  }
+
+  // ---------- Flow ----------
+  const isPlaying = () => ["play"].includes(state);
+  function startGame() {
+    if (!audioCtx) { try { audioCtx = new (window.AudioContext || window.webkitAudioContext)(); } catch { audioCtx = null; } }
+    if (audioCtx && audioCtx.state === "suspended") audioCtx.resume();
+    score = 0; lives = diff.lives; evIdx = 0; round = 0; results = [];
+    bestCache = parseInt(load(bestKey(difficulty)), 10) || 0;
+    state = "play";
+    startEvent();
+    menu = null;
+    overlay.classList.add("hidden");
+    syncControls();
+    last = performance.now();
+  }
+  function startEvent() {
+    attempt = 0; best = 0; falseStarts = 0;
+    message = { text: EV().name.toUpperCase(), sub: `Qualificazione: ${EV().unit === "s" ? "sotto i " : "almeno "}${fmt(qualMark(), EV().unit)}${EV().kind === "jump" || EV().kind === "throw" ? " · 3 tentativi" : ""}`, t: 0, long: true };
+    startAttempt();
+  }
+  function startAttempt() {
+    const ev = EV();
+    a = { x: ev.kind === "run" || ev.kind === "hurdles" ? 0 : 0, v: 0, foot: -1, air: 0, airT: 0, h: 0, fell: 0, t: 0, legs: 0, angle: 0, done: false, crouch: 0 };
+    cpu = ev.kind === "run" || ev.kind === "hurdles" ? { x: 0, t: 0, fin: 0 } : null;
+    hurdles = ev.kind === "hurdles" ? HURDLES.map((x) => ({ x, down: false })) : [];
+    jav = null; mark = null; runT = 0; camX = -6;
+    phase = "ready"; phaseT = ev.kind === "run" || ev.kind === "hurdles" ? 1.2 : 0.8; readyStep = 0;
+    actionPressed = actionReleased = false;
+  }
+  function addPopup(text, color = "#ffd34d", big = false) { popups.push({ text, color, t: 0, big }); }
+  function finishAttempt(value, foul) {
+    const ev = EV(), q = qualMark();
+    phase = "result"; phaseT = 2.4;
+    let passed = false;
+    if (foul) { sfx.foul(); message = { text: "NULLO!", sub: ev.kind === "throw" ? "Hai superato la linea di lancio" : "Hai superato l'asse di battuta", t: 0 }; }
+    else {
+      const better = ev.unit === "s" ? (best === 0 || value < best) : value > best;
+      if (better) best = value;
+      passed = ev.unit === "s" ? value <= q : value >= q;
+      const wr = ev.unit === "s" ? value < RECORDS[ev.id] : value > RECORDS[ev.id];
+      message = { text: fmt(value, ev.unit) + (wr ? " · RECORD DEL MONDO!" : ""), sub: passed ? "Qualificato!" : `Qualificazione: ${fmt(q, ev.unit)}`, t: 0, good: passed };
+      if (passed) sfx.cheer(); else if (ev.unit === "s") sfx.fail();
+    }
+    attempt++;
+    const tries = ev.kind === "jump" || ev.kind === "throw" ? 3 : 1;
+    a.passed = passed;
+    a.outcome = passed ? "next" : attempt < tries ? "again" : "fail";
+  }
+  function afterResult() {
+    const ev = EV();
+    if (a.outcome === "again") { startAttempt(); return; }
+    if (a.outcome === "next") {
+      const pts = ev.pts(best) + 500;
+      score += pts; results.push({ ev: ev.name, v: best, unit: ev.unit, pts });
+      addPopup(`+${pts.toLocaleString("it-IT")} punti`, "#ffd34d", true);
+      evIdx++;
+      const lapDone = evIdx >= EVENTS.length;
+      if (lapDone) { evIdx = 0; round++; }
+      startEvent();
+      if (lapDone) message = { text: `GIRO ${round + 1}`, sub: "Si ricomincia, con qualificazioni più difficili!", t: 0, long: true };
+      return;
+    }
+    // failed the event: a life is gone, and the event starts over
+    lives--;
+    if (lives <= 0) { gameOver(); return; }
+    addPopup("VITA PERSA · RIPROVA", "#ff4a5a", true);
+    startEvent();
+  }
+  function gameOver() {
+    state = "over";
+    const prev = parseInt(load(bestKey(difficulty)), 10) || 0;
+    const record = score > prev;
+    if (record) store(bestKey(difficulty), String(score));
+    const played = diff.label;
+    const list = results.slice(-4).map((r) => `<span><b>${r.ev}</b></span><span>${fmt(r.v, r.unit)} · ${r.pts.toLocaleString("it-IT")}</span>`).join("");
+    menu = () => showOverlay(
+      `<h2 class="lose">GAME OVER</h2>
+       <p>Punteggio: <b>${score.toLocaleString("it-IT")}</b> · ${EV().name} · giro ${round + 1} · ${played}</p>
+       ${list ? `<div class="pts">${list}</div>` : ""}
+       ${record ? "<p style='color:var(--gold)'>★ NUOVO RECORD! ★</p>" : ""}
+       ${difficultyHTML()}
+       <button class="start" data-start>GIOCA ANCORA</button>`
+    );
+    menu();
+    sfx.over();
+    syncControls();
+  }
+  function togglePause() {
+    if (isPlaying()) {
+      pausedFrom = state; state = "paused";
+      showOverlay(`<h2>PAUSA</h2><button class="start" data-resume>CONTINUA</button><p class="muted">Premi P per continuare</p>`);
+    } else if (state === "paused") {
+      state = pausedFrom; overlay.classList.add("hidden"); last = performance.now();
+    }
+    syncControls();
+  }
+  function syncControls() {
+    const portrait = window.innerHeight > window.innerWidth;
+    pauseBtn.style.display = isPlaying() && touchMode ? "block" : "none";
+    Object.assign(pauseBtn.style, portrait
+      ? { top: "calc(10px + env(safe-area-inset-top, 0px))", bottom: "auto", right: "10px", left: "auto" }
+      : { top: "calc(10px + env(safe-area-inset-top, 0px))", bottom: "auto", right: "10px", left: "auto" });
+    resize();
+  }
+  pauseBtn.addEventListener("click", () => togglePause());
+  function showOverlay(html) { overlay.innerHTML = html; overlay.classList.remove("hidden"); }
+  function difficultyHTML() {
+    const buttons = DIFF_IDS.map((id) => {
+      const d = DIFFICULTIES[id];
+      return `<button type="button" data-diff="${id}" class="${id === difficulty ? "on" : ""}" style="--c:${d.color}">${d.label}</button>`;
+    }).join("");
+    const bestS = parseInt(load(bestKey(difficulty)), 10);
+    return `<div class="diff">${buttons}</div><p class="muted">${diff.desc}${bestS ? ` · Record: ${bestS.toLocaleString("it-IT")}` : ""}</p>`;
+  }
+  function setDifficulty(id) { if (!DIFFICULTIES[id]) return; difficulty = id; diff = DIFFICULTIES[id]; store(DIFF_KEY, id); if (menu) menu(); }
+  function showTitle() {
+    menu = showTitle;
+    showOverlay(
+      `<h1>CAMPIONI D'ATLETICA</h1>
+       <p>Quattro gare allo stadio: 100 metri, salto in lungo, giavellotto e 110 ostacoli. Per correre premi i due tasti uno dopo l'altro, sempre più in fretta. Supera la qualificazione di ogni gara per passare alla successiva: se la manchi perdi una vita e la ripeti.</p>
+       <div class="pts">
+         <span><b>100 metri · ostacoli</b></span><span>attento alla falsa partenza! Negli ostacoli salta al momento giusto</span>
+         <span><b>Lungo · giavellotto</b></span><span>prendi velocità, poi tieni premuto SALTA/LANCIA per l'angolo (ideale 40–45°) e rilascia prima della linea</span>
+         <span><b>Punti</b></span><span>più sei veloce o lontano, più punti · 500 di bonus per ogni qualificazione</span>
+       </div>
+       ${touchMode
+         ? `<p class="muted help">Pollici sui tasti SINISTRO e DESTRO, da premere alternati · tasto giallo per saltare e lanciare (tienilo premuto per alzare l'angolo)</p>`
+         : `<p class="muted help">Z e X (oppure ← e →) alternati per correre · SPAZIO o ↑ per saltare e lanciare (tienilo premuto per alzare l'angolo) · P pausa</p>`}
+       ${difficultyHTML()}
+       <button class="start" data-start>IN PISTA</button>`
+    );
+  }
+  overlay.addEventListener("click", (e) => {
+    const d = e.target.closest("[data-diff]");
+    if (d) { setDifficulty(d.dataset.diff); return; }
+    if (e.target.closest("[data-start]")) startGame();
+    if (e.target.closest("[data-resume]")) togglePause();
+  });
+
+  // ---------- Input ----------
+  function tap(foot) {
+    if (state !== "play") return;
+    if (phase === "ready" && (EV().kind === "run" || EV().kind === "hurdles") && readyStep >= 1) {
+      // a false start
+      falseStarts++; sfx.whistle();
+      if (falseStarts >= 3) { phase = "result"; phaseT = 2.4; a.outcome = "fail"; sfx.foul(); message = { text: "SQUALIFICATO!", sub: "Tre false partenze", t: 0 }; return; }
+      message = { text: "FALSA PARTENZA!", sub: falseStarts === 2 ? "Alla prossima sei squalificato" : "Aspetta lo sparo", t: 0 };
+      startAttempt(); phaseT = 2; return;
+    }
+    if (phase !== "run" || a.air || a.fell > 0) return;
+    if (foot !== a.foot) {
+      a.v = Math.min(VMAX, a.v + 1.15 * (1 - (a.v / VMAX) * 0.62));
+      a.foot = foot; a.legs += 1; sfx.step(foot);
+    } else a.v = Math.max(0, a.v - 0.25);
+  }
+  function actionDown() { if (state === "play") { actionHeld = true; actionPressed = true; } }
+  function actionUp() { if (actionHeld) actionReleased = true; actionHeld = false; }
+  window.addEventListener("keydown", (e) => {
+    const k = e.key.toLowerCase();
+    if ([" ", "arrowup", "arrowdown", "arrowleft", "arrowright"].includes(k)) e.preventDefault();
+    if (state === "menu" || state === "over") {
+      if (e.key === "Enter") startGame();
+      else if (["1", "2", "3"].includes(k)) setDifficulty(DIFF_IDS[+k - 1]);
+      return;
+    }
+    if (k === "p" || k === "escape") { if (!e.repeat) togglePause(); return; }
+    if (state === "paused") { if (e.key === "Enter") togglePause(); return; }
+    if (e.repeat) return;
+    if (k === "z" || k === "arrowleft" || k === "a") tap(0);
+    if (k === "x" || k === "arrowright" || k === "d") tap(1);
+    if (k === " " || k === "arrowup" || k === "w") actionDown();
+  });
+  window.addEventListener("keyup", (e) => { const k = e.key.toLowerCase(); if (k === " " || k === "arrowup" || k === "w") actionUp(); });
+  window.addEventListener("blur", () => { actionUp(); if (isPlaying()) togglePause(); });
+  for (const btn of touchEl.querySelectorAll(".run")) {
+    btn.addEventListener("pointerdown", (e) => { e.preventDefault(); btn.classList.add("on"); tap(+btn.dataset.foot); });
+    for (const ev of ["pointerup", "pointercancel", "pointerleave"]) btn.addEventListener(ev, () => btn.classList.remove("on"));
+  }
+  const actBtn = touchEl.querySelector(".act");
+  let actId = null;
+  actBtn.addEventListener("pointerdown", (e) => { e.preventDefault(); actId = e.pointerId; try { actBtn.setPointerCapture(e.pointerId); } catch { /* ignore */ } actBtn.classList.add("on"); actionDown(); });
+  for (const ev of ["pointerup", "pointercancel", "lostpointercapture"]) actBtn.addEventListener(ev, (e) => { if (e.pointerId !== actId) return; actId = null; actBtn.classList.remove("on"); actionUp(); });
+  window.addEventListener("pointerdown", (e) => { if (e.pointerType === "touch" && !touchMode) { touchMode = true; syncControls(); if (menu) menu(); } }, true);
+
+  // ---------- Update ----------
+  // the rival runs at a steady pace that finishes just under the qualifying time
+  function cpuPos(t, len, target) {
+    const tau = 1.1, vt = len / (target - tau * (1 - Math.exp(-target / tau)));
+    return vt * (t - tau * (1 - Math.exp(-t / tau)));
+  }
+  function update(dt) {
+    clock += dt;
+    sfxN = 0;
+    for (const q of parts) { q.t += dt; q.x += q.vx * dt; q.y += q.vy * dt; q.vy += 30 * dt; }
+    parts = parts.filter((q) => q.t < q.life);
+    for (const q of popups) q.t += dt;
+    popups = popups.filter((q) => q.t < 1.8);
+    if (message) { message.t += dt; if (message.t > (message.long ? 3 : 2.4)) message = null; }
+    if (state !== "play") return;
+    const ev = EV();
+    phaseT -= dt;
+    if (phase === "ready") {
+      if (ev.kind === "run" || ev.kind === "hurdles") {
+        // "Ai posti" … "Pronti" … bang
+        if (readyStep === 0 && phaseT <= 0) { readyStep = 1; phaseT = rnd(1, 2.2); sfx.ready(); }
+        else if (readyStep === 1 && phaseT <= 0) { phase = "run"; runT = 0; sfx.gun(); }
+      } else if (phaseT <= 0) { phase = "run"; runT = 0; }
+      actionPressed = actionReleased = false;
+      return;
+    }
+    if (phase === "result") {
+      if (a.air || jav) stepFlight(dt);
+      if (phaseT <= 0) afterResult();
+      return;
+    }
+    runT += dt;
+    if (phase === "run") stepRun(dt, ev);
+    else if (phase === "takeoff") stepTakeoff(dt, ev);
+    else if (phase === "flight") stepFlight(dt, ev);
+    actionPressed = false;
+    const focus = jav ? jav.x : a.x;
+    camX += (focus - 18 - camX) * Math.min(1, dt * 6);
+  }
+  function stepRun(dt, ev) {
+    // speed fades unless the feet keep going
+    if (!a.air) a.v *= Math.exp(-0.55 * dt);
+    if (a.fell > 0) { a.fell -= dt; a.v *= Math.exp(-2 * dt); }
+    a.x += a.v * dt;
+    a.t += dt;
+    if (cpu) { cpu.t += dt; cpu.x = Math.min(ev.len + 3, cpuPos(cpu.t, ev.len, qualMark() - 0.15)); if (!cpu.fin && cpu.x >= ev.len) cpu.fin = cpu.t; }
+    if (ev.kind === "hurdles") {
+      if (actionPressed && !a.air && a.fell <= 0) { a.air = 0.42; a.airT = 0.42; sfx.jump(); }
+      if (a.air) { a.air = Math.max(0, a.air - dt); const u = 1 - a.air / a.airT; a.h = 1.1 * 4 * u * (1 - u); if (!a.air) { a.h = 0; a.v *= 0.93; } }   // every landing costs a little speed
+      for (const hd of hurdles) {
+        if (!hd.down && Math.abs(a.x - hd.x) < 0.35 && a.h < 0.75) {
+          hd.down = true; a.v *= 0.5; a.fell = 0.3; sfx.hurdle();
+          addPopup("OSTACOLO!", "#ff4a5a");
+        }
+      }
+    }
+    if ((ev.kind === "run" || ev.kind === "hurdles") && a.x >= ev.len) { finishAttempt(runT, false); a.v *= 0.4; return; }
+    if (ev.kind === "jump" || ev.kind === "throw") {
+      if (actionPressed) {
+        // take-off or release point: past the line is a foul
+        if (a.x > ev.board) { finishAttempt(0, true); return; }
+        phase = "takeoff"; a.angle = 12; a.tx = a.x; a.tv = Math.max(a.v, 1); sfx.jump();
+      } else if (a.x > ev.board + 3) { finishAttempt(0, true); return; }
+      if (runT > 12 && a.v < 0.3) { finishAttempt(0, true); return; }
+    }
+  }
+  function stepTakeoff(dt, ev) {
+    // the angle climbs while the button stays down
+    a.angle = Math.min(70, a.angle + 85 * dt);
+    if (Math.floor(a.angle / 5) !== Math.floor((a.angle - 85 * dt) / 5)) sfx.angle(a.angle / 5);
+    a.x += a.v * 0.25 * dt;
+    if (actionReleased || !actionHeld || a.angle >= 70) {
+      const th = a.angle * Math.PI / 180;
+      if (ev.kind === "jump") {
+        // a long jumper leaves the board a little slower than the run-up
+        const v = a.tv * 0.9;
+        a.vx = v * Math.cos(th); a.vy = v * Math.sin(th); a.h = 0; a.air = 1; a.x = a.tx;
+      } else {
+        const V = a.tv * 2.55 + 4;
+        jav = { x: a.tx + 0.5, y: 1.8, vx: V * Math.cos(th), vy: V * Math.sin(th), rot: -th };
+        a.v *= 0.3;
+      }
+      phase = "flight"; actionReleased = false;
+    }
+  }
+  function stepFlight(dt, ev = EV()) {
+    if (ev.kind === "jump" && a.air) {
+      a.x += a.vx * dt; a.h += a.vy * dt; a.vy -= G * dt;
+      if (a.h <= 0) {
+        a.h = 0; a.air = 0; sfx.land();
+        for (let k = 0; k < 14; k++) parts.push({ x: a.x, y: 0, vx: rnd(-3, 3), vy: rnd(1, 4), t: 0, life: 0.6, c: "#e8d090" });
+        mark = a.x;
+        if (phase === "flight") finishAttempt(Math.max(0, +(a.x - ev.board).toFixed(2)), false);
+      }
+    } else if (jav) {
+      if (jav.y > 0) {
+        jav.x += jav.vx * dt; jav.y += jav.vy * dt; jav.vy -= G * dt;
+        jav.rot = -Math.atan2(jav.vy, jav.vx);
+        if (jav.y <= 0) {
+          jav.y = 0; sfx.land(); mark = jav.x;
+          if (phase === "flight") finishAttempt(Math.max(0, +(jav.x - ev.board).toFixed(2)), false);
+        }
+      }
+      a.x += a.v * dt; a.v *= Math.exp(-3 * dt);
+    }
+  }
+
+  // ---------- Drawing ----------
+  const sx = (m) => (m - camX) * S;
+  function drawStadium() {
+    const g = ctx.createLinearGradient(0, HUD, 0, 120);
+    g.addColorStop(0, "#1a3a6a"); g.addColorStop(1, "#4a7ab0");
+    ctx.fillStyle = g; ctx.fillRect(0, HUD, W, 100);
+    // floodlights
+    for (const x of [150, 330]) { ctx.fillStyle = "#c8c8d8"; ctx.fillRect(x, 58, 3, 40); ctx.fillStyle = "#fff8d0"; ctx.fillRect(x - 10, 52, 23, 8); }
+    // stands with the crowd, scrolling a little slower
+    ctx.fillStyle = "#2a2a3a"; ctx.fillRect(0, 96, W, 90);
+    const off = camX * S * 0.4;
+    for (let r = 0; r < 5; r++) for (let i = 0; i < 44; i++) {
+      const x = ((i * 12 + r * 5 - off) % (W + 12) + W + 12) % (W + 12) - 6, y = 104 + r * 16;
+      const jump = phase === "result" && a && a.passed ? Math.abs(Math.sin(clock * 10 + i + r)) * 3 : Math.sin(clock * 3 + i * 1.7) * 0.6;
+      ctx.fillStyle = ["#ff5a5a", "#4a9aff", "#ffd34d", "#7dff7a", "#ff9ae0", "#ffffff"][(i + r * 3) % 6];
+      ctx.fillRect(x - 3, y + 4 - jump, 6, 6);
+      ctx.fillStyle = ["#f0c8a0", "#c8905a", "#8a5a3a"][(i + r) % 3];
+      ctx.beginPath(); ctx.arc(x, y - jump, 3, 0, Math.PI * 2); ctx.fill();
+    }
+    ctx.fillStyle = "#5a5a6a"; ctx.fillRect(0, 184, W, 6);
+    ctx.fillStyle = "#3a8a3a"; ctx.fillRect(0, 190, W, H - 190);
+  }
+  function drawTrack(ev) {
+    const trackTop = TRACK_Y - 30;
+    if (ev.kind === "run" || ev.kind === "hurdles" || ev.kind === "jump" || ev.kind === "throw") {
+      ctx.fillStyle = ev.kind === "throw" ? "#d8583a" : "#d8583a"; ctx.fillRect(0, trackTop, W, 44);
+      ctx.fillStyle = "rgba(255,255,255,0.7)";
+      ctx.fillRect(0, trackTop, W, 1.5); ctx.fillRect(0, trackTop + 22, W, 1); ctx.fillRect(0, trackTop + 43, W, 1.5);
+    }
+    // metre marks every 10 m on the running track (the jumps and throws have their own scales)
+    if (ev.kind === "run" || ev.kind === "hurdles") for (let m = Math.floor(camX / 10) * 10; m < camX + W / S + 10; m += 10) {
+      if (m < 0) continue;
+      const x = sx(m);
+      ctx.fillStyle = "rgba(255,255,255,0.5)"; ctx.fillRect(x, trackTop + 38, 1, 6);
+      ctx.font = "700 8px system-ui, sans-serif"; ctx.textAlign = "center"; ctx.fillStyle = "#e8f0ff"; ctx.fillText(`${m}`, x, trackTop + 54);
+    }
+    if (ev.kind === "run" || ev.kind === "hurdles") {
+      const fx = sx(ev.len);
+      for (let k = 0; k < 11; k++) { ctx.fillStyle = k % 2 ? "#111" : "#fff"; ctx.fillRect(fx - 2, trackTop + k * 4, 4, 4); }
+      ctx.fillStyle = "#fff"; ctx.fillRect(sx(0), trackTop, 2, 44);
+    }
+    if (ev.kind === "jump") {
+      // board and sand pit
+      ctx.fillStyle = "#fff"; ctx.fillRect(sx(ev.board) - 3, TRACK_Y - 2, 5, 6);
+      ctx.fillStyle = "#e8d090"; ctx.fillRect(sx(ev.board + 1), TRACK_Y - 6, 11 * S, 16);
+      for (let m = 4; m <= 11; m++) { ctx.fillStyle = m === Math.round(qualMark()) ? "#ffd34d" : "rgba(0,0,0,0.3)"; ctx.fillRect(sx(ev.board + m), TRACK_Y + 10, 1.5, 6); ctx.font = "700 7px system-ui, sans-serif"; ctx.fillStyle = "#fff"; ctx.textAlign = "center"; ctx.fillText(`${m}`, sx(ev.board + m), TRACK_Y + 24); }
+      // qualifying line in the sand
+      ctx.fillStyle = "rgba(255,211,77,0.8)"; ctx.fillRect(sx(ev.board + qualMark()), TRACK_Y - 6, 1.5, 16);
+    }
+    if (ev.kind === "throw") {
+      ctx.fillStyle = "#fff"; ctx.fillRect(sx(ev.board) - 2, TRACK_Y - 30, 3, 44);
+      // the field with distance arcs
+      for (let m = 20; m <= 100; m += 10) {
+        const x = sx(ev.board + m);
+        if (x < -10 || x > W + 10) continue;
+        ctx.fillStyle = "rgba(255,255,255,0.5)"; ctx.fillRect(x, TRACK_Y + 16, 1.5, 22);
+        ctx.font = "800 9px system-ui, sans-serif"; ctx.fillStyle = "#fff"; ctx.textAlign = "center"; ctx.fillText(`${m}`, x, TRACK_Y + 48);
+      }
+      const qx = sx(ev.board + qualMark()); ctx.fillStyle = "#ffd34d"; ctx.fillRect(qx, TRACK_Y + 14, 2, 28);
+    }
+    if (mark !== null) {
+      ctx.fillStyle = "#ff4a5a"; ctx.beginPath(); ctx.moveTo(sx(mark), TRACK_Y + 12); ctx.lineTo(sx(mark) - 4, TRACK_Y + 20); ctx.lineTo(sx(mark) + 4, TRACK_Y + 20); ctx.fill();
+    }
+  }
+  function drawAthlete(x, y, o) {
+    // o: { run (phase), kit, air, crouch, fell, arm }
+    ctx.save(); ctx.translate(x, y);
+    if (o.fell > 0) ctx.rotate(0.5);
+    const s = o.speed > 0.3 ? Math.sin(o.run) : 0, s2 = Math.cos(o.run);
+    ctx.strokeStyle = "#8a5a3a"; ctx.lineWidth = 3; ctx.lineCap = "round";
+    // legs
+    ctx.beginPath();
+    if (o.air) { ctx.moveTo(0, -12); ctx.lineTo(8, -8); ctx.lineTo(10, -2); ctx.moveTo(0, -12); ctx.lineTo(-5, -6); ctx.lineTo(-10, -8); }
+    else if (o.crouch) { ctx.moveTo(0, -10); ctx.lineTo(6, -5); ctx.lineTo(3, 0); ctx.moveTo(0, -10); ctx.lineTo(-6, -4); ctx.lineTo(-8, 0); }
+    else {
+      ctx.moveTo(0, -12); ctx.lineTo(s * 6, -6); ctx.lineTo(s * 8 - 2, 0 - Math.max(0, s2) * 3);
+      ctx.moveTo(0, -12); ctx.lineTo(-s * 6, -6); ctx.lineTo(-s * 8 - 2, 0 - Math.max(0, -s2) * 3);
+    }
+    ctx.stroke();
+    // shorts and vest
+    ctx.fillStyle = o.kit[1]; ctx.fillRect(-3.5, -15, 7, 5);
+    ctx.fillStyle = o.kit[0]; ctx.fillRect(-3.5, -26, 7, 11);
+    ctx.fillStyle = "#fff"; ctx.fillRect(-2, -23, 4, 4);
+    // arms
+    ctx.strokeStyle = "#8a5a3a"; ctx.lineWidth = 2.5; ctx.beginPath();
+    if (o.arm) { ctx.moveTo(0, -24); ctx.lineTo(-7, -28); ctx.lineTo(-10, -32); ctx.moveTo(0, -24); ctx.lineTo(6, -20); }
+    else { ctx.moveTo(0, -24); ctx.lineTo(-s * 6, -19); ctx.lineTo(-s * 8 + 2, -15); ctx.moveTo(0, -24); ctx.lineTo(s * 6, -19); ctx.lineTo(s * 8 + 2, -15); }
+    ctx.stroke();
+    // head
+    ctx.fillStyle = "#8a5a3a"; ctx.beginPath(); ctx.arc(1, -31, 4.5, 0, Math.PI * 2); ctx.fill();
+    ctx.fillStyle = "#1a1a1a"; ctx.fillRect(-3, -36, 8, 3);
+    ctx.restore();
+  }
+  function draw() {
+    ctx.setTransform(pxRatio, 0, 0, pxRatio, 0, 0);
+    ctx.fillStyle = "#081018"; ctx.fillRect(0, 0, W, H);
+    drawStadium();
+    const ev = EV();
+    drawTrack(ev);
+    if (state === "menu" || !a) return;
+    for (const hd of hurdles) {
+      const x = sx(hd.x);
+      if (x < -20 || x > W + 20) continue;
+      ctx.fillStyle = "#fff";
+      if (hd.down) { ctx.fillRect(x - 6, TRACK_Y - 2, 14, 2); ctx.fillStyle = "#222"; ctx.fillRect(x - 6, TRACK_Y - 3, 3, 1); }
+      else { ctx.fillRect(x - 5, TRACK_Y - 9, 2, 9); ctx.fillRect(x + 4, TRACK_Y - 9, 2, 9); ctx.fillStyle = "#fff"; ctx.fillRect(x - 6, TRACK_Y - 11, 13, 3); ctx.fillStyle = "#111"; ctx.fillRect(x - 3, TRACK_Y - 11, 3, 3); ctx.fillRect(x + 3, TRACK_Y - 11, 3, 3); }
+    }
+    if (cpu) {
+      // the rival hops over each hurdle in the lane next door
+      const near = ev.kind === "hurdles" ? Math.min(...HURDLES.map((h) => Math.abs(h - cpu.x))) : 9;
+      const hop = near < 1.8 ? (1 - near / 1.8) * 11 : 0;
+      if (ev.kind === "hurdles") for (const hx of HURDLES) { const x = sx(hx); if (x > -20 && x < W + 20) { ctx.fillStyle = "#fff"; ctx.fillRect(x - 5, TRACK_Y - 31, 2, 9); ctx.fillRect(x + 4, TRACK_Y - 31, 2, 9); ctx.fillRect(x - 6, TRACK_Y - 33, 13, 3); ctx.fillStyle = "#111"; ctx.fillRect(x - 3, TRACK_Y - 33, 3, 3); ctx.fillRect(x + 3, TRACK_Y - 33, 3, 3); } }
+      drawAthlete(sx(cpu.x), TRACK_Y - 18 - hop, { run: cpu.t * 14, speed: 1, kit: ["#ff4a5a", "#1a1a1a"], air: hop > 3 });
+    }
+    const inAir = ev.kind === "jump" && (a.air || phase === "takeoff");
+    const y = TRACK_Y + 4 - (ev.kind === "hurdles" ? a.h * 12 : ev.kind === "jump" ? a.h * 10 : 0);
+    drawAthlete(sx(a.x), y, { run: a.legs * 1.6 + (a.v > 0.3 ? clock * 0 : 0), speed: a.v, kit: ["#4a9aff", "#1a2a6a"], air: inAir || a.air, crouch: phase === "takeoff" && ev.kind === "jump" && !a.air, fell: a.fell, arm: ev.kind === "throw" && !jav });
+    if (ev.kind === "throw") {
+      const j = jav || { x: a.x - 0.4, y: 2.9, rot: phase === "takeoff" ? -a.angle * Math.PI / 180 : -0.15 };
+      ctx.save(); ctx.translate(sx(j.x), TRACK_Y + 4 - j.y * (jav ? 6 : 10)); ctx.rotate(j.rot);
+      ctx.fillStyle = "#1a1a2a"; ctx.fillRect(-15, -2, 30, 4);
+      ctx.fillStyle = "#e8e8f0"; ctx.fillRect(-14, -1, 28, 2); ctx.fillStyle = "#ff4a5a"; ctx.fillRect(12, -1.5, 4, 3); ctx.fillStyle = "#8a5a3a"; ctx.fillRect(-2, -1.5, 5, 3);
+      ctx.restore();
+    }
+    for (const q of parts) { ctx.globalAlpha = Math.max(0, 1 - q.t / q.life); ctx.fillStyle = q.c; ctx.fillRect(sx(q.x) - 1, TRACK_Y + 4 - q.y * 10 - 1, 2, 2); }
+    ctx.globalAlpha = 1;
+    // speed meter and angle gauge
+    const pw = 110, px = W / 2 - pw / 2 - 20, py = HUD + 9;
+    ctx.fillStyle = "rgba(0,0,0,0.55)"; ctx.fillRect(px - 4, py - 4, pw + 8, 14);
+    const vf = Math.min(1, a.v / VMAX);
+    const vg = ctx.createLinearGradient(px, 0, px + pw, 0); vg.addColorStop(0, "#4a9aff"); vg.addColorStop(0.7, "#ffd34d"); vg.addColorStop(1, "#ff4a5a");
+    ctx.fillStyle = vg; ctx.fillRect(px, py, pw * vf, 6);
+    ctx.font = "800 8px system-ui, sans-serif"; ctx.textAlign = "left"; ctx.fillStyle = "#fff"; ctx.fillText(`${(a.v * 3.6).toFixed(0)} km/h`, px + pw + 8, py + 6);
+    if (phase === "takeoff" || (phase === "flight" && (ev.kind === "jump" || ev.kind === "throw")) || (phase === "result" && a.angle)) {
+      const cx = sx(a.tx || a.x) + 30, cy = TRACK_Y - 44;
+      ctx.strokeStyle = "rgba(255,255,255,0.4)"; ctx.lineWidth = 1; ctx.beginPath(); ctx.arc(cx, cy, 22, -Math.PI / 2, 0); ctx.stroke();
+      ctx.strokeStyle = "rgba(125,255,154,0.6)"; ctx.lineWidth = 4; ctx.beginPath(); ctx.arc(cx, cy, 22, -45 * Math.PI / 180, -38 * Math.PI / 180); ctx.stroke();
+      const th = a.angle * Math.PI / 180;
+      ctx.strokeStyle = "#ffd34d"; ctx.lineWidth = 2; ctx.beginPath(); ctx.moveTo(cx, cy); ctx.lineTo(cx + Math.cos(th) * 24, cy - Math.sin(th) * 24); ctx.stroke();
+      ctx.fillStyle = "#fff"; ctx.font = "800 9px system-ui, sans-serif"; ctx.fillText(`${Math.round(a.angle)}°`, cx + 26, cy - 4);
+    }
+    // status bar
+    ctx.fillStyle = "#081018"; ctx.fillRect(0, 0, W, HUD);
+    ctx.textBaseline = "middle"; ctx.textAlign = "left"; ctx.font = "900 14px system-ui, sans-serif"; ctx.fillStyle = "#f4f8ff";
+    ctx.fillText(score.toLocaleString("it-IT"), 8, 12);
+    const sw = ctx.measureText(score.toLocaleString("it-IT")).width;
+    ctx.font = "700 9px system-ui, sans-serif"; ctx.fillStyle = "#a0b0c8";
+    ctx.fillText(`REC ${Math.max(bestCache, score).toLocaleString("it-IT")}`, 8 + Math.max(58, sw + 10), 12);
+    for (let i = 0; i < Math.min(lives, 6); i++) { ctx.fillStyle = "#4a9aff"; ctx.fillRect(176 + i * 10, 8, 6, 9); ctx.fillStyle = "#8a5a3a"; ctx.beginPath(); ctx.arc(179 + i * 10, 6, 2.5, 0, Math.PI * 2); ctx.fill(); }
+    ctx.textAlign = "right"; ctx.font = "800 11px system-ui, sans-serif"; ctx.fillStyle = "#ffd34d";
+    const tries = ev.kind === "jump" || ev.kind === "throw" ? ` · prova ${Math.min(3, attempt + 1)}/3` : "";
+    ctx.fillText(`${ev.name.toUpperCase()}${tries}`, W - 8, 12);
+    // live readout under the bar: time or best mark, and the target
+    ctx.textAlign = "left"; ctx.font = "800 11px system-ui, sans-serif"; ctx.fillStyle = "#fff";
+    const live = ev.unit === "s" ? (phase === "ready" ? "0,00 s" : fmt(phase === "result" ? (best || runT) : runT, "s")) : (best ? `migliore ${fmt(best, "m")}` : "");
+    ctx.fillText(live, 8, HUD + 12);
+    ctx.textAlign = "right"; ctx.fillStyle = "#ffd34d";
+    ctx.fillText(`QUALIFICA ${ev.unit === "s" ? "≤" : "≥"} ${fmt(qualMark(), ev.unit)}`, W - 8, HUD + 12);
+    ctx.textBaseline = "alphabetic";
+    if (phase === "ready" && (ev.kind === "run" || ev.kind === "hurdles") && !message) {
+      ctx.textAlign = "center"; ctx.font = "900 22px system-ui, sans-serif"; ctx.fillStyle = "#fff";
+      ctx.fillText(readyStep === 0 ? "AI POSTI…" : "PRONTI…", W / 2, 92);
+    }
+    if (phase === "run" && runT < 0.8 && (ev.kind === "run" || ev.kind === "hurdles")) { ctx.textAlign = "center"; ctx.font = "900 26px system-ui, sans-serif"; ctx.fillStyle = "#7dff9a"; ctx.fillText("VIA!", W / 2, 92); }
+    for (const q of popups) {
+      ctx.globalAlpha = Math.max(0, 1 - q.t / 1.8);
+      ctx.textAlign = "center"; ctx.font = q.big ? "900 18px system-ui, sans-serif" : "900 13px system-ui, sans-serif";
+      ctx.lineWidth = 3; ctx.strokeStyle = "#000"; ctx.strokeText(q.text, W / 2, 150 - q.t * 20); ctx.fillStyle = q.color; ctx.fillText(q.text, W / 2, 150 - q.t * 20);
+    }
+    ctx.globalAlpha = 1;
+    if (message) {
+      const dur = message.long ? 3 : 2.4;
+      ctx.globalAlpha = Math.min(1, (dur - message.t) * 2);
+      ctx.fillStyle = "rgba(8,16,24,0.82)"; ctx.fillRect(0, 62, W, message.sub ? 50 : 34);
+      ctx.textAlign = "center"; ctx.font = "900 19px system-ui, sans-serif"; ctx.fillStyle = message.good ? "#7dff9a" : "#ffd34d";
+      ctx.fillText(message.text, W / 2, 85);
+      if (message.sub) { ctx.font = "700 11px system-ui, sans-serif"; ctx.fillStyle = "#f4f8ff"; ctx.fillText(message.sub, W / 2, 103); }
+      ctx.globalAlpha = 1;
+    }
+  }
+
+  // ---------- Loop ----------
+  const STEP = 1 / 120;
+  let last = performance.now(), acc = 0;
+  function loop(now) {
+    const dt = Math.min(0.1, (now - last) / 1000);
+    last = now;
+    if (isPlaying()) {
+      acc += dt;
+      while (acc >= STEP && isPlaying()) { update(STEP); acc -= STEP; }
+    } else { acc = 0; update(dt); }
+    draw();
+    requestAnimationFrame(loop);
+  }
+  syncControls();
+  startAttempt(); state = "menu";
+  showTitle();
+  requestAnimationFrame(loop);
+})();
+</script>
+<script src="../../shared/iniziali.js" data-record="atletica-best-" data-kind="score"></script>
+</body>
+</html>
