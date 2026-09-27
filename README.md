@@ -628,6 +628,6 @@ Labirinto in auto in stile *Rally-X*: la tua auto blu corre in un grande labirin
 - **4 paesaggi:** campagna, città, deserto e neve, con un labirinto nuovo a ogni round e sempre più inseguitori
 - **Difficoltà:** Facile (5 vite, meno inseguitori, più carburante), Normale, Difficile; record separati per ogni difficoltà
 - **Comandi:** frecce o `W` `A` `S` `D` per sterzare (l'auto va sempre avanti) · `SPAZIO` o `Z` per il fumo · `P` pausa
-- **Touch:** croce a sinistra e tasto FUMO a destra
+- **Touch:** levetta a sinistra (basta un colpetto verso la direzione: la svolta viene fatta al primo incrocio utile) e tasto FUMO a destra
 
 Per giocare apri `games/rally-bandiere/index.html` nel browser.

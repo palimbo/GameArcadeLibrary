@@ -37,19 +37,26 @@
     bottom: calc(14px + env(safe-area-inset-bottom, 0px));
     justify-content: space-between; align-items: flex-end; pointer-events: none;
   }
-  #touch .pad { display: grid; grid-template-columns: repeat(3, 56px); grid-template-rows: repeat(3, 56px); gap: 4px; pointer-events: auto; }
-  #touch .pad [data-a="up"] { grid-column: 2; grid-row: 1; }
-  #touch .pad [data-a="left"] { grid-column: 1; grid-row: 2; }
-  #touch .pad [data-a="right"] { grid-column: 3; grid-row: 2; }
-  #touch .pad [data-a="down"] { grid-column: 2; grid-row: 3; }
+  /* a thumb stick: push it the way you want to turn */
+  #touch .stick { position: relative; width: 136px; height: 136px; border-radius: 50%; pointer-events: auto; touch-action: none;
+    border: 2px solid rgba(58, 138, 255, 0.6); background: radial-gradient(circle, rgba(58,138,255,0.16), rgba(58,138,255,0.05)); }
+  #touch .stick .knob { position: absolute; left: 50%; top: 50%; width: 58px; height: 58px; margin: -29px 0 0 -29px; border-radius: 50%;
+    background: rgba(58, 138, 255, 0.55); border: 2px solid rgba(255,255,255,0.7); box-shadow: 0 4px 10px rgba(0,0,0,0.4); pointer-events: none; }
+  #touch .stick i { position: absolute; font: 900 14px system-ui, sans-serif; font-style: normal; color: rgba(242,246,255,0.35); pointer-events: none; }
+  #touch .stick i.on { color: #ffd34d; }
+  #touch .stick i[data-d="up"] { left: 50%; top: 6px; transform: translateX(-50%); }
+  #touch .stick i[data-d="down"] { left: 50%; bottom: 6px; transform: translateX(-50%); }
+  #touch .stick i[data-d="left"] { top: 50%; left: 8px; transform: translateY(-50%); }
+  #touch .stick i[data-d="right"] { top: 50%; right: 8px; transform: translateY(-50%); }
+  #touch.small .stick { width: 112px; height: 112px; }
+  #touch.small .stick .knob { width: 48px; height: 48px; margin: -24px 0 0 -24px; }
   #touch button {
     width: 56px; height: 56px; border-radius: 14px; touch-action: none;
     font: 700 22px system-ui, sans-serif; color: var(--fg);
     border: 2px solid rgba(58, 138, 255, 0.7); background: rgba(58, 138, 255, 0.1);
   }
   #touch button[data-a="smoke"] { width: 92px; height: 92px; border-radius: 50%; border-color: rgba(200, 200, 220, 0.9); background: rgba(200, 200, 220, 0.14); font: 800 14px system-ui, sans-serif; letter-spacing: 1px; pointer-events: auto; }
-  #touch.small .pad { grid-template-columns: repeat(3, 44px); grid-template-rows: repeat(3, 44px); }
-  #touch.small button { width: 44px; height: 44px; font-size: 17px; }
+  #touch.small button { font-size: 17px; }
   #touch.small button[data-a="smoke"] { width: 70px; height: 70px; font-size: 12px; }
   #touch button.on { background: rgba(242, 246, 255, 0.4); }
   #overlay {
@@ -96,11 +103,9 @@
 <body>
 <div id="wrap"><canvas id="game"></canvas></div>
 <div id="touch">
-  <div class="pad">
-    <button type="button" data-a="up" aria-label="Su">▲</button>
-    <button type="button" data-a="left" aria-label="Sinistra">◀</button>
-    <button type="button" data-a="right" aria-label="Destra">▶</button>
-    <button type="button" data-a="down" aria-label="Giù">▼</button>
+  <div class="stick" aria-label="Levetta di guida">
+    <i data-d="up">▲</i><i data-d="down">▼</i><i data-d="left">◀</i><i data-d="right">▶</i>
+    <div class="knob"></div>
   </div>
   <button type="button" data-a="smoke" aria-label="Fumo">FUMO</button>
 </div>
@@ -271,7 +276,7 @@
       e.wait = 1 + i * 1.5; e.rand = 0.15 + (i % 3) * 0.1;
       enemies.push(e);
     }
-    camX = car.x - VW / 2; camY = car.y - H / 2;
+    camX = clamp(car.x - VW / 2, 0, COLS * CELL - VW); camY = clamp(car.y - H / 2, 0, ROWS * CELL - H);
   }
 
   // ---------- Flow ----------
@@ -376,7 +381,7 @@
          <span><b>Fine round</b></span><span>20 punti per ogni goccia di carburante</span>
        </div>
        ${touchMode
-         ? `<p class="muted help">Croce per sterzare (l'auto va sempre avanti) · FUMO per la cortina di fumo, consuma carburante</p>`
+         ? `<p class="muted help">Levetta per sterzare (l'auto va sempre avanti; basta un colpetto prima dell'incrocio) · FUMO per la cortina di fumo, consuma carburante</p>`
          : `<p class="muted help">Frecce o W A S D per sterzare (l'auto va sempre avanti) · SPAZIO o Z per il fumo · P pausa</p>`}
        ${difficultyHTML()}
        <button class="start" data-start>INIZIA</button>`
@@ -412,26 +417,41 @@
   const smokeBtn = touchEl.querySelector('[data-a="smoke"]');
   smokeBtn.addEventListener("pointerdown", (e) => { e.preventDefault(); smokeBtn.classList.add("on"); ctl.smoke = true; smokePressed = true; });
   for (const ev of ["pointerup", "pointercancel", "pointerleave"]) smokeBtn.addEventListener(ev, () => { smokeBtn.classList.remove("on"); ctl.smoke = false; });
-  // the whole cross works like a small joystick: the direction is where the thumb is from the centre,
-  // so the gaps between the arrows count too and sliding from one arrow to another switches direction
-  const pad = touchEl.querySelector(".pad"), padBtns = {};
-  for (const b of pad.querySelectorAll("button")) padBtns[b.dataset.a] = b;
-  let padId = null;
-  function padAt(e) {
-    const r = pad.getBoundingClientRect(), dx = e.clientX - (r.left + r.width / 2), dy = e.clientY - (r.top + r.height / 2);
-    if (Math.hypot(dx, dy) < 10) return;
-    const d = Math.abs(dx) > Math.abs(dy) ? (dx > 0 ? "right" : "left") : (dy > 0 ? "down" : "up");
-    for (const k in DIRS) { ctl[k] = k === d; padBtns[k].classList.toggle("on", k === d); }
-    if (d !== lastDir) { lastDir = d; pendingDir = d; }
+  // thumb stick: the knob follows the thumb and the stronger axis gives the direction;
+  // a small dead zone in the middle, and a little stickiness on the diagonals so it does not flicker
+  const stick = touchEl.querySelector(".stick"), knob = stick.querySelector(".knob"), marks = {};
+  for (const m of stick.querySelectorAll("i")) marks[m.dataset.d] = m;
+  let stickId = null, stickDir = null;
+  function stickAt(e) {
+    const r = stick.getBoundingClientRect(), max = r.width / 2 - 14;
+    let dx = e.clientX - (r.left + r.width / 2), dy = e.clientY - (r.top + r.height / 2);
+    const len = Math.hypot(dx, dy);
+    if (len > max) { dx *= max / len; dy *= max / len; }
+    knob.style.transform = `translate(${dx}px, ${dy}px)`;
+    let d = null;
+    if (len > max * 0.28) {
+      const ax = Math.abs(dx), ay = Math.abs(dy);
+      const horiz = stickDir === "left" || stickDir === "right";
+      // keep the current axis unless the other one is clearly stronger
+      if (stickDir && (horiz ? ax > ay * 0.75 : ay > ax * 0.75)) d = horiz ? (dx > 0 ? "right" : "left") : (dy > 0 ? "down" : "up");
+      else d = ax > ay ? (dx > 0 ? "right" : "left") : (dy > 0 ? "down" : "up");
+    }
+    stickDir = d;
+    for (const k in DIRS) { ctl[k] = k === d; marks[k].classList.toggle("on", k === d); }
+    if (d && d !== lastDir) { lastDir = d; pendingDir = d; }
   }
-  const padEnd = (e) => { if (e.pointerId !== padId) return; padId = null; for (const k in DIRS) { ctl[k] = false; padBtns[k].classList.remove("on"); } };
-  pad.addEventListener("pointerdown", (e) => {
-    e.preventDefault(); padId = e.pointerId; lastDir = null;
-    try { pad.setPointerCapture(e.pointerId); } catch { /* ignore */ }
-    padAt(e);
+  const stickEnd = (e) => {
+    if (e.pointerId !== stickId) return;
+    stickId = null; stickDir = null; lastDir = null; knob.style.transform = "";
+    for (const k in DIRS) { ctl[k] = false; marks[k].classList.remove("on"); }
+  };
+  stick.addEventListener("pointerdown", (e) => {
+    e.preventDefault(); stickId = e.pointerId;
+    try { stick.setPointerCapture(e.pointerId); } catch { /* ignore */ }
+    stickAt(e);
   });
-  pad.addEventListener("pointermove", (e) => { if (e.pointerId === padId) padAt(e); });
-  for (const ev of ["pointerup", "pointercancel", "lostpointercapture"]) pad.addEventListener(ev, padEnd);
+  stick.addEventListener("pointermove", (e) => { if (e.pointerId === stickId) stickAt(e); });
+  for (const ev of ["pointerup", "pointercancel", "lostpointercapture"]) stick.addEventListener(ev, stickEnd);
   window.addEventListener("pointerdown", (e) => { if (e.pointerType === "touch" && !touchMode) { touchMode = true; syncControls(); if (menu) menu(); } }, true);
 
   // ---------- Driving on the grid ----------
@@ -501,7 +521,11 @@
     for (const q of popups) { q.t += dt; q.y -= 22 * dt; }
     popups = popups.filter((q) => q.t < (q.big ? 1.6 : 0.9));
     if (message) { message.t += dt; if (message.t > 2.2) message = null; }
-    if (car) { camX += (car.x - VW / 2 - camX) * Math.min(1, dt * 6); camY += (car.y - H / 2 - camY) * Math.min(1, dt * 6); }
+    if (car) {
+      // the view follows the car but never shows the empty space outside the map
+      const tx = clamp(car.x - VW / 2, 0, COLS * CELL - VW), ty = clamp(car.y - H / 2, 0, ROWS * CELL - H);
+      camX += (tx - camX) * Math.min(1, dt * 6); camY += (ty - camY) * Math.min(1, dt * 6);
+    }
     if (!isPlaying()) return;
     if (state === "intro") { stateT -= dt; if (stateT <= 0) state = "play"; return; }
     if (state === "dead") { stateT -= dt; if (stateT <= 0) afterDeath(); return; }
@@ -631,7 +655,9 @@
     ctx.strokeStyle = "#1a6a3a"; ctx.lineWidth = 1; ctx.strokeRect(px + 0.5, ry + 0.5, rw - 1, rh - 1);
     ctx.fillStyle = "rgba(58,200,106,0.18)";
     for (let r = 0; r < ROWS; r++) for (let c = 0; c < COLS; c++) if (walls[key(c, r)]) ctx.fillRect(px + c * CELL * sxr, ry + r * CELL * syr, CELL * sxr + 0.3, CELL * syr + 0.3);
+    ctx.save(); ctx.beginPath(); ctx.rect(px, ry, rw, rh); ctx.clip();
     ctx.strokeStyle = "rgba(242,246,255,0.5)"; ctx.strokeRect(px + camX * sxr, ry + camY * syr, VW * sxr, H * syr);
+    ctx.restore();
     for (const f of flags) if (!f.got) { ctx.fillStyle = f.kind === "S" ? "#ff5aff" : f.kind === "L" ? "#3aff8a" : "#ffd34d"; ctx.fillRect(px + cx(f.c) * sxr - 1.5, ry + cx(f.r) * syr - 1.5, 3, 3); }
     if (Math.floor(clock * 4) % 2) for (const e of enemies) { ctx.fillStyle = "#ff3a3a"; ctx.fillRect(px + e.x * sxr - 1.5, ry + e.y * syr - 1.5, 3, 3); }
     ctx.fillStyle = "#ffffff"; ctx.fillRect(px + car.x * sxr - 2, ry + car.y * syr - 2, 4, 4);
