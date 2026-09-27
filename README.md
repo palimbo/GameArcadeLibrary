@@ -4,7 +4,7 @@ Raccolta di giochi arcade per il browser. Ogni gioco è un singolo file HTML sen
 
 ## 🕹️ Sala Giochi — `index.html`
 
-Apri `index.html` nella cartella principale per la pagina di raccolta: mostra tutti i 45 giochi con copertina, genere, comandi e i tuoi record per ogni difficoltà (Facile, Normale, Difficile). Tocca «Gioca» per avviare un gioco; in ogni gioco il pulsante «← Sala Giochi» in alto a sinistra (visibile nei menu) riporta alla raccolta.
+Apri `index.html` nella cartella principale per la pagina di raccolta: mostra tutti i 46 giochi con copertina, genere, comandi e i tuoi record per ogni difficoltà (Facile, Normale, Difficile). Tocca «Gioca» per avviare un gioco; in ogni gioco il pulsante «← Sala Giochi» in alto a sinistra (visibile nei menu) riporta alla raccolta.
 
 **Iniziali del record:** quando batti un record compare la schermata da sala giochi per inserire le tue tre iniziali (frecce ↑ ↓ per cambiare lettera, ← → per spostarti, oppure scrivile direttamente; su telefono i tasti ▲ ▼ e OK). Le iniziali vengono salvate insieme al record e compaiono nei menu del gioco e nella Sala Giochi. Il codice è condiviso da tutti i giochi in `shared/iniziali.js`.
 
@@ -710,3 +710,18 @@ Sparatutto a scorrimento orizzontale in stile *Defender*: la tua astronave sorvo
 - **Touch:** levetta a sinistra per volare, tasti FUOCO (da tenere premuto) e BOMBA a destra
 
 Per giocare apri `games/difensore-stellare/index.html` nel browser.
+
+### 🕵️ Agente Segreto — `games/agente-segreto/index.html`
+
+Azione in stile *Elevator Action*: la spia atterra sul tetto di un grattacielo nemico e deve scendere fino al garage, con la visuale che scorre piano per piano.
+
+- **Documenti segreti:** stanno dietro le porte rosse (con la freccetta ▲). Fermati davanti e premi su per entrare (500 punti); servono tutti per poter scappare
+- **Ascensori:** tre in fila, e uno in più dal secondo edificio. Quando sei dentro li guidi tu con su e giù; altrimenti vanno su e giù da soli. Un pozzo senza la cabina al tuo piano non si attraversa
+- **Agenti:** escono dalle porte blu e sparano alto o basso: abbassati per i colpi alti, salta per quelli bassi. Colpiscili con la pistola (100) o con un calcio volante (150); se ti toccano a terra ti prendono. Anche loro si abbassano per schivare, ma un colpo sparato accovacciato li prende sempre
+- **Fuga:** con tutti i documenti raggiungi l'auto nel garage in fondo all'edificio; bonus per l'edificio e per il tempo
+- **Edifici:** sempre più alti (fino a 20 piani) e con più documenti; dopo un po' scatta «Sbrigati!» e gli agenti aumentano
+- **Difficoltà:** Facile (5 vite, agenti lenti e pochi colpi), Normale, Difficile; record separati per ogni difficoltà
+- **Comandi:** frecce: ←→ cammina · ↑ porta rossa o ascensore su · ↓ abbassati o ascensore giù · `SPAZIO` o `Z` spara · `X` salta · `P` pausa
+- **Touch:** levetta a sinistra, tasti SALTA e SPARA a destra
+
+Per giocare apri `games/agente-segreto/index.html` nel browser.

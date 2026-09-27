@@ -1,0 +1,806 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no, viewport-fit=cover">
+<title>Agente Segreto</title>
+<style>
+  :root {
+    --bg: #0a0a12;
+    --fg: #f4f2ea;
+    --muted: #aaa6b8;
+    --red: #ff4a4a;
+    --gold: #ffd34d;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  html, body {
+    height: 100%;
+    background: var(--bg);
+    color: var(--fg);
+    font-family: system-ui, -apple-system, "Segoe UI", sans-serif;
+    overflow: hidden;
+    user-select: none;
+    -webkit-user-select: none;
+    touch-action: none;
+  }
+  #wrap { position: fixed; inset: 0; display: flex; align-items: center; justify-content: center; }
+  canvas { display: block; touch-action: none; border-radius: 6px; box-shadow: 0 0 0 2px #2a2a3a, 0 10px 40px rgba(0,0,0,0.6); }
+  #pauseBtn {
+    position: fixed; z-index: 3; display: none; right: 10px; top: calc(10px + env(safe-area-inset-top, 0px));
+    font: 700 13px system-ui, sans-serif; color: var(--fg);
+    background: rgba(0, 0, 0, 0.6); border: 1px solid rgba(244, 242, 234, 0.35);
+    border-radius: 8px; padding: 6px 10px; cursor: pointer;
+  }
+  #touch {
+    position: fixed; z-index: 2; display: none; left: 12px; right: 12px;
+    bottom: calc(14px + env(safe-area-inset-bottom, 0px));
+    justify-content: space-between; align-items: flex-end; pointer-events: none;
+  }
+  /* thumb stick in four directions, jump and shoot buttons */
+  #touch .stick { position: relative; width: 136px; height: 136px; border-radius: 50%; pointer-events: auto; touch-action: none;
+    border: 2px solid rgba(255, 74, 74, 0.55); background: radial-gradient(circle, rgba(255,74,74,0.14), rgba(255,74,74,0.04)); }
+  #touch .stick .knob { position: absolute; left: 50%; top: 50%; width: 58px; height: 58px; margin: -29px 0 0 -29px; border-radius: 50%;
+    background: rgba(255, 74, 74, 0.45); border: 2px solid rgba(255,255,255,0.7); box-shadow: 0 4px 10px rgba(0,0,0,0.4); pointer-events: none; }
+  #touch .stick i { position: absolute; font: 900 14px system-ui, sans-serif; font-style: normal; color: rgba(244,242,234,0.35); pointer-events: none; }
+  #touch .stick i.on { color: var(--gold); }
+  #touch .stick i[data-d="up"] { left: 50%; top: 6px; transform: translateX(-50%); }
+  #touch .stick i[data-d="down"] { left: 50%; bottom: 6px; transform: translateX(-50%); }
+  #touch .stick i[data-d="left"] { top: 50%; left: 8px; transform: translateY(-50%); }
+  #touch .stick i[data-d="right"] { top: 50%; right: 8px; transform: translateY(-50%); }
+  #touch .btns { display: flex; gap: 10px; align-items: flex-end; pointer-events: auto; }
+  #touch .btns button { width: 76px; height: 76px; border-radius: 50%; touch-action: none; color: var(--fg);
+    font: 800 12px system-ui, sans-serif; letter-spacing: 1px; }
+  #touch .jump { border: 2px solid rgba(90, 200, 255, 0.9); background: rgba(90, 200, 255, 0.18); margin-bottom: 34px; }
+  #touch .shoot { border: 2px solid rgba(255, 211, 77, 0.9); background: rgba(255, 211, 77, 0.18); }
+  #touch .btns button.on { background: rgba(244, 242, 234, 0.4); }
+  #touch.small .stick { width: 112px; height: 112px; }
+  #touch.small .stick .knob { width: 48px; height: 48px; margin: -24px 0 0 -24px; }
+  #touch.small .btns button { width: 64px; height: 64px; font-size: 10px; }
+  #overlay {
+    position: fixed; inset: 0; z-index: 5;
+    display: flex; flex-direction: column; align-items: center; justify-content: flex-start;
+    gap: 14px; padding: 16px; text-align: center; overflow-y: auto;
+    background: rgba(10, 10, 18, 0.9);
+  }
+  #overlay > :first-child { margin-top: auto; }
+  #overlay > :last-child { margin-bottom: auto; }
+  #overlay.hidden { display: none; }
+  #homeLink {
+    position: fixed; top: calc(10px + env(safe-area-inset-top, 0px)); left: 10px; z-index: 6;
+    font: 600 13px/1 system-ui, sans-serif; color: #fff; text-decoration: none;
+    padding: 8px 12px; border-radius: 999px; background: rgba(0,0,0,.55);
+    border: 1px solid rgba(255,255,255,.25);
+  }
+  #homeLink:hover { background: rgba(0,0,0,.8); }
+  #overlay.hidden ~ #homeLink { display: none; }
+  @media (max-width: 700px) { #overlay { padding-top: calc(52px + env(safe-area-inset-top, 0px)); } }
+  #overlay h1 { font-size: clamp(32px, 9.5vw, 60px); font-weight: 900; letter-spacing: 1px; color: var(--red); text-shadow: 0 3px 0 #7a1a1a, 0 0 22px rgba(255,74,74,0.45); }
+  #overlay h2 { font-size: clamp(28px, 7vw, 44px); font-weight: 900; letter-spacing: 2px; }
+  #overlay h2.lose { color: var(--red); }
+  #overlay p { max-width: 540px; font-size: clamp(13px, 3.4vw, 16px); line-height: 1.55; }
+  #overlay p.muted { color: var(--muted); }
+  #overlay .pts { display: grid; grid-template-columns: repeat(2, auto); gap: 4px 18px; font-size: 13px; color: var(--muted); text-align: left; }
+  #overlay .pts b { color: var(--fg); }
+  #overlay .diff { display: flex; gap: 10px; flex-wrap: wrap; justify-content: center; }
+  #overlay button {
+    font: 800 15px system-ui, sans-serif; letter-spacing: 1.5px; color: var(--fg);
+    background: transparent; cursor: pointer;
+    border: 2px solid rgba(244,242,234,0.3); border-radius: 10px; padding: 9px 16px;
+  }
+  #overlay .diff button.on { border-color: var(--c); color: var(--c); box-shadow: 0 0 12px var(--c); }
+  #overlay button.start { border-color: var(--red); color: #fff; background: var(--red); padding: 11px 30px; box-shadow: 0 4px 0 #7a1a1a; }
+  @media (max-height: 560px) {
+    #overlay { gap: 8px; }
+    #overlay h1 { font-size: 30px; }
+    #overlay p { font-size: 13px; line-height: 1.4; }
+    #overlay .help, #overlay .pts { display: none; }
+  }
+</style>
+</head>
+<body>
+<div id="wrap"><canvas id="game"></canvas></div>
+<div id="touch">
+  <div class="stick" aria-label="Levetta">
+    <i data-d="up">▲</i><i data-d="down">▼</i><i data-d="left">◀</i><i data-d="right">▶</i>
+    <div class="knob"></div>
+  </div>
+  <div class="btns">
+    <button type="button" class="jump" aria-label="Salta">SALTA</button>
+    <button type="button" class="shoot" aria-label="Spara">SPARA</button>
+  </div>
+</div>
+<button id="pauseBtn" type="button" aria-label="Pausa">❚❚</button>
+<div id="overlay"></div>
+<a id="homeLink" href="../../index.html">← Sala Giochi</a>
+
+<script>
+(() => {
+  "use strict";
+
+  const W = 480, H = 380, HUD = 24, FH = 64, ROOF = 90, SW = 18;   // SW: half width of an elevator shaft
+  const LEFT = 22, RIGHT = W - 22;
+  const Y = (f) => ROOF + f * FH;                                  // walking surface of floor f
+  const DIRS = { up: [0, -1], down: [0, 1], left: [-1, 0], right: [1, 0] };
+
+  const DIFFICULTIES = {
+    facile:    { label: "FACILE",    color: "#7dff9a", desc: "5 vite · agenti lenti e pochi colpi", lives: 5, fire: 0.6, spawn: 0.7, speed: 0.85 },
+    normale:   { label: "NORMALE",   color: "#ff4a4a", desc: "3 vite · l'esperienza classica", lives: 3, fire: 1, spawn: 1, speed: 1 },
+    difficile: { label: "DIFFICILE", color: "#ff9a3a", desc: "3 vite · agenti rapidi e numerosi", lives: 3, fire: 1.35, spawn: 1.3, speed: 1.15 },
+  };
+  const DIFF_IDS = Object.keys(DIFFICULTIES);
+  const DIFF_KEY = "agente-difficulty";
+  const bestKey = (id) => `agente-best-${id}`;
+  function store(k, v) { try { localStorage.setItem(k, v); } catch { /* ignore */ } }
+  function load(k) { try { return localStorage.getItem(k); } catch { return null; } }
+  const rnd = (a, b) => a + Math.random() * (b - a);
+  const pick = (a) => a[Math.floor(Math.random() * a.length)];
+
+  // ---------- Canvas ----------
+  const canvas = document.getElementById("game");
+  const ctx = canvas.getContext("2d");
+  const wrap = document.getElementById("wrap");
+  const overlay = document.getElementById("overlay");
+  const touchEl = document.getElementById("touch");
+  const pauseBtn = document.getElementById("pauseBtn");
+  let pxRatio = 1, touchMode = !!(window.matchMedia && matchMedia("(pointer: coarse)").matches);
+  function resize() {
+    const portrait = window.innerHeight > window.innerWidth;
+    const showTouch = touchMode && isPlaying();
+    touchEl.style.display = showTouch ? "flex" : "none";
+    touchEl.classList.toggle("small", !portrait && window.innerHeight < 480);
+    wrap.style.paddingBottom = showTouch && portrait ? "calc(170px + env(safe-area-inset-bottom, 0px))" : "0";
+    let availW = window.innerWidth - 8, availH = window.innerHeight - 8;
+    if (showTouch && portrait) availH -= 170;
+    if (showTouch && !portrait) {
+      const side = Math.max(...[...touchEl.children].map((el) => el.offsetWidth)) + 20;
+      if (window.innerWidth - 2 * side > 280) availW = window.innerWidth - 2 * side;
+    }
+    const s = Math.max(0.2, Math.min(availW / W, availH / H));
+    pxRatio = Math.min(3, s * (window.devicePixelRatio || 1));
+    canvas.style.width = W * s + "px";
+    canvas.style.height = H * s + "px";
+    canvas.width = Math.round(W * pxRatio);
+    canvas.height = Math.round(H * pxRatio);
+  }
+  window.addEventListener("resize", () => syncControls());
+
+  // ---------- Audio ----------
+  let audioCtx = null;
+  function beep(freq, dur, type = "square", vol = 0.04, slide = 0, delay = 0) {
+    if (!audioCtx) return;
+    const t = audioCtx.currentTime + delay;
+    const osc = audioCtx.createOscillator(), gain = audioCtx.createGain();
+    osc.type = type;
+    osc.frequency.setValueAtTime(freq, t);
+    if (slide) osc.frequency.exponentialRampToValueAtTime(Math.max(20, freq + slide), t + dur);
+    gain.gain.setValueAtTime(vol, t);
+    gain.gain.exponentialRampToValueAtTime(0.0001, t + dur);
+    osc.connect(gain).connect(audioCtx.destination);
+    osc.start(t); osc.stop(t + dur + 0.02);
+  }
+  function noise(dur, vol, freq) {
+    if (!audioCtx) return;
+    const len = Math.floor(audioCtx.sampleRate * dur), buf = audioCtx.createBuffer(1, len, audioCtx.sampleRate), d = buf.getChannelData(0);
+    for (let i = 0; i < len; i++) d[i] = (Math.random() * 2 - 1) * (1 - i / len);
+    const src = audioCtx.createBufferSource(), f = audioCtx.createBiquadFilter(), g = audioCtx.createGain();
+    src.buffer = buf; f.type = "bandpass"; f.frequency.value = freq; g.gain.value = vol;
+    src.connect(f).connect(g).connect(audioCtx.destination); src.start();
+  }
+  const arp = (notes, gap, d, type = "square", vol = 0.04) => notes.forEach((f, i) => beep(f, d, type, vol, 0, i * gap));
+  let sfxN = 0;
+  const lim = (fn) => (...a) => { if (sfxN++ < 5) fn(...a); };
+  const sfx = {
+    shot: lim(() => { noise(0.08, 0.3, 2400); beep(900, 0.05, "square", 0.02, -500); }),
+    enemyShot: lim(() => { noise(0.08, 0.2, 1500); beep(500, 0.05, "square", 0.015, -250); }),
+    hit: lim(() => arp([400, 250, 150], 0.05, 0.08, "sawtooth", 0.035)),
+    kick: lim(() => { noise(0.1, 0.3, 600); beep(220, 0.1, "square", 0.03, -100); }),
+    jump: lim(() => beep(300, 0.12, "triangle", 0.03, 250)),
+    door: lim(() => beep(180, 0.1, "square", 0.025, 60)),
+    doc: () => arp([659, 784, 988, 1319], 0.06, 0.1, "square", 0.04),
+    lift: lim(() => beep(110, 0.08, "triangle", 0.025)),
+    ding: lim(() => beep(1568, 0.25, "sine", 0.04)),
+    clear: () => arp([523, 659, 784, 1047, 784, 1047, 1319], 0.09, 0.14),
+    die: () => arp([784, 622, 523, 415, 330], 0.12, 0.16, "sawtooth", 0.035),
+    over: () => arp([523, 415, 330, 262], 0.18, 0.25),
+    life: () => arp([523, 784, 1047, 1319], 0.08, 0.12, "triangle", 0.05),
+    hurry: () => arp([880, 880, 880, 1175], 0.12, 0.1, "square", 0.04),
+  };
+
+  // ---------- State ----------
+  let difficulty = DIFFICULTIES[load(DIFF_KEY)] ? load(DIFF_KEY) : "normale";
+  let diff = DIFFICULTIES[difficulty];
+  let state = "menu", menu = null, pausedFrom = null, stateT = 0, clock = 0;
+  let score = 0, lives = 3, level = 0, bestCache = 0, nextLife = 20000;
+  let N = 12, shafts = [], doors = [], enemies = [], bullets = [], parts = [], popups = [], message = null;
+  let spy = null, camY = 0, levelT = 0, hurry = false, spawnT = 0, docsTotal = 0, lamps = [];
+  const ctl = { up: false, down: false, left: false, right: false };
+  let shootPressed = false, jumpPressed = false, upPressed = false;
+
+  const docsLeft = () => doors.filter((d) => d.red && !d.used).length;
+  const GARAGE = () => N - 1;
+
+  // ---------- Building ----------
+  function buildLevel() {
+    N = Math.min(20, 12 + level * 2);
+    // three elevators in a chain: each one overlaps the next by a floor, so every floor can be reached
+    const a = Math.floor(N / 3) + 1, b = Math.floor((2 * N) / 3) + 1;
+    const xs = pick([[380, 240, 100], [240, 380, 100], [100, 380, 240], [380, 100, 240]]);   // the last lift never blocks the garage exit
+    const ranges = [[0, a], [a - 1, b], [b - 1, N - 1]];
+    shafts = ranges.map(([lo, hi], i) => ({ x: xs[i], lo, hi, y: Y(lo + (i === 0 ? 0 : 1)), at: lo + (i === 0 ? 0 : 1), target: null, dir: 1, wait: 1 + i }));
+    // a fourth, short express lift in the middle of the building from the second level on
+    if (level >= 1) {
+      const used = new Set(xs), x = [170, 310].find((v) => !used.has(v)) || 170;
+      const lo = Math.floor(N / 2) - 2, hi = Math.floor(N / 2) + 2;
+      shafts.push({ x, lo, hi, y: Y(lo), at: lo, target: null, dir: 1, wait: 2 });
+    }
+    doors = [];
+    const slots = [48, 168, 310, 432, 200, 280];
+    for (let f = 1; f < N - 1; f++) {
+      const ok = slots.filter((x) => shafts.every((s) => Math.abs(s.x - x) > SW + 24 || f < s.lo || f > s.hi));
+      const n = Math.min(ok.length, f % 2 ? 2 : 3);
+      const chosen = ok.sort(() => Math.random() - 0.5).slice(0, n);
+      for (const x of chosen) doors.push({ f, x, red: false, used: false, open: 0, cool: rnd(0, 2) });
+    }
+    // secret documents behind red doors, spread over the building
+    docsTotal = Math.min(8, 4 + level);
+    const floors = [...new Set(doors.map((d) => d.f))].sort(() => Math.random() - 0.5).slice(0, docsTotal);
+    for (const f of floors) pick(doors.filter((d) => d.f === f)).red = true;
+    docsTotal = docsLeft();
+    lamps = [];
+    for (let f = 1; f < N - 1; f++) lamps.push({ f, x: pick([140, 240, 340]), on: true });
+    enemies = []; bullets = [];
+    spy = { x: 60, f: 0, y: Y(0), face: 1, jz: 0, jv: 0, duck: false, st: "walk", t: 0, inv: 1.5, cool: 0, ride: null, door: null };
+    camY = 0; levelT = 0; hurry = false; spawnT = 2;
+    message = { text: `EDIFICIO ${level + 1}`, sub: `Recupera ${docsTotal} documenti segreti e scappa col garage`, t: 0 };
+    state = "intro"; stateT = 1.8;
+  }
+  const shaftAt = (x, f) => shafts.find((s) => f >= s.lo && f <= s.hi && Math.abs(x - s.x) < SW + 2);
+  // a floor spot is solid unless it is an elevator shaft without the car stopped there
+  function passable(x, f) {
+    const s = shaftAt(x, f);
+    return !s || s.at === f;
+  }
+
+  // ---------- Flow ----------
+  const isPlaying = () => ["intro", "play", "dead", "clear"].includes(state);
+  function startGame() {
+    if (!audioCtx) { try { audioCtx = new (window.AudioContext || window.webkitAudioContext)(); } catch { audioCtx = null; } }
+    if (audioCtx && audioCtx.state === "suspended") audioCtx.resume();
+    score = 0; lives = diff.lives; level = 0; nextLife = 20000;
+    bestCache = parseInt(load(bestKey(difficulty)), 10) || 0;
+    buildLevel();
+    menu = null;
+    overlay.classList.add("hidden");
+    syncControls();
+    last = performance.now();
+  }
+  function addScore(n, x, y, color = "#f4f2ea") {
+    score += n;
+    if (x !== undefined) popups.push({ x, y, text: String(n), color, t: 0 });
+    if (score >= nextLife) {
+      nextLife += 30000; if (lives < 9) lives++; sfx.life();
+      popups.push({ x: W / 2, y: camY + H / 2, text: "VITA EXTRA", color: "#ffd34d", t: 0, big: true });
+    }
+  }
+  function burst(x, y, color, n = 10, sp = 100, life = 0.5) {
+    for (let k = 0; k < n; k++) {
+      const a = Math.random() * Math.PI * 2, s = sp * (0.3 + Math.random() * 0.8);
+      parts.push({ x, y, vx: Math.cos(a) * s, vy: Math.sin(a) * s, t: 0, life: life * (0.5 + Math.random()), c: color });
+    }
+  }
+  function killSpy(why) {
+    if (state !== "play" || spy.inv > 0 || spy.st === "door") return;
+    lives--;
+    sfx.die(); burst(spy.x, spy.y - 14, "#ff4a4a", 14, 100, 0.6);
+    message = { text: why, t: 0 };
+    spy.st = "dead";
+    state = "dead"; stateT = 2.2;
+  }
+  function afterDeath() {
+    if (lives <= 0) { gameOver(); return; }
+    // back on the same spot, with the corridor cleared
+    enemies = enemies.filter((e) => Math.abs(e.f - spy.f) > 1);
+    bullets = [];
+    spy.st = "walk"; spy.inv = 2.5; spy.jz = 0; spy.jv = 0; spy.duck = false;
+    state = "play";
+  }
+  function gameOver() {
+    state = "over";
+    const prev = parseInt(load(bestKey(difficulty)), 10) || 0;
+    const record = score > prev;
+    if (record) store(bestKey(difficulty), String(score));
+    const played = diff.label, lv = level + 1;
+    menu = () => showOverlay(
+      `<h2 class="lose">GAME OVER</h2>
+       <p>Punteggio: <b>${score.toLocaleString("it-IT")}</b> · Edificio ${lv} · ${played}</p>
+       ${record ? "<p style='color:var(--gold)'>★ NUOVO RECORD! ★</p>" : ""}
+       ${difficultyHTML()}
+       <button class="start" data-start>GIOCA ANCORA</button>`
+    );
+    menu();
+    sfx.over();
+    syncControls();
+  }
+  function togglePause() {
+    if (isPlaying()) {
+      pausedFrom = state; state = "paused";
+      showOverlay(`<h2>PAUSA</h2><button class="start" data-resume>CONTINUA</button><p class="muted">Premi P per continuare</p>`);
+    } else if (state === "paused") {
+      state = pausedFrom; overlay.classList.add("hidden"); last = performance.now();
+    }
+    syncControls();
+  }
+  function syncControls() {
+    const portrait = window.innerHeight > window.innerWidth;
+    pauseBtn.style.display = isPlaying() && touchMode ? "block" : "none";
+    Object.assign(pauseBtn.style, portrait
+      ? { top: "auto", bottom: "calc(40px + env(safe-area-inset-bottom, 0px))", right: "auto", left: "calc(50% - 20px)" }
+      : { top: "calc(10px + env(safe-area-inset-top, 0px))", bottom: "auto", right: "10px", left: "auto" });
+    resize();
+  }
+  pauseBtn.addEventListener("click", () => togglePause());
+  function showOverlay(html) { overlay.innerHTML = html; overlay.classList.remove("hidden"); }
+  function difficultyHTML() {
+    const buttons = DIFF_IDS.map((id) => {
+      const d = DIFFICULTIES[id];
+      return `<button type="button" data-diff="${id}" class="${id === difficulty ? "on" : ""}" style="--c:${d.color}">${d.label}</button>`;
+    }).join("");
+    const best = parseInt(load(bestKey(difficulty)), 10);
+    return `<div class="diff">${buttons}</div><p class="muted">${diff.desc}${best ? ` · Record: ${best.toLocaleString("it-IT")}` : ""}</p>`;
+  }
+  function setDifficulty(id) { if (!DIFFICULTIES[id]) return; difficulty = id; diff = DIFFICULTIES[id]; store(DIFF_KEY, id); if (menu) menu(); }
+  function showTitle() {
+    menu = showTitle;
+    showOverlay(
+      `<h1>AGENTE SEGRETO</h1>
+       <p>Ti cali sul tetto del grattacielo nemico: scendi piano dopo piano con gli ascensori, entra nelle porte rosse per recuperare i documenti segreti e fuggi con l'auto nel garage. Gli agenti in nero escono dalle porte blu e sparano alto o basso: abbassati, salta, spara per primo!</p>
+       <div class="pts">
+         <span><b>Documento segreto</b></span><span>500</span>
+         <span><b>Agente colpito</b></span><span>100 · 150 con un calcio volante</span>
+         <span><b>Fuga in auto</b></span><span>bonus per edificio e per il tempo</span>
+         <span><b>Ascensore</b></span><span>entraci e usa su e giù per guidarlo</span>
+       </div>
+       ${touchMode
+         ? `<p class="muted help">Levetta: ◀▶ cammina · ▲ entra nelle porte rosse o sali in ascensore · ▼ abbassati o scendi · SALTA e SPARA a destra</p>`
+         : `<p class="muted help">Frecce: ←→ cammina · ↑ porta rossa / ascensore su · ↓ abbassati / ascensore giù · SPAZIO o Z spara · X salta · P pausa</p>`}
+       ${difficultyHTML()}
+       <button class="start" data-start>INIZIA</button>`
+    );
+  }
+  overlay.addEventListener("click", (e) => {
+    const d = e.target.closest("[data-diff]");
+    if (d) { setDifficulty(d.dataset.diff); return; }
+    if (e.target.closest("[data-start]")) startGame();
+    if (e.target.closest("[data-resume]")) togglePause();
+  });
+
+  // ---------- Input ----------
+  const KEYS = { arrowup: "up", w: "up", arrowdown: "down", s: "down", arrowleft: "left", a: "left", arrowright: "right", d: "right" };
+  window.addEventListener("keydown", (e) => {
+    const k = e.key.toLowerCase();
+    if ([" ", "arrowup", "arrowdown", "arrowleft", "arrowright"].includes(k)) e.preventDefault();
+    if (state === "menu" || state === "over") {
+      if (e.key === "Enter") startGame();
+      else if (["1", "2", "3"].includes(k)) setDifficulty(DIFF_IDS[+k - 1]);
+      return;
+    }
+    if (k === "p" || k === "escape") { if (!e.repeat) togglePause(); return; }
+    if (state === "paused") { if (e.key === "Enter") togglePause(); return; }
+    if ((k === " " || k === "z") && !e.repeat) shootPressed = true;
+    if ((k === "x" || k === "c") && !e.repeat) jumpPressed = true;
+    const a = KEYS[k];
+    if (a) { ctl[a] = true; if (a === "up" && !e.repeat) upPressed = true; }
+  });
+  window.addEventListener("keyup", (e) => { const a = KEYS[e.key.toLowerCase()]; if (a) ctl[a] = false; });
+  window.addEventListener("blur", () => { for (const k in ctl) ctl[k] = false; if (isPlaying()) togglePause(); });
+  for (const [sel, fn] of [[".jump", () => { jumpPressed = true; }], [".shoot", () => { shootPressed = true; }]]) {
+    const btn = touchEl.querySelector(sel);
+    btn.addEventListener("pointerdown", (e) => { e.preventDefault(); btn.classList.add("on"); fn(); });
+    for (const ev of ["pointerup", "pointercancel", "pointerleave"]) btn.addEventListener(ev, () => btn.classList.remove("on"));
+  }
+  // thumb stick: the stronger axis gives the direction, with a small dead zone
+  const stick = touchEl.querySelector(".stick"), knob = stick.querySelector(".knob"), marks = {};
+  for (const m of stick.querySelectorAll("i")) marks[m.dataset.d] = m;
+  let stickId = null, stickDir = null;
+  function stickAt(e) {
+    const r = stick.getBoundingClientRect(), max = r.width / 2 - 14;
+    let dx = e.clientX - (r.left + r.width / 2), dy = e.clientY - (r.top + r.height / 2);
+    const len = Math.hypot(dx, dy);
+    if (len > max) { dx *= max / len; dy *= max / len; }
+    knob.style.transform = `translate(${dx}px, ${dy}px)`;
+    let d = null;
+    if (len > max * 0.28) {
+      const ax = Math.abs(dx), ay = Math.abs(dy), horiz = stickDir === "left" || stickDir === "right";
+      if (stickDir && (horiz ? ax > ay * 0.75 : ay > ax * 0.75)) d = horiz ? (dx > 0 ? "right" : "left") : (dy > 0 ? "down" : "up");
+      else d = ax > ay ? (dx > 0 ? "right" : "left") : (dy > 0 ? "down" : "up");
+    }
+    if (d === "up" && stickDir !== "up") upPressed = true;
+    stickDir = d;
+    for (const k in DIRS) { ctl[k] = k === d; marks[k].classList.toggle("on", k === d); }
+  }
+  const stickEnd = (e) => { if (e.pointerId !== stickId) return; stickId = null; stickDir = null; knob.style.transform = ""; for (const k in DIRS) { ctl[k] = false; marks[k].classList.remove("on"); } };
+  stick.addEventListener("pointerdown", (e) => { e.preventDefault(); stickId = e.pointerId; try { stick.setPointerCapture(e.pointerId); } catch { /* ignore */ } stickAt(e); });
+  stick.addEventListener("pointermove", (e) => { if (e.pointerId === stickId) stickAt(e); });
+  for (const ev of ["pointerup", "pointercancel", "lostpointercapture"]) stick.addEventListener(ev, stickEnd);
+  window.addEventListener("pointerdown", (e) => { if (e.pointerType === "touch" && !touchMode) { touchMode = true; syncControls(); if (menu) menu(); } }, true);
+
+  // ---------- Elevators ----------
+  function updateShafts(dt) {
+    for (const s of shafts) {
+      const ridden = spy.ride === s;
+      const busy = !ridden && s.at !== null && (
+        (spy.f === s.at && Math.abs(spy.x - s.x) < SW + 8 && spy.st !== "dead") ||
+        enemies.some((e) => e.f === s.at && Math.abs(e.x - s.x) < SW + 8));
+      if (s.target === null) {
+        if (ridden) continue;
+        if (busy) { s.wait = Math.max(s.wait, 0.4); continue; }
+        s.wait -= dt;
+        if (s.wait > 0) continue;
+        let next = s.at + s.dir;
+        if (next < s.lo || next > s.hi) { s.dir = -s.dir; next = s.at + s.dir; }
+        s.target = next; s.at = null;
+      } else {
+        const ty = Y(s.target), step = (ridden ? 100 : 80) * dt;
+        if (Math.abs(ty - s.y) <= step) {
+          s.y = ty; s.at = s.target; s.target = null; s.wait = rnd(1.2, 2);
+          if (ridden) { spy.f = s.at; sfx.ding(); }
+          // anyone standing in the doorway is nudged out, so nobody gets stuck in the shaft
+        } else s.y += Math.sign(ty - s.y) * step;
+        if (ridden) spy.y = s.y;
+      }
+    }
+    // agents never ride: whoever is left in an empty shaft steps out
+    for (const e of enemies) {
+      const s = shaftAt(e.x, e.f);
+      if (s && s.at !== e.f) e.x = s.x + (e.x < s.x ? -1 : 1) * (SW + 3);
+    }
+  }
+
+  // ---------- Update ----------
+  function tryMove(a, dx) {
+    // walking is blocked by walls and by shafts whose car is elsewhere
+    const nx = Math.max(LEFT + 6, Math.min(RIGHT - 6, a.x + dx));
+    if (!passable(nx + Math.sign(dx) * 5, a.f)) return false;
+    const moved = nx !== a.x;
+    a.x = nx;
+    return moved;
+  }
+  function update(dt) {
+    clock += dt;
+    sfxN = 0;
+    for (const q of parts) { q.t += dt; q.x += q.vx * dt; q.y += q.vy * dt; q.vy += 250 * dt; }
+    parts = parts.filter((q) => q.t < q.life);
+    for (const q of popups) { q.t += dt; q.y -= 22 * dt; }
+    popups = popups.filter((q) => q.t < (q.big ? 1.6 : 0.9));
+    if (message) { message.t += dt; if (message.t > 2.4) message = null; }
+    for (const d of doors) d.open = Math.max(0, d.open - dt);
+    if (!isPlaying()) return;
+    // camera follows the spy up and down the building
+    const target = Math.max(0, Math.min(Y(N - 1) + 40 - H, spy.y - H * 0.55));
+    camY += (target - camY) * Math.min(1, dt * 5);
+    if (state === "intro") { stateT -= dt; if (stateT <= 0) state = "play"; updateShafts(dt); return; }
+    if (state === "dead") { stateT -= dt; if (stateT <= 0) afterDeath(); return; }
+    if (state === "clear") { stateT -= dt; if (stateT <= 0) { level++; buildLevel(); } return; }
+    levelT += dt;
+    if (!hurry && levelT > 100) { hurry = true; sfx.hurry(); message = { text: "SBRIGATI!", sub: "Arrivano più agenti", t: 0 }; }
+
+    updateShafts(dt);
+    updateSpy(dt);
+    if (state !== "play") return;
+    spawnAgents(dt);
+    updateEnemies(dt);
+    updateBullets(dt);
+  }
+  function updateSpy(dt) {
+    const p = spy;
+    p.t += dt; p.inv = Math.max(0, p.inv - dt); p.cool -= dt;
+    if (p.st === "door") {
+      p.doorT -= dt;
+      if (p.doorT <= 0) {
+        p.st = "walk"; p.door.open = 0.4;
+        if (p.door.red && !p.door.used) {
+          p.door.used = true; sfx.doc();
+          addScore(500, p.x, p.y - 34, "#ff4a4a");
+          if (docsLeft() === 0) message = { text: "TUTTI I DOCUMENTI!", sub: "Ora scappa col garage in fondo all'edificio", t: 0 };
+        }
+      }
+      shootPressed = jumpPressed = upPressed = false;
+      return;
+    }
+    // riding a lift: up and down drive it one floor at a time
+    const s = shaftAt(p.x, p.f);
+    p.ride = s && (s.at === p.f || s.target !== null) && Math.abs(p.x - s.x) < SW - 6 ? s : null;
+    const r = p.ride;
+    if (r && r.target === null && p.jz === 0) {
+      if (ctl.up && r.at > r.lo) { r.target = r.at - 1; r.at = null; sfx.lift(); }
+      else if (ctl.down && r.at < r.hi) { r.target = r.at + 1; r.at = null; sfx.lift(); }
+    }
+    const moving = r && r.target !== null;
+    if (moving) p.x = r.x;
+    // doors: step in with up
+    if (upPressed && !r && p.jz === 0) {
+      const d = doors.find((d) => d.f === p.f && d.red && !d.used && Math.abs(d.x - p.x) < 10);
+      if (d) { p.st = "door"; p.door = d; p.doorT = 0.7; p.x = d.x; d.open = 0.5; sfx.door(); }
+    }
+    upPressed = false;
+    if (p.st === "door") return;
+    p.duck = ctl.down && !r && p.jz === 0;
+    const dir = (ctl.right ? 1 : 0) - (ctl.left ? 1 : 0);
+    if (dir) p.face = dir;
+    if (dir && !p.duck && !moving) { if (tryMove(p, dir * 72 * dt)) p.walking = true; } else p.walking = false;
+    if (jumpPressed && p.jz === 0 && !p.duck && !moving) { p.jv = 150; sfx.jump(); }
+    jumpPressed = false;
+    if (p.jv || p.jz > 0) { p.jz += p.jv * dt; p.jv -= 520 * dt; if (p.jz <= 0) { p.jz = 0; p.jv = 0; } }
+    if (!moving) p.y = r ? r.y : Y(p.f);
+    if (shootPressed && p.cool <= 0 && bullets.filter((b) => b.mine).length < 2) {
+      p.cool = 0.3;
+      const low = p.duck;
+      bullets.push({ mine: true, x: p.x + p.face * 12, f: p.f, h: low ? 8 : 18 + p.jz, dir: p.face, low, t: 0 });
+      sfx.shot();
+    }
+    shootPressed = false;
+    // the getaway car waits in the garage
+    if (p.f === GARAGE() && p.x > RIGHT - 60 && !r) {
+      if (docsLeft() === 0) {
+        const bonus = 1000 * (level + 1) + Math.max(0, Math.round(150 - levelT)) * 10;
+        addScore(bonus);
+        message = { text: "FUGA RIUSCITA!", sub: `Bonus ${bonus.toLocaleString("it-IT")}`, t: 0 };
+        sfx.clear(); state = "clear"; stateT = 2.6; p.x = RIGHT - 30;
+      } else if (!message) message = { text: `MANCANO ${docsLeft()} DOCUMENTI`, sub: "Le porte rosse sono ai piani di sopra", t: 1 };
+    }
+  }
+  function spawnAgents(dt) {
+    spawnT -= dt;
+    const max = Math.min(6, 3 + Math.floor(level / 2) + (hurry ? 2 : 0));
+    if (spawnT > 0 || enemies.length >= max || spy.f === 0) return;
+    spawnT = rnd(1.6, 3.2) / diff.spawn / (hurry ? 1.6 : 1);
+    // an agent steps out of a blue door near the spy, but never right next to them
+    const cands = doors.filter((d) => !d.red && Math.abs(d.f - spy.f) <= 1 && d.f !== GARAGE() && Math.abs(d.x - spy.x) > 70 &&
+      Y(d.f) > camY + 30 && Y(d.f) < camY + H + 20);
+    if (!cands.length) return;
+    const d = pick(cands);
+    d.open = 0.6; sfx.door();
+    enemies.push({ x: d.x, f: d.f, face: spy.x < d.x ? -1 : 1, st: "emerge", t: 0.5, aim: 0, duck: 0, stop: rnd(70, 170), shootT: rnd(0.8, 1.6) / diff.fire, walk: 0 });
+  }
+  function updateEnemies(dt) {
+    const p = spy, sp = 46 * diff.speed * (1 + Math.min(0.4, level * 0.06)) * (hurry ? 1.25 : 1);
+    for (const e of enemies) {
+      if (e.st === "dead") { e.t -= dt; continue; }
+      if (e.st === "emerge") { e.t -= dt; if (e.t <= 0) e.st = "walk"; continue; }
+      e.duck = Math.max(0, e.duck - dt);
+      const same = e.f === p.f && p.st !== "dead";
+      if (same) e.face = p.x < e.x ? -1 : 1;
+      if (e.aim > 0) {
+        e.aim -= dt;
+        if (e.aim <= 0) {
+          const low = e.aimLow;
+          bullets.push({ mine: false, x: e.x + e.face * 10, f: e.f, h: low ? 7 : 19, dir: e.face, low, t: 0 });
+          sfx.enemyShot();
+          e.shootT = rnd(1.2, 2.6) / diff.fire / (hurry ? 1.3 : 1);
+        }
+        continue;
+      }
+      // dodge an incoming high bullet by ducking, now and then
+      if (same && e.duck <= 0 && Math.random() < dt * 1.5 * diff.fire) {
+        if (bullets.some((b) => b.mine && !b.low && b.f === e.f && Math.sign(e.x - b.x) === b.dir && Math.abs(e.x - b.x) < 70)) e.duck = 0.6;
+      }
+      if (e.duck > 0) continue;
+      const dist = Math.abs(p.x - e.x);
+      if (same && dist > e.stop) {
+        e.walk += dt;
+        if (!tryMove(e, e.face * sp * dt)) e.face = -e.face;
+      } else if (!same) {
+        // patrol on other floors
+        e.walk += dt;
+        if (!tryMove(e, e.face * sp * 0.6 * dt) || e.x <= LEFT + 7 || e.x >= RIGHT - 7) e.face = -e.face;
+      }
+      if (same) {
+        e.shootT -= dt;
+        if (e.shootT <= 0 && dist < 260) { e.aim = 0.32; e.aimLow = Math.random() < 0.45; }
+        // walking into the spy: only a flying kick stops them
+        if (dist < 12 && p.inv <= 0 && !(p.ride && p.ride.target !== null)) {
+          if (p.jz > 6) { e.st = "dead"; e.t = 0.8; addScore(150, e.x, Y(e.f) - 36, "#ffd34d"); sfx.kick(); burst(e.x, Y(e.f) - 16, "#ffd34d", 8, 90, 0.4); }
+          else killSpy("PRESO DAGLI AGENTI!");
+        }
+      }
+    }
+    enemies = enemies.filter((e) => (e.st !== "dead" || e.t > 0) && Math.abs(e.f - p.f) <= 3);
+  }
+  function updateBullets(dt) {
+    const p = spy;
+    for (const b of bullets) {
+      b.t += dt; b.x += b.dir * (b.mine ? 330 : 205) * dt;
+      if (b.x < LEFT || b.x > RIGHT) { b.t = 99; continue; }
+      if (b.mine) {
+        for (const e of enemies) {
+          if (e.st === "dead" || e.st === "emerge" || e.f !== b.f || Math.abs(e.x - b.x) > 7) continue;
+          if (!b.low && e.duck > 0) continue;               // ducked under a high shot
+          e.st = "dead"; e.t = 0.8; b.t = 99;
+          addScore(100, e.x, Y(e.f) - 36); sfx.hit(); burst(e.x, Y(e.f) - 14, "#8a8aa0", 8, 80, 0.4);
+          break;
+        }
+      } else if (b.f === p.f && Math.abs(b.x - p.x) < 6 && p.inv <= 0 && p.st === "walk" && !(p.ride && p.ride.target !== null)) {
+        const dodged = b.low ? p.jz > 8 : p.duck;
+        if (!dodged) { b.t = 99; killSpy("COLPITO!"); }
+      }
+    }
+    bullets = bullets.filter((b) => b.t < 3);
+  }
+
+  // ---------- Drawing ----------
+  const PANELS = ["#3a3a52", "#34425a", "#42384e", "#3a4648"];
+  function drawBuilding() {
+    // night sky and city behind the roof
+    const sky = ctx.createLinearGradient(0, 0, 0, ROOF);
+    sky.addColorStop(0, "#0a0a24"); sky.addColorStop(1, "#2a1a4a");
+    ctx.fillStyle = sky; ctx.fillRect(0, -camY - 200, W, ROOF + 200);
+    ctx.fillStyle = "#fff8d0"; ctx.beginPath(); ctx.arc(400, ROOF - 60 - camY, 12, 0, Math.PI * 2); ctx.fill();
+    const f0 = Math.max(0, Math.floor((camY - ROOF) / FH)), f1 = Math.min(N - 1, Math.ceil((camY + H - ROOF) / FH) + 1);
+    for (let f = Math.max(1, f0); f <= f1; f++) {
+      const top = Y(f - 1) + 6 - camY, bot = Y(f) - camY;
+      const lamp = lamps.find((l) => l.f === f);
+      ctx.fillStyle = f === GARAGE() ? "#2a2a30" : PANELS[f % PANELS.length]; ctx.fillRect(LEFT, top, RIGHT - LEFT, bot - top);
+      if (f !== GARAGE()) { ctx.fillStyle = "rgba(255,255,255,0.04)"; for (let x = LEFT + 10; x < RIGHT; x += 40) ctx.fillRect(x, top + 8, 20, bot - top - 16); }
+      if (lamp && lamp.on) {
+        ctx.fillStyle = "#ffe89a"; ctx.fillRect(lamp.x - 6, top, 12, 3);
+        const g = ctx.createRadialGradient(lamp.x, top, 2, lamp.x, top, 90); g.addColorStop(0, "rgba(255,232,154,0.18)"); g.addColorStop(1, "rgba(255,232,154,0)");
+        ctx.fillStyle = g; ctx.fillRect(lamp.x - 90, top, 180, bot - top);
+      }
+      // floor number on the left wall
+      ctx.fillStyle = "rgba(255,255,255,0.25)"; ctx.font = "800 9px system-ui, sans-serif"; ctx.textAlign = "left";
+      ctx.fillText(f === GARAGE() ? "GARAGE" : String(N - 1 - f), LEFT + 4, top + 12);
+    }
+    // outer walls and floor slabs
+    ctx.fillStyle = "#6a6a7a"; ctx.fillRect(0, ROOF - camY, LEFT, Y(N - 1) - ROOF + 40); ctx.fillRect(RIGHT, ROOF - camY, W - RIGHT, Y(N - 1) - ROOF + 40);
+    for (let f = f0; f <= f1; f++) {
+      const y = Y(f) - camY;
+      ctx.fillStyle = f === 0 ? "#8a8a9a" : "#7a7a8a"; ctx.fillRect(f === 0 ? 0 : LEFT, y, f === 0 ? W : RIGHT - LEFT, 6);
+      ctx.fillStyle = "#4a4a5a"; ctx.fillRect(LEFT, y + 5, RIGHT - LEFT, 1.5);
+    }
+    // roof details
+    if (camY < ROOF) {
+      ctx.fillStyle = "#5a5a6a"; ctx.fillRect(300, ROOF - 30 - camY, 50, 30); ctx.fillRect(310, ROOF - 44 - camY, 4, 14);
+      ctx.fillStyle = "#ff4a4a"; if (Math.floor(clock * 2) % 2) ctx.fillRect(309, ROOF - 47 - camY, 6, 4);
+    }
+    // the garage and the getaway car
+    const gy = Y(GARAGE()) - camY;
+    if (gy > -20 && gy < H + 60) {
+      ctx.fillStyle = "#c83a3a"; ctx.beginPath(); ctx.roundRect ? ctx.roundRect(RIGHT - 70, gy - 22, 56, 16, 5) : ctx.rect(RIGHT - 70, gy - 22, 56, 16); ctx.fill();
+      ctx.fillRect(RIGHT - 58, gy - 30, 30, 10);
+      ctx.fillStyle = "#9ad0ff"; ctx.fillRect(RIGHT - 55, gy - 28, 11, 7); ctx.fillRect(RIGHT - 42, gy - 28, 11, 7);
+      ctx.fillStyle = "#222"; ctx.beginPath(); ctx.arc(RIGHT - 58, gy - 5, 5, 0, Math.PI * 2); ctx.arc(RIGHT - 26, gy - 5, 5, 0, Math.PI * 2); ctx.fill();
+      ctx.fillStyle = docsLeft() === 0 ? "#7dff9a" : "#ffd34d"; ctx.font = "800 9px system-ui, sans-serif"; ctx.textAlign = "center";
+      ctx.fillText(docsLeft() === 0 ? "FUGA ▶" : "🔒", RIGHT - 42, gy - 38);
+    }
+  }
+  function drawShafts() {
+    for (const s of shafts) {
+      const top = Y(s.lo - 1 < 0 ? 0 : s.lo - 1) + 6 - camY, bot = Y(s.hi) - camY;
+      const t = s.lo === 0 ? Y(0) - 40 - camY : top;
+      ctx.fillStyle = "#141420"; ctx.fillRect(s.x - SW, t, SW * 2, bot - t);
+      ctx.fillStyle = "#3a3a4a"; ctx.fillRect(s.x - 1, t, 2, s.y - 40 - camY - t);
+      // doorway frames on each floor the lift serves
+      for (let f = s.lo; f <= s.hi; f++) {
+        const y = Y(f) - camY;
+        if (y < -60 || y > H + 60) continue;
+        ctx.fillStyle = "#8a7a5a"; ctx.fillRect(s.x - SW - 2, y - 42, 2, 42); ctx.fillRect(s.x + SW, y - 42, 2, 42); ctx.fillRect(s.x - SW - 2, y - 44, SW * 2 + 4, 2);
+        ctx.fillStyle = s.at === f ? "#7dff9a" : "#5a5a6a"; ctx.fillRect(s.x - 3, y - 50, 6, 3);
+        if (s.at !== f) { ctx.fillStyle = "rgba(0,0,0,0.35)"; ctx.fillRect(s.x - SW, y, SW * 2, 6); }
+      }
+      // the car
+      const cy = s.y - camY;
+      ctx.fillStyle = "#b8a878"; ctx.fillRect(s.x - SW + 1, cy - 40, SW * 2 - 2, 40);
+      ctx.fillStyle = "#8a7a5a"; ctx.fillRect(s.x - SW + 1, cy - 40, SW * 2 - 2, 3); ctx.fillRect(s.x - SW + 1, cy - 2, SW * 2 - 2, 3);
+      ctx.fillStyle = "#6a5a3a"; ctx.fillRect(s.x - SW + 1, cy - 37, 2, 35); ctx.fillRect(s.x + SW - 3, cy - 37, 2, 35);
+    }
+  }
+  function drawDoor(d) {
+    const y = Y(d.f) - camY;
+    if (y < -50 || y > H + 50) return;
+    ctx.fillStyle = "#2a2a3a"; ctx.fillRect(d.x - 11, y - 40, 22, 40);
+    const col = d.red ? (d.used ? "#5a3a3a" : "#e83a3a") : "#3a6ac8";
+    const open = d.open > 0 ? Math.min(1, d.open * 3) : 0;
+    ctx.fillStyle = "#101018"; ctx.fillRect(d.x - 9, y - 38, 18, 38);
+    ctx.fillStyle = col; ctx.fillRect(d.x - 9, y - 38, 18 * (1 - open * 0.8), 38);
+    ctx.fillStyle = "rgba(255,255,255,0.2)"; ctx.fillRect(d.x - 7, y - 35, 14 * (1 - open * 0.8), 2);
+    ctx.fillStyle = "#ffd34d"; if (open < 0.5) ctx.fillRect(d.x + 5 - open * 12, y - 20, 2, 3);
+    if (d.red && !d.used && Math.floor(clock * 3) % 2) { ctx.fillStyle = "#ffd34d"; ctx.font = "900 8px system-ui, sans-serif"; ctx.textAlign = "center"; ctx.fillText("▲", d.x, y - 44); }
+  }
+  function drawPerson(x, y, face, o) {
+    // o: { suit, hair, duck, jz, walk, aim, dead, hat }
+    ctx.save(); ctx.translate(x, y - (o.jz || 0)); ctx.scale(face, 1);
+    if (o.dead) { ctx.rotate(-0.4 * Math.min(1, (0.8 - o.dead) * 3)); ctx.globalAlpha = Math.max(0, o.dead / 0.8); }
+    const h = o.duck ? 14 : 26;
+    const step = o.walk ? Math.sin(o.walk * 14) * 3 : 0;
+    // legs
+    ctx.fillStyle = o.suit;
+    if (o.duck) { ctx.fillRect(-5, -6, 10, 6); }
+    else { ctx.fillRect(-4 + step * 0.5, -10, 3.5, 10); ctx.fillRect(0.5 - step * 0.5, -10, 3.5, 10); }
+    // body and arm with the gun
+    ctx.fillRect(-5, -h, 10, h - (o.duck ? 5 : 9));
+    ctx.fillStyle = "#f8f8f0"; ctx.fillRect(-1, -h + 1, 3, 5);
+    ctx.fillStyle = o.tie; ctx.fillRect(0, -h + 2, 1.5, 5);
+    ctx.fillStyle = o.suit; ctx.fillRect(2, -h + 5, 8, 3);
+    ctx.fillStyle = "#2a2a2a"; ctx.fillRect(9, -h + 4, 5, 2.5);
+    // head
+    ctx.fillStyle = "#f0c8a0"; ctx.beginPath(); ctx.arc(1, -h - 5, 5, 0, Math.PI * 2); ctx.fill();
+    if (o.hat) { ctx.fillStyle = "#1a1a1a"; ctx.fillRect(-6, -h - 9, 13, 2.5); ctx.fillRect(-4, -h - 13, 9, 5); ctx.fillStyle = "#111"; ctx.fillRect(1, -h - 6, 5, 2); }
+    else { ctx.fillStyle = o.hair; ctx.fillRect(-4, -h - 10, 10, 4); ctx.fillRect(-4, -h - 8, 3, 5); ctx.fillStyle = "#222"; ctx.fillRect(3, -h - 6, 1.5, 1.5); }
+    ctx.restore(); ctx.globalAlpha = 1;
+  }
+  function draw() {
+    ctx.setTransform(pxRatio, 0, 0, pxRatio, 0, 0);
+    ctx.fillStyle = "#0a0a12"; ctx.fillRect(0, 0, W, H);
+    if (!spy) return;
+    drawBuilding();
+    drawShafts();
+    for (const d of doors) drawDoor(d);
+    for (const e of enemies) {
+      const y = Y(e.f) - camY;
+      if (e.st === "emerge") { ctx.globalAlpha = 1 - e.t / 0.5; }
+      drawPerson(e.x, y, e.face, { suit: "#1a1a22", tie: "#c83a3a", hat: true, duck: e.duck > 0 || (e.aim > 0 && e.aimLow), walk: e.walk, dead: e.st === "dead" ? e.t : 0 });
+      ctx.globalAlpha = 1;
+      if (e.aim > 0) { ctx.fillStyle = "#ffd34d"; ctx.fillRect(e.x + e.face * 16, y - (e.aimLow ? 11 : 22), 2, 2); }
+    }
+    const p = spy;
+    if (p.st !== "door" && !(p.st === "dead" && stateT < 1.9) && !(p.inv > 0 && state === "play" && Math.floor(clock * 12) % 2)) {
+      drawPerson(p.x, p.y - camY, p.face, { suit: "#2a4aa8", tie: "#ffd34d", hair: "#e8c050", duck: p.duck, jz: p.jz, walk: p.walking ? p.t : 0 });
+    }
+    for (const b of bullets) {
+      const y = Y(b.f) - camY - b.h;
+      ctx.fillStyle = b.mine ? "#ffe89a" : "#ff6a4a"; ctx.fillRect(b.x - 3, y - 1, 6, 2);
+    }
+    for (const q of parts) { ctx.globalAlpha = Math.max(0, 1 - q.t / q.life); ctx.fillStyle = q.c; ctx.fillRect(q.x - 1.5, q.y - camY - 1.5, 3, 3); }
+    ctx.globalAlpha = 1;
+    for (const q of popups) {
+      ctx.globalAlpha = Math.max(0, 1 - q.t / (q.big ? 1.6 : 0.9));
+      ctx.textAlign = "center"; ctx.font = q.big ? "900 20px system-ui, sans-serif" : "900 11px system-ui, sans-serif";
+      ctx.lineWidth = 3; ctx.strokeStyle = "#000"; ctx.strokeText(q.text, q.x, q.y - camY); ctx.fillStyle = q.color; ctx.fillText(q.text, q.x, q.y - camY);
+    }
+    ctx.globalAlpha = 1;
+    if (state === "menu") return;
+    // status bar
+    ctx.fillStyle = "#0a0a12"; ctx.fillRect(0, 0, W, HUD);
+    ctx.textBaseline = "middle"; ctx.textAlign = "left"; ctx.font = "900 14px system-ui, sans-serif"; ctx.fillStyle = "#f4f2ea";
+    ctx.fillText(score.toLocaleString("it-IT"), 8, 12);
+    const sw = ctx.measureText(score.toLocaleString("it-IT")).width;
+    ctx.font = "700 9px system-ui, sans-serif"; ctx.fillStyle = "#aaa6b8";
+    ctx.fillText(`REC ${Math.max(bestCache, score).toLocaleString("it-IT")}`, 8 + Math.max(58, sw + 10), 12);
+    for (let i = 0; i < Math.min(lives - (state === "dead" ? 0 : 1), 6); i++) { ctx.fillStyle = "#e8c050"; ctx.fillRect(196 + i * 12, 7, 7, 3); ctx.fillStyle = "#2a4aa8"; ctx.fillRect(196 + i * 12, 11, 7, 7); }
+    ctx.textAlign = "center"; ctx.font = "800 11px system-ui, sans-serif"; ctx.fillStyle = "#ff4a4a";
+    ctx.fillText(`DOCUMENTI ${docsTotal - docsLeft()}/${docsTotal}`, 330, 12);
+    ctx.textAlign = "right"; ctx.fillStyle = hurry ? (Math.floor(clock * 4) % 2 ? "#ff4a4a" : "#ffd34d") : "#aaa6b8";
+    ctx.fillText(`EDIFICIO ${level + 1}`, W - 8, 12);
+    ctx.textBaseline = "alphabetic";
+    if (message) {
+      ctx.globalAlpha = Math.min(1, (2.4 - message.t) * 2);
+      ctx.fillStyle = "rgba(10,10,18,0.82)"; ctx.fillRect(0, 60, W, message.sub ? 50 : 34);
+      ctx.textAlign = "center"; ctx.font = "900 19px system-ui, sans-serif"; ctx.fillStyle = "#ff4a4a";
+      ctx.fillText(message.text, W / 2, 83);
+      if (message.sub) { ctx.font = "700 11px system-ui, sans-serif"; ctx.fillStyle = "#f4f2ea"; ctx.fillText(message.sub, W / 2, 101); }
+      ctx.globalAlpha = 1;
+    }
+  }
+
+  // ---------- Loop ----------
+  const STEP = 1 / 120;
+  let last = performance.now(), acc = 0;
+  function loop(now) {
+    const dt = Math.min(0.1, (now - last) / 1000);
+    last = now;
+    if (isPlaying()) {
+      acc += dt;
+      while (acc >= STEP && isPlaying()) { update(STEP); acc -= STEP; }
+    } else { acc = 0; update(dt); }
+    draw();
+    requestAnimationFrame(loop);
+  }
+  syncControls();
+  buildLevel(); state = "menu"; message = null;
+  showTitle();
+  requestAnimationFrame(loop);
+})();
+</script>
+<script src="../../shared/iniziali.js" data-record="agente-best-" data-kind="score"></script>
+</body>
+</html>
