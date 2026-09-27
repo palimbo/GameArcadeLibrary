@@ -4,7 +4,7 @@ Raccolta di giochi arcade per il browser. Ogni gioco è un singolo file HTML sen
 
 ## 🕹️ Sala Giochi — `index.html`
 
-Apri `index.html` nella cartella principale per la pagina di raccolta: mostra tutti i 49 giochi con copertina, genere, comandi e i tuoi record per ogni difficoltà (Facile, Normale, Difficile). Tocca «Gioca» per avviare un gioco; in ogni gioco il pulsante «← Sala Giochi» in alto a sinistra (visibile nei menu) riporta alla raccolta.
+Apri `index.html` nella cartella principale per la pagina di raccolta: mostra tutti i 50 giochi con copertina, genere, comandi e i tuoi record per ogni difficoltà (Facile, Normale, Difficile). Tocca «Gioca» per avviare un gioco; in ogni gioco il pulsante «← Sala Giochi» in alto a sinistra (visibile nei menu) riporta alla raccolta.
 
 **Iniziali del record:** quando batti un record compare la schermata da sala giochi per inserire le tue tre iniziali (frecce ↑ ↓ per cambiare lettera, ← → per spostarti, oppure scrivile direttamente; su telefono i tasti ▲ ▼ e OK). Le iniziali vengono salvate insieme al record e compaiono nei menu del gioco e nella Sala Giochi. Il codice è condiviso da tutti i giochi in `shared/iniziali.js`.
 
@@ -772,3 +772,19 @@ Pugilato in stile *Punch-Out!!*: vedi il ring alle spalle del tuo pugile e affro
 - **Touch:** levetta a sinistra (◀▶ schiva, ▼ para, ▲ volto), tasti SINISTRO, DESTRO e ★ SUPER a destra
 
 Per giocare apri `games/guantoni-d-oro/index.html` nel browser.
+
+### 🛸 Sciame Galattico — `games/sciame-galattico/index.html`
+
+Sparatutto a formazione in stile *Galaga*: api, farfalle e comandanti alieni entrano a spirale, si schierano e poi si tuffano sulla tua nave.
+
+- **Formazione:** 40 alieni per livello. Api (50), farfalle (80) e comandanti verdi (due colpi, 150); abbattuti in picchiata valgono il doppio o più (comandante 400)
+- **Picchiate:** gli alieni si staccano dallo schieramento con un mezzo giro e scendono su di te sparando; le farfalle zigzagano
+- **Raggio traente:** un comandante può scendere e aprire un raggio: se ci finisci dentro la tua nave viene catturata (perdi una vita) e resta sopra di lui
+- **Doppio caccia:** abbatti quel comandante mentre si tuffa e la nave prigioniera torna da te: voli con due caccia affiancati, spari il doppio (1.000 punti). Se lo colpisci mentre è in formazione, la nave è persa. Un colpo nemico fa perdere solo uno dei due caccia
+- **Livelli bonus:** al livello 3 e poi ogni 4, quaranta alieni sfilano senza sparare: 100 punti a colpo e 10.000 se li prendi tutti
+- **Navi extra:** a 20.000 e 70.000 punti, poi ogni 70.000; a fine partita vedi la precisione di tiro
+- **Difficoltà:** Facile (5 navi, tuffi lenti e pochi colpi), Normale, Difficile; record separati per ogni difficoltà
+- **Comandi:** frecce ←→ o `A` `D` per muoverti · `SPAZIO` o `Z` per sparare · `P` pausa
+- **Touch:** levetta a sinistra (conta solo destra e sinistra) e tasto FUOCO a destra, da tenere premuto
+
+Per giocare apri `games/sciame-galattico/index.html` nel browser.
