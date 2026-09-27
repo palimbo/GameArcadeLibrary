@@ -1,0 +1,736 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no, viewport-fit=cover">
+<title>Cercatore d'Oro</title>
+<style>
+  :root {
+    --bg: #07070f;
+    --fg: #f6f2ff;
+    --muted: #a8a0c8;
+    --gold: #ffd34d;
+    --brick: #c8502a;
+    --hero: #6ae8ff;
+    --red: #ff4a4a;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  html, body {
+    height: 100%;
+    background: var(--bg);
+    color: var(--fg);
+    font-family: system-ui, -apple-system, "Segoe UI", sans-serif;
+    overflow: hidden;
+    user-select: none;
+    -webkit-user-select: none;
+    touch-action: none;
+  }
+  #wrap { position: fixed; inset: 0; display: flex; align-items: center; justify-content: center; }
+  canvas { display: block; touch-action: none; border-radius: 6px; box-shadow: 0 0 0 2px #2a2440, 0 10px 40px rgba(0,0,0,0.6); }
+  #pauseBtn {
+    position: fixed; z-index: 3; display: none; right: 10px; top: calc(10px + env(safe-area-inset-top, 0px));
+    font: 700 13px system-ui, sans-serif; color: var(--fg);
+    background: rgba(0, 0, 0, 0.6); border: 1px solid rgba(246, 242, 255, 0.35);
+    border-radius: 8px; padding: 6px 10px; cursor: pointer;
+  }
+  #touch {
+    position: fixed; z-index: 2; display: none; left: 12px; right: 12px;
+    bottom: calc(14px + env(safe-area-inset-bottom, 0px));
+    justify-content: space-between; align-items: flex-end; pointer-events: none;
+  }
+  /* thumb stick to move, two buttons to dig */
+  #touch .stick { position: relative; width: 136px; height: 136px; border-radius: 50%; pointer-events: auto; touch-action: none;
+    border: 2px solid rgba(106, 232, 255, 0.6); background: radial-gradient(circle, rgba(106,232,255,0.16), rgba(106,232,255,0.05)); }
+  #touch .stick .knob { position: absolute; left: 50%; top: 50%; width: 58px; height: 58px; margin: -29px 0 0 -29px; border-radius: 50%;
+    background: rgba(106, 232, 255, 0.5); border: 2px solid rgba(255,255,255,0.7); box-shadow: 0 4px 10px rgba(0,0,0,0.4); pointer-events: none; }
+  #touch .stick i { position: absolute; font: 900 14px system-ui, sans-serif; font-style: normal; color: rgba(246,242,255,0.35); pointer-events: none; }
+  #touch .stick i.on { color: #ffd34d; }
+  #touch .stick i[data-d="up"] { left: 50%; top: 6px; transform: translateX(-50%); }
+  #touch .stick i[data-d="down"] { left: 50%; bottom: 6px; transform: translateX(-50%); }
+  #touch .stick i[data-d="left"] { top: 50%; left: 8px; transform: translateY(-50%); }
+  #touch .stick i[data-d="right"] { top: 50%; right: 8px; transform: translateY(-50%); }
+  #touch .digs { display: flex; gap: 10px; pointer-events: auto; align-items: flex-end; }
+  #touch .digs button { width: 76px; height: 76px; border-radius: 50%; touch-action: none; color: var(--fg);
+    font: 800 12px system-ui, sans-serif; letter-spacing: 0.5px; line-height: 1.2;
+    border: 2px solid rgba(200, 80, 42, 0.9); background: rgba(200, 80, 42, 0.18); }
+  #touch .digs button b { display: block; font-size: 20px; }
+  #touch .digs button.on { background: rgba(246, 242, 255, 0.4); }
+  #touch.small .stick { width: 112px; height: 112px; }
+  #touch.small .stick .knob { width: 48px; height: 48px; margin: -24px 0 0 -24px; }
+  #touch.small .digs button { width: 62px; height: 62px; font-size: 10px; }
+  #overlay {
+    position: fixed; inset: 0; z-index: 5;
+    display: flex; flex-direction: column; align-items: center; justify-content: flex-start;
+    gap: 14px; padding: 16px; text-align: center; overflow-y: auto;
+    background: rgba(7, 7, 15, 0.9);
+  }
+  #overlay > :first-child { margin-top: auto; }
+  #overlay > :last-child { margin-bottom: auto; }
+  #overlay.hidden { display: none; }
+  #homeLink {
+    position: fixed; top: calc(10px + env(safe-area-inset-top, 0px)); left: 10px; z-index: 6;
+    font: 600 13px/1 system-ui, sans-serif; color: #fff; text-decoration: none;
+    padding: 8px 12px; border-radius: 999px; background: rgba(0,0,0,.55);
+    border: 1px solid rgba(255,255,255,.25);
+  }
+  #homeLink:hover { background: rgba(0,0,0,.8); }
+  #overlay.hidden ~ #homeLink { display: none; }
+  @media (max-width: 700px) { #overlay { padding-top: calc(52px + env(safe-area-inset-top, 0px)); } }
+  #overlay h1 { font-size: clamp(32px, 9.5vw, 60px); font-weight: 900; letter-spacing: 1px; color: var(--gold); text-shadow: 0 3px 0 #a86a0a, 0 0 22px rgba(255,211,77,0.45); }
+  #overlay h2 { font-size: clamp(28px, 7vw, 44px); font-weight: 900; letter-spacing: 2px; }
+  #overlay h2.lose { color: var(--red); }
+  #overlay p { max-width: 540px; font-size: clamp(13px, 3.4vw, 16px); line-height: 1.55; }
+  #overlay p.muted { color: var(--muted); }
+  #overlay .pts { display: grid; grid-template-columns: repeat(2, auto); gap: 4px 18px; font-size: 13px; color: var(--muted); text-align: left; }
+  #overlay .pts b { color: var(--fg); }
+  #overlay .diff { display: flex; gap: 10px; flex-wrap: wrap; justify-content: center; }
+  #overlay button {
+    font: 800 15px system-ui, sans-serif; letter-spacing: 1.5px; color: var(--fg);
+    background: transparent; cursor: pointer;
+    border: 2px solid rgba(246,242,255,0.3); border-radius: 10px; padding: 9px 16px;
+  }
+  #overlay .diff button.on { border-color: var(--c); color: var(--c); box-shadow: 0 0 12px var(--c); }
+  #overlay button.start { border-color: var(--gold); color: #2a1a00; background: var(--gold); padding: 11px 30px; box-shadow: 0 4px 0 #a86a0a; }
+  @media (max-height: 560px) {
+    #overlay { gap: 8px; }
+    #overlay h1 { font-size: 30px; }
+    #overlay p { font-size: 13px; line-height: 1.4; }
+    #overlay .help, #overlay .pts { display: none; }
+  }
+</style>
+</head>
+<body>
+<div id="wrap"><canvas id="game"></canvas></div>
+<div id="touch">
+  <div class="stick" aria-label="Levetta">
+    <i data-d="up">▲</i><i data-d="down">▼</i><i data-d="left">◀</i><i data-d="right">▶</i>
+    <div class="knob"></div>
+  </div>
+  <div class="digs">
+    <button type="button" data-a="digL" aria-label="Scava a sinistra"><b>◣</b>SCAVA</button>
+    <button type="button" data-a="digR" aria-label="Scava a destra"><b>◢</b>SCAVA</button>
+  </div>
+</div>
+<button id="pauseBtn" type="button" aria-label="Pausa">❚❚</button>
+<div id="overlay"></div>
+<a id="homeLink" href="../../index.html">← Sala Giochi</a>
+
+<script>
+(() => {
+  "use strict";
+
+  const T = 18, COLS = 28, ROWS = 16, HUD = 24, W = COLS * T, H = HUD + ROWS * T;
+  const DIRS = { up: [0, -1], down: [0, 1], left: [-1, 0], right: [1, 0] };
+  const HOLE_TIME = 6.5, TRAP_TIME = 2.6;
+  // the levels are described by floors, ladders, ropes and gold; walking rows are 2, 5, 8, 11 and 14
+  const LEVELS = [
+    { name: "LA MINIERA", floors: [[3, 0, 27], [6, 0, 12], [6, 16, 27], [9, 3, 27], [12, 0, 20], [12, 24, 27]],
+      ladders: [[4, 3, 5], [20, 3, 5], [10, 6, 8], [25, 6, 8], [14, 9, 11], [3, 9, 11], [22, 12, 14], [8, 12, 14]],
+      ropes: [], gold: [[2, 2], [15, 2], [26, 5], [7, 5], [18, 8], [5, 8], [18, 11], [10, 11], [4, 14], [17, 14]],
+      hero: [13, 14], guards: [[1, 2], [26, 8]], exit: [13, 0, 2] },
+    { name: "IL PONTE DI CORDA", floors: [[3, 0, 9], [3, 10, 17, "@"], [3, 18, 27], [6, 0, 6], [6, 10, 27], [9, 0, 18], [9, 22, 27], [12, 0, 11], [12, 12, 15, "@"], [12, 16, 27]],
+      ladders: [[8, 3, 5], [19, 3, 5], [3, 6, 8], [24, 6, 8], [12, 9, 11], [26, 9, 11], [6, 12, 14], [20, 12, 14]],
+      ropes: [[5, 6, 10], [8, 18, 22]], gold: [[1, 2], [14, 2], [26, 2], [15, 5], [1, 5], [20, 8], [5, 8], [13, 11], [27, 11], [2, 14], [24, 14]],
+      hero: [14, 14], guards: [[0, 2], [27, 5], [10, 8]], exit: [16, 0, 2] },
+    { name: "LA TORRE", floors: [[3, 2, 25], [6, 0, 8], [6, 12, 16], [6, 20, 27], [9, 0, 3, "@"], [9, 4, 27], [12, 4, 23]],
+      ladders: [[2, 3, 8], [25, 3, 5], [14, 6, 8], [22, 6, 8], [6, 9, 11], [21, 9, 11], [4, 12, 14], [23, 12, 14]],
+      ropes: [[5, 8, 12], [5, 16, 20]], gold: [[3, 2], [24, 2], [13, 2], [13, 5], [26, 5], [1, 8], [26, 8], [12, 11], [19, 11], [1, 14], [26, 14]],
+      hero: [14, 14], guards: [[20, 2], [5, 8], [25, 11]], exit: [5, 0, 2] },
+    { name: "IL LABIRINTO D'ORO", floors: [[3, 0, 11], [3, 12, 15, "@"], [3, 16, 27], [6, 0, 4], [6, 8, 19], [6, 23, 27], [9, 0, 10], [9, 14, 27], [12, 0, 27]],
+      ladders: [[1, 3, 5], [26, 3, 5], [6, 6, 8], [21, 6, 8], [12, 9, 11], [3, 9, 11], [17, 12, 14], [9, 12, 14]],
+      ropes: [[8, 10, 14], [5, 19, 23], [5, 4, 8]], gold: [[6, 2], [20, 2], [14, 2], [2, 5], [13, 5], [25, 5], [8, 8], [18, 8], [5, 11], [23, 11], [13, 14], [26, 14]],
+      hero: [4, 14], guards: [[26, 2], [1, 8], [20, 11], [14, 5]], exit: [24, 0, 2] },
+  ];
+
+  const DIFFICULTIES = {
+    facile:    { label: "FACILE",    color: "#7dff9a", desc: "5 vite · guardie lente, buche aperte più a lungo", lives: 5, guard: 2.6, hole: 1.25 },
+    normale:   { label: "NORMALE",   color: "#ffd34d", desc: "3 vite · l'esperienza classica", lives: 3, guard: 3.2, hole: 1 },
+    difficile: { label: "DIFFICILE", color: "#ff4a4a", desc: "3 vite · guardie veloci, buche che si chiudono presto", lives: 3, guard: 3.8, hole: 0.85 },
+  };
+  const DIFF_IDS = Object.keys(DIFFICULTIES);
+  const DIFF_KEY = "oro-difficulty";
+  const bestKey = (id) => `oro-best-${id}`;
+  function store(k, v) { try { localStorage.setItem(k, v); } catch { /* ignore */ } }
+  function load(k) { try { return localStorage.getItem(k); } catch { return null; } }
+  const rnd = (a, b) => a + Math.random() * (b - a);
+
+  // ---------- Canvas ----------
+  const canvas = document.getElementById("game");
+  const ctx = canvas.getContext("2d");
+  const wrap = document.getElementById("wrap");
+  const overlay = document.getElementById("overlay");
+  const touchEl = document.getElementById("touch");
+  const pauseBtn = document.getElementById("pauseBtn");
+  let pxRatio = 1, touchMode = !!(window.matchMedia && matchMedia("(pointer: coarse)").matches);
+  function resize() {
+    const portrait = window.innerHeight > window.innerWidth;
+    const showTouch = touchMode && isPlaying();
+    touchEl.style.display = showTouch ? "flex" : "none";
+    touchEl.classList.toggle("small", !portrait && window.innerHeight < 480);
+    wrap.style.paddingBottom = showTouch && portrait ? "calc(170px + env(safe-area-inset-bottom, 0px))" : "0";
+    let availW = window.innerWidth - 8, availH = window.innerHeight - 8;
+    if (showTouch && portrait) availH -= 170;
+    if (showTouch && !portrait) {
+      const side = Math.max(...[...touchEl.children].map((el) => el.offsetWidth)) + 20;
+      if (window.innerWidth - 2 * side > 280) availW = window.innerWidth - 2 * side;
+    }
+    const s = Math.max(0.2, Math.min(availW / W, availH / H));
+    pxRatio = Math.min(3, s * (window.devicePixelRatio || 1));
+    canvas.style.width = W * s + "px";
+    canvas.style.height = H * s + "px";
+    canvas.width = Math.round(W * pxRatio);
+    canvas.height = Math.round(H * pxRatio);
+  }
+  window.addEventListener("resize", () => syncControls());
+
+  // ---------- Audio ----------
+  let audioCtx = null;
+  function beep(freq, dur, type = "square", vol = 0.04, slide = 0, delay = 0) {
+    if (!audioCtx) return;
+    const t = audioCtx.currentTime + delay;
+    const osc = audioCtx.createOscillator(), gain = audioCtx.createGain();
+    osc.type = type;
+    osc.frequency.setValueAtTime(freq, t);
+    if (slide) osc.frequency.exponentialRampToValueAtTime(Math.max(20, freq + slide), t + dur);
+    gain.gain.setValueAtTime(vol, t);
+    gain.gain.exponentialRampToValueAtTime(0.0001, t + dur);
+    osc.connect(gain).connect(audioCtx.destination);
+    osc.start(t); osc.stop(t + dur + 0.02);
+  }
+  function noise(dur, vol, freq) {
+    if (!audioCtx) return;
+    const len = Math.floor(audioCtx.sampleRate * dur), buf = audioCtx.createBuffer(1, len, audioCtx.sampleRate), d = buf.getChannelData(0);
+    for (let i = 0; i < len; i++) d[i] = (Math.random() * 2 - 1) * (1 - i / len);
+    const src = audioCtx.createBufferSource(), f = audioCtx.createBiquadFilter(), g = audioCtx.createGain();
+    src.buffer = buf; f.type = "lowpass"; f.frequency.value = freq; g.gain.value = vol;
+    src.connect(f).connect(g).connect(audioCtx.destination); src.start();
+  }
+  const arp = (notes, gap, d, type = "square", vol = 0.04) => notes.forEach((f, i) => beep(f, d, type, vol, 0, i * gap));
+  let sfxN = 0;
+  const lim = (fn) => (...a) => { if (sfxN++ < 5) fn(...a); };
+  const sfx = {
+    gold: lim(() => arp([1319, 1760], 0.05, 0.08, "square", 0.035)),
+    dig: lim(() => noise(0.25, 0.2, 700)),
+    trap: lim(() => beep(300, 0.2, "square", 0.03, -150)),
+    crush: lim(() => { noise(0.3, 0.25, 400); beep(200, 0.25, "sawtooth", 0.035, -120); }),
+    fall: lim(() => beep(600, 0.25, "triangle", 0.02, -400)),
+    reveal: () => arp([523, 659, 784, 1047, 1319, 1568], 0.07, 0.12, "triangle", 0.05),
+    die: () => arp([784, 659, 523, 392, 330, 262], 0.1, 0.13, "sawtooth", 0.035),
+    clear: () => arp([523, 659, 784, 1047, 784, 1047, 1319, 1568], 0.08, 0.13),
+    over: () => arp([523, 415, 330, 262], 0.18, 0.25),
+    life: () => arp([523, 784, 1047, 1319], 0.08, 0.12, "triangle", 0.05),
+    step: lim(() => beep(120, 0.02, "square", 0.012)),
+  };
+
+  // ---------- State ----------
+  let difficulty = DIFFICULTIES[load(DIFF_KEY)] ? load(DIFF_KEY) : "normale";
+  let diff = DIFFICULTIES[difficulty];
+  let state = "menu", menu = null, pausedFrom = null, stateT = 0, clock = 0;
+  let score = 0, lives = 3, level = 0, bestCache = 0, nextLife = 20000;
+  let map = [], holes = [], gold = new Set(), hero = null, guards = [], exitCells = [], revealed = false;
+  let parts = [], popups = [], message = null, levelT = 0;
+  const ctl = { up: false, down: false, left: false, right: false };
+  let digPressed = 0;
+
+  const LV = () => LEVELS[level % LEVELS.length];
+  const loopN = () => Math.floor(level / LEVELS.length);
+  const key = (c, r) => r * COLS + c;
+  const cellAt = (c, r) => (c < 0 || c >= COLS || r >= ROWS ? "@" : r < 0 ? "." : map[r][c]);
+  const holeAt = (c, r) => holes.find((h) => h.c === c && h.r === r);
+  // bricks with a hole dug in them are open until the hole fills up again
+  const solid = (c, r) => { const t = cellAt(c, r); return t === "@" || (t === "#" && !holeAt(c, r)); };
+  const ladder = (c, r) => cellAt(c, r) === "H";
+  const rope = (c, r) => cellAt(c, r) === "-";
+  const cx = (c) => c * T + T / 2, cy = (r) => HUD + r * T + T / 2;
+
+  function buildLevel() {
+    const lv = LV();
+    map = Array.from({ length: ROWS }, () => new Array(COLS).fill("."));
+    for (let c = 0; c < COLS; c++) map[ROWS - 1][c] = "@";
+    for (const [r, a, b, m] of lv.floors) for (let c = a; c <= b; c++) map[r][c] = m || "#";
+    for (const [c, a, b] of lv.ladders) for (let r = a; r <= b; r++) map[r][c] = "H";
+    for (const [r, a, b] of lv.ropes) for (let c = a; c <= b; c++) if (map[r][c] === ".") map[r][c] = "-";
+    gold = new Set(lv.gold.map(([c, r]) => key(c, r)));
+    exitCells = []; for (let r = lv.exit[1]; r <= lv.exit[2]; r++) exitCells.push([lv.exit[0], r]);
+    revealed = false; holes = []; levelT = 0;
+    resetActors();
+    message = { text: `LIVELLO ${level + 1}`, sub: lv.name, t: 0 };
+    state = "intro"; stateT = 1.6;
+  }
+  function makeActor(c, r, speed) { return { c, r, tc: c, tr: r, x: cx(c), y: cy(r), speed, face: 1, moving: false, walk: 0, dir: null }; }
+  function resetActors() {
+    const lv = LV();
+    hero = makeActor(lv.hero[0], lv.hero[1], 5.2 * T);
+    hero.dead = false; hero.digT = 0; hero.inv = 1; hero.onCell = heroOnCell;
+    const sp = diff.guard * (1 + Math.min(0.35, loopN() * 0.12)) * T;
+    guards = lv.guards.map(([c, r], i) => Object.assign(makeActor(c, r, sp * (0.92 + i * 0.05)), { trapped: 0, carry: false, home: [c, r], wait: 1 + i * 0.4, dead: 0, onCell: guardOnCell }));
+  }
+
+  // ---------- Flow ----------
+  const isPlaying = () => ["intro", "play", "dead", "clear"].includes(state);
+  function startGame() {
+    if (!audioCtx) { try { audioCtx = new (window.AudioContext || window.webkitAudioContext)(); } catch { audioCtx = null; } }
+    if (audioCtx && audioCtx.state === "suspended") audioCtx.resume();
+    score = 0; lives = diff.lives; level = 0; nextLife = 20000;
+    bestCache = parseInt(load(bestKey(difficulty)), 10) || 0;
+    buildLevel();
+    menu = null;
+    overlay.classList.add("hidden");
+    syncControls();
+    last = performance.now();
+  }
+  function addScore(n, x, y, color = "#f6f2ff") {
+    score += n;
+    if (x !== undefined) popups.push({ x, y, text: String(n), color, t: 0 });
+    if (score >= nextLife) { nextLife += 30000; lives++; sfx.life(); popups.push({ x: W / 2, y: H / 2, text: "VITA EXTRA", color: "#ffd34d", t: 0, big: true }); }
+  }
+  function burst(x, y, color, n = 10, sp = 110) {
+    for (let k = 0; k < n; k++) {
+      const a = Math.random() * Math.PI * 2, s = sp * (0.3 + Math.random() * 0.8);
+      parts.push({ x, y, vx: Math.cos(a) * s, vy: Math.sin(a) * s, t: 0, life: 0.3 + Math.random() * 0.4, c: color });
+    }
+  }
+  function killHero(why) {
+    if (state !== "play" || hero.inv > 0) return;
+    lives--; hero.dead = true;
+    sfx.die();
+    burst(hero.x, hero.y, "#6ae8ff", 16, 130);
+    message = { text: why, t: 0 };
+    state = "dead"; stateT = 2;
+  }
+  function afterDeath() {
+    if (lives <= 0) { gameOver(); return; }
+    // the level starts over, with all its gold back in place
+    const lv = LV();
+    gold = new Set(lv.gold.map(([c, r]) => key(c, r)));
+    revealed = false; holes = [];
+    resetActors();
+    state = "intro"; stateT = 1;
+  }
+  function gameOver() {
+    state = "over";
+    const prev = parseInt(load(bestKey(difficulty)), 10) || 0;
+    const record = score > prev;
+    if (record) store(bestKey(difficulty), String(score));
+    const played = diff.label, lv = level + 1;
+    menu = () => showOverlay(
+      `<h2 class="lose">GAME OVER</h2>
+       <p>Punteggio: <b>${score.toLocaleString("it-IT")}</b> · Livello ${lv} · ${played}</p>
+       ${record ? "<p style='color:var(--gold)'>★ NUOVO RECORD! ★</p>" : ""}
+       ${difficultyHTML()}
+       <button class="start" data-start>GIOCA ANCORA</button>`
+    );
+    menu();
+    sfx.over();
+    syncControls();
+  }
+  function togglePause() {
+    if (isPlaying()) {
+      pausedFrom = state; state = "paused";
+      showOverlay(`<h2>PAUSA</h2><button class="start" data-resume>CONTINUA</button><p class="muted">Premi P per continuare</p>`);
+    } else if (state === "paused") {
+      state = pausedFrom; overlay.classList.add("hidden"); last = performance.now();
+    }
+    syncControls();
+  }
+  function syncControls() {
+    const portrait = window.innerHeight > window.innerWidth;
+    pauseBtn.style.display = isPlaying() && touchMode ? "block" : "none";
+    Object.assign(pauseBtn.style, portrait
+      ? { top: "auto", bottom: "calc(40px + env(safe-area-inset-bottom, 0px))", right: "auto", left: "calc(50% - 20px)" }
+      : { top: "calc(10px + env(safe-area-inset-top, 0px))", bottom: "auto", right: "10px", left: "auto" });
+    resize();
+  }
+  pauseBtn.addEventListener("click", () => togglePause());
+  function showOverlay(html) { overlay.innerHTML = html; overlay.classList.remove("hidden"); }
+  function difficultyHTML() {
+    const buttons = DIFF_IDS.map((id) => {
+      const d = DIFFICULTIES[id];
+      return `<button type="button" data-diff="${id}" class="${id === difficulty ? "on" : ""}" style="--c:${d.color}">${d.label}</button>`;
+    }).join("");
+    const best = parseInt(load(bestKey(difficulty)), 10);
+    return `<div class="diff">${buttons}</div><p class="muted">${diff.desc}${best ? ` · Record: ${best.toLocaleString("it-IT")}` : ""}</p>`;
+  }
+  function setDifficulty(id) { if (!DIFFICULTIES[id]) return; difficulty = id; diff = DIFFICULTIES[id]; store(DIFF_KEY, id); if (menu) menu(); }
+  function showTitle() {
+    menu = showTitle;
+    showOverlay(
+      `<h1>CERCATORE D'ORO</h1>
+       <p>Raccogli tutti i lingotti d'oro correndo su scale e corde, mentre le guardie ti danno la caccia. Non puoi saltare né combattere, ma puoi scavare buche nei mattoni: le guardie ci cadono dentro e restano intrappolate. Preso tutto l'oro compare la scala d'uscita: salila fino in cima!</p>
+       <div class="pts">
+         <span><b>Lingotto</b></span><span>250</span>
+         <span><b>Guardia in trappola</b></span><span>75 · se la buca si richiude su di lei 75 in più</span>
+         <span><b>Livello completato</b></span><span>1.500</span>
+         <span><b>Trucco</b></span><span>una buca ti fa anche scendere al piano di sotto</span>
+       </div>
+       ${touchMode
+         ? `<p class="muted help">Levetta per correre, salire e scendere · ◣ SCAVA e SCAVA ◢ per bucare il mattone in basso a sinistra o a destra</p>`
+         : `<p class="muted help">Frecce o W A S D per muoverti · Z scava a sinistra · X scava a destra · P pausa</p>`}
+       ${difficultyHTML()}
+       <button class="start" data-start>INIZIA</button>`
+    );
+  }
+  overlay.addEventListener("click", (e) => {
+    const d = e.target.closest("[data-diff]");
+    if (d) { setDifficulty(d.dataset.diff); return; }
+    if (e.target.closest("[data-start]")) startGame();
+    if (e.target.closest("[data-resume]")) togglePause();
+  });
+
+  // ---------- Input ----------
+  const KEYS = { arrowup: "up", w: "up", arrowdown: "down", s: "down", arrowleft: "left", a: "left", arrowright: "right", d: "right" };
+  let lastDir = null;
+  window.addEventListener("keydown", (e) => {
+    const k = e.key.toLowerCase();
+    if ([" ", "arrowup", "arrowdown", "arrowleft", "arrowright"].includes(k)) e.preventDefault();
+    if (state === "menu" || state === "over") {
+      if (e.key === "Enter") startGame();
+      else if (["1", "2", "3"].includes(k)) setDifficulty(DIFF_IDS[+k - 1]);
+      return;
+    }
+    if (k === "p" || k === "escape") { if (!e.repeat) togglePause(); return; }
+    if (state === "paused") { if (e.key === "Enter") togglePause(); return; }
+    if ((k === "z" || k === "q") && !e.repeat) digPressed = -1;
+    if ((k === "x" || k === "e") && !e.repeat) digPressed = 1;
+    const a = KEYS[k];
+    if (a) { ctl[a] = true; if (!e.repeat) lastDir = a; }
+  });
+  window.addEventListener("keyup", (e) => { const a = KEYS[e.key.toLowerCase()]; if (a) ctl[a] = false; });
+  window.addEventListener("blur", () => { for (const k in ctl) ctl[k] = false; if (isPlaying()) togglePause(); });
+  for (const btn of touchEl.querySelectorAll(".digs button")) {
+    btn.addEventListener("pointerdown", (e) => { e.preventDefault(); btn.classList.add("on"); digPressed = btn.dataset.a === "digL" ? -1 : 1; });
+    for (const ev of ["pointerup", "pointercancel", "pointerleave"]) btn.addEventListener(ev, () => btn.classList.remove("on"));
+  }
+  // thumb stick: the stronger axis gives the direction, with a small dead zone in the middle
+  const stick = touchEl.querySelector(".stick"), knob = stick.querySelector(".knob"), marks = {};
+  for (const m of stick.querySelectorAll("i")) marks[m.dataset.d] = m;
+  let stickId = null, stickDir = null;
+  function stickAt(e) {
+    const r = stick.getBoundingClientRect(), max = r.width / 2 - 14;
+    let dx = e.clientX - (r.left + r.width / 2), dy = e.clientY - (r.top + r.height / 2);
+    const len = Math.hypot(dx, dy);
+    if (len > max) { dx *= max / len; dy *= max / len; }
+    knob.style.transform = `translate(${dx}px, ${dy}px)`;
+    let d = null;
+    if (len > max * 0.28) {
+      const ax = Math.abs(dx), ay = Math.abs(dy), horiz = stickDir === "left" || stickDir === "right";
+      if (stickDir && (horiz ? ax > ay * 0.75 : ay > ax * 0.75)) d = horiz ? (dx > 0 ? "right" : "left") : (dy > 0 ? "down" : "up");
+      else d = ax > ay ? (dx > 0 ? "right" : "left") : (dy > 0 ? "down" : "up");
+    }
+    stickDir = d;
+    for (const k in DIRS) { ctl[k] = k === d; marks[k].classList.toggle("on", k === d); }
+    if (d) lastDir = d;
+  }
+  const stickEnd = (e) => { if (e.pointerId !== stickId) return; stickId = null; stickDir = null; knob.style.transform = ""; for (const k in DIRS) { ctl[k] = false; marks[k].classList.remove("on"); } };
+  stick.addEventListener("pointerdown", (e) => { e.preventDefault(); stickId = e.pointerId; try { stick.setPointerCapture(e.pointerId); } catch { /* ignore */ } stickAt(e); });
+  stick.addEventListener("pointermove", (e) => { if (e.pointerId === stickId) stickAt(e); });
+  for (const ev of ["pointerup", "pointercancel", "lostpointercapture"]) stick.addEventListener(ev, stickEnd);
+  window.addEventListener("pointerdown", (e) => { if (e.pointerType === "touch" && !touchMode) { touchMode = true; syncControls(); if (menu) menu(); } }, true);
+
+  // ---------- Movement rules (the same for the hero and the guards) ----------
+  const trappedGuardAt = (c, r) => guards.some((g) => !g.dead && g.trapped > 0 && g.c === c && g.r === r);
+  function supported(a) {
+    const { c, r } = a;
+    if (r >= ROWS - 1) return true;
+    if (ladder(c, r) || rope(c, r)) return true;
+    if (a.trapped > 0) return true;
+    return solid(c, r + 1) || ladder(c, r + 1) || trappedGuardAt(c, r + 1);
+  }
+  function canMove(a, d) {
+    const [dx, dy] = DIRS[d], nc = a.c + dx, nr = a.r + dy;
+    if (nc < 0 || nc >= COLS || nr < 0 || nr >= ROWS) return d === "up" && nr < 0 ? false : false;
+    if (solid(nc, nr)) return false;
+    if (d === "up") return ladder(a.c, a.r);
+    if (d === "down") return ladder(nc, nr) || ladder(a.c, a.r) || rope(a.c, a.r) || !supported(a);
+    return true;
+  }
+  function advance(a, dt, speed, choose) {
+    let budget = speed * dt;
+    for (let guard = 0; guard < 3 && budget > 0; guard++) {
+      if (a.tc === a.c && a.tr === a.r) {
+        const d = choose(a);
+        if (!d) { a.moving = false; return; }
+        const [dx, dy] = DIRS[d];
+        a.tc = a.c + dx; a.tr = a.r + dy; a.dir = d;
+        if (dx) a.face = dx;
+      }
+      const tx = cx(a.tc), ty = cy(a.tr), dist = Math.abs(tx - a.x) + Math.abs(ty - a.y);
+      if (dist <= budget) { a.x = tx; a.y = ty; a.c = a.tc; a.r = a.tr; budget -= dist; if (a.onCell) a.onCell(a); }
+      else { a.x += Math.sign(tx - a.x) * budget; a.y += Math.sign(ty - a.y) * budget; budget = 0; }
+      a.moving = true; a.walk += dt * 14;
+    }
+  }
+
+  // ---------- Hero ----------
+  function chooseHero(a) {
+    if (!supported(a)) { a.falling = true; return "down"; }
+    a.falling = false;
+    const held = Object.keys(DIRS).filter((d) => ctl[d]);
+    const want = held.includes(lastDir) ? lastDir : held[0];
+    if (want && canMove(a, want)) return want;
+    // holding up or down next to a ladder: slide sideways onto it
+    return null;
+  }
+  function heroOnCell(a) {
+    const k = key(a.c, a.r);
+    if (gold.has(k)) {
+      gold.delete(k); addScore(250, a.x, a.y - 12, "#ffd34d"); sfx.gold(); burst(a.x, a.y, "#ffd34d", 8, 80);
+      checkReveal();
+    }
+    if (revealed && a.r === 0) levelCleared();
+  }
+  function checkReveal() {
+    if (revealed || gold.size || guards.some((g) => g.carry)) return;
+    revealed = true;
+    for (const [c, r] of exitCells) map[r][c] = "H";
+    message = { text: "TUTTO L'ORO! SALI IN CIMA!", t: 0 };
+    sfx.reveal();
+  }
+  function dig(dir) {
+    const h = hero;
+    if (h.tc !== h.c || h.tr !== h.r || !supported(h) || h.digT > 0) return;
+    const c = h.c + dir, r = h.r + 1;
+    if (cellAt(c, r) !== "#" || holeAt(c, r)) return;
+    if (solid(c, h.r) || ladder(c, h.r) || cellAt(c, h.r) === "H") return;
+    if (guards.some((g) => !g.dead && Math.abs(g.x - cx(c)) < T * 0.8 && Math.abs(g.y - cy(h.r)) < T * 0.8)) return;
+    holes.push({ c, r, t: 0, life: HOLE_TIME * diff.hole });
+    h.digT = 0.28; h.face = dir;
+    sfx.dig(); burst(cx(c), cy(r) - 4, "#c8502a", 8, 70);
+  }
+
+  // ---------- Guards ----------
+  function guardStep(g) {
+    // breadth-first search over the cells, using the same moves as the hero; first step towards him
+    const start = key(g.c, g.r), goal = key(hero.c, hero.r);
+    const prev = new Map([[start, -1]]), q = [[g.c, g.r]];
+    let found = start === goal;
+    for (let i = 0; i < q.length && !found; i++) {
+      const [c, r] = q[i];
+      const a = { c, r, trapped: 0 };
+      const moves = !supported(a) ? ["down"] : Object.keys(DIRS).filter((d) => canMove(a, d));
+      for (const d of moves) {
+        const nc = c + DIRS[d][0], nr = r + DIRS[d][1], k = key(nc, nr);
+        if (prev.has(k)) continue;
+        prev.set(k, key(c, r)); q.push([nc, nr]);
+        if (k === goal) { found = true; break; }
+      }
+    }
+    let target = goal;
+    if (!found) {
+      // no way to him: get as close as possible
+      let best = null;
+      for (const k of prev.keys()) { const c = k % COLS, r = Math.floor(k / COLS), s = Math.abs(r - hero.r) * 3 + Math.abs(c - hero.c); if (!best || s < best.s) best = { k, s }; }
+      target = best.k;
+    }
+    if (target === start) return null;
+    let k = target; while (prev.get(k) !== start && prev.get(k) !== -1) k = prev.get(k);
+    const nc = k % COLS, nr = Math.floor(k / COLS);
+    return Object.keys(DIRS).find((d) => g.c + DIRS[d][0] === nc && g.r + DIRS[d][1] === nr) || null;
+  }
+  function chooseGuard(g) {
+    // guards fall into open holes and stay stuck in them
+    const h = holeAt(g.c, g.r);
+    if (h && !g.trapped && !g.climbed) {
+      g.trapped = TRAP_TIME; addScore(75, g.x, g.y - 14, "#ff9a7a"); sfx.trap();
+      if (g.carry) { g.carry = false; if (!solid(g.c, g.r - 1)) gold.add(key(g.c, g.r - 1)); }
+      return null;
+    }
+    if (!h) g.climbed = false;
+    if (!supported(g)) return "down";
+    if (Math.random() < 0.03 && g.carry && !ladder(g.c, g.r) && !rope(g.c, g.r) && !gold.has(key(g.c, g.r))) { g.carry = false; gold.add(key(g.c, g.r)); }
+    return guardStep(g);
+  }
+  function guardOnCell(g) {
+    const k = key(g.c, g.r);
+    if (!g.carry && gold.has(k) && Math.random() < 0.35) { g.carry = true; gold.delete(k); }
+  }
+  function updateGuards(dt) {
+    for (const g of guards) {
+      if (g.dead) { g.dead -= dt; if (g.dead <= 0) respawnGuard(g); continue; }
+      if (g.wait > 0) { g.wait -= dt; continue; }
+      if (g.trapped > 0) {
+        g.trapped -= dt;
+        // time's up: climb out of the hole
+        if (g.trapped <= 0) { g.trapped = 0; g.climbed = true; if (!solid(g.c, g.r - 1)) { g.tr = g.r - 1; g.tc = g.c; g.dir = "up"; } }
+        continue;
+      }
+      advance(g, dt, g.speed * (holeAt(g.c, g.r) ? 0.5 : 1), chooseGuard);
+      if (!hero.dead && Math.abs(g.x - hero.x) < T * 0.7 && Math.abs(g.y - hero.y) < T * 0.7) killHero("PRESO DALLE GUARDIE!");
+    }
+  }
+  function respawnGuard(g) {
+    // guards come back from the top of the screen
+    const cols = []; for (let c = 1; c < COLS - 1; c++) if (!solid(c, 1) && !solid(c, 0)) cols.push(c);
+    const c = cols[Math.floor(Math.random() * cols.length)];
+    Object.assign(g, makeActor(c, 1, g.speed), { trapped: 0, carry: false, dead: 0, wait: 0.5, climbed: false });
+  }
+  function updateHoles(dt) {
+    for (const h of holes) {
+      h.t += dt;
+      if (h.t < h.life) continue;
+      h.closed = true;
+      // whoever is inside when the brick grows back is crushed
+      if (hero.c === h.c && hero.r === h.r && hero.tc === h.c && hero.tr === h.r) killHero("SEPOLTO NEL MATTONE!");
+      for (const g of guards) if (!g.dead && g.c === h.c && g.r === h.r) {
+        g.dead = 2.5; addScore(75, g.x, g.y - 14, "#ffd34d"); sfx.crush(); burst(g.x, g.y, "#ff4a4a", 12, 110);
+        if (g.carry) { g.carry = false; }
+      }
+    }
+    holes = holes.filter((h) => !h.closed);
+  }
+  function levelCleared() {
+    if (state !== "play") return;
+    addScore(1500);
+    message = { text: "LIVELLO COMPLETATO!", sub: "Bonus 1.500", t: 0 };
+    sfx.clear();
+    state = "clear"; stateT = 2.4;
+  }
+
+  function update(dt) {
+    clock += dt;
+    sfxN = 0;
+    for (const q of parts) { q.t += dt; q.x += q.vx * dt; q.y += q.vy * dt; q.vy += 200 * dt; }
+    parts = parts.filter((q) => q.t < q.life);
+    for (const q of popups) { q.t += dt; q.y -= 22 * dt; }
+    popups = popups.filter((q) => q.t < (q.big ? 1.6 : 0.9));
+    if (message) { message.t += dt; if (message.t > 2.4) message = null; }
+    if (!isPlaying()) return;
+    if (state === "intro") { stateT -= dt; if (stateT <= 0) state = "play"; return; }
+    if (state === "dead") { stateT -= dt; if (stateT <= 0) afterDeath(); return; }
+    if (state === "clear") { stateT -= dt; if (stateT <= 0) { level++; buildLevel(); } return; }
+    levelT += dt;
+    hero.inv = Math.max(0, hero.inv - dt);
+    if (hero.digT > 0) hero.digT -= dt;
+    if (digPressed) { dig(digPressed); digPressed = 0; }
+    if (hero.digT <= 0) advance(hero, dt, hero.falling ? 7.5 * T : hero.speed, chooseHero);
+    // gold a guard drops right where the hero is standing still is picked up too
+    if (hero.tc === hero.c && hero.tr === hero.r && gold.has(key(hero.c, hero.r))) heroOnCell(hero);
+    if (state !== "play") return;
+    updateHoles(dt);
+    if (state !== "play") return;
+    updateGuards(dt);
+    checkReveal();
+  }
+
+  // ---------- Drawing ----------
+  function drawTile(c, r) {
+    const t = cellAt(c, r), x = c * T, y = HUD + r * T;
+    if (t === "#") {
+      const h = holeAt(c, r);
+      if (h) {
+        // a hole: empty, then the brick grows back from the edges during the last second
+        const k = Math.max(0, 1 - (h.life - h.t));
+        if (h.t < 0.25) { ctx.fillStyle = "#c8502a"; ctx.fillRect(x, y + T * h.t / 0.25, T, T * (1 - h.t / 0.25)); }
+        else if (k > 0) { ctx.fillStyle = "#c8502a"; ctx.fillRect(x, y + T * (1 - k), T, T * k); }
+        return;
+      }
+      ctx.fillStyle = "#c8502a"; ctx.fillRect(x, y, T, T);
+      ctx.fillStyle = "#7a2a14"; ctx.fillRect(x, y + T / 2 - 1, T, 2); ctx.fillRect(x, y + T - 2, T, 2);
+      ctx.fillRect(x + (r % 2 ? 4 : 12), y, 2, T / 2); ctx.fillRect(x + (r % 2 ? 12 : 4), y + T / 2, 2, T / 2);
+      ctx.fillStyle = "rgba(255,255,255,0.15)"; ctx.fillRect(x, y, T, 2);
+    } else if (t === "@") {
+      ctx.fillStyle = "#6a6a80"; ctx.fillRect(x, y, T, T);
+      ctx.fillStyle = "#8a8aa0"; ctx.fillRect(x + 2, y + 2, T - 4, T - 4);
+      ctx.fillStyle = "#4a4a5a"; ctx.fillRect(x + 4, y + 4, 2, 2); ctx.fillRect(x + T - 6, y + T - 6, 2, 2);
+    } else if (t === "H") {
+      ctx.fillStyle = "#e8d0a0"; ctx.fillRect(x + 3, y, 2, T); ctx.fillRect(x + T - 5, y, 2, T);
+      for (let k = 2; k < T; k += 5) ctx.fillRect(x + 3, y + k, T - 6, 2);
+    } else if (t === "-") {
+      ctx.fillStyle = "#c8c0a8"; ctx.fillRect(x, y + 3, T, 2);
+    }
+  }
+  function drawRunner(a, color, band) {
+    if (a.dead) return;
+    const x = a.x, y = a.y, step = a.moving ? Math.sin(a.walk) * 4 : 0;
+    const climbing = ladder(a.c, a.r) && (a.dir === "up" || a.dir === "down") && !rope(a.c, a.r);
+    const hanging = rope(a.c, a.r) && Math.abs(a.y - cy(a.r)) < 2;
+    ctx.save(); ctx.translate(x, y); if (!climbing) ctx.scale(a.face || 1, 1);
+    ctx.strokeStyle = color; ctx.lineWidth = 2.4; ctx.lineCap = "round";
+    ctx.fillStyle = color; ctx.beginPath(); ctx.arc(0, -6, 3.2, 0, Math.PI * 2); ctx.fill();
+    ctx.beginPath(); ctx.moveTo(0, -3); ctx.lineTo(0, 3);
+    if (hanging) { ctx.moveTo(0, -1); ctx.lineTo(-4, -8); ctx.moveTo(0, -1); ctx.lineTo(4, -8); ctx.moveTo(0, 3); ctx.lineTo(-3 + step * 0.4, 8); ctx.moveTo(0, 3); ctx.lineTo(3 - step * 0.4, 8); }
+    else if (climbing) { ctx.moveTo(0, -1); ctx.lineTo(-5, -5 + step * 0.5); ctx.moveTo(0, -1); ctx.lineTo(5, -5 - step * 0.5); ctx.moveTo(0, 3); ctx.lineTo(-4, 8 - step * 0.4); ctx.moveTo(0, 3); ctx.lineTo(4, 8 + step * 0.4); }
+    else { ctx.moveTo(0, -1); ctx.lineTo(4, 2 - step * 0.3); ctx.moveTo(0, -1); ctx.lineTo(-4, 2 + step * 0.3); ctx.moveTo(0, 3); ctx.lineTo(step * 0.7, 9); ctx.moveTo(0, 3); ctx.lineTo(-step * 0.7, 9); }
+    ctx.stroke();
+    if (band) { ctx.fillStyle = band; ctx.fillRect(-3, -9, 6, 2); }
+    ctx.restore();
+  }
+  function draw() {
+    ctx.setTransform(pxRatio, 0, 0, pxRatio, 0, 0);
+    ctx.fillStyle = "#07070f"; ctx.fillRect(0, 0, W, H);
+    if (!map.length) return;
+    for (let r = 0; r < ROWS; r++) for (let c = 0; c < COLS; c++) drawTile(c, r);
+    // the hidden exit ladder shimmers faintly before it appears
+    if (!revealed) for (const [c, r] of exitCells) {
+      ctx.fillStyle = `rgba(255,211,77,${0.12 + 0.08 * Math.sin(clock * 3)})`;
+      const x = c * T, y = HUD + r * T;
+      for (let k = 2; k < T; k += 5) ctx.fillRect(x + 3, y + k, T - 6, 1);
+    }
+    for (const k of gold) {
+      const c = k % COLS, r = Math.floor(k / COLS), x = c * T, y = HUD + r * T;
+      ctx.fillStyle = "#ffd34d"; ctx.beginPath(); ctx.moveTo(x + 3, y + T - 2); ctx.lineTo(x + 6, y + T - 8); ctx.lineTo(x + T - 6, y + T - 8); ctx.lineTo(x + T - 3, y + T - 2); ctx.closePath(); ctx.fill();
+      ctx.fillStyle = "#fff6c8"; ctx.fillRect(x + 7, y + T - 7, 4, 2);
+      if (Math.floor(clock * 3 + c) % 7 === 0) { ctx.fillStyle = "#fff"; ctx.fillRect(x + T - 7, y + T - 10, 2, 2); }
+    }
+    for (const g of guards) {
+      if (g.wait > 0 && Math.floor(clock * 10) % 2) continue;
+      drawRunner(g, g.trapped > 0 && g.trapped < 0.8 && Math.floor(clock * 12) % 2 ? "#ffffff" : "#ff5a4a", g.carry ? "#ffd34d" : "#ffd0c0");
+    }
+    if (!(hero.inv > 0 && Math.floor(clock * 12) % 2)) drawRunner(hero, "#6ae8ff", "#ffffff");
+    if (hero.digT > 0) {
+      // a laser pick burst towards the brick being dug
+      ctx.fillStyle = "rgba(255,211,77,0.8)"; ctx.fillRect(hero.x + hero.face * 6, hero.y + 4, hero.face * 8, 2);
+    }
+    for (const q of parts) { ctx.globalAlpha = Math.max(0, 1 - q.t / q.life); ctx.fillStyle = q.c; ctx.fillRect(q.x - 1.5, q.y - 1.5, 3, 3); }
+    ctx.globalAlpha = 1;
+    for (const q of popups) {
+      ctx.globalAlpha = Math.max(0, 1 - q.t / (q.big ? 1.6 : 0.9));
+      ctx.textAlign = "center"; ctx.font = q.big ? "900 20px system-ui, sans-serif" : "900 11px system-ui, sans-serif";
+      ctx.lineWidth = 3; ctx.strokeStyle = "#000"; ctx.strokeText(q.text, q.x, q.y); ctx.fillStyle = q.color; ctx.fillText(q.text, q.x, q.y);
+    }
+    ctx.globalAlpha = 1;
+    // status bar
+    ctx.fillStyle = "#07070f"; ctx.fillRect(0, 0, W, HUD);
+    ctx.textBaseline = "middle"; ctx.textAlign = "left"; ctx.font = "900 14px system-ui, sans-serif"; ctx.fillStyle = "#f6f2ff";
+    ctx.fillText(score.toLocaleString("it-IT"), 8, 12);
+    ctx.font = "700 10px system-ui, sans-serif"; ctx.fillStyle = "#a8a0c8";
+    ctx.fillText(`REC ${Math.max(bestCache, score).toLocaleString("it-IT")}`, 90, 12);
+    for (let i = 0; i < Math.min(lives - (state === "dead" ? 0 : 1), 6); i++) { ctx.fillStyle = "#6ae8ff"; ctx.beginPath(); ctx.arc(200 + i * 12, 9, 3, 0, Math.PI * 2); ctx.fill(); ctx.fillRect(199 + i * 12, 12, 2, 6); }
+    ctx.textAlign = "center"; ctx.fillStyle = "#ffd34d"; ctx.font = "800 11px system-ui, sans-serif";
+    const left = gold.size + guards.filter((g) => g.carry).length;
+    ctx.fillText(revealed ? "↑ ESCI DALLA CIMA" : `ORO ${left}`, 330, 12);
+    ctx.textAlign = "right"; ctx.fillStyle = "#c8502a";
+    ctx.fillText(`LIVELLO ${level + 1}`, W - 8, 12);
+    ctx.textBaseline = "alphabetic";
+    if (message) {
+      ctx.globalAlpha = Math.min(1, (2.4 - message.t) * 2);
+      ctx.fillStyle = "rgba(7,7,15,0.8)"; ctx.fillRect(0, H / 2 - 30, W, message.sub ? 52 : 36);
+      ctx.textAlign = "center"; ctx.font = "900 20px system-ui, sans-serif"; ctx.fillStyle = "#ffd34d";
+      ctx.fillText(message.text, W / 2, H / 2 - 5);
+      if (message.sub) { ctx.font = "700 12px system-ui, sans-serif"; ctx.fillStyle = "#f6f2ff"; ctx.fillText(message.sub, W / 2, H / 2 + 14); }
+      ctx.globalAlpha = 1;
+    }
+  }
+
+  // ---------- Loop ----------
+  const STEP = 1 / 120;
+  let last = performance.now(), acc = 0;
+  function loop(now) {
+    const dt = Math.min(0.1, (now - last) / 1000);
+    last = now;
+    if (isPlaying()) {
+      acc += dt;
+      while (acc >= STEP && isPlaying()) { update(STEP); acc -= STEP; }
+    } else { acc = 0; update(dt); }
+    draw();
+    requestAnimationFrame(loop);
+  }
+  syncControls();
+  buildLevel(); state = "menu"; message = null;
+  showTitle();
+  requestAnimationFrame(loop);
+})();
+</script>
+<script src="../../shared/iniziali.js" data-record="oro-best-" data-kind="score"></script>
+</body>
+</html>

@@ -4,7 +4,7 @@ Raccolta di giochi arcade per il browser. Ogni gioco è un singolo file HTML sen
 
 ## 🕹️ Sala Giochi — `index.html`
 
-Apri `index.html` nella cartella principale per la pagina di raccolta: mostra tutti i 40 giochi con copertina, genere, comandi e i tuoi record per ogni difficoltà (Facile, Normale, Difficile). Tocca «Gioca» per avviare un gioco; in ogni gioco il pulsante «← Sala Giochi» in alto a sinistra (visibile nei menu) riporta alla raccolta.
+Apri `index.html` nella cartella principale per la pagina di raccolta: mostra tutti i 41 giochi con copertina, genere, comandi e i tuoi record per ogni difficoltà (Facile, Normale, Difficile). Tocca «Gioca» per avviare un gioco; in ogni gioco il pulsante «← Sala Giochi» in alto a sinistra (visibile nei menu) riporta alla raccolta.
 
 **Iniziali del record:** quando batti un record compare la schermata da sala giochi per inserire le tue tre iniziali (frecce ↑ ↓ per cambiare lettera, ← → per spostarti, oppure scrivile direttamente; su telefono i tasti ▲ ▼ e OK). Le iniziali vengono salvate insieme al record e compaiono nei menu del gioco e nella Sala Giochi. Il codice è condiviso da tutti i giochi in `shared/iniziali.js`.
 
@@ -631,3 +631,18 @@ Labirinto in auto in stile *Rally-X*: la tua auto blu corre in un grande labirin
 - **Touch:** levetta a sinistra (basta un colpetto verso la direzione: la svolta viene fatta al primo incrocio utile) e tasto FUMO a destra
 
 Per giocare apri `games/rally-bandiere/index.html` nel browser.
+
+### ⛏️ Cercatore d'Oro — `games/cercatore-d-oro/index.html`
+
+Rompicapo d'azione in stile *Lode Runner*: raccogli tutto l'oro del livello fra mattoni, scale e corde, senza mai poter saltare.
+
+- **Oro:** 250 punti a lingotto; quando li hai presi tutti compare la scala segreta che porta all'uscita in alto (1.500 punti a livello)
+- **Scavare:** apri una buca nel mattone in basso a sinistra o a destra; la buca si richiude da sola dopo qualche secondo
+- **Guardie:** ti inseguono su scale e corde e possono rubare l'oro; se cadono in una buca restano intrappolate (75 punti) e lasciano l'oro. Se la buca si richiude con loro dentro, rinascono in alto (altri 75 punti)
+- **Corde:** ci si appende e ci si sposta di lato; premi giù per lasciarsi cadere
+- **4 livelli** che poi ricominciano più veloci; vita extra a 20.000 punti e poi ogni 30.000
+- **Difficoltà:** Facile (5 vite, guardie lente, buche aperte più a lungo), Normale, Difficile; record separati per ogni difficoltà
+- **Comandi:** frecce o `W` `A` `S` `D` per muoversi · `Z`/`Q` scava a sinistra · `X`/`E` scava a destra · `P` pausa
+- **Touch:** levetta a sinistra per muoversi e due tasti SCAVA (◀ e ▶) a destra
+
+Per giocare apri `games/cercatore-d-oro/index.html` nel browser.
