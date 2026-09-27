@@ -4,7 +4,7 @@ Raccolta di giochi arcade per il browser. Ogni gioco è un singolo file HTML sen
 
 ## 🕹️ Sala Giochi — `index.html`
 
-Apri `index.html` nella cartella principale per la pagina di raccolta: mostra tutti i 41 giochi con copertina, genere, comandi e i tuoi record per ogni difficoltà (Facile, Normale, Difficile). Tocca «Gioca» per avviare un gioco; in ogni gioco il pulsante «← Sala Giochi» in alto a sinistra (visibile nei menu) riporta alla raccolta.
+Apri `index.html` nella cartella principale per la pagina di raccolta: mostra tutti i 42 giochi con copertina, genere, comandi e i tuoi record per ogni difficoltà (Facile, Normale, Difficile). Tocca «Gioca» per avviare un gioco; in ogni gioco il pulsante «← Sala Giochi» in alto a sinistra (visibile nei menu) riporta alla raccolta.
 
 **Iniziali del record:** quando batti un record compare la schermata da sala giochi per inserire le tue tre iniziali (frecce ↑ ↓ per cambiare lettera, ← → per spostarti, oppure scrivile direttamente; su telefono i tasti ▲ ▼ e OK). Le iniziali vengono salvate insieme al record e compaiono nei menu del gioco e nella Sala Giochi. Il codice è condiviso da tutti i giochi in `shared/iniziali.js`.
 
@@ -646,3 +646,19 @@ Rompicapo d'azione in stile *Lode Runner*: raccogli tutto l'oro del livello fra 
 - **Touch:** levetta a sinistra per muoversi e due tasti SCAVA (◀ e ▶) a destra
 
 Per giocare apri `games/cercatore-d-oro/index.html` nel browser.
+
+### ✈️ Pilota del Tempo — `games/pilota-del-tempo/index.html`
+
+Duelli aerei in stile *Time Pilot*: il tuo jet resta al centro dello schermo e vira libero a 360° in un cielo senza confini, attraverso cinque epoche.
+
+- **Epoche:** 1910 biplani, 1940 caccia a elica, 1970 elicotteri, 1983 jet supersonici, 2001 UFO nello spazio; poi si ricomincia, più veloci
+- **Nemici:** ti inseguono virando e sparano; elicotteri e jet lanciano missili a ricerca (si possono abbattere, 150 punti), gli UFO sparano a ventaglio
+- **Squadriglie:** gruppi di 5 aerei in formazione; abbatterli tutti vale 1.000 punti di bonus
+- **Gigante dell'epoca:** abbatti abbastanza nemici (la barra in alto) e arriva il dirigibile, il bombardiere, l'elicottero da trasporto, il bombardiere strategico o la nave madre. Una freccia rossa sul bordo indica dove si trova; distruggilo per aprire il varco del tempo
+- **Paracadutisti:** volaci sopra per salvarli (500, 1.000, 1.500… punti); la freccia verde li indica. Nel 2001 sono astronauti
+- **Vite extra:** a 10.000 punti e poi ogni 40.000
+- **Difficoltà:** Facile (5 vite, 28 nemici per epoca, spari lenti), Normale (40 nemici), Difficile (50 nemici, cieli affollati); record separati per ogni difficoltà
+- **Comandi:** frecce o `W` `A` `S` `D` per virare, anche in diagonale · `SPAZIO` o `Z` tenuti premuti per sparare · `P` pausa
+- **Touch:** levetta analogica a sinistra (spingi verso dove vuoi andare e l'aereo vira da solo) e tasto FUOCO a destra da tenere premuto
+
+Per giocare apri `games/pilota-del-tempo/index.html` nel browser.
