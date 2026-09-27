@@ -4,7 +4,7 @@ Raccolta di giochi arcade per il browser. Ogni gioco è un singolo file HTML sen
 
 ## 🕹️ Sala Giochi — `index.html`
 
-Apri `index.html` nella cartella principale per la pagina di raccolta: mostra tutti i 39 giochi con copertina, genere, comandi e i tuoi record per ogni difficoltà (Facile, Normale, Difficile). Tocca «Gioca» per avviare un gioco; in ogni gioco il pulsante «← Sala Giochi» in alto a sinistra (visibile nei menu) riporta alla raccolta.
+Apri `index.html` nella cartella principale per la pagina di raccolta: mostra tutti i 40 giochi con copertina, genere, comandi e i tuoi record per ogni difficoltà (Facile, Normale, Difficile). Tocca «Gioca» per avviare un gioco; in ogni gioco il pulsante «← Sala Giochi» in alto a sinistra (visibile nei menu) riporta alla raccolta.
 
 **Iniziali del record:** quando batti un record compare la schermata da sala giochi per inserire le tue tre iniziali (frecce ↑ ↓ per cambiare lettera, ← → per spostarti, oppure scrivile direttamente; su telefono i tasti ▲ ▼ e OK). Le iniziali vengono salvate insieme al record e compaiono nei menu del gioco e nella Sala Giochi. Il codice è condiviso da tutti i giochi in `shared/iniziali.js`.
 
@@ -614,3 +614,20 @@ Piattaforme e bolle in stile *Bubble Bobble*: un draghetto soffia bolle per catt
 - **Touch:** ◀ ▶ a sinistra, BOLLA e SALTA a destra
 
 Per giocare apri `games/bolle-di-drago/index.html` nel browser.
+
+### 🏁 Rally delle Bandiere — `games/rally-bandiere/index.html`
+
+Labirinto in auto in stile *Rally-X*: la tua auto blu corre in un grande labirinto che scorre, con un radar che mostra tutta la mappa.
+
+- **Bandiere:** raccogline 10 per finire il round; valgono 100, 200, 300… una più dell'altra
+- **Bandiere speciali:** la S (viola) raddoppia il valore delle successive, la L (verde) fa il pieno di carburante
+- **Carburante:** scende col tempo; a secco l'auto va pianissimo. Quello avanzato a fine round vale 20 punti a goccia
+- **Auto rosse:** ti inseguono lungo le strade; lascia una cortina di fumo e chi ci entra va in testacoda (il fumo consuma un po' di carburante)
+- **Massi:** fermi sulla strada, da evitare
+- **Radar:** sul pannello a destra, con le bandiere (gialle), gli inseguitori (rossi) e te (bianco)
+- **4 paesaggi:** campagna, città, deserto e neve, con un labirinto nuovo a ogni round e sempre più inseguitori
+- **Difficoltà:** Facile (5 vite, meno inseguitori, più carburante), Normale, Difficile; record separati per ogni difficoltà
+- **Comandi:** frecce o `W` `A` `S` `D` per sterzare (l'auto va sempre avanti) · `SPAZIO` o `Z` per il fumo · `P` pausa
+- **Touch:** croce a sinistra e tasto FUMO a destra
+
+Per giocare apri `games/rally-bandiere/index.html` nel browser.

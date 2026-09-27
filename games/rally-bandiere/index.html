@@ -1,0 +1,648 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no, viewport-fit=cover">
+<title>Rally delle Bandiere</title>
+<style>
+  :root {
+    --bg: #0a0e14;
+    --fg: #f2f6ff;
+    --muted: #9aa8c0;
+    --car: #3a8aff;
+    --flag: #ffd34d;
+    --red: #ff3a3a;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  html, body {
+    height: 100%;
+    background: var(--bg);
+    color: var(--fg);
+    font-family: system-ui, -apple-system, "Segoe UI", sans-serif;
+    overflow: hidden;
+    user-select: none;
+    -webkit-user-select: none;
+    touch-action: none;
+  }
+  #wrap { position: fixed; inset: 0; display: flex; align-items: center; justify-content: center; }
+  canvas { display: block; touch-action: none; border-radius: 6px; box-shadow: 0 0 0 2px #2a3040, 0 10px 40px rgba(0,0,0,0.6); }
+  #pauseBtn {
+    position: fixed; z-index: 3; display: none; right: 10px; top: calc(10px + env(safe-area-inset-top, 0px));
+    font: 700 13px system-ui, sans-serif; color: var(--fg);
+    background: rgba(0, 0, 0, 0.6); border: 1px solid rgba(242, 246, 255, 0.35);
+    border-radius: 8px; padding: 6px 10px; cursor: pointer;
+  }
+  #touch {
+    position: fixed; z-index: 2; display: none; left: 12px; right: 12px;
+    bottom: calc(14px + env(safe-area-inset-bottom, 0px));
+    justify-content: space-between; align-items: flex-end; pointer-events: none;
+  }
+  #touch .pad { display: grid; grid-template-columns: repeat(3, 56px); grid-template-rows: repeat(3, 56px); gap: 4px; pointer-events: auto; }
+  #touch .pad [data-a="up"] { grid-column: 2; grid-row: 1; }
+  #touch .pad [data-a="left"] { grid-column: 1; grid-row: 2; }
+  #touch .pad [data-a="right"] { grid-column: 3; grid-row: 2; }
+  #touch .pad [data-a="down"] { grid-column: 2; grid-row: 3; }
+  #touch button {
+    width: 56px; height: 56px; border-radius: 14px; touch-action: none;
+    font: 700 22px system-ui, sans-serif; color: var(--fg);
+    border: 2px solid rgba(58, 138, 255, 0.7); background: rgba(58, 138, 255, 0.1);
+  }
+  #touch button[data-a="smoke"] { width: 92px; height: 92px; border-radius: 50%; border-color: rgba(200, 200, 220, 0.9); background: rgba(200, 200, 220, 0.14); font: 800 14px system-ui, sans-serif; letter-spacing: 1px; pointer-events: auto; }
+  #touch.small .pad { grid-template-columns: repeat(3, 44px); grid-template-rows: repeat(3, 44px); }
+  #touch.small button { width: 44px; height: 44px; font-size: 17px; }
+  #touch.small button[data-a="smoke"] { width: 70px; height: 70px; font-size: 12px; }
+  #touch button.on { background: rgba(242, 246, 255, 0.4); }
+  #overlay {
+    position: fixed; inset: 0; z-index: 5;
+    display: flex; flex-direction: column; align-items: center; justify-content: flex-start;
+    gap: 14px; padding: 16px; text-align: center; overflow-y: auto;
+    background: rgba(10, 14, 20, 0.9);
+  }
+  #overlay > :first-child { margin-top: auto; }
+  #overlay > :last-child { margin-bottom: auto; }
+  #overlay.hidden { display: none; }
+  #homeLink {
+    position: fixed; top: calc(10px + env(safe-area-inset-top, 0px)); left: 10px; z-index: 6;
+    font: 600 13px/1 system-ui, sans-serif; color: #fff; text-decoration: none;
+    padding: 8px 12px; border-radius: 999px; background: rgba(0,0,0,.55);
+    border: 1px solid rgba(255,255,255,.25);
+  }
+  #homeLink:hover { background: rgba(0,0,0,.8); }
+  #overlay.hidden ~ #homeLink { display: none; }
+  @media (max-width: 700px) { #overlay { padding-top: calc(52px + env(safe-area-inset-top, 0px)); } }
+  #overlay h1 { font-size: clamp(30px, 9vw, 58px); font-weight: 900; font-style: italic; letter-spacing: 1px; color: var(--flag); text-shadow: 3px 3px 0 #1a4ab8, 6px 6px 0 #000; }
+  #overlay h2 { font-size: clamp(28px, 7vw, 44px); font-weight: 900; letter-spacing: 2px; }
+  #overlay h2.lose { color: var(--red); }
+  #overlay p { max-width: 540px; font-size: clamp(13px, 3.4vw, 16px); line-height: 1.55; }
+  #overlay p.muted { color: var(--muted); }
+  #overlay .pts { display: grid; grid-template-columns: repeat(2, auto); gap: 4px 18px; font-size: 13px; color: var(--muted); text-align: left; }
+  #overlay .pts b { color: var(--fg); }
+  #overlay .diff { display: flex; gap: 10px; flex-wrap: wrap; justify-content: center; }
+  #overlay button {
+    font: 800 15px system-ui, sans-serif; letter-spacing: 1.5px; color: var(--fg);
+    background: transparent; cursor: pointer;
+    border: 2px solid rgba(242,246,255,0.3); border-radius: 10px; padding: 9px 16px;
+  }
+  #overlay .diff button.on { border-color: var(--c); color: var(--c); box-shadow: 0 0 12px var(--c); }
+  #overlay button.start { border-color: var(--car); color: #fff; background: var(--car); padding: 11px 30px; box-shadow: 0 4px 0 #1a4ab8; }
+  @media (max-height: 560px) {
+    #overlay { gap: 8px; }
+    #overlay h1 { font-size: 30px; }
+    #overlay p { font-size: 13px; line-height: 1.4; }
+    #overlay .help, #overlay .pts { display: none; }
+  }
+</style>
+</head>
+<body>
+<div id="wrap"><canvas id="game"></canvas></div>
+<div id="touch">
+  <div class="pad">
+    <button type="button" data-a="up" aria-label="Su">▲</button>
+    <button type="button" data-a="left" aria-label="Sinistra">◀</button>
+    <button type="button" data-a="right" aria-label="Destra">▶</button>
+    <button type="button" data-a="down" aria-label="Giù">▼</button>
+  </div>
+  <button type="button" data-a="smoke" aria-label="Fumo">FUMO</button>
+</div>
+<button id="pauseBtn" type="button" aria-label="Pausa">❚❚</button>
+<div id="overlay"></div>
+<a id="homeLink" href="../../index.html">← Sala Giochi</a>
+
+<script>
+(() => {
+  "use strict";
+
+  const W = 480, H = 400, VW = 356, PANEL = VW + 4;
+  const CELL = 28, LAT = 5, LC = 6, LR = 8, COLS = LAT * LC + 3, ROWS = LAT * LR + 3;
+  const DIRS = { up: [0, -1], down: [0, 1], left: [-1, 0], right: [1, 0] };
+  const OPP = { up: "down", down: "up", left: "right", right: "left" };
+  const THEMES = [
+    { ground: "#2a2a30", block: "#3a8a3a", roof: "#5aaa4a", name: "LA CAMPAGNA" },
+    { ground: "#2a2a34", block: "#8a6a4a", roof: "#aa8a5a", name: "LA CITTÀ" },
+    { ground: "#3a3020", block: "#c8a060", roof: "#e8c080", name: "IL DESERTO" },
+    { ground: "#26303a", block: "#e8eef8", roof: "#ffffff", name: "LA NEVE" },
+  ];
+
+  const DIFFICULTIES = {
+    facile:    { label: "FACILE",    color: "#7dff9a", desc: "5 vite · poche auto rosse, più carburante", lives: 5, speed: 0.82, cars: -1, fuel: 1.3 },
+    normale:   { label: "NORMALE",   color: "#ffd34d", desc: "3 vite · l'esperienza classica", lives: 3, speed: 1, cars: 0, fuel: 1 },
+    difficile: { label: "DIFFICILE", color: "#ff3a3a", desc: "3 vite · inseguitori veloci e numerosi", lives: 3, speed: 1.12, cars: 1, fuel: 0.85 },
+  };
+  const DIFF_IDS = Object.keys(DIFFICULTIES);
+  const DIFF_KEY = "rally-difficulty";
+  const bestKey = (id) => `rally-best-${id}`;
+  function store(k, v) { try { localStorage.setItem(k, v); } catch { /* ignore */ } }
+  function load(k) { try { return localStorage.getItem(k); } catch { return null; } }
+  const rnd = (a, b) => a + Math.random() * (b - a);
+  const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
+
+  // ---------- Canvas ----------
+  const canvas = document.getElementById("game");
+  const ctx = canvas.getContext("2d");
+  const wrap = document.getElementById("wrap");
+  const overlay = document.getElementById("overlay");
+  const touchEl = document.getElementById("touch");
+  const pauseBtn = document.getElementById("pauseBtn");
+  let pxRatio = 1, touchMode = !!(window.matchMedia && matchMedia("(pointer: coarse)").matches);
+  function resize() {
+    const portrait = window.innerHeight > window.innerWidth;
+    const showTouch = touchMode && isPlaying();
+    touchEl.style.display = showTouch ? "flex" : "none";
+    touchEl.classList.toggle("small", !portrait && window.innerHeight < 480);
+    wrap.style.paddingBottom = showTouch && portrait ? "calc(190px + env(safe-area-inset-bottom, 0px))" : "0";
+    let availW = window.innerWidth - 8, availH = window.innerHeight - 8;
+    if (showTouch && portrait) availH -= 190;
+    if (showTouch && !portrait) {
+      const side = Math.max(...[...touchEl.children].map((el) => el.offsetWidth)) + 20;
+      if (window.innerWidth - 2 * side > 280) availW = window.innerWidth - 2 * side;
+    }
+    const s = Math.max(0.2, Math.min(availW / W, availH / H));
+    pxRatio = Math.min(3, s * (window.devicePixelRatio || 1));
+    canvas.style.width = W * s + "px";
+    canvas.style.height = H * s + "px";
+    canvas.width = Math.round(W * pxRatio);
+    canvas.height = Math.round(H * pxRatio);
+  }
+  window.addEventListener("resize", () => syncControls());
+
+  // ---------- Audio ----------
+  let audioCtx = null;
+  function beep(freq, dur, type = "square", vol = 0.04, slide = 0, delay = 0) {
+    if (!audioCtx) return;
+    const t = audioCtx.currentTime + delay;
+    const osc = audioCtx.createOscillator(), gain = audioCtx.createGain();
+    osc.type = type;
+    osc.frequency.setValueAtTime(freq, t);
+    if (slide) osc.frequency.exponentialRampToValueAtTime(Math.max(20, freq + slide), t + dur);
+    gain.gain.setValueAtTime(vol, t);
+    gain.gain.exponentialRampToValueAtTime(0.0001, t + dur);
+    osc.connect(gain).connect(audioCtx.destination);
+    osc.start(t); osc.stop(t + dur + 0.02);
+  }
+  function noise(dur, vol, freq) {
+    if (!audioCtx) return;
+    const len = Math.floor(audioCtx.sampleRate * dur), buf = audioCtx.createBuffer(1, len, audioCtx.sampleRate), d = buf.getChannelData(0);
+    for (let i = 0; i < len; i++) d[i] = (Math.random() * 2 - 1) * (1 - i / len);
+    const src = audioCtx.createBufferSource(), f = audioCtx.createBiquadFilter(), g = audioCtx.createGain();
+    src.buffer = buf; f.type = "lowpass"; f.frequency.value = freq; g.gain.value = vol;
+    src.connect(f).connect(g).connect(audioCtx.destination); src.start();
+  }
+  const arp = (notes, gap, d, type = "square", vol = 0.04) => notes.forEach((f, i) => beep(f, d, type, vol, 0, i * gap));
+  let sfxN = 0;
+  const lim = (fn) => (...a) => { if (sfxN++ < 5) fn(...a); };
+  const sfx = {
+    flag: lim((k) => arp([784 + k * 40, 1047 + k * 40, 1319 + k * 40], 0.05, 0.1, "square", 0.04)),
+    special: lim(() => arp([1047, 1319, 1568, 2093], 0.05, 0.1, "triangle", 0.05)),
+    smoke: lim(() => noise(0.35, 0.12, 900)),
+    stun: lim(() => beep(500, 0.3, "sawtooth", 0.03, -300)),
+    turn: lim(() => beep(180, 0.03, "triangle", 0.015)),
+    low: lim(() => arp([440, 330], 0.12, 0.12, "square", 0.03)),
+    crash: () => { noise(0.7, 0.35, 500); arp([392, 311, 262, 196], 0.12, 0.16, "sawtooth", 0.035); },
+    clear: () => arp([523, 659, 784, 1047, 784, 1047, 1319, 1568], 0.08, 0.13),
+    over: () => arp([523, 415, 330, 262], 0.18, 0.25),
+    life: () => arp([523, 784, 1047, 1319], 0.08, 0.12, "triangle", 0.05),
+  };
+
+  // ---------- State ----------
+  let difficulty = DIFFICULTIES[load(DIFF_KEY)] ? load(DIFF_KEY) : "normale";
+  let diff = DIFFICULTIES[difficulty];
+  let state = "menu", menu = null, pausedFrom = null, stateT = 0, clock = 0;
+  let score = 0, lives = 3, round = 0, bestCache = 0, nextLife = 20000;
+  let walls = null, rocks = new Set(), flags = [], car = null, enemies = [], smokes = [], fuel = 100, flagValue = 100, doubled = false;
+  let parts = [], popups = [], message = null, roundT = 0, distMap = null, distT = 0, lowWarned = false, camX = 0, camY = 0, smokeT = 0;
+  const ctl = { up: false, down: false, left: false, right: false, smoke: false };
+  let lastDir = null, smokePressed = false;
+
+  const TH = () => THEMES[round % THEMES.length];
+  const key = (c, r) => r * COLS + c;
+  const isWall = (c, r) => c < 0 || r < 0 || c >= COLS || r >= ROWS || walls[key(c, r)] === 1;
+  const cx = (c) => c * CELL + CELL / 2;
+  const START = [1 + LAT * 2, ROWS - 2];
+
+  // ---------- The maze: blocks on a lattice, so that roads always connect ----------
+  function buildMaze() {
+    walls = new Uint8Array(COLS * ROWS);
+    for (let c = 0; c < COLS; c++) { walls[key(c, 0)] = 1; walls[key(c, ROWS - 1)] = 1; }
+    for (let r = 0; r < ROWS; r++) { walls[key(0, r)] = 1; walls[key(COLS - 1, r)] = 1; }
+    for (let i = 0; i < LC; i++) for (let j = 0; j < LR; j++) {
+      if (Math.random() < 0.14) continue; // an open square
+      const w = 2 + Math.floor(Math.random() * 3), h = 2 + Math.floor(Math.random() * 3);
+      const ox = 2 + i * LAT + Math.floor(Math.random() * (5 - w)), oy = 2 + j * LAT + Math.floor(Math.random() * (5 - h));
+      for (let r = oy; r < oy + h; r++) for (let c = ox; c < ox + w; c++) walls[key(c, r)] = 1;
+    }
+    for (let r = START[1] - 1; r <= START[1]; r++) for (let c = START[0] - 2; c <= START[0] + 2; c++) walls[key(c, r)] = 0;
+  }
+  function roadCells() { const out = []; for (let r = 1; r < ROWS - 1; r++) for (let c = 1; c < COLS - 1; c++) if (!walls[key(c, r)]) out.push([c, r]); return out; }
+  function buildRound() {
+    buildMaze();
+    const roads = roadCells().filter(([c, r]) => Math.abs(c - START[0]) + Math.abs(r - START[1]) > 8);
+    const pick = () => roads.splice(Math.floor(Math.random() * roads.length), 1)[0];
+    flags = [];
+    for (let i = 0; i < 10; i++) { const [c, r] = pick(); flags.push({ c, r, kind: i === 0 ? "S" : i === 1 ? "L" : "n", got: false }); }
+    rocks = new Set();
+    for (let i = 0; i < Math.min(12, 3 + round * 2); i++) {
+      const [c, r] = pick(); rocks.add(key(c, r));
+      // a rock must never cut off a flag
+      if (!allFlagsReachable()) rocks.delete(key(c, r));
+    }
+    fuel = 100; flagValue = 100; doubled = false; roundT = 0; lowWarned = false; smokes = [];
+    resetCars();
+    message = { text: `ROUND ${round + 1}`, sub: `${TH().name} · raccogli 10 bandiere`, t: 0 };
+    state = "intro"; stateT = 1.8;
+  }
+  function allFlagsReachable() {
+    const seen = new Uint8Array(COLS * ROWS), q = [START]; seen[key(...START)] = 1;
+    for (let i = 0; i < q.length; i++) {
+      const [c, r] = q[i];
+      for (const d in DIRS) { const nc = c + DIRS[d][0], nr = r + DIRS[d][1], k = key(nc, nr); if (!seen[k] && !isWall(nc, nr) && !rocks.has(k)) { seen[k] = 1; q.push([nc, nr]); } }
+    }
+    return flags.every((f) => seen[key(f.c, f.r)]);
+  }
+  function makeCar(c, r, speed, dir) { return { c, r, tc: c, tr: r, x: cx(c), y: cx(r), speed, dir, face: dir, stun: 0 }; }
+  function resetCars() {
+    car = makeCar(START[0], START[1], 4.3 * CELL, "up");
+    car.inv = 1.5; car.dead = false;
+    const n = clamp(3 + Math.floor(round / 2) + diff.cars, 2, 8);
+    enemies = [];
+    for (let i = 0; i < n; i++) {
+      // the chasers come in from the far end of the map
+      const c = 1 + ((i * 11) % (COLS - 2)), r = 1;
+      const e = makeCar(c, r, (3.4 + Math.min(1.1, round * 0.18)) * CELL * diff.speed, "down");
+      e.wait = 1 + i * 1.5; e.rand = 0.15 + (i % 3) * 0.1;
+      enemies.push(e);
+    }
+    camX = car.x - VW / 2; camY = car.y - H / 2;
+  }
+
+  // ---------- Flow ----------
+  const isPlaying = () => ["intro", "play", "dead", "clear"].includes(state);
+  function startGame() {
+    if (!audioCtx) { try { audioCtx = new (window.AudioContext || window.webkitAudioContext)(); } catch { audioCtx = null; } }
+    if (audioCtx && audioCtx.state === "suspended") audioCtx.resume();
+    score = 0; lives = diff.lives; round = 0; nextLife = 20000;
+    bestCache = parseInt(load(bestKey(difficulty)), 10) || 0;
+    buildRound();
+    menu = null;
+    overlay.classList.add("hidden");
+    syncControls();
+    last = performance.now();
+  }
+  function addScore(n, x, y, color = "#f2f6ff") {
+    score += n;
+    if (x !== undefined) popups.push({ x, y, text: String(n), color, t: 0 });
+    if (score >= nextLife) { nextLife += 30000; lives++; sfx.life(); popups.push({ x: car.x, y: car.y - 30, text: "VITA EXTRA", color: "#ffd34d", t: 0, big: true }); }
+  }
+  function burst(x, y, color, n = 12, sp = 120) {
+    for (let k = 0; k < n; k++) {
+      const a = Math.random() * Math.PI * 2, s = sp * (0.3 + Math.random() * 0.8);
+      parts.push({ x, y, vx: Math.cos(a) * s, vy: Math.sin(a) * s, t: 0, life: 0.3 + Math.random() * 0.5, c: color });
+    }
+  }
+  function crash(why) {
+    if (state !== "play" || car.inv > 0) return;
+    lives--; car.dead = true;
+    sfx.crash();
+    burst(car.x, car.y, "#ffd34d", 20, 160); burst(car.x, car.y, "#3a8aff", 12, 120);
+    message = { text: why, t: 0 };
+    state = "dead"; stateT = 2;
+  }
+  function afterDeath() {
+    if (lives <= 0) { gameOver(); return; }
+    resetCars(); smokes = [];
+    fuel = Math.max(fuel, 35);
+    state = "play";
+  }
+  function roundCleared() {
+    const bonus = Math.round(fuel) * 20;
+    addScore(bonus);
+    message = { text: "TUTTE LE BANDIERE!", sub: `Bonus carburante ${bonus.toLocaleString("it-IT")}`, t: 0 };
+    sfx.clear();
+    state = "clear"; stateT = 3;
+  }
+  function gameOver() {
+    state = "over";
+    const prev = parseInt(load(bestKey(difficulty)), 10) || 0;
+    const record = score > prev;
+    if (record) store(bestKey(difficulty), String(score));
+    const played = diff.label, rd = round + 1;
+    menu = () => showOverlay(
+      `<h2 class="lose">GAME OVER</h2>
+       <p>Punteggio: <b>${score.toLocaleString("it-IT")}</b> · Round ${rd} · ${played}</p>
+       ${record ? "<p style='color:var(--flag)'>★ NUOVO RECORD! ★</p>" : ""}
+       ${difficultyHTML()}
+       <button class="start" data-start>GIOCA ANCORA</button>`
+    );
+    menu();
+    sfx.over();
+    syncControls();
+  }
+  function togglePause() {
+    if (isPlaying()) {
+      pausedFrom = state; state = "paused";
+      showOverlay(`<h2>PAUSA</h2><button class="start" data-resume>CONTINUA</button><p class="muted">Premi P per continuare</p>`);
+    } else if (state === "paused") {
+      state = pausedFrom; overlay.classList.add("hidden"); last = performance.now();
+    }
+    syncControls();
+  }
+  function syncControls() {
+    const portrait = window.innerHeight > window.innerWidth;
+    pauseBtn.style.display = isPlaying() && touchMode ? "block" : "none";
+    Object.assign(pauseBtn.style, portrait
+      ? { top: "auto", bottom: "calc(40px + env(safe-area-inset-bottom, 0px))", right: "auto", left: "calc(50% - 20px)" }
+      : { top: "calc(10px + env(safe-area-inset-top, 0px))", bottom: "auto", right: "10px", left: "auto" });
+    resize();
+  }
+  pauseBtn.addEventListener("click", () => togglePause());
+  function showOverlay(html) { overlay.innerHTML = html; overlay.classList.remove("hidden"); }
+  function difficultyHTML() {
+    const buttons = DIFF_IDS.map((id) => {
+      const d = DIFFICULTIES[id];
+      return `<button type="button" data-diff="${id}" class="${id === difficulty ? "on" : ""}" style="--c:${d.color}">${d.label}</button>`;
+    }).join("");
+    const best = parseInt(load(bestKey(difficulty)), 10);
+    return `<div class="diff">${buttons}</div><p class="muted">${diff.desc}${best ? ` · Record: ${best.toLocaleString("it-IT")}` : ""}</p>`;
+  }
+  function setDifficulty(id) { if (!DIFFICULTIES[id]) return; difficulty = id; diff = DIFFICULTIES[id]; store(DIFF_KEY, id); if (menu) menu(); }
+  function showTitle() {
+    menu = showTitle;
+    showOverlay(
+      `<h1>RALLY DELLE BANDIERE</h1>
+       <p>Sfreccia con la tua auto blu in un grande labirinto e raccogli le 10 bandiere prima che finisca il carburante! Le auto rosse ti danno la caccia: guarda il radar e seminale con una cortina di fumo, che le fa girare in testacoda. Non sbattere contro i massi.</p>
+       <div class="pts">
+         <span><b>Bandiere</b></span><span>100, 200, 300… una più dell'altra</span>
+         <span><b>Bandiera S</b></span><span>raddoppia il valore delle successive</span>
+         <span><b>Bandiera L</b></span><span>fortunata: pieno di carburante</span>
+         <span><b>Fine round</b></span><span>20 punti per ogni goccia di carburante</span>
+       </div>
+       ${touchMode
+         ? `<p class="muted help">Croce per sterzare (l'auto va sempre avanti) · FUMO per la cortina di fumo, consuma carburante</p>`
+         : `<p class="muted help">Frecce o W A S D per sterzare (l'auto va sempre avanti) · SPAZIO o Z per il fumo · P pausa</p>`}
+       ${difficultyHTML()}
+       <button class="start" data-start>INIZIA</button>`
+    );
+  }
+  overlay.addEventListener("click", (e) => {
+    const d = e.target.closest("[data-diff]");
+    if (d) { setDifficulty(d.dataset.diff); return; }
+    if (e.target.closest("[data-start]")) startGame();
+    if (e.target.closest("[data-resume]")) togglePause();
+  });
+
+  // ---------- Input ----------
+  const KEYS = { arrowup: "up", w: "up", arrowdown: "down", s: "down", arrowleft: "left", a: "left", arrowright: "right", d: "right", " ": "smoke", z: "smoke", x: "smoke" };
+  window.addEventListener("keydown", (e) => {
+    const k = e.key.toLowerCase();
+    if ([" ", "arrowup", "arrowdown", "arrowleft", "arrowright"].includes(k)) e.preventDefault();
+    if (state === "menu" || state === "over") {
+      if (e.key === "Enter") startGame();
+      else if (["1", "2", "3"].includes(k)) setDifficulty(DIFF_IDS[+k - 1]);
+      return;
+    }
+    if (k === "p" || k === "escape") { if (!e.repeat) togglePause(); return; }
+    if (state === "paused") { if (e.key === "Enter") togglePause(); return; }
+    const a = KEYS[k];
+    if (!a) return;
+    ctl[a] = true;
+    if (a === "smoke" && !e.repeat) smokePressed = true;
+    if (DIRS[a] && !e.repeat) lastDir = a;
+  });
+  window.addEventListener("keyup", (e) => { const a = KEYS[e.key.toLowerCase()]; if (a) ctl[a] = false; });
+  window.addEventListener("blur", () => { for (const k in ctl) ctl[k] = false; if (isPlaying()) togglePause(); });
+  for (const btn of touchEl.querySelectorAll("button")) {
+    const a = btn.dataset.a;
+    btn.addEventListener("pointerdown", (e) => {
+      e.preventDefault(); btn.classList.add("on"); ctl[a] = true;
+      if (a === "smoke") smokePressed = true; else lastDir = a;
+      try { btn.setPointerCapture(e.pointerId); } catch { /* ignore */ }
+    });
+    for (const ev of ["pointerup", "pointercancel", "lostpointercapture"]) btn.addEventListener(ev, () => { btn.classList.remove("on"); ctl[a] = false; });
+  }
+  window.addEventListener("pointerdown", (e) => { if (e.pointerType === "touch" && !touchMode) { touchMode = true; syncControls(); if (menu) menu(); } }, true);
+
+  // ---------- Driving on the grid ----------
+  const canGo = (c, r, d, avoidRocks) => { const nc = c + DIRS[d][0], nr = r + DIRS[d][1]; return !isWall(nc, nr) && !(avoidRocks && rocks.has(key(nc, nr))); };
+  function advance(a, dt, speed, choose) {
+    let budget = speed * dt;
+    for (let guard = 0; guard < 3 && budget > 0; guard++) {
+      if (a.tc === a.c && a.tr === a.r) {
+        const d = choose(a);
+        if (!d) return;
+        a.dir = d; a.face = d;
+        a.tc = a.c + DIRS[d][0]; a.tr = a.r + DIRS[d][1];
+      }
+      const tx = cx(a.tc), ty = cx(a.tr), dist = Math.abs(tx - a.x) + Math.abs(ty - a.y);
+      if (dist <= budget) { a.x = tx; a.y = ty; a.c = a.tc; a.r = a.tr; budget -= dist; onCell(a); }
+      else { a.x += Math.sign(tx - a.x) * budget; a.y += Math.sign(ty - a.y) * budget; budget = 0; }
+    }
+  }
+  function onCell(a) {
+    if (a !== car) return;
+    if (rocks.has(key(a.c, a.r))) { crash("CONTRO UN MASSO!"); return; }
+    for (const f of flags) {
+      if (f.got || f.c !== a.c || f.r !== a.r) continue;
+      f.got = true;
+      if (f.kind === "S") { doubled = true; addScore(flagValue, cx(f.c), cx(f.r) - 16, "#ffd34d"); popups.push({ x: cx(f.c), y: cx(f.r) - 32, text: "VALORE ×2!", color: "#ff8aff", t: 0 }); sfx.special(); }
+      else if (f.kind === "L") { fuel = 100; addScore(flagValue, cx(f.c), cx(f.r) - 16, "#ffd34d"); popups.push({ x: cx(f.c), y: cx(f.r) - 32, text: "PIENO!", color: "#7dff9a", t: 0 }); sfx.special(); }
+      else { addScore(flagValue * (doubled ? 2 : 1), cx(f.c), cx(f.r) - 16, "#ffd34d"); sfx.flag(flags.filter((q) => q.got).length); }
+      flagValue += 100;
+      burst(cx(f.c), cx(f.r), "#ffd34d", 10, 90);
+      if (flags.every((q) => q.got)) roundCleared();
+    }
+  }
+  function chooseCar(a) {
+    // steer where asked when possible, otherwise keep going; at a wall turn by itself
+    const held = Object.keys(DIRS).filter((d) => ctl[d]);
+    const want = held.includes(lastDir) ? lastDir : held[0];
+    if (want && canGo(a.c, a.r, want)) { if (want !== a.dir) sfx.turn(); return want; }
+    if (canGo(a.c, a.r, a.dir)) return a.dir;
+    const side = Object.keys(DIRS).filter((d) => d !== a.dir && d !== OPP[a.dir] && canGo(a.c, a.r, d));
+    if (side.length) return side[Math.floor(Math.random() * side.length)];
+    return OPP[a.dir];
+  }
+  function computeDist() {
+    const d = new Int16Array(COLS * ROWS).fill(9999);
+    const q = [[car.c, car.r]]; d[key(car.c, car.r)] = 0;
+    for (let i = 0; i < q.length; i++) {
+      const [c, r] = q[i];
+      for (const k in DIRS) { const nc = c + DIRS[k][0], nr = r + DIRS[k][1], kk = key(nc, nr); if (!isWall(nc, nr) && !rocks.has(kk) && d[kk] > d[key(c, r)] + 1) { d[kk] = d[key(c, r)] + 1; q.push([nc, nr]); } }
+    }
+    return d;
+  }
+  function chooseEnemy(e) {
+    let opts = Object.keys(DIRS).filter((d) => d !== OPP[e.dir] && canGo(e.c, e.r, d, true));
+    if (!opts.length) opts = Object.keys(DIRS).filter((d) => canGo(e.c, e.r, d, true));
+    if (!opts.length) return null;
+    if (Math.random() < e.rand) return opts[Math.floor(Math.random() * opts.length)];
+    return opts.reduce((a, b) => (distMap[key(e.c + DIRS[a][0], e.r + DIRS[a][1])] <= distMap[key(e.c + DIRS[b][0], e.r + DIRS[b][1])] ? a : b));
+  }
+
+  function update(dt) {
+    clock += dt;
+    sfxN = 0;
+    for (const q of parts) { q.t += dt; q.x += q.vx * dt; q.y += q.vy * dt; }
+    parts = parts.filter((q) => q.t < q.life);
+    for (const q of popups) { q.t += dt; q.y -= 22 * dt; }
+    popups = popups.filter((q) => q.t < (q.big ? 1.6 : 0.9));
+    if (message) { message.t += dt; if (message.t > 2.2) message = null; }
+    if (car) { camX += (car.x - VW / 2 - camX) * Math.min(1, dt * 6); camY += (car.y - H / 2 - camY) * Math.min(1, dt * 6); }
+    if (!isPlaying()) return;
+    if (state === "intro") { stateT -= dt; if (stateT <= 0) state = "play"; return; }
+    if (state === "dead") { stateT -= dt; if (stateT <= 0) afterDeath(); return; }
+    if (state === "clear") { stateT -= dt; if (stateT <= 0) { round++; buildRound(); } return; }
+    roundT += dt;
+    car.inv = Math.max(0, car.inv - dt);
+    // fuel runs down; an empty tank makes the car crawl
+    fuel = Math.max(0, fuel - dt * 100 / (80 * diff.fuel));
+    if (fuel < 20 && !lowWarned) { lowWarned = true; sfx.low(); message = { text: "CARBURANTE IN RISERVA!", t: 0 }; }
+    advance(car, dt, car.speed * (fuel > 0 ? 1 : 0.45), chooseCar);
+    if (state !== "play") return;
+    smokeT -= dt;
+    if (smokePressed && smokeT <= 0 && fuel > 4) {
+      smokes.push({ c: car.c, r: car.r, x: car.x - DIRS[car.dir][0] * 14, y: car.y - DIRS[car.dir][1] * 14, t: 0 });
+      fuel -= 3; smokeT = 0.35; sfx.smoke();
+    }
+    smokePressed = false;
+    for (const s of smokes) s.t += dt;
+    smokes = smokes.filter((s) => s.t < 3.5);
+    distT -= dt;
+    if (!distMap || distT <= 0) { distMap = computeDist(); distT = 0.25; }
+    for (const e of enemies) {
+      if (e.wait > 0) { e.wait -= dt; continue; }
+      if (e.stun > 0) { e.stun -= dt; continue; }
+      advance(e, dt, e.speed, chooseEnemy);
+      // driving into the smoke spins them round
+      for (const s of smokes) if (Math.hypot(s.x - e.x, s.y - e.y) < 20) { e.stun = 2.6; sfx.stun(); popups.push({ x: e.x, y: e.y - 16, text: "?!", color: "#c8c8dc", t: 0 }); break; }
+      if (Math.hypot(e.x - car.x, e.y - car.y) < 20) { crash("INSEGUITORE!"); return; }
+    }
+  }
+
+  // ---------- Drawing ----------
+  function drawCar(x, y, dir, color, spin) {
+    ctx.save(); ctx.translate(x, y);
+    const ang = { up: 0, right: Math.PI / 2, down: Math.PI, left: -Math.PI / 2 }[dir] + (spin ? clock * 14 : 0);
+    ctx.rotate(ang);
+    ctx.fillStyle = "rgba(0,0,0,0.35)"; ctx.fillRect(-7, -9, 16, 22);
+    ctx.fillStyle = "#1a1a1a"; ctx.fillRect(-10, -9, 4, 6); ctx.fillRect(6, -9, 4, 6); ctx.fillRect(-10, 4, 4, 6); ctx.fillRect(6, 4, 4, 6);
+    ctx.fillStyle = color; ctx.beginPath(); ctx.roundRect ? ctx.roundRect(-7, -11, 14, 22, 4) : ctx.rect(-7, -11, 14, 22); ctx.fill();
+    ctx.fillStyle = "#bfe6ff"; ctx.fillRect(-5, -6, 10, 5);
+    ctx.fillStyle = "rgba(255,255,255,0.5)"; ctx.fillRect(-1, -10, 2, 20);
+    ctx.fillStyle = "#ffe08a"; ctx.fillRect(-6, -12, 3, 2); ctx.fillRect(3, -12, 3, 2);
+    ctx.restore();
+  }
+  function draw() {
+    ctx.setTransform(pxRatio, 0, 0, pxRatio, 0, 0);
+    ctx.fillStyle = "#0a0e14"; ctx.fillRect(0, 0, W, H);
+    if (!walls) return;
+    const th = TH();
+    ctx.save();
+    ctx.beginPath(); ctx.rect(0, 0, VW, H); ctx.clip();
+    const ox = Math.round(-camX), oy = Math.round(-camY);
+    ctx.translate(ox, oy);
+    ctx.fillStyle = th.ground; ctx.fillRect(camX, camY, VW, H);
+    const c0 = Math.max(0, Math.floor(camX / CELL)), c1 = Math.min(COLS - 1, Math.ceil((camX + VW) / CELL));
+    const r0 = Math.max(0, Math.floor(camY / CELL)), r1 = Math.min(ROWS - 1, Math.ceil((camY + H) / CELL));
+    // road markings, then the blocks as little buildings
+    for (let r = r0; r <= r1; r++) for (let c = c0; c <= c1; c++) {
+      const x = c * CELL, y = r * CELL;
+      if (walls[key(c, r)]) {
+        ctx.fillStyle = th.block; ctx.fillRect(x, y, CELL, CELL);
+        ctx.fillStyle = th.roof; ctx.fillRect(x + 3, y + 3, CELL - 6, CELL - 6);
+        if ((c * 7 + r * 3) % 5 === 0) { ctx.fillStyle = "rgba(0,0,0,0.25)"; ctx.beginPath(); ctx.arc(x + CELL / 2, y + CELL / 2, 7, 0, Math.PI * 2); ctx.fill(); }
+      } else {
+        ctx.fillStyle = "rgba(255,255,255,0.06)";
+        if ((c + r) % 2 === 0) ctx.fillRect(x + CELL / 2 - 1, y + CELL / 2 - 1, 2, 2);
+      }
+    }
+    // rocks
+    for (const k of rocks) {
+      const c = k % COLS, r = Math.floor(k / COLS);
+      if (c < c0 || c > c1 || r < r0 || r > r1) continue;
+      const x = cx(c), y = cx(r);
+      ctx.fillStyle = "#6a6a74"; ctx.beginPath(); ctx.moveTo(x - 10, y + 8); ctx.lineTo(x - 7, y - 6); ctx.lineTo(x + 2, y - 10); ctx.lineTo(x + 10, y - 2); ctx.lineTo(x + 8, y + 8); ctx.closePath(); ctx.fill();
+      ctx.fillStyle = "#9a9aa4"; ctx.beginPath(); ctx.moveTo(x - 6, y - 4); ctx.lineTo(x + 1, y - 8); ctx.lineTo(x + 4, y - 2); ctx.closePath(); ctx.fill();
+    }
+    // flags
+    for (const f of flags) {
+      if (f.got) continue;
+      const x = cx(f.c), y = cx(f.r), wave = Math.sin(clock * 6 + f.c) * 2;
+      ctx.fillStyle = "#e8e8f0"; ctx.fillRect(x - 6, y - 10, 2, 20);
+      ctx.fillStyle = f.kind === "S" ? "#ff5aff" : f.kind === "L" ? "#3aff8a" : "#ffd34d";
+      ctx.beginPath(); ctx.moveTo(x - 4, y - 10); ctx.lineTo(x + 9, y - 6 + wave); ctx.lineTo(x - 4, y - 1); ctx.closePath(); ctx.fill();
+      if (f.kind !== "n") { ctx.fillStyle = "#1a1a1a"; ctx.font = "900 7px system-ui, sans-serif"; ctx.textAlign = "center"; ctx.fillText(f.kind, x + 1, y - 3); }
+    }
+    for (const s of smokes) {
+      const a = 1 - s.t / 3.5;
+      for (let k = 0; k < 4; k++) { ctx.fillStyle = `rgba(210,210,225,${0.45 * a})`; ctx.beginPath(); ctx.arc(s.x + Math.cos(k * 1.7 + s.t) * 6, s.y + Math.sin(k * 2.3 + s.t) * 6, 9 + s.t * 2, 0, Math.PI * 2); ctx.fill(); }
+    }
+    for (const e of enemies) drawCar(e.x, e.y, e.face, e.wait > 0 ? "#8a2a2a" : "#ff3a3a", e.stun > 0);
+    if (!car.dead && !(car.inv > 0 && Math.floor(clock * 12) % 2)) drawCar(car.x, car.y, car.face, "#3a8aff", false);
+    for (const q of parts) { ctx.globalAlpha = Math.max(0, 1 - q.t / q.life); ctx.fillStyle = q.c; ctx.fillRect(q.x - 2, q.y - 2, 4, 4); }
+    ctx.globalAlpha = 1;
+    for (const q of popups) {
+      ctx.globalAlpha = Math.max(0, 1 - q.t / (q.big ? 1.6 : 0.9));
+      ctx.textAlign = "center"; ctx.font = q.big ? "900 18px system-ui, sans-serif" : "900 12px system-ui, sans-serif";
+      ctx.lineWidth = 3; ctx.strokeStyle = "#000"; ctx.strokeText(q.text, q.x, q.y); ctx.fillStyle = q.color; ctx.fillText(q.text, q.x, q.y);
+    }
+    ctx.globalAlpha = 1;
+    ctx.restore();
+    // side panel: score, fuel and the radar
+    ctx.fillStyle = "#101620"; ctx.fillRect(VW, 0, W - VW, H);
+    ctx.fillStyle = "#2a3040"; ctx.fillRect(VW, 0, 2, H);
+    const px = PANEL + 4;
+    ctx.textAlign = "left"; ctx.textBaseline = "top";
+    ctx.fillStyle = "#9aa8c0"; ctx.font = "800 9px system-ui, sans-serif"; ctx.fillText("PUNTI", px, 6);
+    ctx.fillStyle = "#f2f6ff"; ctx.font = "900 15px system-ui, sans-serif"; ctx.fillText(score.toLocaleString("it-IT"), px, 17);
+    ctx.fillStyle = "#9aa8c0"; ctx.font = "800 9px system-ui, sans-serif"; ctx.fillText("RECORD", px, 38);
+    ctx.fillStyle = "#c8d0e0"; ctx.font = "800 11px system-ui, sans-serif"; ctx.fillText(Math.max(bestCache, score).toLocaleString("it-IT"), px, 49);
+    ctx.fillStyle = "#9aa8c0"; ctx.font = "800 9px system-ui, sans-serif"; ctx.fillText(`ROUND ${round + 1}`, px, 68);
+    for (let i = 0; i < Math.min(lives - (state === "dead" ? 0 : 1), 6); i++) { ctx.fillStyle = "#3a8aff"; ctx.fillRect(px + 60 + i * 9, 68, 6, 9); }
+    ctx.fillStyle = "#9aa8c0"; ctx.fillText("CARBURANTE", px, 86);
+    ctx.fillStyle = "#2a3040"; ctx.fillRect(px, 98, 104, 9);
+    ctx.fillStyle = fuel > 20 ? "#3aff8a" : Math.floor(clock * 6) % 2 ? "#ff3a3a" : "#8a1a1a"; ctx.fillRect(px, 98, 104 * fuel / 100, 9);
+    // flags left
+    const left = flags.filter((f) => !f.got).length;
+    ctx.fillStyle = "#ffd34d"; ctx.font = "800 9px system-ui, sans-serif"; ctx.fillText(`BANDIERE ${10 - left}/10`, px, 114);
+    for (let i = 0; i < 10; i++) { ctx.fillStyle = i < 10 - left ? "#ffd34d" : "#3a4050"; ctx.fillRect(px + i * 10.5, 126, 7, 7); }
+    // radar
+    const ry = 144, rw = W - px - 6, rh = H - ry - 8, sxr = rw / (COLS * CELL), syr = rh / (ROWS * CELL);
+    ctx.fillStyle = "#06120a"; ctx.fillRect(px, ry, rw, rh);
+    ctx.strokeStyle = "#1a6a3a"; ctx.lineWidth = 1; ctx.strokeRect(px + 0.5, ry + 0.5, rw - 1, rh - 1);
+    ctx.fillStyle = "rgba(58,200,106,0.18)";
+    for (let r = 0; r < ROWS; r++) for (let c = 0; c < COLS; c++) if (walls[key(c, r)]) ctx.fillRect(px + c * CELL * sxr, ry + r * CELL * syr, CELL * sxr + 0.3, CELL * syr + 0.3);
+    ctx.strokeStyle = "rgba(242,246,255,0.5)"; ctx.strokeRect(px + camX * sxr, ry + camY * syr, VW * sxr, H * syr);
+    for (const f of flags) if (!f.got) { ctx.fillStyle = f.kind === "S" ? "#ff5aff" : f.kind === "L" ? "#3aff8a" : "#ffd34d"; ctx.fillRect(px + cx(f.c) * sxr - 1.5, ry + cx(f.r) * syr - 1.5, 3, 3); }
+    if (Math.floor(clock * 4) % 2) for (const e of enemies) { ctx.fillStyle = "#ff3a3a"; ctx.fillRect(px + e.x * sxr - 1.5, ry + e.y * syr - 1.5, 3, 3); }
+    ctx.fillStyle = "#ffffff"; ctx.fillRect(px + car.x * sxr - 2, ry + car.y * syr - 2, 4, 4);
+    ctx.textBaseline = "alphabetic";
+    if (message) {
+      ctx.globalAlpha = Math.min(1, (2.2 - message.t) * 2);
+      ctx.textAlign = "center"; ctx.font = "italic 900 22px system-ui, sans-serif"; ctx.lineWidth = 5; ctx.strokeStyle = "#000";
+      ctx.strokeText(message.text, VW / 2, H / 2 - 50); ctx.fillStyle = "#ffd34d"; ctx.fillText(message.text, VW / 2, H / 2 - 50);
+      if (message.sub) { ctx.font = "700 12px system-ui, sans-serif"; ctx.lineWidth = 4; ctx.strokeText(message.sub, VW / 2, H / 2 - 28); ctx.fillStyle = "#f2f6ff"; ctx.fillText(message.sub, VW / 2, H / 2 - 28); }
+      ctx.globalAlpha = 1;
+    }
+  }
+
+  // ---------- Loop ----------
+  const STEP = 1 / 120;
+  let last = performance.now(), acc = 0;
+  function loop(now) {
+    const dt = Math.min(0.1, (now - last) / 1000);
+    last = now;
+    if (isPlaying()) {
+      acc += dt;
+      while (acc >= STEP && isPlaying()) { update(STEP); acc -= STEP; }
+    } else { acc = 0; update(dt); }
+    draw();
+    requestAnimationFrame(loop);
+  }
+  syncControls();
+  buildRound(); state = "menu"; message = null;
+  showTitle();
+  requestAnimationFrame(loop);
+})();
+</script>
+<script src="../../shared/iniziali.js" data-record="rally-best-" data-kind="score"></script>
+</body>
+</html>
