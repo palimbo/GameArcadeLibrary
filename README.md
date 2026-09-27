@@ -4,7 +4,7 @@ Raccolta di giochi arcade per il browser. Ogni gioco è un singolo file HTML sen
 
 ## 🕹️ Sala Giochi — `index.html`
 
-Apri `index.html` nella cartella principale per la pagina di raccolta: mostra tutti i 44 giochi con copertina, genere, comandi e i tuoi record per ogni difficoltà (Facile, Normale, Difficile). Tocca «Gioca» per avviare un gioco; in ogni gioco il pulsante «← Sala Giochi» in alto a sinistra (visibile nei menu) riporta alla raccolta.
+Apri `index.html` nella cartella principale per la pagina di raccolta: mostra tutti i 45 giochi con copertina, genere, comandi e i tuoi record per ogni difficoltà (Facile, Normale, Difficile). Tocca «Gioca» per avviare un gioco; in ogni gioco il pulsante «← Sala Giochi» in alto a sinistra (visibile nei menu) riporta alla raccolta.
 
 **Iniziali del record:** quando batti un record compare la schermata da sala giochi per inserire le tue tre iniziali (frecce ↑ ↓ per cambiare lettera, ← → per spostarti, oppure scrivile direttamente; su telefono i tasti ▲ ▼ e OK). Le iniziali vengono salvate insieme al record e compaiono nei menu del gioco e nella Sala Giochi. Il codice è condiviso da tutti i giochi in `shared/iniziali.js`.
 
@@ -694,3 +694,19 @@ Piattaforme con trampolini in stile *Mappy*: il topo poliziotto deve recuperare 
 - **Touch:** levetta a sinistra (conta solo destra e sinistra) e tasto PORTA a destra
 
 Per giocare apri `games/villa-dei-gatti/index.html` nel browser.
+
+### 🛸 Difensore Stellare — `games/difensore-stellare/index.html`
+
+Sparatutto a scorrimento orizzontale in stile *Defender*: la tua astronave sorvola un pianeta che gira in tondo, e il radar in alto mostra tutto quello che succede.
+
+- **Umanoidi:** dieci persone camminano sulla superficie. I rapitori verdi scendono, ne afferrano una e la portano in cielo: se arrivano in cima diventano mutanti velocissimi
+- **Salvataggio:** abbatti il rapitore e l'umanoide cade: prendilo al volo (500 punti) e riportalo a terra (altri 500). Se cade da poco in alto si salva da solo (250), da troppo in alto no
+- **Pianeta:** se muoiono tutti gli umanoidi il pianeta esplode e restano solo mutanti; ogni 5 ondate arrivano nuovi umanoidi e il pianeta torna com'era
+- **Nemici:** rapitori e mutanti (150), bombardieri che lasciano mine (250), capsule che liberano uno sciame di cacciatori (1.000), e i velocissimi inseguitori se ci metti troppo
+- **Bombe intelligenti:** distruggono tutto quello che è sullo schermo; ne hai 3 e ne guadagni una con ogni nave extra (a 10.000, 30.000, 60.000, 100.000 punti…)
+- **Bonus d'ondata:** punti per ogni umanoide ancora vivo
+- **Difficoltà:** Facile (5 navi, alieni lenti che sparano poco), Normale, Difficile; record separati per ogni difficoltà
+- **Comandi:** frecce o `W` `A` `S` `D` per volare (spingi nell'altra direzione per girarti) · `SPAZIO` o `Z` per sparare · `B` o `X` per la bomba intelligente · `P` pausa
+- **Touch:** levetta a sinistra per volare, tasti FUOCO (da tenere premuto) e BOMBA a destra
+
+Per giocare apri `games/difensore-stellare/index.html` nel browser.
