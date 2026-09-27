@@ -4,7 +4,7 @@ Raccolta di giochi arcade per il browser. Ogni gioco è un singolo file HTML sen
 
 ## 🕹️ Sala Giochi — `index.html`
 
-Apri `index.html` nella cartella principale per la pagina di raccolta: mostra tutti i 48 giochi con copertina, genere, comandi e i tuoi record per ogni difficoltà (Facile, Normale, Difficile). Tocca «Gioca» per avviare un gioco; in ogni gioco il pulsante «← Sala Giochi» in alto a sinistra (visibile nei menu) riporta alla raccolta.
+Apri `index.html` nella cartella principale per la pagina di raccolta: mostra tutti i 49 giochi con copertina, genere, comandi e i tuoi record per ogni difficoltà (Facile, Normale, Difficile). Tocca «Gioca» per avviare un gioco; in ogni gioco il pulsante «← Sala Giochi» in alto a sinistra (visibile nei menu) riporta alla raccolta.
 
 **Iniziali del record:** quando batti un record compare la schermata da sala giochi per inserire le tue tre iniziali (frecce ↑ ↓ per cambiare lettera, ← → per spostarti, oppure scrivile direttamente; su telefono i tasti ▲ ▼ e OK). Le iniziali vengono salvate insieme al record e compaiono nei menu del gioco e nella Sala Giochi. Il codice è condiviso da tutti i giochi in `shared/iniziali.js`.
 
@@ -757,3 +757,18 @@ Gare a pulsanti in stile *Track & Field*: quattro prove allo stadio, una dopo l'
 - **Touch:** tasti SINISTRO e DESTRO per i due pollici, e il tasto giallo al centro per saltare e lanciare
 
 Per giocare apri `games/campioni-atletica/index.html` nel browser.
+
+### 🥊 Guantoni d'Oro — `games/guantoni-d-oro/index.html`
+
+Pugilato in stile *Punch-Out!!*: vedi il ring alle spalle del tuo pugile e affronti cinque avversari, ognuno con il suo stile: Tonio Tartaruga, Gigi Gancio, Mister Montante, Zar Zorro e Il Colosso.
+
+- **Leggere i colpi:** prima di colpire l'avversario carica il guantone, che si illumina. Bianco è un diretto (para o schiva), arancio un gancio (schiva dalla parte opposta al guantone; parando dimezzi il danno), rosso un montante (solo schivata di lato). Alcuni fanno finte
+- **Colpire:** la guardia dell'avversario copre il volto o il corpo; tieni su per mirare al volto, altrimenti colpisci al corpo. I pugni sulla guardia stancano (cuori ♥): a zero resti senza fiato per un attimo
+- **Contrattacco:** subito dopo una schivata l'avversario è scoperto: il primo colpo fa danni doppi e ti dà una ★. Con le stelle usi il **super montante**, che va sempre a segno
+- **Atterramenti:** chi finisce al tappeto ha il conteggio fino a 10; tre atterramenti sono K.O. tecnico. Quando cadi tu, premi i pugni in fretta per rialzarti
+- **Incontri:** 3 round da un minuto; se nessuno va K.O. si decide ai punti. Una sconfitta costa una vita e si rifà l'incontro; battuti tutti e cinque, il circuito ricomincia più duro
+- **Difficoltà:** Facile (5 vite, avversari più lenti da leggere e meno potenti), Normale, Difficile; record separati per ogni difficoltà
+- **Comandi:** ← → schiva · ↓ para · ↑ tienilo premuto per mirare al volto · `Z` e `X` pugni sinistro e destro · `SPAZIO` super · `P` pausa
+- **Touch:** levetta a sinistra (◀▶ schiva, ▼ para, ▲ volto), tasti SINISTRO, DESTRO e ★ SUPER a destra
+
+Per giocare apri `games/guantoni-d-oro/index.html` nel browser.
