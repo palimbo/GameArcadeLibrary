@@ -4,7 +4,7 @@ Raccolta di giochi arcade per il browser. Ogni gioco è un singolo file HTML sen
 
 ## 🕹️ Sala Giochi — `index.html`
 
-Apri `index.html` nella cartella principale per la pagina di raccolta: mostra tutti i 46 giochi con copertina, genere, comandi e i tuoi record per ogni difficoltà (Facile, Normale, Difficile). Tocca «Gioca» per avviare un gioco; in ogni gioco il pulsante «← Sala Giochi» in alto a sinistra (visibile nei menu) riporta alla raccolta.
+Apri `index.html` nella cartella principale per la pagina di raccolta: mostra tutti i 47 giochi con copertina, genere, comandi e i tuoi record per ogni difficoltà (Facile, Normale, Difficile). Tocca «Gioca» per avviare un gioco; in ogni gioco il pulsante «← Sala Giochi» in alto a sinistra (visibile nei menu) riporta alla raccolta.
 
 **Iniziali del record:** quando batti un record compare la schermata da sala giochi per inserire le tue tre iniziali (frecce ↑ ↓ per cambiare lettera, ← → per spostarti, oppure scrivile direttamente; su telefono i tasti ▲ ▼ e OK). Le iniziali vengono salvate insieme al record e compaiono nei menu del gioco e nella Sala Giochi. Il codice è condiviso da tutti i giochi in `shared/iniziali.js`.
 
@@ -725,3 +725,19 @@ Azione in stile *Elevator Action*: la spia atterra sul tetto di un grattacielo n
 - **Touch:** levetta a sinistra, tasti SALTA e SPARA a destra
 
 Per giocare apri `games/agente-segreto/index.html` nel browser.
+
+### 🎪 Clown del Circo — `games/clown-del-circo/index.html`
+
+Acrobazie in stile *Circus Charlie*: il clown affronta tre numeri da 100 metri, uno dopo l'altro, poi si ricomincia più veloci.
+
+- **Il leone e i cerchi di fuoco:** in groppa al leone, salta attraverso i cerchi che arrivano (100 punti; quello piccolo col sacchetto vale 500 ma il varco è stretto) e sopra i bracieri (200)
+- **Il funambolo:** sulla fune, salta le scimmie che vengono incontro (100); quelle blu corrono il doppio (200)
+- **Le palle giganti:** in equilibrio su una palla, salta sulla prossima che arriva rotolando prima che le due si scontrino (150 a salto)
+- **Il salto** segue la direzione in cui stai andando: puoi anche fermarti o indietreggiare per aspettare il momento giusto
+- **Bonus:** parte da 5.000 e scende col tempo; al podio lo incassi. Se arriva a zero perdi una vita
+- **Traguardi:** i cartelli segnano i metri che mancano; se cadi riparti dall'ultimo quarto di percorso
+- **Difficoltà:** Facile (5 vite, ostacoli più radi e più lenti), Normale, Difficile; record separati per ogni difficoltà
+- **Comandi:** frecce ←→ o `A` `D` per avanzare e indietreggiare · `SPAZIO`, `Z` o ↑ per saltare · `P` pausa
+- **Touch:** levetta a sinistra (conta solo destra e sinistra) e tasto SALTA a destra
+
+Per giocare apri `games/clown-del-circo/index.html` nel browser.

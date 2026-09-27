@@ -1,0 +1,753 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no, viewport-fit=cover">
+<title>Clown del Circo</title>
+<style>
+  :root {
+    --bg: #12060a;
+    --fg: #fff6ea;
+    --muted: #c8a8a8;
+    --red: #ff3a4a;
+    --gold: #ffd34d;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  html, body {
+    height: 100%;
+    background: var(--bg);
+    color: var(--fg);
+    font-family: system-ui, -apple-system, "Segoe UI", sans-serif;
+    overflow: hidden;
+    user-select: none;
+    -webkit-user-select: none;
+    touch-action: none;
+  }
+  #wrap { position: fixed; inset: 0; display: flex; align-items: center; justify-content: center; }
+  canvas { display: block; touch-action: none; border-radius: 6px; box-shadow: 0 0 0 2px #3a1a20, 0 10px 40px rgba(0,0,0,0.6); }
+  #pauseBtn {
+    position: fixed; z-index: 3; display: none; right: 10px; top: calc(10px + env(safe-area-inset-top, 0px));
+    font: 700 13px system-ui, sans-serif; color: var(--fg);
+    background: rgba(0, 0, 0, 0.6); border: 1px solid rgba(255, 246, 234, 0.35);
+    border-radius: 8px; padding: 6px 10px; cursor: pointer;
+  }
+  #touch {
+    position: fixed; z-index: 2; display: none; left: 12px; right: 12px;
+    bottom: calc(14px + env(safe-area-inset-bottom, 0px));
+    justify-content: space-between; align-items: flex-end; pointer-events: none;
+  }
+  /* thumb stick (only left and right count) and a jump button */
+  #touch .stick { position: relative; width: 136px; height: 136px; border-radius: 50%; pointer-events: auto; touch-action: none;
+    border: 2px solid rgba(255, 211, 77, 0.6); background: radial-gradient(circle, rgba(255,211,77,0.16), rgba(255,211,77,0.05)); }
+  #touch .stick .knob { position: absolute; left: 50%; top: 50%; width: 58px; height: 58px; margin: -29px 0 0 -29px; border-radius: 50%;
+    background: rgba(255, 211, 77, 0.5); border: 2px solid rgba(255,255,255,0.7); box-shadow: 0 4px 10px rgba(0,0,0,0.4); pointer-events: none; }
+  #touch .stick i { position: absolute; top: 50%; transform: translateY(-50%); font: 900 14px system-ui, sans-serif; font-style: normal; color: rgba(255,246,234,0.35); pointer-events: none; }
+  #touch .stick i.on { color: var(--red); }
+  #touch .stick i[data-d="left"] { left: 8px; }
+  #touch .stick i[data-d="right"] { right: 8px; }
+  #touch .jump { width: 96px; height: 96px; border-radius: 50%; pointer-events: auto; touch-action: none; color: var(--fg);
+    font: 800 13px system-ui, sans-serif; letter-spacing: 1px; border: 2px solid rgba(255, 58, 74, 0.9); background: rgba(255, 58, 74, 0.2); }
+  #touch .jump.on { background: rgba(255, 211, 77, 0.5); }
+  #touch.small .stick { width: 112px; height: 112px; }
+  #touch.small .stick .knob { width: 48px; height: 48px; margin: -24px 0 0 -24px; }
+  #touch.small .jump { width: 80px; height: 80px; font-size: 11px; }
+  #overlay {
+    position: fixed; inset: 0; z-index: 5;
+    display: flex; flex-direction: column; align-items: center; justify-content: flex-start;
+    gap: 14px; padding: 16px; text-align: center; overflow-y: auto;
+    background: rgba(18, 6, 10, 0.9);
+  }
+  #overlay > :first-child { margin-top: auto; }
+  #overlay > :last-child { margin-bottom: auto; }
+  #overlay.hidden { display: none; }
+  #homeLink {
+    position: fixed; top: calc(10px + env(safe-area-inset-top, 0px)); left: 10px; z-index: 6;
+    font: 600 13px/1 system-ui, sans-serif; color: #fff; text-decoration: none;
+    padding: 8px 12px; border-radius: 999px; background: rgba(0,0,0,.55);
+    border: 1px solid rgba(255,255,255,.25);
+  }
+  #homeLink:hover { background: rgba(0,0,0,.8); }
+  #overlay.hidden ~ #homeLink { display: none; }
+  @media (max-width: 700px) { #overlay { padding-top: calc(52px + env(safe-area-inset-top, 0px)); } }
+  #overlay h1 { font-size: clamp(32px, 9.5vw, 60px); font-weight: 900; letter-spacing: 1px; color: var(--gold); text-shadow: 0 3px 0 #b01a2a, 0 0 22px rgba(255,211,77,0.45); }
+  #overlay h2 { font-size: clamp(28px, 7vw, 44px); font-weight: 900; letter-spacing: 2px; }
+  #overlay h2.lose { color: var(--red); }
+  #overlay p { max-width: 540px; font-size: clamp(13px, 3.4vw, 16px); line-height: 1.55; }
+  #overlay p.muted { color: var(--muted); }
+  #overlay .pts { display: grid; grid-template-columns: repeat(2, auto); gap: 4px 18px; font-size: 13px; color: var(--muted); text-align: left; }
+  #overlay .pts b { color: var(--fg); }
+  #overlay .diff { display: flex; gap: 10px; flex-wrap: wrap; justify-content: center; }
+  #overlay button {
+    font: 800 15px system-ui, sans-serif; letter-spacing: 1.5px; color: var(--fg);
+    background: transparent; cursor: pointer;
+    border: 2px solid rgba(255,246,234,0.3); border-radius: 10px; padding: 9px 16px;
+  }
+  #overlay .diff button.on { border-color: var(--c); color: var(--c); box-shadow: 0 0 12px var(--c); }
+  #overlay button.start { border-color: var(--gold); color: #4a1a00; background: var(--gold); padding: 11px 30px; box-shadow: 0 4px 0 #b01a2a; }
+  @media (max-height: 560px) {
+    #overlay { gap: 8px; }
+    #overlay h1 { font-size: 30px; }
+    #overlay p { font-size: 13px; line-height: 1.4; }
+    #overlay .help, #overlay .pts { display: none; }
+  }
+</style>
+</head>
+<body>
+<div id="wrap"><canvas id="game"></canvas></div>
+<div id="touch">
+  <div class="stick" aria-label="Levetta"><i data-d="left">◀</i><i data-d="right">▶</i><div class="knob"></div></div>
+  <button type="button" class="jump" aria-label="Salta">SALTA</button>
+</div>
+<button id="pauseBtn" type="button" aria-label="Pausa">❚❚</button>
+<div id="overlay"></div>
+<a id="homeLink" href="../../index.html">← Sala Giochi</a>
+
+<script>
+(() => {
+  "use strict";
+
+  const W = 480, H = 300, HUD = 24, GROUND = 262, ROPE = 214, TAU = Math.PI * 2;
+  const PX_M = 30, LEN = 100 * PX_M, CHECK = 25 * PX_M;           // 100 metres per act, checkpoints every 25
+  // the three acts; each has its own jump
+  const ACTS = [
+    { id: "leone", name: "Il leone e i cerchi di fuoco", jumpH: 52, jumpT: 0.9, fwd: 110, back: -50 },
+    { id: "fune", name: "Il funambolo e le scimmie", jumpH: 46, jumpT: 0.7, fwd: 80, back: -45 },
+    { id: "palle", name: "Le palle giganti", jumpH: 54, jumpT: 0.8, fwd: 95, back: -45 },
+  ];
+
+  const DIFFICULTIES = {
+    facile:    { label: "FACILE",    color: "#7dff9a", desc: "5 vite · ostacoli più radi e più lenti", lives: 5, dense: 0.75, speed: 0.85 },
+    normale:   { label: "NORMALE",   color: "#ffd34d", desc: "3 vite · l'esperienza classica", lives: 3, dense: 1, speed: 1 },
+    difficile: { label: "DIFFICILE", color: "#ff3a4a", desc: "3 vite · ostacoli fitti e veloci", lives: 3, dense: 1.25, speed: 1.15 },
+  };
+  const DIFF_IDS = Object.keys(DIFFICULTIES);
+  const DIFF_KEY = "circo-difficulty";
+  const bestKey = (id) => `circo-best-${id}`;
+  function store(k, v) { try { localStorage.setItem(k, v); } catch { /* ignore */ } }
+  function load(k) { try { return localStorage.getItem(k); } catch { return null; } }
+  const rnd = (a, b) => a + Math.random() * (b - a);
+
+  // ---------- Canvas ----------
+  const canvas = document.getElementById("game");
+  const ctx = canvas.getContext("2d");
+  const wrap = document.getElementById("wrap");
+  const overlay = document.getElementById("overlay");
+  const touchEl = document.getElementById("touch");
+  const pauseBtn = document.getElementById("pauseBtn");
+  let pxRatio = 1, touchMode = !!(window.matchMedia && matchMedia("(pointer: coarse)").matches);
+  function resize() {
+    const portrait = window.innerHeight > window.innerWidth;
+    const showTouch = touchMode && isPlaying();
+    touchEl.style.display = showTouch ? "flex" : "none";
+    touchEl.classList.toggle("small", !portrait && window.innerHeight < 480);
+    wrap.style.paddingBottom = showTouch && portrait ? "calc(170px + env(safe-area-inset-bottom, 0px))" : "0";
+    let availW = window.innerWidth - 8, availH = window.innerHeight - 8;
+    if (showTouch && portrait) availH -= 170;
+    if (showTouch && !portrait) {
+      const side = Math.max(...[...touchEl.children].map((el) => el.offsetWidth)) + 20;
+      if (window.innerWidth - 2 * side > 280) availW = window.innerWidth - 2 * side;
+    }
+    const s = Math.max(0.2, Math.min(availW / W, availH / H));
+    pxRatio = Math.min(3, s * (window.devicePixelRatio || 1));
+    canvas.style.width = W * s + "px";
+    canvas.style.height = H * s + "px";
+    canvas.width = Math.round(W * pxRatio);
+    canvas.height = Math.round(H * pxRatio);
+  }
+  window.addEventListener("resize", () => syncControls());
+
+  // ---------- Audio ----------
+  let audioCtx = null;
+  function beep(freq, dur, type = "square", vol = 0.04, slide = 0, delay = 0) {
+    if (!audioCtx) return;
+    const t = audioCtx.currentTime + delay;
+    const osc = audioCtx.createOscillator(), gain = audioCtx.createGain();
+    osc.type = type;
+    osc.frequency.setValueAtTime(freq, t);
+    if (slide) osc.frequency.exponentialRampToValueAtTime(Math.max(20, freq + slide), t + dur);
+    gain.gain.setValueAtTime(vol, t);
+    gain.gain.exponentialRampToValueAtTime(0.0001, t + dur);
+    osc.connect(gain).connect(audioCtx.destination);
+    osc.start(t); osc.stop(t + dur + 0.02);
+  }
+  const arp = (notes, gap, d, type = "square", vol = 0.04) => notes.forEach((f, i) => beep(f, d, type, vol, 0, i * gap));
+  let sfxN = 0;
+  const lim = (fn) => (...a) => { if (sfxN++ < 5) fn(...a); };
+  const sfx = {
+    jump: lim(() => beep(330, 0.18, "triangle", 0.04, 330)),
+    pass: lim(() => arp([988, 1319], 0.05, 0.08, "square", 0.03)),
+    bag: () => arp([1319, 1568, 2093], 0.05, 0.1, "square", 0.04),
+    land: lim(() => beep(180, 0.08, "triangle", 0.035, -60)),
+    step: lim(() => beep(700, 0.02, "square", 0.01)),
+    clear: () => arp([523, 659, 784, 1047, 784, 1047, 1319, 1568], 0.08, 0.14),
+    die: () => arp([784, 740, 698, 659, 622, 587], 0.1, 0.12, "sawtooth", 0.035),
+    over: () => arp([523, 415, 330, 262], 0.18, 0.25),
+    life: () => arp([523, 784, 1047, 1319], 0.08, 0.12, "triangle", 0.05),
+    tick: lim(() => beep(1200, 0.03, "square", 0.02)),
+  };
+  // a little circus march in the background while playing
+  const MARCH = [523, 0, 392, 0, 523, 0, 392, 0, 523, 587, 659, 587, 523, 494, 523, 0, 587, 0, 440, 0, 587, 0, 440, 0, 587, 659, 698, 659, 587, 523, 494, 0];
+  let marchT = 0, marchI = 0;
+
+  // ---------- State ----------
+  let difficulty = DIFFICULTIES[load(DIFF_KEY)] ? load(DIFF_KEY) : "normale";
+  let diff = DIFFICULTIES[difficulty];
+  let state = "menu", menu = null, pausedFrom = null, stateT = 0, clock = 0;
+  let score = 0, lives = 3, stage = 0, bestCache = 0, nextLife = 20000, bonus = 5000, bonusT = 0;
+  let p = null, camX = 0, obs = [], parts = [], popups = [], message = null, spawnT = 0, lastCheck = 0;
+  let axis = 0, jumpPressed = false;
+  const keys = { left: false, right: false };
+
+  const act = () => ACTS[stage % 3];
+  const loopN = () => Math.floor(stage / 3);
+  const pace = () => diff.speed * (1 + Math.min(0.45, loopN() * 0.15));
+
+  // ---------- Stages ----------
+  function buildStage(fromX = 0) {
+    obs = [];
+    const a = act().id;
+    if (a === "leone") {
+      // fire pots stand still along the track; flaming rings roll in from the right
+      let x = 380;
+      while (x < LEN - 200) {
+        if (x > fromX + 180) obs.push({ k: "pot", x, passed: false });
+        x += rnd(260, 420) / diff.dense;
+      }
+    }
+    p = { x: fromX + 60, h: 0, vx: 0, air: false, t: 0, jt: 0, jvx: 0, st: "ok", deadT: 0, walk: 0, ball: null };
+    if (a === "palle") {
+      const b = { k: "ball", x: p.x, vx: 0, mine: true, rot: 0, hue: 0 };
+      obs.push(b); p.ball = b;
+    }
+    camX = Math.max(0, p.x - 140);
+    spawnT = 0.5;
+    lastCheck = fromX;
+  }
+  function startStage() {
+    bonus = 5000; bonusT = 0;
+    buildStage(0);
+    message = { text: `NUMERO ${stage + 1}`, sub: act().name, t: 0 };
+    state = "intro"; stateT = 1.8;
+  }
+
+  // ---------- Flow ----------
+  const isPlaying = () => ["intro", "play", "dead", "clear"].includes(state);
+  function startGame() {
+    if (!audioCtx) { try { audioCtx = new (window.AudioContext || window.webkitAudioContext)(); } catch { audioCtx = null; } }
+    if (audioCtx && audioCtx.state === "suspended") audioCtx.resume();
+    score = 0; lives = diff.lives; stage = 0; nextLife = 20000;
+    bestCache = parseInt(load(bestKey(difficulty)), 10) || 0;
+    startStage();
+    menu = null;
+    overlay.classList.add("hidden");
+    syncControls();
+    last = performance.now();
+  }
+  function addScore(n, x, y, color = "#fff6ea") {
+    score += n;
+    if (x !== undefined) popups.push({ x, y, text: String(n), color, t: 0 });
+    if (score >= nextLife) {
+      nextLife += 30000; if (lives < 9) lives++; sfx.life();
+      popups.push({ x: camX + W / 2, y: 110, text: "VITA EXTRA", color: "#ffd34d", t: 0, big: true });
+    }
+  }
+  function burst(x, y, color, n = 10, sp = 110, life = 0.5) {
+    for (let k = 0; k < n; k++) {
+      const a = Math.random() * TAU, s = sp * (0.3 + Math.random() * 0.8);
+      parts.push({ x, y, vx: Math.cos(a) * s, vy: Math.sin(a) * s, t: 0, life: life * (0.5 + Math.random()), c: color });
+    }
+  }
+  function fall(why) {
+    if (state !== "play") return;
+    lives--; p.st = "fall"; p.deadT = 0;
+    sfx.die();
+    message = { text: why, t: 0 };
+    state = "dead"; stateT = 2.2;
+  }
+  function afterDeath() {
+    if (lives <= 0) { gameOver(); return; }
+    // back to the last checkpoint behind the clown
+    const cp = Math.floor(Math.max(0, p.x - 40) / CHECK) * CHECK;
+    const keep = obs.filter((o) => o.k === "pot" && o.x > cp + 180);
+    buildStage(cp);
+    if (act().id === "leone") obs = keep;
+    if (bonus <= 0) bonus = 2000;
+    state = "intro"; stateT = 1;
+  }
+  function gameOver() {
+    state = "over";
+    const prev = parseInt(load(bestKey(difficulty)), 10) || 0;
+    const record = score > prev;
+    if (record) store(bestKey(difficulty), String(score));
+    const played = diff.label, st = stage + 1;
+    menu = () => showOverlay(
+      `<h2 class="lose">GAME OVER</h2>
+       <p>Punteggio: <b>${score.toLocaleString("it-IT")}</b> · Numero ${st} · ${played}</p>
+       ${record ? "<p style='color:var(--gold)'>★ NUOVO RECORD! ★</p>" : ""}
+       ${difficultyHTML()}
+       <button class="start" data-start>GIOCA ANCORA</button>`
+    );
+    menu();
+    sfx.over();
+    syncControls();
+  }
+  function togglePause() {
+    if (isPlaying()) {
+      pausedFrom = state; state = "paused";
+      showOverlay(`<h2>PAUSA</h2><button class="start" data-resume>CONTINUA</button><p class="muted">Premi P per continuare</p>`);
+    } else if (state === "paused") {
+      state = pausedFrom; overlay.classList.add("hidden"); last = performance.now();
+    }
+    syncControls();
+  }
+  function syncControls() {
+    const portrait = window.innerHeight > window.innerWidth;
+    pauseBtn.style.display = isPlaying() && touchMode ? "block" : "none";
+    Object.assign(pauseBtn.style, portrait
+      ? { top: "auto", bottom: "calc(40px + env(safe-area-inset-bottom, 0px))", right: "auto", left: "calc(50% - 20px)" }
+      : { top: "calc(10px + env(safe-area-inset-top, 0px))", bottom: "auto", right: "10px", left: "auto" });
+    resize();
+  }
+  pauseBtn.addEventListener("click", () => togglePause());
+  function showOverlay(html) { overlay.innerHTML = html; overlay.classList.remove("hidden"); }
+  function difficultyHTML() {
+    const buttons = DIFF_IDS.map((id) => {
+      const d = DIFFICULTIES[id];
+      return `<button type="button" data-diff="${id}" class="${id === difficulty ? "on" : ""}" style="--c:${d.color}">${d.label}</button>`;
+    }).join("");
+    const best = parseInt(load(bestKey(difficulty)), 10);
+    return `<div class="diff">${buttons}</div><p class="muted">${diff.desc}${best ? ` · Record: ${best.toLocaleString("it-IT")}` : ""}</p>`;
+  }
+  function setDifficulty(id) { if (!DIFFICULTIES[id]) return; difficulty = id; diff = DIFFICULTIES[id]; store(DIFF_KEY, id); if (menu) menu(); }
+  function showTitle() {
+    menu = showTitle;
+    showOverlay(
+      `<h1>CLOWN DEL CIRCO</h1>
+       <p>Signore e signori, il grande spettacolo! Il clown affronta tre numeri da 100 metri: in groppa al leone attraverso i cerchi di fuoco, sulla fune contro le scimmie dispettose e in equilibrio sulle palle giganti. Arriva al podio prima che il bonus arrivi a zero!</p>
+       <div class="pts">
+         <span><b>Cerchio di fuoco</b></span><span>100 · quello piccolo col sacchetto 500</span>
+         <span><b>Braciere saltato</b></span><span>200</span>
+         <span><b>Scimmia saltata</b></span><span>100 · quella blu 200</span>
+         <span><b>Salto su una palla</b></span><span>150</span>
+         <span><b>Bonus</b></span><span>parte da 5.000 e scende: incassi quello che resta al podio</span>
+       </div>
+       ${touchMode
+         ? `<p class="muted help">Levetta ▶ per avanzare e ◀ per indietreggiare · SALTA per saltare (il salto segue la direzione in cui stai andando)</p>`
+         : `<p class="muted help">Frecce ←→ o A D per avanzare e indietreggiare · SPAZIO, Z o ↑ per saltare · P pausa</p>`}
+       ${difficultyHTML()}
+       <button class="start" data-start>SI VA IN SCENA</button>`
+    );
+  }
+  overlay.addEventListener("click", (e) => {
+    const d = e.target.closest("[data-diff]");
+    if (d) { setDifficulty(d.dataset.diff); return; }
+    if (e.target.closest("[data-start]")) startGame();
+    if (e.target.closest("[data-resume]")) togglePause();
+  });
+
+  // ---------- Input ----------
+  window.addEventListener("keydown", (e) => {
+    const k = e.key.toLowerCase();
+    if ([" ", "arrowup", "arrowdown", "arrowleft", "arrowright"].includes(k)) e.preventDefault();
+    if (state === "menu" || state === "over") {
+      if (e.key === "Enter") startGame();
+      else if (["1", "2", "3"].includes(k)) setDifficulty(DIFF_IDS[+k - 1]);
+      return;
+    }
+    if (k === "p" || k === "escape") { if (!e.repeat) togglePause(); return; }
+    if (state === "paused") { if (e.key === "Enter") togglePause(); return; }
+    if ((k === " " || k === "z" || k === "arrowup" || k === "w") && !e.repeat) jumpPressed = true;
+    if (k === "arrowleft" || k === "a") keys.left = true;
+    if (k === "arrowright" || k === "d") keys.right = true;
+  });
+  window.addEventListener("keyup", (e) => {
+    const k = e.key.toLowerCase();
+    if (k === "arrowleft" || k === "a") keys.left = false;
+    if (k === "arrowright" || k === "d") keys.right = false;
+  });
+  window.addEventListener("blur", () => { keys.left = keys.right = false; axis = 0; if (isPlaying()) togglePause(); });
+  const jumpBtn = touchEl.querySelector(".jump");
+  jumpBtn.addEventListener("pointerdown", (e) => { e.preventDefault(); jumpPressed = true; jumpBtn.classList.add("on"); });
+  for (const ev of ["pointerup", "pointercancel", "pointerleave"]) jumpBtn.addEventListener(ev, () => jumpBtn.classList.remove("on"));
+  // thumb stick: only its horizontal part matters
+  const stick = touchEl.querySelector(".stick"), knob = stick.querySelector(".knob"), marks = {};
+  for (const m of stick.querySelectorAll("i")) marks[m.dataset.d] = m;
+  let stickId = null;
+  function stickAt(e) {
+    const r = stick.getBoundingClientRect(), max = r.width / 2 - 14;
+    let dx = e.clientX - (r.left + r.width / 2), dy = e.clientY - (r.top + r.height / 2);
+    const len = Math.hypot(dx, dy);
+    if (len > max) { dx *= max / len; dy *= max / len; }
+    knob.style.transform = `translate(${dx}px, ${dy * 0.4}px)`;
+    const v = dx / max;
+    axis = Math.abs(v) < 0.25 ? 0 : Math.sign(v);
+    marks.left.classList.toggle("on", axis < 0); marks.right.classList.toggle("on", axis > 0);
+  }
+  const stickEnd = (e) => { if (e.pointerId !== stickId) return; stickId = null; knob.style.transform = ""; axis = 0; marks.left.classList.remove("on"); marks.right.classList.remove("on"); };
+  stick.addEventListener("pointerdown", (e) => { e.preventDefault(); stickId = e.pointerId; try { stick.setPointerCapture(e.pointerId); } catch { /* ignore */ } stickAt(e); });
+  stick.addEventListener("pointermove", (e) => { if (e.pointerId === stickId) stickAt(e); });
+  for (const ev of ["pointerup", "pointercancel", "lostpointercapture"]) stick.addEventListener(ev, stickEnd);
+  window.addEventListener("pointerdown", (e) => { if (e.pointerType === "touch" && !touchMode) { touchMode = true; syncControls(); if (menu) menu(); } }, true);
+
+  // ---------- Update ----------
+  const jumpHeight = (a, t) => { const u = (t / a.jumpT) * 2 - 1; return a.jumpH * (1 - u * u); };
+  function spawn(dt) {
+    const a = act().id, right = camX + W + 30;
+    spawnT -= dt;
+    if (spawnT > 0 || right > LEN + 100) return;
+    if (a === "leone") {
+      // flaming rings; now and then a small one with a money bag
+      // the ring meets a clown going full speed about here: keep it clear of the pots, or right on top of one
+      const vr = -32 * pace(), meet = p.x + (right - p.x) * act().fwd / (act().fwd - vr);
+      // (a pot just past the meeting point is cleared by the same jump through the ring)
+      if (obs.some((o) => o.k === "pot" && !(o.x - meet >= -8 && o.x - meet <= 22) && Math.abs(o.x - meet) < 150)) { spawnT = 0.15; return; }
+      const small = Math.random() < 0.18;
+      obs.push({ k: "ring", x: right, small, bag: small, passed: false, vx: vr });
+      spawnT = rnd(2.4, 3.6) / diff.dense / pace();
+    } else if (a === "fune") {
+      const blue = Math.random() < Math.min(0.5, 0.2 + stage * 0.04);
+      const vm = -(blue ? 85 : 42) * pace(), fwd = act().fwd;
+      // leave at least a second between two monkeys reaching the clown
+      const eta = (o) => (o.x - p.x) / (fwd - o.vx), mine = (right - p.x) / (fwd - vm);
+      if (obs.some((o) => o.k === "monkey" && o.x > p.x && Math.abs(eta(o) - mine) < 1)) { spawnT = 0.2; return; }
+      obs.push({ k: "monkey", x: right, blue, vx: vm, passed: false, t: rnd(0, 5), hop: 0 });
+      spawnT = rnd(1.8, 3.2) / diff.dense / pace();
+    } else {
+      // only one ball rolls in at a time
+      if (obs.some((o) => o.k === "ball" && !o.mine && o.x > p.x)) { spawnT = 0.3; return; }
+      obs.push({ k: "ball", x: right, vx: -rnd(45, 70) * pace(), mine: false, rot: 0, hue: Math.floor(rnd(1, 4)), scored: false });
+      spawnT = rnd(0.6, 1.4) / diff.dense;
+    }
+  }
+  function update(dt) {
+    clock += dt;
+    sfxN = 0;
+    for (const q of parts) { q.t += dt; q.x += q.vx * dt; q.y += q.vy * dt; q.vy += 200 * dt; }
+    parts = parts.filter((q) => q.t < q.life);
+    for (const q of popups) { q.t += dt; q.y -= 22 * dt; }
+    popups = popups.filter((q) => q.t < (q.big ? 1.6 : 0.9));
+    if (message) { message.t += dt; if (message.t > 2.4) message = null; }
+    if (!isPlaying()) return;
+    if (state === "intro") { stateT -= dt; if (stateT <= 0) state = "play"; return; }
+    if (state === "dead") {
+      stateT -= dt; p.deadT += dt;
+      if (stateT <= 0) afterDeath();
+      return;
+    }
+    if (state === "clear") {
+      stateT -= dt;
+      // the bonus pours into the score
+      if (bonus > 0) { const k = Math.min(bonus, Math.ceil(2500 * dt / 10) * 10); bonus -= k; addScore(k); sfx.tick(); }
+      if (stateT <= 0 && bonus <= 0) { stage++; startStage(); }
+      return;
+    }
+    // bonus countdown and the band
+    bonusT += dt;
+    // the ball act is slower going, so its clock runs slower too
+    const tick = act().id === "palle" ? 0.2 : 0.12;
+    if (bonusT >= tick) { bonusT -= tick; bonus = Math.max(0, bonus - 10); if (bonus === 0) { fall("TEMPO SCADUTO!"); return; } }
+    marchT -= dt;
+    if (marchT <= 0) { marchT = 0.16; const n = MARCH[marchI++ % MARCH.length]; if (n) beep(n, 0.12, "square", 0.012); if (marchI % 4 === 0) beep(n ? n / 4 : 131, 0.1, "triangle", 0.02); }
+
+    const a = act();
+    const dir = axis || ((keys.right ? 1 : 0) - (keys.left ? 1 : 0));
+    // moving and jumping
+    if (!p.air) {
+      p.vx = dir > 0 ? a.fwd : dir < 0 ? a.back : 0;
+      if (jumpPressed) { p.air = true; p.jt = 0; p.jvx = p.vx; sfx.jump(); }
+    }
+    jumpPressed = false;
+    const vx = p.air ? p.jvx : p.vx;
+    p.x = Math.max(camX + 16, Math.min(LEN + 60, p.x + vx * dt));
+    if (vx && !p.air) p.walk += dt * Math.abs(vx) / 10;
+    if (p.air) {
+      p.jt += dt; p.h = jumpHeight(a, Math.min(p.jt, a.jumpT));
+      if (p.jt >= a.jumpT) { p.air = false; p.h = 0; land(); if (state !== "play") return; }
+    }
+    if (p.ball && !p.air) { p.ball.x = p.x; p.ball.vx = vx; }
+    camX = Math.max(0, Math.min(LEN - W + 120, Math.max(camX, p.x - 170)));
+    if (p.x < camX + 150 && vx < 0) camX = Math.max(0, Math.min(camX, p.x - 150));
+
+    spawn(dt);
+    for (const o of obs) {
+      if (o.vx !== undefined && !(o.mine)) o.x += o.vx * dt;
+      if (o.k === "ball") o.rot += (o.vx || 0) * dt / 18;
+      if (o.k === "monkey") o.t += dt;
+    }
+    collide(a);
+    obs = obs.filter((o) => o.x > camX - 80 || o.mine);
+    // checkpoints and the podium
+    const cp = Math.floor(p.x / CHECK) * CHECK;
+    if (cp > lastCheck) lastCheck = cp;
+    if (p.x >= LEN && !p.air) {
+      message = { text: "BRAVO! APPLAUSI!", sub: `Bonus ${bonus.toLocaleString("it-IT")}`, t: 0 };
+      sfx.clear(); state = "clear"; stateT = 1.6;
+      burst(p.x, GROUND - 60, "#ffd34d", 30, 160, 1); burst(p.x, GROUND - 60, "#ff3a4a", 20, 140, 1);
+    }
+  }
+  function land() {
+    sfx.land();
+    if (act().id !== "palle") return;
+    // landing on a ball, or on the sand
+    // when two balls are under the clown, the one rolling in wins
+    const under = obs.filter((o) => o.k === "ball" && Math.abs(o.x - p.x) < 21);
+    const b = under.find((o) => !o.mine) || under[0];
+    if (!b && p.x < LEN) { fall("CADUTO DALLA PALLA!"); return; }
+    if (!b) return;
+    if (!b.mine) {
+      for (const o of obs) if (o.k === "ball") o.mine = false;
+      if (p.ball) { p.ball.vx = -20; p.ball.spent = true; }
+      b.mine = true; p.ball = b; p.x = b.x;
+      addScore(150, b.x, GROUND - 90, "#ffd34d"); sfx.pass();
+    }
+  }
+  function collide(a) {
+    const feet = p.h;
+    for (const o of obs) {
+      const dx = o.x - p.x;
+      if (o.k === "pot") {
+        if (Math.abs(dx) < 22 && feet < 17) { fall("SCOTTATO DAL BRACIERE!"); return; }
+        if (!o.passed && dx < -8) { o.passed = true; if (p.air || feet > 0) { addScore(200, o.x, GROUND - 40, "#ffd34d"); sfx.pass(); } }
+      } else if (o.k === "ring") {
+        const cy = o.small ? 70 : 66, hr = o.small ? 26 : 32;
+        // the rider's torso has to go through the middle of the ring
+        if (Math.abs(dx) < 4) {
+          const top = feet + 40;
+          if (feet < cy - hr + 4 || top > cy + hr - 4) { fall("BRUCIATO DAL CERCHIO!"); return; }
+        }
+        if (!o.passed && dx < -8) {
+          o.passed = true;
+          addScore(o.small ? 500 : 100, o.x, GROUND - 110, o.small ? "#7dff9a" : "#fff6ea");
+          if (o.bag) { o.bag = false; sfx.bag(); } else sfx.pass();
+        }
+      } else if (o.k === "monkey") {
+        if (Math.abs(dx) < 12 && feet < 17) { fall("TRAVOLTO DALLA SCIMMIA!"); return; }
+        if (!o.passed && dx < -12) { o.passed = true; addScore(o.blue ? 200 : 100, o.x, ROPE - 40, o.blue ? "#5ad8ff" : "#fff6ea"); sfx.pass(); }
+      } else if (o.k === "ball" && !o.mine && !o.spent && p.ball && !p.air) {
+        // only a ball rolling in from ahead can knock the clown off; the one just left behind rolls away
+        const d = o.x - p.ball.x;
+        if (d > 0 && d < 30) { fall("LE PALLE SI SCONTRANO!"); return; }
+      }
+    }
+  }
+
+  // ---------- Drawing ----------
+  function drawTent() {
+    // the big top: stripes, lights and a crowd that scroll slower than the ring
+    const par = camX * 0.3;
+    for (let i = -1; i < 14; i++) {
+      const x = i * 40 - (par % 80);
+      ctx.fillStyle = i % 2 ? "#b01a2a" : "#f0e0d0";
+      ctx.beginPath(); ctx.moveTo(x, HUD); ctx.lineTo(x + 40, HUD); ctx.lineTo(x + 40 + 30, 120); ctx.lineTo(x + 30, 120); ctx.fill();
+    }
+    ctx.fillStyle = "#3a0a14"; ctx.fillRect(0, 118, W, 80);
+    for (let i = 0; i < 40; i++) {
+      const x = ((i * 37 - camX * 0.5) % (W + 40) + W + 40) % (W + 40) - 20, y = 130 + (i % 3) * 20;
+      ctx.fillStyle = ["#f0c8a0", "#c8905a", "#8a5a3a"][i % 3]; ctx.beginPath(); ctx.arc(x, y + Math.sin(clock * 6 + i) * (state === "clear" ? 3 : 0.8), 5, 0, TAU); ctx.fill();
+      ctx.fillStyle = ["#3a5aff", "#ffd34d", "#7dff7a", "#ff5a8a"][i % 4]; ctx.fillRect(x - 6, y + 5, 12, 8);
+    }
+    for (let i = 0; i < 12; i++) { const x = ((i * 50 - camX * 0.3) % (W + 50) + W + 50) % (W + 50) - 25; ctx.fillStyle = Math.floor(clock * 3 + i) % 2 ? "#ffd34d" : "#ff8a3a"; ctx.beginPath(); ctx.arc(x, 118, 3, 0, TAU); ctx.fill(); }
+    ctx.fillStyle = "#6a1a1a"; ctx.fillRect(0, 196, W, 6);
+    // the ring floor
+    ctx.fillStyle = "#c89a5a"; ctx.fillRect(0, 202, W, H - 202);
+    ctx.fillStyle = "#b0824a"; for (let i = 0; i < 20; i++) { const x = ((i * 43 - camX) % (W + 43) + W + 43) % (W + 43) - 20; ctx.fillRect(x, 230 + (i % 3) * 18, 14, 2); }
+  }
+  function drawMarkers() {
+    // distance signs every 10 metres and the podium at the end
+    for (let m = 90; m >= 0; m -= 10) {
+      const x = (100 - m) * PX_M - camX;
+      if (x < -30 || x > W + 30) continue;
+      ctx.fillStyle = "#fff6ea"; ctx.fillRect(x - 13, GROUND + 14, 26, 14);
+      ctx.fillStyle = (100 - m) % 25 === 0 ? "#b01a2a" : "#3a3a5a"; ctx.font = "900 10px system-ui, sans-serif"; ctx.textAlign = "center"; ctx.fillText(`${m}m`, x, GROUND + 25);
+    }
+    const px = LEN - camX;
+    if (px < W + 60) {
+      ctx.fillStyle = "#3a5aff"; ctx.fillRect(px - 20, GROUND - 26, 70, 26);
+      ctx.fillStyle = "#ffd34d"; ctx.fillRect(px - 20, GROUND - 28, 70, 4);
+      ctx.fillStyle = "#fff"; ctx.font = "900 11px system-ui, sans-serif"; ctx.textAlign = "center"; ctx.fillText("★ FINE ★", px + 15, GROUND - 10);
+    }
+  }
+  function drawClown(x, y, o = {}) {
+    ctx.save(); ctx.translate(x, y);
+    if (o.spin) ctx.rotate(o.spin);
+    const step = o.walk ? Math.sin(o.walk) * 3 : 0;
+    // legs
+    ctx.fillStyle = "#3a5aff";
+    if (o.sit) { ctx.fillRect(-7, -6, 5, 6); ctx.fillRect(3, -6, 5, 6); }
+    else { ctx.fillRect(-5 + step * 0.5, -10, 4, 10); ctx.fillRect(1 - step * 0.5, -10, 4, 10); ctx.fillStyle = "#b01a2a"; ctx.fillRect(-7 + step * 0.5, -2, 7, 3); ctx.fillRect(0 - step * 0.5, -2, 7, 3); }
+    // body with polka dots
+    ctx.fillStyle = "#ffd34d"; ctx.fillRect(-6, -24, 12, 15);
+    ctx.fillStyle = "#b01a2a"; ctx.fillRect(-4, -21, 2, 2); ctx.fillRect(2, -17, 2, 2); ctx.fillRect(-3, -13, 2, 2);
+    ctx.fillStyle = "#fff"; ctx.fillRect(-7, -25, 14, 3);
+    // arms out for balance
+    const arm = o.air ? -6 : Math.sin(clock * 5) * 2;
+    ctx.strokeStyle = "#ffd34d"; ctx.lineWidth = 3; ctx.lineCap = "round";
+    ctx.beginPath(); ctx.moveTo(-5, -21); ctx.lineTo(-12, -20 + arm); ctx.moveTo(5, -21); ctx.lineTo(12, -20 - arm); ctx.stroke();
+    ctx.fillStyle = "#fff"; ctx.beginPath(); ctx.arc(-12, -20 + arm, 2, 0, TAU); ctx.arc(12, -20 - arm, 2, 0, TAU); ctx.fill();
+    // head: white face, red nose, orange hair, little hat
+    ctx.fillStyle = "#ff8a3a"; ctx.beginPath(); ctx.arc(-5, -30, 3.5, 0, TAU); ctx.arc(5, -30, 3.5, 0, TAU); ctx.fill();
+    ctx.fillStyle = "#fff6ea"; ctx.beginPath(); ctx.arc(0, -31, 5.5, 0, TAU); ctx.fill();
+    ctx.fillStyle = "#ff3a4a"; ctx.beginPath(); ctx.arc(2, -30, 1.8, 0, TAU); ctx.fill();
+    ctx.fillStyle = "#222"; ctx.fillRect(-2, -33, 1.5, 1.5); ctx.fillRect(3, -33, 1.5, 1.5);
+    ctx.fillStyle = "#3a5aff"; ctx.beginPath(); ctx.moveTo(-3, -36); ctx.lineTo(0, -45); ctx.lineTo(3, -36); ctx.fill();
+    ctx.fillStyle = "#ffd34d"; ctx.beginPath(); ctx.arc(0, -45, 1.8, 0, TAU); ctx.fill();
+    ctx.restore();
+  }
+  function drawLion(x, y, walk, air) {
+    ctx.save(); ctx.translate(x, y);
+    const s = walk ? Math.sin(walk) * 4 : 0, leap = air ? 1 : 0;
+    ctx.fillStyle = "#e89a3a";
+    // legs
+    ctx.fillRect(-14 + s * 0.5 - leap * 3, -10, 4, 10); ctx.fillRect(-8 - s * 0.5, -10, 4, 10);
+    ctx.fillRect(8 + s * 0.5 + leap * 3, -10, 4, 10); ctx.fillRect(12 - s * 0.5 + leap * 2, -10, 4, 10);
+    ctx.beginPath(); ctx.ellipse(0, -14, 18, 7, 0, 0, TAU); ctx.fill();
+    // tail
+    ctx.strokeStyle = "#e89a3a"; ctx.lineWidth = 2; ctx.beginPath(); ctx.moveTo(-17, -15); ctx.quadraticCurveTo(-26, -20 + Math.sin(clock * 6) * 3, -24, -26); ctx.stroke();
+    ctx.fillStyle = "#8a4a1a"; ctx.beginPath(); ctx.arc(-24, -26, 2.5, 0, TAU); ctx.fill();
+    // head and mane
+    ctx.fillStyle = "#a85a1a"; ctx.beginPath(); ctx.arc(18, -20, 9, 0, TAU); ctx.fill();
+    ctx.fillStyle = "#f0aa4a"; ctx.beginPath(); ctx.arc(20, -19, 5.5, 0, TAU); ctx.fill();
+    ctx.fillStyle = "#222"; ctx.fillRect(21, -21, 1.5, 1.5); ctx.fillRect(24, -18, 2, 1.5);
+    ctx.restore();
+  }
+  function drawRing(o, x, half) {
+    // half = "back" draws the far side of the ring before the clown, "front" the near side after
+    const cy = GROUND - (o.small ? 70 : 66), hr = o.small ? 26 : 32;
+    ctx.lineWidth = 5;
+    ctx.strokeStyle = "#ff8a1a";
+    ctx.beginPath();
+    if (half === "back") ctx.ellipse(x, cy, 9, hr, 0, Math.PI / 2, Math.PI * 1.5);
+    else ctx.ellipse(x, cy, 9, hr, 0, -Math.PI / 2, Math.PI / 2);
+    ctx.stroke();
+    ctx.lineWidth = 2; ctx.strokeStyle = "#ffe89a";
+    ctx.beginPath();
+    if (half === "back") ctx.ellipse(x, cy, 9, hr, 0, Math.PI / 2, Math.PI * 1.5); else ctx.ellipse(x, cy, 9, hr, 0, -Math.PI / 2, Math.PI / 2);
+    ctx.stroke();
+    if (half === "front") {
+      // flames along the ring
+      for (let k = 0; k < 6; k++) {
+        const a = (k / 6) * TAU + clock * 2, fx = x + Math.cos(a) * 9, fy = cy + Math.sin(a) * hr;
+        ctx.fillStyle = Math.floor(clock * 12 + k) % 2 ? "#ffd34d" : "#ff5a1a";
+        ctx.beginPath(); ctx.moveTo(fx - 3, fy); ctx.lineTo(fx, fy - 7 - Math.random() * 3); ctx.lineTo(fx + 3, fy); ctx.fill();
+      }
+      if (o.bag) { ctx.fillStyle = "#c8a04a"; ctx.beginPath(); ctx.arc(x, cy + hr - 8, 5, 0, TAU); ctx.fill(); ctx.fillStyle = "#3a2a0a"; ctx.font = "900 7px system-ui, sans-serif"; ctx.textAlign = "center"; ctx.fillText("$", x, cy + hr - 5.5); }
+    }
+  }
+  function drawPot(x) {
+    ctx.fillStyle = "#8a5a2a"; ctx.beginPath(); ctx.moveTo(x - 10, GROUND - 16); ctx.lineTo(x + 10, GROUND - 16); ctx.lineTo(x + 7, GROUND); ctx.lineTo(x - 7, GROUND); ctx.fill();
+    ctx.fillStyle = "#c88a4a"; ctx.fillRect(x - 11, GROUND - 18, 22, 3);
+    for (let k = -1; k <= 1; k++) {
+      ctx.fillStyle = Math.floor(clock * 10 + k) % 2 ? "#ffd34d" : "#ff5a1a";
+      ctx.beginPath(); ctx.moveTo(x + k * 6 - 4, GROUND - 18); ctx.lineTo(x + k * 6, GROUND - 30 - Math.random() * 6); ctx.lineTo(x + k * 6 + 4, GROUND - 18); ctx.fill();
+    }
+  }
+  function drawMonkey(o, x) {
+    const y = ROPE, hop = Math.abs(Math.sin(o.t * (o.blue ? 12 : 8))) * 2;
+    ctx.save(); ctx.translate(x, y - hop);
+    ctx.fillStyle = o.blue ? "#3a8aff" : "#8a5a2a";
+    ctx.beginPath(); ctx.ellipse(0, -8, 6, 7, 0, 0, TAU); ctx.fill();
+    ctx.beginPath(); ctx.arc(-3, -17, 5, 0, TAU); ctx.fill();
+    ctx.fillStyle = "#f0c8a0"; ctx.beginPath(); ctx.arc(-4, -16, 3, 0, TAU); ctx.fill();
+    ctx.fillStyle = "#222"; ctx.fillRect(-6, -18, 1.5, 1.5);
+    ctx.strokeStyle = o.blue ? "#3a8aff" : "#8a5a2a"; ctx.lineWidth = 2;
+    ctx.beginPath(); ctx.moveTo(5, -6); ctx.quadraticCurveTo(12, -8, 10, -16); ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(-3, -2); ctx.lineTo(-5, 0); ctx.moveTo(3, -2); ctx.lineTo(4, 0); ctx.stroke();
+    ctx.restore();
+  }
+  function drawBall(o, x) {
+    const cy = GROUND - 18;
+    const cols = [["#ff3a4a", "#fff6ea"], ["#3a8aff", "#ffd34d"], ["#7dff7a", "#ff5a8a"], ["#b05aff", "#fff6ea"]][o.hue || 0];
+    ctx.save(); ctx.translate(x, cy); ctx.rotate(o.rot);
+    for (let k = 0; k < 6; k++) { ctx.fillStyle = cols[k % 2]; ctx.beginPath(); ctx.moveTo(0, 0); ctx.arc(0, 0, 18, k * TAU / 6, (k + 1) * TAU / 6); ctx.fill(); }
+    ctx.restore();
+    ctx.fillStyle = "rgba(255,255,255,0.3)"; ctx.beginPath(); ctx.arc(x - 6, cy - 7, 4, 0, TAU); ctx.fill();
+  }
+  function draw() {
+    ctx.setTransform(pxRatio, 0, 0, pxRatio, 0, 0);
+    ctx.fillStyle = "#12060a"; ctx.fillRect(0, 0, W, H);
+    drawTent();
+    if (!p) return;
+    drawMarkers();
+    const a = act().id;
+    if (a === "fune") {
+      // the tightrope with its poles
+      ctx.strokeStyle = "#e8e0d0"; ctx.lineWidth = 2; ctx.beginPath(); ctx.moveTo(0, ROPE); ctx.lineTo(W, ROPE); ctx.stroke();
+      for (let x0 = 0; x0 <= LEN + 200; x0 += 600) { const x = x0 - camX; if (x < -10 || x > W + 10) continue; ctx.fillStyle = "#8a8aa0"; ctx.fillRect(x - 2, ROPE, 4, GROUND - ROPE); }
+    }
+    const surf = a === "fune" ? ROPE : a === "palle" ? GROUND - 36 : GROUND;
+    for (const o of obs) { const x = o.x - camX; if (o.k === "ring" && x > -40 && x < W + 40) drawRing(o, x, "back"); }
+    for (const o of obs) {
+      const x = o.x - camX;
+      if (x < -40 || x > W + 40) continue;
+      if (o.k === "pot") drawPot(x);
+      else if (o.k === "monkey") drawMonkey(o, x);
+      else if (o.k === "ball") drawBall(o, x);
+    }
+    // the clown (on the lion in the first act)
+    const px = p.x - camX;
+    if (state === "dead") {
+      const t = p.deadT, y = surf - p.h + Math.min(1, t) * 0 + (t > 0.4 ? (t - 0.4) * (t - 0.4) * 300 : -t * 30);
+      if (a === "leone") drawLion(px, GROUND, 0, false);
+      drawClown(px, Math.min(H + 60, y - (a === "leone" ? 20 : 0)), { spin: t * 6 });
+    } else if (a === "leone") {
+      drawLion(px, GROUND - p.h, p.air ? 0 : p.walk, p.air);
+      drawClown(px - 2, GROUND - p.h - 20, { sit: true, air: p.air });
+    } else {
+      drawClown(px, surf - p.h, { walk: p.air ? 0 : p.walk, air: p.air });
+    }
+    for (const o of obs) { const x = o.x - camX; if (o.k === "ring" && x > -40 && x < W + 40) drawRing(o, x, "front"); }
+    for (const q of parts) { ctx.globalAlpha = Math.max(0, 1 - q.t / q.life); ctx.fillStyle = q.c; ctx.fillRect(q.x - camX - 1.5, q.y - 1.5, 3, 3); }
+    ctx.globalAlpha = 1;
+    for (const q of popups) {
+      ctx.globalAlpha = Math.max(0, 1 - q.t / (q.big ? 1.6 : 0.9));
+      ctx.textAlign = "center"; ctx.font = q.big ? "900 20px system-ui, sans-serif" : "900 11px system-ui, sans-serif";
+      ctx.lineWidth = 3; ctx.strokeStyle = "#000"; ctx.strokeText(q.text, q.x - camX, q.y); ctx.fillStyle = q.color; ctx.fillText(q.text, q.x - camX, q.y);
+    }
+    ctx.globalAlpha = 1;
+    if (state === "menu") return;
+    // status bar
+    ctx.fillStyle = "#12060a"; ctx.fillRect(0, 0, W, HUD);
+    ctx.textBaseline = "middle"; ctx.textAlign = "left"; ctx.font = "900 14px system-ui, sans-serif"; ctx.fillStyle = "#fff6ea";
+    ctx.fillText(score.toLocaleString("it-IT"), 8, 12);
+    const sw = ctx.measureText(score.toLocaleString("it-IT")).width;
+    ctx.font = "700 9px system-ui, sans-serif"; ctx.fillStyle = "#c8a8a8";
+    ctx.fillText(`REC ${Math.max(bestCache, score).toLocaleString("it-IT")}`, 8 + Math.max(58, sw + 10), 12);
+    for (let i = 0; i < Math.min(lives - (state === "dead" ? 0 : 1), 6); i++) { ctx.fillStyle = "#fff6ea"; ctx.beginPath(); ctx.arc(200 + i * 13, 12, 4, 0, TAU); ctx.fill(); ctx.fillStyle = "#ff3a4a"; ctx.beginPath(); ctx.arc(201 + i * 13, 12, 1.5, 0, TAU); ctx.fill(); }
+    ctx.textAlign = "center"; ctx.font = "800 11px system-ui, sans-serif";
+    ctx.fillStyle = bonus < 1000 && Math.floor(clock * 4) % 2 ? "#ff3a4a" : "#ffd34d";
+    ctx.fillText(`BONUS ${bonus.toLocaleString("it-IT")}`, 320, 12);
+    ctx.textAlign = "right"; ctx.fillStyle = "#c8a8a8";
+    ctx.fillText(`NUMERO ${stage + 1} · ${Math.max(0, Math.ceil((LEN - p.x) / PX_M))}m`, W - 8, 12);
+    ctx.textBaseline = "alphabetic";
+    if (message) {
+      ctx.globalAlpha = Math.min(1, (2.4 - message.t) * 2);
+      ctx.fillStyle = "rgba(18,6,10,0.82)"; ctx.fillRect(0, 60, W, message.sub ? 50 : 34);
+      ctx.textAlign = "center"; ctx.font = "900 19px system-ui, sans-serif"; ctx.fillStyle = "#ffd34d";
+      ctx.fillText(message.text, W / 2, 83);
+      if (message.sub) { ctx.font = "700 11px system-ui, sans-serif"; ctx.fillStyle = "#fff6ea"; ctx.fillText(message.sub, W / 2, 101); }
+      ctx.globalAlpha = 1;
+    }
+  }
+
+  // ---------- Loop ----------
+  const STEP = 1 / 120;
+  let last = performance.now(), acc = 0;
+  function loop(now) {
+    const dt = Math.min(0.1, (now - last) / 1000);
+    last = now;
+    if (isPlaying()) {
+      acc += dt;
+      while (acc >= STEP && isPlaying()) { update(STEP); acc -= STEP; }
+    } else { acc = 0; update(dt); }
+    draw();
+    requestAnimationFrame(loop);
+  }
+  syncControls();
+  buildStage(0);
+  showTitle();
+  requestAnimationFrame(loop);
+})();
+</script>
+<script src="../../shared/iniziali.js" data-record="circo-best-" data-kind="score"></script>
+</body>
+</html>
