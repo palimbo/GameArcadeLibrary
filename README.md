@@ -4,7 +4,7 @@ Raccolta di giochi arcade per il browser. Ogni gioco è un singolo file HTML sen
 
 ## 🕹️ Sala Giochi — `index.html`
 
-Apri `index.html` nella cartella principale per la pagina di raccolta: mostra tutti i 57 giochi con copertina, genere, comandi e i tuoi record per ogni difficoltà (Facile, Normale, Difficile). Tocca «Gioca» per avviare un gioco; in ogni gioco il pulsante «← Sala Giochi» in alto a sinistra (visibile nei menu) riporta alla raccolta.
+Apri `index.html` nella cartella principale per la pagina di raccolta: mostra tutti i 58 giochi con copertina, genere, comandi e i tuoi record per ogni difficoltà (Facile, Normale, Difficile). Tocca «Gioca» per avviare un gioco; in ogni gioco il pulsante «← Sala Giochi» in alto a sinistra (visibile nei menu) riporta alla raccolta.
 
 **Iniziali del record:** quando batti un record compare la schermata da sala giochi per inserire le tue tre iniziali (frecce ↑ ↓ per cambiare lettera, ← → per spostarti, oppure scrivile direttamente; su telefono i tasti ▲ ▼ e OK). Le iniziali vengono salvate insieme al record e compaiono nei menu del gioco e nella Sala Giochi. Il codice è condiviso da tutti i giochi in `shared/iniziali.js`.
 
@@ -902,3 +902,18 @@ Corse di macchinine viste dall'alto in stile *Super Sprint*: quattro auto su una
 - **Touch:** punta la levetta nella direzione in cui vuoi andare, più la spingi più acceleri; tasto FRENO a destra
 
 Per giocare apri `games/circuito-mini/index.html` nel browser.
+
+### 👑 Quattro Re — `games/quattro-re/index.html`
+
+Battaglia di castelli in stile *Warlords*: quattro castelli agli angoli, ognuno con un re dentro le mura e uno scudo che corre lungo un arco.
+
+- **Il tuo castello:** quello blu in basso a sinistra. Muovi lo scudo per respingere le palle di fuoco prima che sgretolino le tue mura e colpiscano il re
+- **Prendi:** tieni premuto per bloccare la palla sullo scudo, lascia per lanciarla nella direzione in cui guarda lo scudo
+- **Palle di fuoco:** accelerano durante il round e ogni 25 secondi ne arriva un'altra, fino a tre
+- **Round:** l'ultimo re rimasto vince. Se cade il tuo, perdi una vita. Round dopo round gli avversari diventano più bravi
+- **Punti:** mattone nemico 10 (se la palla l'hai lanciata tu) · re nemico 500 · round vinto 1.000 più 5 per ogni tuo mattone rimasto
+- **Difficoltà:** Facile (3 vite, avversari distratti, palla lenta), Normale (2 vite), Difficile (1 vita, palla veloce); record separati per ogni difficoltà
+- **Comandi:** `↑` `←` e `↓` `→` per spostare lo scudo lungo l'arco · tieni premuto `SPAZIO` per bloccare la palla · `P` pausa
+- **Touch:** punta la levetta dove vuoi lo scudo (in su o a destra), tasto PRENDI a destra
+
+Per giocare apri `games/quattro-re/index.html` nel browser.
