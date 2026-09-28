@@ -8,6 +8,8 @@ Apri `index.html` nella cartella principale per la pagina di raccolta: mostra tu
 
 **Iniziali del record:** quando batti un record compare la schermata da sala giochi per inserire le tue tre iniziali (frecce ↑ ↓ per cambiare lettera, ← → per spostarti, oppure scrivile direttamente; su telefono i tasti ▲ ▼ e OK). Le iniziali vengono salvate insieme al record e compaiono nei menu del gioco e nella Sala Giochi. Il codice è condiviso da tutti i giochi in `shared/iniziali.js`.
 
+**Menu di pausa:** in ogni gioco la pausa offre, oltre a «Continua», anche «Termina partita» (chiude la partita come un normale game over, quindi il punteggio viene conteggiato e, se è un nuovo record, ti chiede le iniziali) ed «Esci alla Sala Giochi» (termina la partita, fa inserire le iniziali se hai battuto un record e poi torna alla raccolta). Anche il pulsante «← Sala Giochi» premuto durante la pausa salva il record prima di uscire.
+
 ## Giochi
 
 ### 🚀 Space Defender — `games/space-defender/index.html`

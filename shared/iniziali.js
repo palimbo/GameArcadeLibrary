@@ -69,7 +69,9 @@
   #ai-modal .keys { margin-top: 10px; font-size: 11px; color: #6a70a0; letter-spacing: 1px; }
   @media (pointer: coarse) { #ai-modal .keys { display: none; } }
   @keyframes ai-blink { 50% { opacity: 0.35; } }
-  .ai-name { color: #ffd34d; font-weight: 800; letter-spacing: 1px; }`;
+  .ai-name { color: #ffd34d; font-weight: 800; letter-spacing: 1px; }
+  #overlay .ai-quit { display: flex; flex-wrap: wrap; gap: 10px; justify-content: center; pointer-events: auto; }
+  #overlay .ai-quit button { font-size: 13px; }`;
   function injectCss() {
     if (document.getElementById("ai-css")) return;
     const st = document.createElement("style"); st.id = "ai-css"; st.textContent = css;
@@ -119,6 +121,7 @@
       setTimeout(() => { for (const ev of ["click", "mousedown", "mouseup"]) window.removeEventListener(ev, eat, true); }, 750);
       markNewRecord(name);
       decorate();
+      if (leaveAfter) { leaveAfter = false; setTimeout(goHome, 800); } // after the tap guard above
     }
     function onKey(e) {
       // while the initials screen is open the game does not see the keyboard
@@ -196,11 +199,45 @@
     }
     if (observer) observer.observe(ov, { childList: true, subtree: true, characterData: true });
   }
+  // ---------- Ending the game from the pause menu ----------
+  // The pause screen (the overlay with a "continua" button) gets two more buttons. The game listens for
+  // "sala:termina" and ends itself the usual way, so the score is saved as a record, and the initials asked
+  // for, exactly as after a real game over. The hall link does the same while the game is paused.
+  let leaveAfter = false, goingHome = false;
+  const paused = () => { const ov = document.getElementById("overlay"); return !!(ov && !ov.classList.contains("hidden") && ov.querySelector("[data-resume]")); };
+  function extendPause() {
+    const ov = document.getElementById("overlay");
+    const resume = ov && ov.querySelector("[data-resume]");
+    if (!resume || ov.querySelector("[data-quit]")) return;
+    const box = document.createElement("div");
+    box.className = "ai-quit";
+    box.innerHTML = `<button type="button" data-quit>TERMINA PARTITA</button><button type="button" data-leave>ESCI ALLA SALA GIOCHI</button>`;
+    resume.insertAdjacentElement("afterend", box);
+  }
+  function endGame() { window.dispatchEvent(new CustomEvent("sala:termina")); }
+  function goHome() {
+    const a = document.getElementById("homeLink");
+    if (!a) return;
+    goingHome = true;
+    a.click();
+    goingHome = false;
+  }
+  function leave() {
+    endGame();
+    // wait for the record to be written; if it was, the initials screen opens and we leave after it
+    setTimeout(() => { if (modal || pending.length) leaveAfter = true; else goHome(); }, 600);
+  }
+  document.addEventListener("click", (e) => {
+    if (e.target.closest("[data-quit]")) { e.stopPropagation(); e.preventDefault(); endGame(); }
+    else if (e.target.closest("[data-leave]")) { e.stopPropagation(); e.preventDefault(); leave(); }
+    else if (!goingHome && e.target.closest("#homeLink") && paused()) { e.stopImmediatePropagation(); e.preventDefault(); leave(); }
+  }, true);
   function start() {
     injectCss();
     const ov = document.getElementById("overlay");
     if (!ov) return;
-    observer = new MutationObserver(() => decorate());
+    observer = new MutationObserver(() => { extendPause(); decorate(); });
+    extendPause();
     decorate();
   }
   if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", start);
