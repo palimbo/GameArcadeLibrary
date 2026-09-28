@@ -4,7 +4,7 @@ Raccolta di giochi arcade per il browser. Ogni gioco è un singolo file HTML sen
 
 ## 🕹️ Sala Giochi — `index.html`
 
-Apri `index.html` nella cartella principale per la pagina di raccolta: mostra tutti i 79 giochi con copertina, genere, comandi e i tuoi record per ogni difficoltà (Facile, Normale, Difficile). Tocca «Gioca» per avviare un gioco; in ogni gioco il pulsante «← Sala Giochi» in alto a sinistra (visibile nei menu) riporta alla raccolta.
+Apri `index.html` nella cartella principale per la pagina di raccolta: mostra tutti i 80 giochi con copertina, genere, comandi e i tuoi record per ogni difficoltà (Facile, Normale, Difficile). Tocca «Gioca» per avviare un gioco; in ogni gioco il pulsante «← Sala Giochi» in alto a sinistra (visibile nei menu) riporta alla raccolta.
 
 **Iniziali del record:** quando batti un record compare la schermata da sala giochi per inserire le tue tre iniziali (frecce ↑ ↓ per cambiare lettera, ← → per spostarti, oppure scrivile direttamente; su telefono i tasti ▲ ▼ e OK). Le iniziali vengono salvate insieme al record e compaiono nei menu del gioco e nella Sala Giochi. Il codice è condiviso da tutti i giochi in `shared/iniziali.js`.
 
@@ -1250,3 +1250,19 @@ Minigolf visto dall'alto, con nove buche ognuna con il suo trabocchetto. Si mira
 - **Touch:** levetta per mirare e pulsante TIRA (tieni premuto e rilascia), oppure trascina sul campo all'indietro come una fionda
 
 Per giocare apri `games/minigolf-pazzo/index.html` nel browser.
+
+### 🎾 Set e Match — `games/set-e-match/index.html`
+
+Tennis arcade visto da dietro le spalle del tuo giocatore. Si gioca un torneo a eliminazione: quattro avversari, dal primo turno alla finale, ognuno più veloce e preciso del precedente. Ogni partita è un set corto: vince chi arriva per primo a 3 giochi, con il punteggio vero del tennis (15, 30, 40, parità, vantaggio).
+
+- **Colpire:** corri verso la pallina e premi TIRA poco prima che ti arrivi: con il tempo giusto il colpo è veloce e preciso, troppo presto o troppo tardi va storto (e può finire fuori o in rete)
+- **Mirare:** conta la direzione che tieni mentre colpisci: sinistra o destra per gli angoli, su per un colpo lungo, giù per uno corto e angolato. Il PALLONETTO va alto e lungo, utile se l'avversario è a rete
+- **Servizio:** TIRA per lanciare la palla in aria, di nuovo TIRA quando è in alto; più sei preciso, più il servizio è forte. La palla deve cadere nel riquadro evidenziato; due falli di fila sono un doppio fallo
+- **Avversari:** corrono verso la pallina dopo un attimo di reazione, lasciano andare le palle che escono e, se li fai correre molto, sbagliano più spesso; i più forti cercano l'angolo libero
+- **Tornei:** cemento (rimbalzo regolare), terra rossa (palla lenta e alta), erba (palla veloce e bassa); dopo ogni torneo vinto il successivo ha avversari più forti
+- **Punteggio:** punto 100 · ace +300 · vincente +150 · gioco 500 · partita vinta 2.000 × turno × torneo · torneo vinto 10.000 × torneo
+- **Difficoltà:** Facile (avversari lenti e fallosi, racchetta più lunga), Normale, Difficile (avversari veloci e precisi fin dal primo turno); record separati per ogni difficoltà
+- **Comandi:** frecce o `W` `A` `S` `D` per correre e mirare · `Spazio`, `J` o `Invio` tira · `K` o `Shift` pallonetto · `P` pausa
+- **Touch:** levetta per correre e mirare, pulsanti TIRA e PALLONETTO
+
+Per giocare apri `games/set-e-match/index.html` nel browser.
