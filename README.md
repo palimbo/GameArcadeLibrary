@@ -4,7 +4,7 @@ Raccolta di giochi arcade per il browser. Ogni gioco è un singolo file HTML sen
 
 ## 🕹️ Sala Giochi — `index.html`
 
-Apri `index.html` nella cartella principale per la pagina di raccolta: mostra tutti i 56 giochi con copertina, genere, comandi e i tuoi record per ogni difficoltà (Facile, Normale, Difficile). Tocca «Gioca» per avviare un gioco; in ogni gioco il pulsante «← Sala Giochi» in alto a sinistra (visibile nei menu) riporta alla raccolta.
+Apri `index.html` nella cartella principale per la pagina di raccolta: mostra tutti i 57 giochi con copertina, genere, comandi e i tuoi record per ogni difficoltà (Facile, Normale, Difficile). Tocca «Gioca» per avviare un gioco; in ogni gioco il pulsante «← Sala Giochi» in alto a sinistra (visibile nei menu) riporta alla raccolta.
 
 **Iniziali del record:** quando batti un record compare la schermata da sala giochi per inserire le tue tre iniziali (frecce ↑ ↓ per cambiare lettera, ← → per spostarti, oppure scrivile direttamente; su telefono i tasti ▲ ▼ e OK). Le iniziali vengono salvate insieme al record e compaiono nei menu del gioco e nella Sala Giochi. Il codice è condiviso da tutti i giochi in `shared/iniziali.js`.
 
@@ -887,3 +887,18 @@ Avventura a schermate in stile *Pitfall!*: 12 tesori nascosti in una giungla di 
 - **Touch:** levetta a sinistra, tasto SALTA a destra
 
 Per giocare apri `games/esploratore-giungla/index.html` nel browser.
+
+### 🏁 Circuito Mini — `games/circuito-mini/index.html`
+
+Corse di macchinine viste dall'alto in stile *Super Sprint*: quattro auto su una pista che sta tutta in uno schermo, tre giri per gara.
+
+- **Circuiti:** L'Ovale, La Chicane, Il Serpente e I Tornanti, uno dopo l'altro; poi si ricomincia, con avversari sempre più veloci
+- **Per continuare:** devi arrivare almeno 3° (Facile), 2° (Normale) o 1° (Difficile)
+- **Arrivo:** 1° 1.500 · 2° 900 · 3° 500 · 4° 200 punti
+- **Chiavi inglesi:** 100 punti ciascuna; ogni tre, fra una gara e l'altra scegli un potenziamento: velocità, accelerazione o aderenza (fino a 5 per tipo)
+- **Pista:** l'erba ti rallenta molto; dalla seconda gara compaiono l'olio, che ti fa sbandare, e le pozzanghere, che ti frenano. Le auto si urtano e si spingono
+- **Difficoltà:** Facile, Normale, Difficile; record separati per ogni difficoltà
+- **Comandi:** `←` `→` sterzo · `↑` o `SPAZIO` acceleratore · `↓` freno (da fermo, retromarcia) · `P` pausa
+- **Touch:** punta la levetta nella direzione in cui vuoi andare, più la spingi più acceleri; tasto FRENO a destra
+
+Per giocare apri `games/circuito-mini/index.html` nel browser.
