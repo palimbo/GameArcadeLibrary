@@ -4,7 +4,7 @@ Raccolta di giochi arcade per il browser. Ogni gioco è un singolo file HTML sen
 
 ## 🕹️ Sala Giochi — `index.html`
 
-Apri `index.html` nella cartella principale per la pagina di raccolta: mostra tutti i 70 giochi con copertina, genere, comandi e i tuoi record per ogni difficoltà (Facile, Normale, Difficile). Tocca «Gioca» per avviare un gioco; in ogni gioco il pulsante «← Sala Giochi» in alto a sinistra (visibile nei menu) riporta alla raccolta.
+Apri `index.html` nella cartella principale per la pagina di raccolta: mostra tutti i 71 giochi con copertina, genere, comandi e i tuoi record per ogni difficoltà (Facile, Normale, Difficile). Tocca «Gioca» per avviare un gioco; in ogni gioco il pulsante «← Sala Giochi» in alto a sinistra (visibile nei menu) riporta alla raccolta.
 
 **Iniziali del record:** quando batti un record compare la schermata da sala giochi per inserire le tue tre iniziali (frecce ↑ ↓ per cambiare lettera, ← → per spostarti, oppure scrivile direttamente; su telefono i tasti ▲ ▼ e OK). Le iniziali vengono salvate insieme al record e compaiono nei menu del gioco e nella Sala Giochi. Il codice è condiviso da tutti i giochi in `shared/iniziali.js`.
 
@@ -1105,3 +1105,19 @@ Sparatutto spaziale in stile *Bosconian*: la tua astronave vola sempre in avanti
 - **Touch:** levetta per la direzione, pulsante FUOCO
 
 Per giocare apri `games/basi-stellari/index.html` nel browser.
+
+### 🪖 Sergente di Ferro — `games/sergente-di-ferro/index.html`
+
+Sparatutto a piedi in stile *Commando*: da solo contro un esercito, avanzi verso l'alto (lo schermo non torna mai indietro) fino al forte nemico in cima a ogni zona.
+
+- **Quattro zone:** la Giungla, il Deserto, la Città in Rovina e la Valle Innevata, poi si ricomincia con nemici più rapidi. Alberi, rocce e macerie fermano te e i proiettili; i sacchi di sabbia fermano solo il passo (i colpi ci passano sopra); fiumi e canali si attraversano sui ponti
+- **Soldati:** i fucilieri si fermano e mirano (una lineetta rossa e un lampo giallo mostrano dove spareranno) 100 · i granatieri lanciano una granata che cade dove c'è il cerchio rosso lampeggiante 150 · alcuni restano di guardia dietro i sacchi di sabbia finché non ti avvicini, altri ti corrono addosso
+- **Bunker:** la feritoia lampeggia di rosso prima di sparare tre colpi a ventaglio; si distruggono con otto colpi o con una granata (500)
+- **Jeep:** sulle strade un triangolo «!» avvisa che sta per arrivarne una; ti investe se sei sulla sua strada, si ferma con tre colpi o una granata (300)
+- **Prigionieri e granate:** tocca i prigionieri legati al palo per liberarli (1.000); le casse «G» danno 3 granate (fino a 9). Le granate volano oltre ostacoli e sacchi di sabbia e non feriscono te
+- **Il forte:** in cima alla zona i difensori escono dal portone; eliminali tutti per conquistare il forte e prendere il bonus (2.000 per zona e 200 per ogni granata rimasta). Vita extra a 20.000 punti e poi ogni 30.000
+- **Difficoltà:** Facile (5 vite, nemici più lenti e colpi radi), Normale (3 vite), Difficile (3 vite, nemici numerosi e rapidi di mira); record separati per ogni difficoltà
+- **Comandi:** frecce o `W` `A` `S` `D` per camminare (spari nella direzione in cui cammini) · `Spazio` o `J` fuoco (tieni premuto) · `K` o `X` granata · `P` pausa
+- **Touch:** levetta per camminare e mirare, pulsanti FUOCO (tieni premuto) e BOMBA
+
+Per giocare apri `games/sergente-di-ferro/index.html` nel browser.
