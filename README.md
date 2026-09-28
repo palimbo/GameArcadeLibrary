@@ -4,7 +4,7 @@ Raccolta di giochi arcade per il browser. Ogni gioco è un singolo file HTML sen
 
 ## 🕹️ Sala Giochi — `index.html`
 
-Apri `index.html` nella cartella principale per la pagina di raccolta: mostra tutti i 65 giochi con copertina, genere, comandi e i tuoi record per ogni difficoltà (Facile, Normale, Difficile). Tocca «Gioca» per avviare un gioco; in ogni gioco il pulsante «← Sala Giochi» in alto a sinistra (visibile nei menu) riporta alla raccolta.
+Apri `index.html` nella cartella principale per la pagina di raccolta: mostra tutti i 66 giochi con copertina, genere, comandi e i tuoi record per ogni difficoltà (Facile, Normale, Difficile). Tocca «Gioca» per avviare un gioco; in ogni gioco il pulsante «← Sala Giochi» in alto a sinistra (visibile nei menu) riporta alla raccolta.
 
 **Iniziali del record:** quando batti un record compare la schermata da sala giochi per inserire le tue tre iniziali (frecce ↑ ↓ per cambiare lettera, ← → per spostarti, oppure scrivile direttamente; su telefono i tasti ▲ ▼ e OK). Le iniziali vengono salvate insieme al record e compaiono nei menu del gioco e nella Sala Giochi. Il codice è condiviso da tutti i giochi in `shared/iniziali.js`.
 
@@ -1028,3 +1028,18 @@ Rompicapo in stile *Columns*: nel pozzo di un tempio antico scendono colonne di 
 - **Touch:** levetta (sinistra e destra per spostare, giù per scendere, una spinta decisa in su per la caduta immediata) e i pulsanti CAMBIA e GIÙ
 
 Per giocare apri `games/colonne-di-gemme/index.html` nel browser.
+
+### 🤠 Banca del West — `games/banca-del-west/index.html`
+
+Gioco di riflessi in stile *Bank Panic*: sei lo sceriffo al bancone di una banca con dodici porte disposte in cerchio, e ne vedi tre alla volta.
+
+- **Chi entra:** i clienti (una signora, un signore col cilindro, un minatore, un cowboy) posano il loro sacco d'oro e la porta riceve il suo $ (50); i banditi, col fazzoletto rosso, portano la mano alla fondina ed estraggono: devi sparare prima tu (100, 200 o 300, e 500 se sei fulmineo). Le dita che fremono sulla fondina avvisano che sta per estrarre
+- **Attenzione:** mai sparare a un cliente. Dal secondo giorno alcuni clienti hanno un'ombra alle spalle: è un bandito che lo spinge da parte e prende il suo posto. Il ragazzino porta una pila di cappelli: falli saltare uno a uno (100 l'uno), ma non colpire lui
+- **Dinamite:** ogni tanto qualcuno la piazza su una porta, di solito una che non stai guardando. La barra in alto mostra dove e quanto manca: raggiungila e colpiscila tre volte (200) prima che esploda
+- **La giornata:** finisce quando tutte e dodici le porte hanno ricevuto un deposito, con un bonus per il tempo rimasto. Se il tempo finisce, perdi una vita. Ogni giorno i banditi sono più rapidi
+- **Si perde una vita** se un bandito spara per primo, se colpisci un cliente o il ragazzino, se la dinamite esplode o se finisce il tempo; una vita extra ogni 30.000 punti
+- **Difficoltà:** Facile (5 vite, banditi lenti a estrarre, dinamite con la miccia lunga, più tempo), Normale (3 vite), Difficile (3 vite, banditi fulminei, più dinamite, meno tempo); record separati per ogni difficoltà
+- **Comandi:** `←` `→` per girare nella sala · `1` `2` `3` o `J` `K` `L` per sparare alla porta di sinistra, di centro e di destra · anche un clic sulla porta · `P` pausa
+- **Touch:** la levetta fa girare la sala; tocca direttamente la porta per sparare (con il telefono in verticale ci sono anche i pulsanti ◀ ● ▶)
+
+Per giocare apri `games/banca-del-west/index.html` nel browser.

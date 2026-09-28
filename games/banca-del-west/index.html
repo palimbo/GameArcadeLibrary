@@ -1,0 +1,763 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no, viewport-fit=cover">
+<title>Banca del West</title>
+<style>
+  :root {
+    --bg: #1a0e06;
+    --fg: #fbeed6;
+    --muted: #c8a882;
+    --gold: #ffcc4a;
+    --red: #e8402a;
+    --green: #7ed87a;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  html, body {
+    height: 100%;
+    background: var(--bg);
+    color: var(--fg);
+    font-family: Georgia, "Times New Roman", serif;
+    overflow: hidden;
+    user-select: none;
+    -webkit-user-select: none;
+    touch-action: none;
+  }
+  #wrap { position: fixed; inset: 0; display: flex; align-items: center; justify-content: center; }
+  canvas { display: block; touch-action: none; border-radius: 6px; box-shadow: 0 0 0 2px #4a2a10, 0 10px 40px rgba(0,0,0,0.6); }
+  #pauseBtn {
+    position: fixed; z-index: 3; display: none; right: 10px; top: calc(10px + env(safe-area-inset-top, 0px));
+    font: 700 13px system-ui, sans-serif; color: var(--fg);
+    background: rgba(0, 0, 0, 0.6); border: 1px solid rgba(255, 204, 74, 0.5);
+    border-radius: 8px; padding: 6px 10px; cursor: pointer;
+  }
+  #touch {
+    position: fixed; z-index: 2; display: none; left: 12px; right: 12px;
+    bottom: calc(14px + env(safe-area-inset-bottom, 0px));
+    justify-content: space-between; align-items: flex-end; pointer-events: none;
+  }
+  /* thumb stick to turn round the hall, and one button per door you can see */
+  #touch .stick { position: relative; width: 128px; height: 128px; border-radius: 50%; pointer-events: auto; touch-action: none;
+    border: 2px solid rgba(255, 204, 74, 0.55); background: radial-gradient(circle, rgba(255,204,74,0.14), rgba(255,204,74,0.04)); }
+  #touch .stick .knob { position: absolute; left: 50%; top: 50%; width: 54px; height: 54px; margin: -27px 0 0 -27px; border-radius: 50%;
+    background: rgba(255, 204, 74, 0.45); border: 2px solid rgba(255,255,255,0.7); box-shadow: 0 4px 10px rgba(0,0,0,0.4); pointer-events: none; }
+  #touch .stick .ring { position: absolute; inset: 10px; border-radius: 50%; border: 1px dashed rgba(251,238,214,0.25); pointer-events: none; }
+  #touch .shots { display: flex; gap: 8px; align-items: flex-end; }
+  #touch .shots button { width: 64px; height: 64px; border-radius: 50%; pointer-events: auto; touch-action: none; color: var(--fg);
+    font: 800 20px Georgia, serif; border: 2px solid rgba(232, 64, 42, 0.9); background: rgba(232, 64, 42, 0.2); }
+  #touch .shots button.on { background: rgba(232, 64, 42, 0.6); }
+  #touch.small .stick { width: 104px; height: 104px; }
+  #touch.small .stick .knob { width: 44px; height: 44px; margin: -22px 0 0 -22px; }
+  #touch.small .shots button { width: 54px; height: 54px; font-size: 17px; }
+  /* sideways the doors are big enough to tap directly: only the stick stays */
+  #touch.land .shots { display: none; }
+  #overlay {
+    position: fixed; inset: 0; z-index: 5;
+    display: flex; flex-direction: column; align-items: center; justify-content: flex-start;
+    gap: 14px; padding: 16px; text-align: center; overflow-y: auto;
+    background: rgba(26, 14, 6, 0.92);
+  }
+  #overlay > :first-child { margin-top: auto; }
+  #overlay > :last-child { margin-bottom: auto; }
+  #overlay.hidden { display: none; }
+  #homeLink {
+    position: fixed; top: calc(10px + env(safe-area-inset-top, 0px)); left: 10px; z-index: 6;
+    font: 600 13px/1 system-ui, sans-serif; color: #fff; text-decoration: none;
+    padding: 8px 12px; border-radius: 999px; background: rgba(0,0,0,.55);
+    border: 1px solid rgba(255,255,255,.25);
+  }
+  #homeLink:hover { background: rgba(0,0,0,.8); }
+  #overlay.hidden ~ #homeLink { display: none; }
+  @media (max-width: 700px) { #overlay { padding-top: calc(52px + env(safe-area-inset-top, 0px)); } }
+  #overlay h1 { font-size: clamp(30px, 9vw, 58px); font-weight: 700; letter-spacing: 2px; color: var(--gold);
+    text-shadow: 0 3px 0 #6a3a10, 0 0 22px rgba(255,204,74,0.3); }
+  #overlay h2 { font-size: clamp(26px, 7vw, 42px); font-weight: 700; letter-spacing: 2px; color: var(--gold); }
+  #overlay h2.lose { color: var(--red); }
+  #overlay p { max-width: 560px; font-size: clamp(13px, 3.4vw, 16px); line-height: 1.55; }
+  #overlay p.muted { color: var(--muted); }
+  #overlay .pts { display: grid; grid-template-columns: repeat(2, auto); gap: 4px 18px; font-size: 13px; color: var(--muted); text-align: left; font-family: system-ui, sans-serif; }
+  #overlay .pts b { color: var(--fg); }
+  #overlay .diff { display: flex; gap: 10px; flex-wrap: wrap; justify-content: center; }
+  #overlay button {
+    font: 800 15px system-ui, sans-serif; letter-spacing: 1.5px; color: var(--fg);
+    background: transparent; cursor: pointer;
+    border: 2px solid rgba(251,238,214,0.3); border-radius: 10px; padding: 9px 16px;
+  }
+  #overlay .diff button.on { border-color: var(--c); color: var(--c); box-shadow: 0 0 12px var(--c); }
+  #overlay button.start { border-color: var(--gold); color: #2a1400; background: var(--gold); padding: 11px 30px; box-shadow: 0 4px 0 #6a3a10; }
+  @media (max-height: 560px) {
+    #overlay { gap: 8px; }
+    #overlay h1 { font-size: 30px; }
+    #overlay p { font-size: 13px; line-height: 1.4; }
+    #overlay .help, #overlay .pts { display: none; }
+  }
+</style>
+</head>
+<body>
+<div id="wrap"><canvas id="game"></canvas></div>
+<div id="touch">
+  <div class="stick" aria-label="Levetta"><div class="ring"></div><div class="knob"></div></div>
+  <div class="shots">
+    <button type="button" data-shot="0" aria-label="Spara alla porta di sinistra">◀</button>
+    <button type="button" data-shot="1" aria-label="Spara alla porta di centro">●</button>
+    <button type="button" data-shot="2" aria-label="Spara alla porta di destra">▶</button>
+  </div>
+</div>
+<button id="pauseBtn" type="button" aria-label="Pausa">❚❚</button>
+<div id="overlay"></div>
+<a id="homeLink" href="../../index.html">← Sala Giochi</a>
+
+<script>
+(() => {
+  "use strict";
+
+  const W = 640, H = 360, TAU = Math.PI * 2;
+  const N = 12, SPACING = 206, X0 = 114, FLOOR = 292, DOOR_W = 112, DOOR_H = 178, TOPBAR = 44;
+
+  const DIFFICULTIES = {
+    facile:    { label: "FACILE",    color: "#7ed87a", desc: "5 vite · i banditi estraggono con calma · dinamite lenta", lives: 5, draw: [1.2, 1.7], fuse: 13, time: 100, pace: 0.8 },
+    normale:   { label: "NORMALE",   color: "#ffcc4a", desc: "3 vite · l'esperienza classica", lives: 3, draw: [0.8, 1.2], fuse: 10, time: 85, pace: 1 },
+    difficile: { label: "DIFFICILE", color: "#e8402a", desc: "3 vite · banditi fulminei e più dinamite", lives: 3, draw: [0.55, 0.85], fuse: 8, time: 75, pace: 1.25 },
+  };
+  const DIFF_IDS = Object.keys(DIFFICULTIES);
+  const DIFF_KEY = "banca-difficulty";
+  const bestKey = (id) => `banca-best-${id}`;
+  function store(k, v) { try { localStorage.setItem(k, v); } catch { /* ignore */ } }
+  function load(k) { try { return localStorage.getItem(k); } catch { return null; } }
+  const rnd = (a, b) => a + Math.random() * (b - a);
+  const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
+  const mod = (v) => ((v % N) + N) % N;
+
+  // ---------- Canvas ----------
+  const canvas = document.getElementById("game");
+  const ctx = canvas.getContext("2d");
+  const wrapEl = document.getElementById("wrap");
+  const overlay = document.getElementById("overlay");
+  const touchEl = document.getElementById("touch");
+  const pauseBtn = document.getElementById("pauseBtn");
+  let pxRatio = 1, scale = 1, touchMode = !!(window.matchMedia && matchMedia("(pointer: coarse)").matches);
+  function resize() {
+    const portrait = window.innerHeight > window.innerWidth;
+    const showTouch = touchMode && isPlaying();
+    touchEl.style.display = showTouch ? "flex" : "none";
+    touchEl.classList.toggle("small", !portrait && window.innerHeight < 480);
+    touchEl.classList.toggle("land", !portrait);
+    wrapEl.style.paddingBottom = showTouch && portrait ? "calc(160px + env(safe-area-inset-bottom, 0px))" : "0";
+    let availW = window.innerWidth - 8, availH = window.innerHeight - 8;
+    if (showTouch && portrait) availH -= 160;
+    if (showTouch && !portrait) {
+      const side = Math.max(...[...touchEl.children].map((el) => el.offsetWidth)) + 20;
+      if (window.innerWidth - 2 * side > 200) availW = window.innerWidth - 2 * side;
+    }
+    scale = Math.max(0.2, Math.min(availW / W, availH / H));
+    pxRatio = Math.min(3, scale * (window.devicePixelRatio || 1));
+    canvas.style.width = W * scale + "px";
+    canvas.style.height = H * scale + "px";
+    canvas.width = Math.round(W * pxRatio);
+    canvas.height = Math.round(H * pxRatio);
+  }
+  window.addEventListener("resize", () => syncControls());
+
+  // ---------- Audio ----------
+  let audioCtx = null;
+  function beep(freq, dur, type = "square", vol = 0.04, slide = 0, delay = 0) {
+    if (!audioCtx) return;
+    const t = audioCtx.currentTime + delay;
+    const osc = audioCtx.createOscillator(), gain = audioCtx.createGain();
+    osc.type = type;
+    osc.frequency.setValueAtTime(freq, t);
+    if (slide) osc.frequency.exponentialRampToValueAtTime(Math.max(20, freq + slide), t + dur);
+    gain.gain.setValueAtTime(vol, t);
+    gain.gain.exponentialRampToValueAtTime(0.0001, t + dur);
+    osc.connect(gain).connect(audioCtx.destination);
+    osc.start(t); osc.stop(t + dur + 0.02);
+  }
+  function noise(dur, vol, freq, delay = 0) {
+    if (!audioCtx) return;
+    const len = Math.floor(audioCtx.sampleRate * dur), buf = audioCtx.createBuffer(1, len, audioCtx.sampleRate), d = buf.getChannelData(0);
+    for (let i = 0; i < len; i++) d[i] = (Math.random() * 2 - 1) * Math.pow(1 - i / len, 3);
+    const src = audioCtx.createBufferSource(), f = audioCtx.createBiquadFilter(), g = audioCtx.createGain();
+    src.buffer = buf; f.type = "lowpass"; f.frequency.value = freq; g.gain.value = vol;
+    src.connect(f).connect(g).connect(audioCtx.destination); src.start(audioCtx.currentTime + delay);
+  }
+  const arp = (notes, gap, d, type = "square", vol = 0.04) => notes.forEach((f, i) => beep(f, d, type, vol, 0, i * gap));
+  const sfx = {
+    shot: () => { noise(0.25, 0.35, 2400); beep(90, 0.1, "square", 0.04, -40); },
+    ricochet: () => beep(2400, 0.25, "sine", 0.02, -1600),
+    door: () => beep(140, 0.12, "triangle", 0.03, 40),
+    creak: () => beep(420, 0.25, "sawtooth", 0.012, -200),
+    coin: () => arp([988, 1319], 0.06, 0.1, "square", 0.03),
+    hat: () => beep(700, 0.12, "triangle", 0.03, 300),
+    boom: () => { noise(0.9, 0.4, 500); beep(60, 0.6, "square", 0.05, -30); },
+    fuse: () => noise(0.05, 0.05, 4000),
+    bang: () => { noise(0.3, 0.4, 1800); arp([392, 330, 262, 196], 0.12, 0.2, "triangle", 0.05); },
+    ouch: () => arp([523, 392, 311], 0.1, 0.16, "triangle", 0.05),
+    round: () => arp([392, 494, 587, 784, 587, 784, 988], 0.1, 0.16, "square", 0.04),
+    start: () => arp([294, 370, 440, 587, 440, 587], 0.11, 0.15, "square", 0.04),
+    over: () => arp([440, 415, 392, 370, 349, 330], 0.16, 0.24, "triangle", 0.05),
+    warn: () => beep(1400, 0.08, "square", 0.02),
+  };
+
+  // ---------- State ----------
+  let difficulty = DIFFICULTIES[load(DIFF_KEY)] ? load(DIFF_KEY) : "normale";
+  let diff = DIFFICULTIES[difficulty];
+  let state = "menu", menu = null, pausedFrom = null, stateT = 0, clock = 0;
+  let score = 0, lives = 3, round = 0, timeLeft = 0, bestCache = 0, robbers = 0, nextLife = 30000;
+  let doors = [], view = 0, scroll = 0, spawnT = 0, bombT = 0, message = null, popups = [], flashes = [], hurt = 0, hurtWhy = "";
+  let shotQueue = [], dirHeld = 0, dirT = 0;
+  const keys = { left: false, right: false };
+  const stick = { x: 0 };
+  const pace = () => diff.pace * (1 + Math.min(1, round * 0.12));
+  const visible = () => [mod(view), mod(view + 1), mod(view + 2)];
+
+  function newDoors() { doors = Array.from({ length: N }, (_, i) => ({ n: i + 1, dep: false, open: 0, occ: null, bomb: null, holes: [] })); }
+
+  // ---------- Flow ----------
+  const isPlaying = () => ["intro", "play", "hurt", "clear"].includes(state);
+  function startGame() {
+    if (!audioCtx) { try { audioCtx = new (window.AudioContext || window.webkitAudioContext)(); } catch { audioCtx = null; } }
+    if (audioCtx && audioCtx.state === "suspended") audioCtx.resume();
+    score = 0; lives = diff.lives; round = 0; robbers = 0; nextLife = 30000;
+    bestCache = parseInt(load(bestKey(difficulty)), 10) || 0;
+    beginRound();
+    sfx.start();
+    menu = null;
+    overlay.classList.add("hidden");
+    syncControls();
+    last = performance.now();
+  }
+  function beginRound() {
+    newDoors();
+    view = 0; scroll = 0; shotQueue = [];
+    timeLeft = diff.time;
+    spawnT = 1.4; bombT = rnd(12, 18) / pace();
+    message = { text: `GIORNO ${round + 1}`, sub: "Fai arrivare un deposito a tutte e 12 le porte", t: 0 };
+    state = "intro"; stateT = 2;
+  }
+  function addScore(n, x, y, color = "#fbeed6") {
+    score += n;
+    if (x !== undefined) popups.push({ x, y, text: String(n), color, t: 0 });
+    if (score >= nextLife) { nextLife += 30000; if (lives < 9) { lives++; message = { text: "VITA EXTRA", sub: "", t: 0.6 }; sfx.round(); } }
+  }
+  function loseLife(why) {
+    if (state !== "play") return;
+    lives--;
+    hurt = 1; hurtWhy = why;
+    message = { text: why, sub: lives > 0 ? `Vite rimaste: ${lives}` : "", t: 0 };
+    state = "hurt"; stateT = 2;
+  }
+  function afterHurt() {
+    if (lives <= 0) { gameOver(); return; }
+    // everyone goes back out; the bombs stay where they are
+    for (const d of doors) { d.occ = null; d.open = 0; if (d.bomb && d.bomb.t <= 0) d.bomb = null; }
+    if (timeLeft <= 0) timeLeft = 40;
+    spawnT = 1.2;
+    state = "play";
+  }
+  function roundClear() {
+    const bonus = Math.ceil(timeLeft) * 20 * (round + 1);
+    addScore(bonus);
+    message = { text: "TUTTE LE PORTE HANNO DEPOSITATO!", sub: `Bonus tempo ${bonus.toLocaleString("it-IT")}`, t: 0 };
+    sfx.round();
+    for (const d of doors) { d.occ = null; }
+    state = "clear"; stateT = 3;
+  }
+  function gameOver() {
+    state = "over";
+    const prev = parseInt(load(bestKey(difficulty)), 10) || 0;
+    const record = score > prev;
+    if (record) store(bestKey(difficulty), String(score));
+    sfx.over();
+    const played = diff.label, r = round + 1, rb = robbers;
+    menu = () => showOverlay(
+      `<h2 class="lose">LA BANCA CHIUDE</h2>
+       <p>Punteggio: <b>${score.toLocaleString("it-IT")}</b> · Giorno ${r} · ${played}</p>
+       <p class="muted">Banditi fermati: ${rb}</p>
+       ${record ? "<p style='color:var(--gold)'>★ NUOVO RECORD! ★</p>" : ""}
+       ${difficultyHTML()}
+       <button class="start" data-start>GIOCA ANCORA</button>`
+    );
+    menu();
+    syncControls();
+  }
+  function togglePause() {
+    if (isPlaying()) {
+      pausedFrom = state; state = "paused";
+      showOverlay(`<h2>PAUSA</h2><button class="start" data-resume>CONTINUA</button><p class="muted">Premi P per continuare</p>`);
+    } else if (state === "paused") {
+      state = pausedFrom; overlay.classList.add("hidden"); last = performance.now();
+    }
+    syncControls();
+  }
+  // the pause menu can end the game (shared/iniziali.js): it ends here the usual way, saving the record
+  window.addEventListener("sala:termina", () => { if (state !== "paused") return; state = pausedFrom; overlay.classList.add("hidden"); gameOver(); syncControls(); });
+  function syncControls() {
+    pauseBtn.style.display = isPlaying() && touchMode ? "block" : "none";
+    resize();
+  }
+  pauseBtn.addEventListener("click", () => togglePause());
+  function showOverlay(html) { overlay.innerHTML = html; overlay.classList.remove("hidden"); }
+  function difficultyHTML() {
+    const buttons = DIFF_IDS.map((id) => {
+      const d = DIFFICULTIES[id];
+      return `<button type="button" data-diff="${id}" class="${id === difficulty ? "on" : ""}" style="--c:${d.color}">${d.label}</button>`;
+    }).join("");
+    const best = parseInt(load(bestKey(difficulty)), 10);
+    return `<div class="diff">${buttons}</div><p class="muted">${diff.desc}${best ? ` · Record: ${best.toLocaleString("it-IT")}` : ""}</p>`;
+  }
+  function setDifficulty(id) { if (!DIFFICULTIES[id]) return; difficulty = id; diff = DIFFICULTIES[id]; store(DIFF_KEY, id); if (menu) menu(); }
+  function showTitle() {
+    menu = showTitle;
+    showOverlay(
+      `<h1>BANCA DEL WEST</h1>
+       <p>Sei lo sceriffo della banca: dodici porte in cerchio e tu ne vedi tre alla volta. I clienti entrano a depositare i loro sacchi d'oro; i banditi entrano per spararti. Riconoscili al volo e spara per primo, ma mai a un cliente! Quando tutte e dodici le porte hanno ricevuto un deposito, la giornata è finita.</p>
+       <div class="pts">
+         <span><b>Bandito</b></span><span>100, fino a 500 se lo fermi in un lampo</span>
+         <span><b>Cliente</b></span><span>non sparare: lascia il sacco e riceve un $ sulla sua porta (50)</span>
+         <span><b>Cliente con l'ombra</b></span><span>attento: alle sue spalle può spuntare un bandito</span>
+         <span><b>Ragazzino dei cappelli</b></span><span>fai saltare i cappelli uno a uno (100 l'uno), non lui</span>
+         <span><b>Dinamite</b></span><span>su una porta, anche lontana: raggiungila e colpiscila 3 volte (200)</span>
+       </div>
+       ${touchMode
+         ? `<p class="muted help">Levetta per girare nella sala · tocca la porta per sparare (in verticale anche i pulsanti ◀ ● ▶)</p>`
+         : `<p class="muted help">← → per girare nella sala · 1 2 3 o J K L per sparare alle tre porte · anche un clic sulla porta · P pausa</p>`}
+       ${difficultyHTML()}
+       <button class="start" data-start>APRI LA BANCA</button>`
+    );
+  }
+  overlay.addEventListener("click", (e) => {
+    const d = e.target.closest("[data-diff]");
+    if (d) { setDifficulty(d.dataset.diff); return; }
+    if (e.target.closest("[data-start]")) startGame();
+    if (e.target.closest("[data-resume]")) togglePause();
+  });
+
+  // ---------- Input ----------
+  const SHOT_KEYS = { "1": 0, "2": 1, "3": 2, j: 0, k: 1, l: 2 };
+  window.addEventListener("keydown", (e) => {
+    const k = e.key.toLowerCase();
+    if ([" ", "arrowup", "arrowdown", "arrowleft", "arrowright"].includes(k)) e.preventDefault();
+    if (state === "menu" || state === "over") {
+      if (e.key === "Enter") startGame();
+      else if (["1", "2", "3"].includes(k)) setDifficulty(DIFF_IDS[+k - 1]);
+      return;
+    }
+    if (k === "p" || k === "escape") { if (!e.repeat) togglePause(); return; }
+    if (state === "paused") { if (e.key === "Enter") togglePause(); return; }
+    if (e.repeat) return;
+    if (k in SHOT_KEYS) shotQueue.push(SHOT_KEYS[k]);
+    if (k === "arrowleft" || k === "a") keys.left = true;
+    if (k === "arrowright" || k === "d") keys.right = true;
+  });
+  window.addEventListener("keyup", (e) => {
+    const k = e.key.toLowerCase();
+    if (k === "arrowleft" || k === "a") keys.left = false;
+    if (k === "arrowright" || k === "d") keys.right = false;
+  });
+  window.addEventListener("blur", () => { keys.left = keys.right = false; stick.x = 0; if (isPlaying()) togglePause(); });
+  // a tap or click on a door fires at it
+  canvas.addEventListener("pointerdown", (e) => {
+    if (state !== "play") return;
+    const r = canvas.getBoundingClientRect();
+    const x = (e.clientX - r.left) / r.width * W, y = (e.clientY - r.top) / r.height * H;
+    if (y < TOPBAR || y > FLOOR + 20) return;
+    const slot = Math.round((x - X0) / SPACING);
+    if (slot >= 0 && slot <= 2 && Math.abs(x - (X0 + slot * SPACING)) < SPACING / 2) { e.preventDefault(); shotQueue.push(slot); }
+  });
+  for (const btn of touchEl.querySelectorAll("[data-shot]")) {
+    btn.addEventListener("pointerdown", (e) => { e.preventDefault(); shotQueue.push(+btn.dataset.shot); btn.classList.add("on"); setTimeout(() => btn.classList.remove("on"), 120); });
+  }
+  const stickEl = touchEl.querySelector(".stick"), knob = stickEl.querySelector(".knob");
+  let stickId = null;
+  function stickAt(e) {
+    const r = stickEl.getBoundingClientRect(), max = r.width / 2 - 14;
+    let dx = e.clientX - (r.left + r.width / 2), dy = e.clientY - (r.top + r.height / 2);
+    const len = Math.hypot(dx, dy);
+    if (len > max) { dx *= max / len; dy *= max / len; }
+    knob.style.transform = `translate(${dx}px, ${dy}px)`;
+    stick.x = Math.abs(dx) > max * 0.4 ? Math.sign(dx) : 0;
+  }
+  const stickEnd = (e) => { if (e.pointerId !== stickId) return; stickId = null; knob.style.transform = ""; stick.x = 0; };
+  stickEl.addEventListener("pointerdown", (e) => { e.preventDefault(); stickId = e.pointerId; try { stickEl.setPointerCapture(e.pointerId); } catch { /* ignore */ } stickAt(e); });
+  stickEl.addEventListener("pointermove", (e) => { if (e.pointerId === stickId) stickAt(e); });
+  for (const ev of ["pointerup", "pointercancel", "lostpointercapture"]) stickEl.addEventListener(ev, stickEnd);
+  window.addEventListener("pointerdown", (e) => { if (e.pointerType === "touch" && !touchMode) { touchMode = true; syncControls(); if (menu) menu(); } }, true);
+
+  // ---------- The doors ----------
+  const CUSTOMERS = ["signora", "signore", "minatore", "cowboy"];
+  function spawnVisitor() {
+    const vis = visible().filter((i) => !doors[i].occ && !doors[i].bomb);
+    if (!vis.length) return;
+    const i = vis[Math.floor(Math.random() * vis.length)], d = doors[i];
+    // customers come more often to the doors that still wait for a deposit
+    const need = !d.dep;
+    let r = Math.random();
+    const pRobber = 0.36 + Math.min(0.14, round * 0.03);
+    let kind;
+    if (r < (need ? 0.46 : 0.26)) kind = "customer";
+    else if ((r -= need ? 0.46 : 0.26) < pRobber) kind = "robber";
+    else if (round >= 1 && r < pRobber + 0.14) kind = "double";
+    else if (r < pRobber + 0.24) kind = "kid";
+    else kind = need ? "customer" : "robber";
+    const [a, b] = diff.draw;
+    const k = 1 / (1 + Math.min(0.6, round * 0.08));
+    d.occ = { kind, t: 0, who: CUSTOMERS[Math.floor(Math.random() * CUSTOMERS.length)],
+      draw: rnd(a, b) * k, swapAt: rnd(0.45, 0.8), hats: 2 + Math.floor(Math.random() * 3), leaveAt: kind === "kid" ? rnd(2.4, 3.2) : 1.5,
+      phase: kind === "double" ? "customer" : kind, dead: 0, gone: false, bagDropped: false, drawnT: 0 };
+    sfx.creak();
+  }
+  function shoot(slot) {
+    const i = visible()[slot], d = doors[i];
+    const x = X0 + slot * SPACING, y = FLOOR - 100;
+    flashes.push({ x: x + rnd(-10, 10), y: y + rnd(-20, 20), t: 0 });
+    sfx.shot();
+    if (d.bomb) {
+      d.bomb.hits++;
+      if (d.bomb.hits >= 3) { d.bomb = null; addScore(200, x, FLOOR - 150, "#ffcc4a"); sfx.hat(); popups.push({ x, y: FLOOR - 120, text: "DINAMITE DISINNESCATA", color: "#7ed87a", t: 0 }); }
+      else sfx.ricochet();
+      return;
+    }
+    const o = d.occ;
+    if (!o || o.dead || d.open < 0.6) { d.holes.push({ x: rnd(-40, 40), y: rnd(-150, -40) }); if (d.holes.length > 6) d.holes.shift(); sfx.ricochet(); return; }
+    if (o.phase === "robber") {
+      o.dead = 0.001;
+      robbers++;
+      // the quicker the draw, the bigger the reward
+      const since = o.t - (o.kind === "double" ? o.swapAt : 0);
+      const pts = since < 0.35 ? 500 : since < 0.6 ? 300 : since < o.draw ? 200 : 100;
+      addScore(pts, x, FLOOR - 170, pts >= 300 ? "#ffcc4a" : "#fbeed6");
+      if (pts === 500) popups.push({ x, y: FLOOR - 190, text: "FULMINEO!", color: "#ffcc4a", t: 0 });
+    } else if (o.phase === "kid") {
+      if (o.hats > 0) {
+        o.hats--; addScore(100, x, FLOOR - 170, "#7ed87a"); sfx.hat();
+        popups.push({ x: x + rnd(-10, 10), y: FLOOR - 150, text: "🎩", color: "#fff", t: 0, hat: true });
+        if (o.hats === 0) o.leaveAt = Math.min(o.leaveAt, o.t + 0.25);
+      } else { o.dead = 0.001; sfx.ouch(); loseLife("HAI COLPITO IL RAGAZZINO!"); }
+    } else {
+      o.dead = 0.001; sfx.ouch(); loseLife("HAI COLPITO UN CLIENTE!");
+    }
+  }
+  function updateDoors(dt) {
+    const vis = visible();
+    for (let i = 0; i < N; i++) {
+      const d = doors[i];
+      if (d.bomb) {
+        d.bomb.t -= dt;
+        if (Math.floor(d.bomb.t * 4) !== Math.floor((d.bomb.t + dt) * 4) && d.bomb.t < 3) sfx.warn();
+        if (d.bomb.t <= 0 && state === "play") { sfx.boom(); d.bomb = null; loseLife(`LA DINAMITE È ESPLOSA ALLA PORTA ${d.n}!`); return; }
+      }
+      const o = d.occ;
+      if (!o) { d.open = Math.max(0, d.open - dt * 5); continue; }
+      // someone at a door you have turned away from simply leaves
+      if (!vis.includes(i)) { d.occ = null; d.open = 0; continue; }
+      if (o.dead) {
+        o.dead += dt;
+        if (o.dead > 0.9) { d.occ = null; }
+        continue;
+      }
+      d.open = Math.min(1, d.open + dt * 5);
+      if (d.open < 1) continue;
+      o.t += dt;
+      if (o.phase === "customer") {
+        if (!o.bagDropped && o.t > 0.75) {
+          o.bagDropped = true;
+          if (!d.dep) { d.dep = true; addScore(50, X0 + vis.indexOf(i) * SPACING, FLOOR - 170, "#ffcc4a"); sfx.coin(); if (doors.every((q) => q.dep)) { roundClear(); return; } }
+          else { addScore(10); sfx.coin(); }
+        }
+        // the one with a shadow behind: the robber pushes him aside
+        if (o.kind === "double" && o.t > o.swapAt) { o.phase = "robber"; o.t = o.swapAt; sfx.door(); }
+        else if (o.t > o.leaveAt) { d.occ = null; sfx.door(); }
+      } else if (o.phase === "robber") {
+        const since = o.t - (o.kind === "double" ? o.swapAt : 0);
+        if (since > o.draw) {
+          o.drawnT += dt;
+          if (o.drawnT > 0.16 && state === "play") { sfx.bang(); flashes.push({ x: X0 + vis.indexOf(i) * SPACING + 20, y: FLOOR - 110, t: 0, enemy: true }); loseLife("IL BANDITO HA SPARATO PER PRIMO!"); return; }
+        }
+      } else if (o.phase === "kid") {
+        if (o.t > o.leaveAt) { d.occ = null; sfx.door(); }
+      }
+    }
+  }
+  function placeBomb() {
+    // somewhere you are not looking, if possible
+    const vis = visible();
+    let opts = doors.filter((d, i) => !d.bomb && !d.occ && !vis.includes(i));
+    if (!opts.length) opts = doors.filter((d) => !d.bomb && !d.occ);
+    if (!opts.length) return;
+    const d = opts[Math.floor(Math.random() * opts.length)];
+    d.bomb = { t: diff.fuse, max: diff.fuse, hits: 0 };
+    message = { text: `DINAMITE ALLA PORTA ${d.n}!`, sub: "", t: 0.8 };
+    sfx.warn();
+  }
+
+  // ---------- Update ----------
+  function update(dt) {
+    clock += dt;
+    if (message) { message.t += dt; if (message.t > 2.6) message = null; }
+    for (const p of popups) { p.t += dt; p.y -= (p.hat ? -60 : 30) * dt; }
+    popups = popups.filter((p) => p.t < 1);
+    for (const f of flashes) f.t += dt;
+    flashes = flashes.filter((f) => f.t < 0.15);
+    if (hurt > 0) hurt -= dt;
+    if (!isPlaying()) { shotQueue = []; return; }
+    if (state === "intro") { stateT -= dt; shotQueue = []; if (stateT <= 0) state = "play"; return; }
+    if (state === "hurt") { stateT -= dt; shotQueue = []; for (const d of doors) if (d.occ && d.occ.dead) d.occ.dead += dt; if (stateT <= 0) afterHurt(); return; }
+    if (state === "clear") { stateT -= dt; shotQueue = []; if (stateT <= 0) { round++; beginRound(); } return; }
+    // turning round the hall, one door at a time
+    const dir = (keys.right ? 1 : 0) - (keys.left ? 1 : 0) || stick.x;
+    if (scroll !== 0) { scroll -= Math.sign(scroll) * dt * 6; if (Math.abs(scroll) < dt * 6) scroll = 0; }
+    if (dir && scroll === 0) {
+      if (dir !== dirHeld) { dirHeld = dir; dirT = 0; }
+      if (dirT <= 0) { view = mod(view + dir); scroll = dir; dirT = 0.22; sfx.door(); }
+      else dirT -= dt;
+    } else if (!dir) { dirHeld = 0; dirT = 0; }
+    // shots only while the doors stand still
+    if (scroll === 0) { const q = shotQueue; shotQueue = []; for (const s of q) { shoot(s); if (state !== "play") return; } }
+    else shotQueue = [];
+    timeLeft -= dt;
+    if (timeLeft <= 0) { loseLife("È FINITO IL TEMPO!"); return; }
+    spawnT -= dt;
+    if (spawnT <= 0) { spawnT = rnd(0.7, 1.4) / pace(); if (scroll === 0) spawnVisitor(); }
+    bombT -= dt;
+    if (bombT <= 0) { bombT = rnd(15, 24) / pace(); if (round >= 0) placeBomb(); }
+    updateDoors(dt);
+  }
+
+  // ---------- Drawing ----------
+  function drawPerson(o, x, y) {
+    const t = o.t, dead = o.dead;
+    ctx.save();
+    ctx.translate(x, y);
+    if (dead) { ctx.rotate(Math.min(1.2, dead * 3) * (o.phase === "robber" ? -1 : 1)); ctx.globalAlpha = Math.max(0, 1 - dead * 1.2); }
+    const bob = Math.sin(clock * 4) * 1.5;
+    if (o.phase === "robber") drawRobber(o, bob);
+    else if (o.phase === "kid") drawKid(o, bob);
+    else drawCustomer(o, bob);
+    ctx.restore();
+    // the shadow of the one hiding behind the customer
+    if (o.kind === "double" && o.phase === "customer" && !dead) {
+      ctx.fillStyle = "rgba(10,5,0,0.55)";
+      ctx.beginPath(); ctx.ellipse(x + 30, y - 90, 16, 60, 0.05, 0, TAU); ctx.fill();
+      ctx.beginPath(); ctx.ellipse(x + 30, y - 160, 22, 6, 0, 0, TAU); ctx.fill();
+    }
+  }
+  function body(col, w = 30, h = 70) { ctx.fillStyle = col; ctx.beginPath(); ctx.roundRect(-w / 2, -h - 44, w, h, 8); ctx.fill(); }
+  function legs(col) { ctx.fillStyle = col; ctx.fillRect(-12, -46, 10, 46); ctx.fillRect(2, -46, 10, 46); ctx.fillStyle = "#2a1408"; ctx.fillRect(-14, -6, 13, 6); ctx.fillRect(1, -6, 13, 6); }
+  function head(skin, y = -126) { ctx.fillStyle = skin; ctx.beginPath(); ctx.arc(0, y, 14, 0, TAU); ctx.fill(); }
+  function drawCustomer(o, bob) {
+    const who = o.who;
+    if (who === "signora") {
+      ctx.fillStyle = "#7a3a9a"; ctx.beginPath(); ctx.moveTo(-26, 0); ctx.lineTo(26, 0); ctx.lineTo(12, -100); ctx.lineTo(-12, -100); ctx.fill();
+      body("#9a4aba", 26, 40);
+      head("#f0c8a0", -122 + bob * 0.3);
+      ctx.fillStyle = "#e8d8f0"; ctx.beginPath(); ctx.ellipse(0, -136, 22, 7, 0, 0, TAU); ctx.fill();
+      ctx.fillStyle = "#c860a0"; ctx.beginPath(); ctx.arc(0, -138, 11, Math.PI, 0); ctx.fill();
+    } else {
+      legs(who === "minatore" ? "#5a4a3a" : who === "cowboy" ? "#3a4a6a" : "#2a2a2a");
+      body(who === "minatore" ? "#8a5a2a" : who === "cowboy" ? "#a0602a" : "#2a2a3a");
+      head("#f0c090", -126 + bob * 0.3);
+      if (who === "signore") { ctx.fillStyle = "#1a1a1a"; ctx.fillRect(-15, -140, 30, 4); ctx.fillRect(-10, -168, 20, 30); ctx.fillStyle = "#fff"; ctx.fillRect(-4, -110, 8, 20); }
+      else if (who === "minatore") { ctx.fillStyle = "#c8c8c8"; ctx.beginPath(); ctx.arc(0, -118, 11, 0, Math.PI); ctx.fill(); ctx.fillStyle = "#6a5a4a"; ctx.beginPath(); ctx.ellipse(0, -138, 18, 5, 0, 0, TAU); ctx.fill(); ctx.fillRect(-10, -152, 20, 14); }
+      else { ctx.fillStyle = "#e8c070"; ctx.beginPath(); ctx.ellipse(0, -138, 24, 6, 0, 0, TAU); ctx.fill(); ctx.fillRect(-11, -154, 22, 16); }
+    }
+    // eyes and a smile
+    ctx.fillStyle = "#1a0e06"; ctx.fillRect(-6, -130, 3, 3); ctx.fillRect(3, -130, 3, 3);
+    ctx.strokeStyle = "#8a3a2a"; ctx.lineWidth = 1.5; ctx.beginPath(); ctx.arc(0, -123, 5, 0.2, Math.PI - 0.2); ctx.stroke();
+    // the bag of gold, held out then set on the floor
+    const bx = o.bagDropped ? 32 : 26, by = o.bagDropped ? -14 : -70;
+    ctx.fillStyle = "#c8a060"; ctx.beginPath(); ctx.ellipse(bx, by, 14, 16, 0, 0, TAU); ctx.fill();
+    ctx.fillStyle = "#8a6a30"; ctx.fillRect(bx - 6, by - 18, 12, 5);
+    ctx.fillStyle = "#3a2a10"; ctx.font = "900 15px Georgia, serif"; ctx.textAlign = "center"; ctx.fillText("$", bx, by + 6);
+  }
+  function drawRobber(o, bob) {
+    const since = o.t - (o.kind === "double" ? o.swapAt : 0);
+    const drawing = since > o.draw;
+    legs("#3a2a1a");
+    body("#4a3020", 32, 70);
+    ctx.fillStyle = "#6a1a1a"; ctx.fillRect(-16, -100, 32, 30);            // waistcoat
+    ctx.fillStyle = "#2a1a0a"; ctx.fillRect(-16, -50, 32, 6);              // belt
+    head("#e0a878", -126 + bob * 0.3);
+    ctx.fillStyle = "#c82a1a"; ctx.beginPath(); ctx.moveTo(-14, -126); ctx.lineTo(14, -126); ctx.lineTo(0, -110); ctx.fill();   // bandana
+    ctx.fillStyle = "#1a0e06"; ctx.fillRect(-7, -132, 4, 3); ctx.fillRect(3, -132, 4, 3);
+    ctx.fillStyle = "#1a1008"; ctx.beginPath(); ctx.ellipse(0, -138, 30, 7, 0, 0, TAU); ctx.fill(); ctx.fillRect(-13, -158, 26, 20);
+    // the gun arm: at the holster, then up and aimed at you
+    ctx.strokeStyle = "#4a3020"; ctx.lineWidth = 9; ctx.lineCap = "round";
+    if (drawing) {
+      ctx.beginPath(); ctx.moveTo(14, -100); ctx.lineTo(8, -92); ctx.stroke();
+      ctx.fillStyle = "#5a5a5a"; ctx.beginPath(); ctx.arc(6, -92, 9, 0, TAU); ctx.fill();
+      ctx.fillStyle = "#1a1a1a"; ctx.beginPath(); ctx.arc(6, -92, 3.5, 0, TAU); ctx.fill();
+    } else {
+      ctx.beginPath(); ctx.moveTo(15, -100); ctx.lineTo(20, -60); ctx.stroke();
+      ctx.fillStyle = "#5a5a5a"; ctx.fillRect(18, -60, 7, 18);
+      // the twitching fingers just before the draw
+      if (since > o.draw - 0.35 && Math.floor(clock * 20) % 2) { ctx.fillStyle = "#e0a878"; ctx.fillRect(22, -62, 4, 4); }
+    }
+    ctx.strokeStyle = "#4a3020"; ctx.beginPath(); ctx.moveTo(-15, -100); ctx.lineTo(-20, -60); ctx.stroke();
+    ctx.lineCap = "butt";
+  }
+  function drawKid(o, bob) {
+    ctx.fillStyle = "#3a5a8a"; ctx.fillRect(-9, -34, 8, 34); ctx.fillRect(1, -34, 8, 34);
+    ctx.fillStyle = "#d85a2a"; ctx.beginPath(); ctx.roundRect(-12, -80, 24, 48, 6); ctx.fill();
+    ctx.fillStyle = "#f0c090"; ctx.beginPath(); ctx.arc(0, -92, 12, 0, TAU); ctx.fill();
+    ctx.fillStyle = "#1a0e06"; ctx.fillRect(-5, -95, 3, 3); ctx.fillRect(2, -95, 3, 3);
+    ctx.strokeStyle = "#8a3a2a"; ctx.lineWidth = 1.5; ctx.beginPath(); ctx.arc(0, -89, 4, 0.2, Math.PI - 0.2); ctx.stroke();
+    // the stack of hats, wobbling
+    for (let k = 0; k < o.hats; k++) {
+      const y = -104 - k * 18, sway = Math.sin(clock * 5 + k) * (k * 1.5);
+      ctx.fillStyle = ["#2a2a2a", "#8a5a2a", "#3a2a6a", "#6a1a1a", "#1a4a2a"][k % 5];
+      ctx.beginPath(); ctx.ellipse(sway, y, 18, 4, 0, 0, TAU); ctx.fill();
+      ctx.fillRect(sway - 10, y - 14, 20, 14);
+    }
+  }
+  function drawBomb(b, x) {
+    const y = FLOOR - 105;
+    ctx.fillStyle = "#c82a1a";
+    for (let k = -1; k <= 1; k++) { ctx.beginPath(); ctx.roundRect(x + k * 11 - 5, y - 26, 10, 52, 3); ctx.fill(); }
+    ctx.fillStyle = "#2a1a0a"; ctx.fillRect(x - 18, y - 6, 36, 6);
+    ctx.fillStyle = "#fbeed6"; ctx.font = "900 9px system-ui, sans-serif"; ctx.textAlign = "center"; ctx.fillText("TNT", x, y + 18);
+    // the fuse burning down
+    const k = b.t / b.max;
+    ctx.strokeStyle = "#8a7a5a"; ctx.lineWidth = 2; ctx.beginPath(); ctx.moveTo(x, y - 26); ctx.quadraticCurveTo(x + 12, y - 40, x + 4, y - 26 - 30 * k); ctx.stroke();
+    ctx.fillStyle = Math.floor(clock * 16) % 2 ? "#ffcc4a" : "#ff6a2a";
+    ctx.beginPath(); ctx.arc(x + 4, y - 26 - 30 * k, 4, 0, TAU); ctx.fill();
+    ctx.fillStyle = b.t < 3 ? "#ff4a2a" : "#ffcc4a"; ctx.font = "900 22px Georgia, serif";
+    ctx.lineWidth = 4; ctx.strokeStyle = "#1a0e06"; ctx.strokeText(String(Math.ceil(b.t)), x, y - 58); ctx.fillText(String(Math.ceil(b.t)), x, y - 58);
+    for (let h = 0; h < b.hits; h++) { ctx.fillStyle = "#1a0e06"; ctx.beginPath(); ctx.arc(x - 12 + h * 12, y + 34, 3, 0, TAU); ctx.fill(); }
+  }
+  function drawDoor(i, x) {
+    const d = doors[i];
+    // the frame
+    ctx.fillStyle = "#3a1e0a"; ctx.fillRect(x - DOOR_W / 2 - 10, FLOOR - DOOR_H - 12, DOOR_W + 20, DOOR_H + 12);
+    ctx.fillStyle = "#0e0804"; ctx.fillRect(x - DOOR_W / 2, FLOOR - DOOR_H, DOOR_W, DOOR_H);
+    // the street outside, bright, beyond the open door
+    if (d.open > 0) {
+      const g = ctx.createLinearGradient(0, FLOOR - DOOR_H, 0, FLOOR);
+      g.addColorStop(0, "#f8d8a0"); g.addColorStop(0.7, "#e8b070"); g.addColorStop(1, "#c88a4a");
+      ctx.fillStyle = g; ctx.fillRect(x - DOOR_W / 2, FLOOR - DOOR_H, DOOR_W, DOOR_H);
+      ctx.fillStyle = "#b08a5a"; ctx.fillRect(x - DOOR_W / 2, FLOOR - 50, DOOR_W, 50);
+    }
+    if (d.occ) { ctx.save(); ctx.beginPath(); ctx.rect(x - DOOR_W / 2, FLOOR - DOOR_H - 30, DOOR_W, DOOR_H + 30); ctx.clip(); drawPerson(d.occ, x, FLOOR); ctx.restore(); }
+    // two swinging panels
+    const w = DOOR_W / 2 * (1 - d.open * 0.85);
+    for (const s of [-1, 1]) {
+      const px = s < 0 ? x - DOOR_W / 2 : x + DOOR_W / 2 - w;
+      const g = ctx.createLinearGradient(px, 0, px + w, 0);
+      g.addColorStop(0, "#8a5228"); g.addColorStop(1, "#6a3a18");
+      ctx.fillStyle = g; ctx.fillRect(px, FLOOR - DOOR_H, w, DOOR_H);
+      ctx.strokeStyle = "rgba(40,20,5,0.6)"; ctx.lineWidth = 2;
+      ctx.strokeRect(px + w * 0.15, FLOOR - DOOR_H + 14, w * 0.7, DOOR_H * 0.38);
+      ctx.strokeRect(px + w * 0.15, FLOOR - DOOR_H * 0.52, w * 0.7, DOOR_H * 0.42);
+      ctx.fillStyle = "#e8c060"; ctx.beginPath(); ctx.arc(s < 0 ? px + w - 6 : px + 6, FLOOR - DOOR_H / 2, 3, 0, TAU); ctx.fill();
+    }
+    for (const h of d.holes) { ctx.fillStyle = "#0e0804"; ctx.beginPath(); ctx.arc(x + h.x, FLOOR + h.y, 3, 0, TAU); ctx.fill(); }
+    if (d.bomb) drawBomb(d.bomb, x);
+    // the door number, and the gold $ once a deposit has come in
+    ctx.fillStyle = "#3a1e0a"; ctx.fillRect(x - 22, FLOOR - DOOR_H - 36, 44, 22);
+    ctx.fillStyle = d.dep ? "#ffcc4a" : "#fbeed6"; ctx.font = "700 15px Georgia, serif"; ctx.textAlign = "center";
+    ctx.fillText(d.dep ? `$ ${d.n}` : String(d.n), x, FLOOR - DOOR_H - 20);
+  }
+  function drawHall() {
+    // walls with wainscoting
+    ctx.fillStyle = "#6a3a1a"; ctx.fillRect(0, TOPBAR, W, FLOOR - TOPBAR);
+    ctx.fillStyle = "#7a4a22";
+    for (let x = -((view + scroll) * 40 % 40); x < W; x += 40) ctx.fillRect(x, TOPBAR, 20, FLOOR - TOPBAR);
+    ctx.fillStyle = "#4a2410"; ctx.fillRect(0, FLOOR - 60, W, 60);
+    ctx.fillStyle = "#3a1a08"; ctx.fillRect(0, FLOOR - 62, W, 3);
+    // lamps between the doors
+    for (let k = -1; k <= 3; k++) {
+      const x = X0 + (k + 0.5 + scroll) * SPACING;
+      ctx.fillStyle = "rgba(255,210,120,0.12)"; ctx.beginPath(); ctx.arc(x, TOPBAR + 50, 40, 0, TAU); ctx.fill();
+      ctx.fillStyle = "#e8c060"; ctx.fillRect(x - 3, TOPBAR + 30, 6, 16); ctx.fillStyle = "#fff0b0"; ctx.beginPath(); ctx.arc(x, TOPBAR + 50, 6, 0, TAU); ctx.fill();
+    }
+    for (let k = -1; k <= 3; k++) drawDoor(mod(view + k), X0 + (k + scroll) * SPACING);
+    // the counter in front of the sheriff
+    const g = ctx.createLinearGradient(0, FLOOR, 0, H);
+    g.addColorStop(0, "#9a6030"); g.addColorStop(1, "#5a3010");
+    ctx.fillStyle = g; ctx.fillRect(0, FLOOR, W, H - FLOOR);
+    ctx.fillStyle = "#c8884a"; ctx.fillRect(0, FLOOR, W, 5);
+    for (let x = 30; x < W; x += 80) { ctx.fillStyle = "rgba(40,20,5,0.3)"; ctx.fillRect(x, FLOOR + 14, 50, 40); }
+    // the sheriff's star
+    ctx.save(); ctx.translate(W / 2, FLOOR + 36); ctx.fillStyle = "#ffcc4a"; ctx.beginPath();
+    for (let k = 0; k < 10; k++) { const r = k % 2 ? 7 : 16, a = -Math.PI / 2 + k * Math.PI / 5; ctx.lineTo(Math.cos(a) * r, Math.sin(a) * r); }
+    ctx.fill(); ctx.restore();
+    for (const f of flashes) {
+      ctx.fillStyle = f.enemy ? "rgba(255,240,180,0.9)" : "rgba(255,220,120,0.9)";
+      ctx.beginPath(); ctx.arc(f.x, f.y, (f.enemy ? 26 : 16) * (1 - f.t / 0.15), 0, TAU); ctx.fill();
+    }
+  }
+  function drawTopbar() {
+    ctx.fillStyle = "#1a0e06"; ctx.fillRect(0, 0, W, TOPBAR);
+    ctx.fillStyle = "#6a3a10"; ctx.fillRect(0, TOPBAR - 2, W, 2);
+    // the twelve doors round the hall
+    const bw = 26, x0 = W / 2 - N * bw / 2, vis = visible();
+    for (let i = 0; i < N; i++) {
+      const d = doors[i], x = x0 + i * bw;
+      const seen = vis.includes(i);
+      ctx.fillStyle = d.dep ? "#6a4a10" : "#3a2410";
+      ctx.fillRect(x + 2, 6, bw - 4, 22);
+      if (seen) { ctx.strokeStyle = "#fbeed6"; ctx.lineWidth = 1.5; ctx.strokeRect(x + 1.5, 5.5, bw - 3, 23); }
+      ctx.fillStyle = d.dep ? "#ffcc4a" : "#c8a882"; ctx.font = "700 10px Georgia, serif"; ctx.textAlign = "center";
+      ctx.fillText(d.dep ? "$" : String(i + 1), x + bw / 2, 21);
+      if (d.bomb) {
+        const k = d.bomb.t / d.bomb.max;
+        ctx.fillStyle = Math.floor(clock * 6) % 2 || k > 0.4 ? "#e8402a" : "#ffcc4a";
+        ctx.fillRect(x + 2, 30, (bw - 4) * k, 5);
+        ctx.fillText("💣", x + bw / 2, 43);
+      }
+    }
+    ctx.textAlign = "left"; ctx.fillStyle = "#fbeed6"; ctx.font = "700 14px Georgia, serif";
+    ctx.fillText(score.toLocaleString("it-IT"), 10, 19);
+    ctx.fillStyle = "#c8a882"; ctx.font = "700 9px Georgia, serif";
+    ctx.fillText(`REC ${Math.max(bestCache, score).toLocaleString("it-IT")}`, 10, 33);
+    ctx.textAlign = "right";
+    ctx.fillStyle = timeLeft < 15 && Math.floor(clock * 4) % 2 ? "#e8402a" : "#fbeed6"; ctx.font = "700 14px Georgia, serif";
+    ctx.fillText(`⏱ ${Math.max(0, Math.ceil(timeLeft))}`, W - 10, 19);
+    ctx.fillStyle = "#ffcc4a"; ctx.font = "700 11px Georgia, serif";
+    ctx.fillText(`${"★".repeat(Math.max(0, Math.min(lives, 6)))} · G.${round + 1}`, W - 10, 34);
+  }
+  function draw() {
+    ctx.setTransform(pxRatio, 0, 0, pxRatio, 0, 0);
+    if (!doors.length) newDoors();
+    drawHall();
+    drawTopbar();
+    for (const p of popups) {
+      ctx.globalAlpha = Math.max(0, 1 - p.t);
+      ctx.textAlign = "center"; ctx.font = p.hat ? "20px system-ui" : "700 16px Georgia, serif";
+      ctx.lineWidth = 4; ctx.strokeStyle = "#1a0e06"; if (!p.hat) ctx.strokeText(p.text, p.x, p.y); ctx.fillStyle = p.color; ctx.fillText(p.text, p.x, p.y);
+    }
+    ctx.globalAlpha = 1;
+    if (hurt > 0) { ctx.fillStyle = `rgba(200,30,10,${hurt * 0.35})`; ctx.fillRect(0, 0, W, H); }
+    if (message) {
+      ctx.globalAlpha = Math.min(1, (2.6 - message.t) * 2);
+      ctx.textAlign = "center";
+      ctx.font = `700 ${message.text.length > 26 ? 20 : 26}px Georgia, serif`;
+      ctx.lineWidth = 5; ctx.strokeStyle = "#1a0e06"; ctx.strokeText(message.text, W / 2, 110);
+      ctx.fillStyle = state === "hurt" ? "#ff6a4a" : "#ffcc4a"; ctx.fillText(message.text, W / 2, 110);
+      if (message.sub) { ctx.font = "700 13px Georgia, serif"; ctx.lineWidth = 4; ctx.strokeText(message.sub, W / 2, 132); ctx.fillStyle = "#fbeed6"; ctx.fillText(message.sub, W / 2, 132); }
+      ctx.globalAlpha = 1;
+    }
+  }
+
+  // ---------- Loop ----------
+  const STEP = 1 / 120;
+  let last = performance.now(), acc = 0;
+  function loop(now) {
+    const dt = Math.min(0.1, (now - last) / 1000);
+    last = now;
+    if (isPlaying()) {
+      acc += dt;
+      while (acc >= STEP && isPlaying()) { update(STEP); acc -= STEP; }
+    } else { acc = 0; update(dt); }
+    draw();
+    requestAnimationFrame(loop);
+  }
+  newDoors();
+  syncControls();
+  showTitle();
+  requestAnimationFrame(loop);
+})();
+</script>
+<script src="../../shared/iniziali.js" data-record="banca-best-" data-kind="score"></script>
+</body>
+</html>
