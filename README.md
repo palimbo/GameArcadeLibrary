@@ -4,7 +4,7 @@ Raccolta di giochi arcade per il browser. Ogni gioco è un singolo file HTML sen
 
 ## 🕹️ Sala Giochi — `index.html`
 
-Apri `index.html` nella cartella principale per la pagina di raccolta: mostra tutti i 78 giochi con copertina, genere, comandi e i tuoi record per ogni difficoltà (Facile, Normale, Difficile). Tocca «Gioca» per avviare un gioco; in ogni gioco il pulsante «← Sala Giochi» in alto a sinistra (visibile nei menu) riporta alla raccolta.
+Apri `index.html` nella cartella principale per la pagina di raccolta: mostra tutti i 79 giochi con copertina, genere, comandi e i tuoi record per ogni difficoltà (Facile, Normale, Difficile). Tocca «Gioca» per avviare un gioco; in ogni gioco il pulsante «← Sala Giochi» in alto a sinistra (visibile nei menu) riporta alla raccolta.
 
 **Iniziali del record:** quando batti un record compare la schermata da sala giochi per inserire le tue tre iniziali (frecce ↑ ↓ per cambiare lettera, ← → per spostarti, oppure scrivile direttamente; su telefono i tasti ▲ ▼ e OK). Le iniziali vengono salvate insieme al record e compaiono nei menu del gioco e nella Sala Giochi. Il codice è condiviso da tutti i giochi in `shared/iniziali.js`.
 
@@ -1235,3 +1235,18 @@ Sparatutto isometrico in stile *Zaxxon*: la nave avanza da sola sopra le fortezz
 - **Touch:** levetta (destra/sinistra di lato, su/giù sali e scendi) e pulsante FUOCO
 
 Per giocare apri `games/fortezza-spaziale/index.html` nel browser.
+
+### ⛳ Minigolf Pazzo — `games/minigolf-pazzo/index.html`
+
+Minigolf visto dall'alto, con nove buche ognuna con il suo trabocchetto. Si mira, si carica la forza (la barra sale e scende finché tieni premuto) e si tira: la pallina rimbalza sulle sponde e rallenta da sola.
+
+- **Le buche:** dritta, a gomito, con un blocco in mezzo, con il mulino a vento, con il laghetto, a zig zag, con la rampa, con i respingenti da flipper e un gran finale con tutto insieme
+- **Ostacoli:** le pale del mulino girano e respingono la pallina · l'acqua costa un colpo di penalità e riporta la pallina dove l'avevi tirata · la sabbia frena · le rampe (frecce) spingono di lato · i respingenti la rilanciano più veloce
+- **Punteggio:** per ogni buca 150 punti per ogni colpo sotto «par +3», buca in uno +1.000; bonus a fine giro (di più se chiudi sotto il par). Al massimo 8 colpi per buca
+- **Limite di colpi:** in ogni giro puoi superare il par solo di un certo numero di colpi; oltre, la partita finisce
+- **Giri:** dopo 9 buche il percorso torna allo specchio, con mulini più veloci e un colpo in meno di margine a ogni giro
+- **Difficoltà:** Facile (+12 per giro, mulini lenti), Normale (+7), Difficile (+4, mulini veloci); record separati per ogni difficoltà
+- **Comandi:** `←` `→` mira (con `↑` o `↓` premuto la mira è più fine) · `Spazio`, `J` o `Invio` tieni premuto per caricare e rilascia per tirare · oppure trascina col mouse all'indietro, come una fionda · `P` pausa
+- **Touch:** levetta per mirare e pulsante TIRA (tieni premuto e rilascia), oppure trascina sul campo all'indietro come una fionda
+
+Per giocare apri `games/minigolf-pazzo/index.html` nel browser.
