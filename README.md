@@ -4,7 +4,7 @@ Raccolta di giochi arcade per il browser. Ogni gioco è un singolo file HTML sen
 
 ## 🕹️ Sala Giochi — `index.html`
 
-Apri `index.html` nella cartella principale per la pagina di raccolta: mostra tutti i 51 giochi con copertina, genere, comandi e i tuoi record per ogni difficoltà (Facile, Normale, Difficile). Tocca «Gioca» per avviare un gioco; in ogni gioco il pulsante «← Sala Giochi» in alto a sinistra (visibile nei menu) riporta alla raccolta.
+Apri `index.html` nella cartella principale per la pagina di raccolta: mostra tutti i 52 giochi con copertina, genere, comandi e i tuoi record per ogni difficoltà (Facile, Normale, Difficile). Tocca «Gioca» per avviare un gioco; in ogni gioco il pulsante «← Sala Giochi» in alto a sinistra (visibile nei menu) riporta alla raccolta.
 
 **Iniziali del record:** quando batti un record compare la schermata da sala giochi per inserire le tue tre iniziali (frecce ↑ ↓ per cambiare lettera, ← → per spostarti, oppure scrivile direttamente; su telefono i tasti ▲ ▼ e OK). Le iniziali vengono salvate insieme al record e compaiono nei menu del gioco e nella Sala Giochi. Il codice è condiviso da tutti i giochi in `shared/iniziali.js`.
 
@@ -804,3 +804,19 @@ Distruzione in stile *Rampage*: sei Lucertolone, una lucertola alta come un pala
 - **Touch:** levetta a sinistra (anche in diagonale sulla facciata), tasti SALTA e PUGNO a destra
 
 Per giocare apri `games/mostro-in-citta/index.html` nel browser.
+
+### ⚡ Labirinto Elettrico — `games/labirinto-elettrico/index.html`
+
+Sparatutto nel labirinto in stile *Berzerk*: sei un intruso nella base dei robot e attraversi una stanza dopo l'altra.
+
+- **Muri elettrificati:** ogni stanza è un labirinto di muri blu che fulminano al contatto. Si esce da una delle porte aperte; quella da cui sei entrato si chiude alle tue spalle
+- **Robot:** 50 punti ciascuno. Sparano quando sono allineati con te (in orizzontale, in verticale o in diagonale) e hanno la visuale libera. Muoiono anche sbattendo contro i muri, tra loro o colpiti dai compagni. Ogni due stanze cambiano colore: i gialli non sparano, poi diventano più veloci, sparano di più e imparano a evitare i muri. Ogni tanto ti gridano qualcosa
+- **Bonus:** se li abbatti tutti prima di uscire, 10 punti per ogni robot della stanza
+- **Faccina:** se resti troppo in una stanza entra dalla porta un sorriso giallo che rimbalza verso di te attraversando i muri. Non si può abbattere: devi scappare
+- **Sparare:** tieni premuto il fuoco: resti fermo e spari nella direzione in cui punti (8 direzioni)
+- **Vite extra:** a 5.000 punti e poi ogni 10.000
+- **Difficoltà:** Facile (5 vite, robot lenti, Faccina arriva più tardi), Normale, Difficile; record separati per ogni difficoltà
+- **Comandi:** frecce o `W` `A` `S` `D` per muoverti, anche in diagonale · tieni premuto `SPAZIO` o `Z` e scegli la direzione con le frecce per sparare · `P` pausa
+- **Touch:** levetta a 8 direzioni a sinistra e tasto FUOCO a destra (tenendolo premuto resti fermo e spari dove punta la levetta)
+
+Per giocare apri `games/labirinto-elettrico/index.html` nel browser.
