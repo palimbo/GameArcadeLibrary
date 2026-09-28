@@ -4,7 +4,7 @@ Raccolta di giochi arcade per il browser. Ogni gioco è un singolo file HTML sen
 
 ## 🕹️ Sala Giochi — `index.html`
 
-Apri `index.html` nella cartella principale per la pagina di raccolta: mostra tutti i 53 giochi con copertina, genere, comandi e i tuoi record per ogni difficoltà (Facile, Normale, Difficile). Tocca «Gioca» per avviare un gioco; in ogni gioco il pulsante «← Sala Giochi» in alto a sinistra (visibile nei menu) riporta alla raccolta.
+Apri `index.html` nella cartella principale per la pagina di raccolta: mostra tutti i 54 giochi con copertina, genere, comandi e i tuoi record per ogni difficoltà (Facile, Normale, Difficile). Tocca «Gioca» per avviare un gioco; in ogni gioco il pulsante «← Sala Giochi» in alto a sinistra (visibile nei menu) riporta alla raccolta.
 
 **Iniziali del record:** quando batti un record compare la schermata da sala giochi per inserire le tue tre iniziali (frecce ↑ ↓ per cambiare lettera, ← → per spostarti, oppure scrivile direttamente; su telefono i tasti ▲ ▼ e OK). Le iniziali vengono salvate insieme al record e compaiono nei menu del gioco e nella Sala Giochi. Il codice è condiviso da tutti i giochi in `shared/iniziali.js`.
 
@@ -837,3 +837,19 @@ Sparatutto aereo a scorrimento verticale in stile *1942*: decolli dalla portaere
 - **Touch:** levetta analogica a sinistra, tasti GIRO e FUOCO a destra (tieni premuto FUOCO per la raffica)
 
 Per giocare apri `games/asso-dei-cieli/index.html` nel browser.
+
+### 🚗 Caccia su Strada — `games/caccia-su-strada/index.html`
+
+Inseguimento armato a scorrimento verticale in stile *Spy Hunter*: sei un agente al volante di un'auto con la mitragliatrice, su una strada che non finisce mai.
+
+- **La strada:** curve, restringimenti, ponti sul fiume e tratti con lo spartitraffico in mezzo. Se esci dall'asfalto o finisci sullo spartitraffico perdi l'auto
+- **Nemici:** tagliagomme (150), che ti affianca e, quando le lame lampeggiano, ti viene addosso; limousine (200, 3 colpi) con il pistolero che si sporge e spara di lato; corazzata (300), che ti sperona e su cui i proiettili rimbalzano: va spinta fuori strada; elicottero (500), che sgancia bombe dove stai per arrivare e si abbatte solo con i missili
+- **Auto civili:** non colpirle, costano 250 punti
+- **Furgone armi:** infilati nel suo retro per caricare olio (chi ti segue sbanda), fumo (chi ti segue non vede) o missili. Se c'è l'elicottero, carichi i missili
+- **Auto di riserva:** all'inizio le auto perse non contano (90 secondi a Facile, 60 a Normale, 40 a Difficile); poi hai le tue auto, e ne guadagni una ogni 10.000 punti
+- **Punti:** anche per la strada percorsa
+- **Difficoltà:** Facile (4 auto, nemici più lenti, le lame lampeggiano più a lungo), Normale, Difficile (strade più strette, più nemici insieme); record separati per ogni difficoltà
+- **Comandi:** `←` `→` per sterzare, `↑` accelera, `↓` frena (anche `W` `A` `S` `D`) · tieni premuto `SPAZIO` o `Z` per sparare · `X` o `SHIFT` arma speciale · `P` pausa
+- **Touch:** levetta analogica a sinistra (di lato sterzi, in su acceleri, in giù freni), tasti ARMA e FUOCO a destra
+
+Per giocare apri `games/caccia-su-strada/index.html` nel browser.
