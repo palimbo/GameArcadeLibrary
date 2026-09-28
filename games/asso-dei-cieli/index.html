@@ -1,0 +1,872 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no, viewport-fit=cover">
+<title>Asso dei Cieli</title>
+<style>
+  :root {
+    --bg: #04121f;
+    --fg: #f4f1e6;
+    --muted: #9fb4c4;
+    --sky: #6ac8ff;
+    --gold: #ffc93a;
+    --red: #ff5a4a;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  html, body {
+    height: 100%;
+    background: var(--bg);
+    color: var(--fg);
+    font-family: system-ui, -apple-system, "Segoe UI", sans-serif;
+    overflow: hidden;
+    user-select: none;
+    -webkit-user-select: none;
+    touch-action: none;
+  }
+  #wrap { position: fixed; inset: 0; display: flex; align-items: center; justify-content: center; }
+  canvas { display: block; touch-action: none; border-radius: 6px; box-shadow: 0 0 0 2px #12324a, 0 10px 40px rgba(0,0,0,0.6); }
+  #pauseBtn {
+    position: fixed; z-index: 3; display: none; right: 10px; top: calc(10px + env(safe-area-inset-top, 0px));
+    font: 700 13px system-ui, sans-serif; color: var(--fg);
+    background: rgba(0, 0, 0, 0.6); border: 1px solid rgba(244, 241, 230, 0.35);
+    border-radius: 8px; padding: 6px 10px; cursor: pointer;
+  }
+  #touch {
+    position: fixed; z-index: 2; display: none; left: 12px; right: 12px;
+    bottom: calc(14px + env(safe-area-inset-bottom, 0px));
+    justify-content: space-between; align-items: flex-end; pointer-events: none;
+  }
+  /* analog thumb stick, a fire button (hold for autofire) and the looping button */
+  #touch .stick { position: relative; width: 136px; height: 136px; border-radius: 50%; pointer-events: auto; touch-action: none;
+    border: 2px solid rgba(106, 200, 255, 0.55); background: radial-gradient(circle, rgba(106,200,255,0.14), rgba(106,200,255,0.04)); }
+  #touch .stick .knob { position: absolute; left: 50%; top: 50%; width: 58px; height: 58px; margin: -29px 0 0 -29px; border-radius: 50%;
+    background: rgba(106, 200, 255, 0.45); border: 2px solid rgba(255,255,255,0.7); box-shadow: 0 4px 10px rgba(0,0,0,0.4); pointer-events: none; }
+  #touch .stick .ring { position: absolute; inset: 10px; border-radius: 50%; border: 1px dashed rgba(244,241,230,0.25); pointer-events: none; }
+  #touch .btns { display: flex; flex-direction: column; align-items: center; gap: 10px; }
+  #touch .btns button { border-radius: 50%; pointer-events: auto; touch-action: none; color: var(--fg); font: 800 13px system-ui, sans-serif; letter-spacing: 1px; }
+  #touch .fire { width: 96px; height: 96px; border: 2px solid rgba(255, 90, 74, 0.9); background: rgba(255, 90, 74, 0.2); }
+  #touch .loop { width: 66px; height: 66px; font-size: 11px !important; border: 2px solid rgba(255, 201, 58, 0.9); background: rgba(255, 201, 58, 0.16); }
+  #touch .btns button.on { background: rgba(255, 201, 58, 0.5); }
+  #touch.small .stick { width: 112px; height: 112px; }
+  #touch.small .stick .knob { width: 48px; height: 48px; margin: -24px 0 0 -24px; }
+  #touch.small .fire { width: 80px; height: 80px; font-size: 11px; }
+  #touch.small .loop { width: 56px; height: 56px; font-size: 10px !important; }
+  #touch.small .btns { gap: 6px; }
+  #overlay {
+    position: fixed; inset: 0; z-index: 5;
+    display: flex; flex-direction: column; align-items: center; justify-content: flex-start;
+    gap: 14px; padding: 16px; text-align: center; overflow-y: auto;
+    background: rgba(4, 18, 31, 0.9);
+  }
+  #overlay > :first-child { margin-top: auto; }
+  #overlay > :last-child { margin-bottom: auto; }
+  #overlay.hidden { display: none; }
+  #homeLink {
+    position: fixed; top: calc(10px + env(safe-area-inset-top, 0px)); left: 10px; z-index: 6;
+    font: 600 13px/1 system-ui, sans-serif; color: #fff; text-decoration: none;
+    padding: 8px 12px; border-radius: 999px; background: rgba(0,0,0,.55);
+    border: 1px solid rgba(255,255,255,.25);
+  }
+  #homeLink:hover { background: rgba(0,0,0,.8); }
+  #overlay.hidden ~ #homeLink { display: none; }
+  @media (max-width: 700px) { #overlay { padding-top: calc(52px + env(safe-area-inset-top, 0px)); } }
+  #overlay h1 { font-size: clamp(30px, 9vw, 58px); font-weight: 900; letter-spacing: 1px; color: var(--gold); text-shadow: 0 3px 0 #8a4a10, 0 0 22px rgba(255,201,58,0.4); }
+  #overlay h2 { font-size: clamp(28px, 7vw, 44px); font-weight: 900; letter-spacing: 2px; }
+  #overlay h2.lose { color: var(--red); }
+  #overlay p { max-width: 540px; font-size: clamp(13px, 3.4vw, 16px); line-height: 1.55; }
+  #overlay p.muted { color: var(--muted); }
+  #overlay .pts { display: grid; grid-template-columns: repeat(2, auto); gap: 4px 18px; font-size: 13px; color: var(--muted); text-align: left; }
+  #overlay .pts b { color: var(--fg); }
+  #overlay .diff { display: flex; gap: 10px; flex-wrap: wrap; justify-content: center; }
+  #overlay button {
+    font: 800 15px system-ui, sans-serif; letter-spacing: 1.5px; color: var(--fg);
+    background: transparent; cursor: pointer;
+    border: 2px solid rgba(244,241,230,0.3); border-radius: 10px; padding: 9px 16px;
+  }
+  #overlay .diff button.on { border-color: var(--c); color: var(--c); box-shadow: 0 0 12px var(--c); }
+  #overlay button.start { border-color: var(--gold); color: #2a1600; background: var(--gold); padding: 11px 30px; box-shadow: 0 4px 0 #8a4a10; }
+  @media (max-height: 560px) {
+    #overlay { gap: 8px; }
+    #overlay h1 { font-size: 30px; }
+    #overlay p { font-size: 13px; line-height: 1.4; }
+    #overlay .help, #overlay .pts { display: none; }
+  }
+</style>
+</head>
+<body>
+<div id="wrap"><canvas id="game"></canvas></div>
+<div id="touch">
+  <div class="stick" aria-label="Levetta"><div class="ring"></div><div class="knob"></div></div>
+  <div class="btns">
+    <button type="button" class="loop" aria-label="Giro della morte">GIRO</button>
+    <button type="button" class="fire" aria-label="Fuoco">FUOCO</button>
+  </div>
+</div>
+<button id="pauseBtn" type="button" aria-label="Pausa">❚❚</button>
+<div id="overlay"></div>
+<a id="homeLink" href="../../index.html">← Sala Giochi</a>
+
+<script>
+(() => {
+  "use strict";
+
+  const W = 360, H = 480, HUD = 24, TAU = Math.PI * 2;
+  const STAGE_LEN = 62;                 // seconds of formations before the flying fortress
+  const KINDS = {
+    zero:   { pts: 50,   r: 11, hp: 1,  col: "#5aa05a", col2: "#2e6a3a" },
+    red:    { pts: 100,  r: 11, hp: 1,  col: "#e8463a", col2: "#8a1e1a" },
+    grey:   { pts: 80,   r: 11, hp: 1,  col: "#9aa4ae", col2: "#5a646e" },
+    bomber: { pts: 500,  r: 20, hp: 7,  col: "#6a8a4a", col2: "#3a5a2a" },
+    boss:   { pts: 5000, r: 40, hp: 70, col: "#7a8a5a", col2: "#4a5a34" },
+  };
+  const POWS = {
+    P: { col: "#ff5a4a", text: "FUOCO QUADRUPLO!" },
+    G: { col: "#6ac8ff", text: "GREGARI IN VOLO!" },
+    L: { col: "#ffc93a", text: "GIRO EXTRA!" },
+    B: { col: "#b86aff", text: "BOMBA: CIELO PULITO!" },
+    S: { col: "#f4f1e6", text: "STELLA: 1.000 PUNTI" },
+  };
+
+  const DIFFICULTIES = {
+    facile:    { label: "FACILE",    color: "#7dff9a", desc: "5 aerei · 4 giri per missione · nemici lenti e pochi colpi", lives: 5, loops: 4, aggr: 0.75, fire: 0.5, bullet: 0.8 },
+    normale:   { label: "NORMALE",   color: "#6ac8ff", desc: "3 aerei · 3 giri per missione · l'esperienza classica", lives: 3, loops: 3, aggr: 1, fire: 1, bullet: 1 },
+    difficile: { label: "DIFFICILE", color: "#ff5a4a", desc: "3 aerei · 3 giri · squadriglie fitte e colpi rapidi", lives: 3, loops: 3, aggr: 1.25, fire: 1.5, bullet: 1.15 },
+  };
+  const DIFF_IDS = Object.keys(DIFFICULTIES);
+  const DIFF_KEY = "asso-difficulty";
+  const bestKey = (id) => `asso-best-${id}`;
+  function store(k, v) { try { localStorage.setItem(k, v); } catch { /* ignore */ } }
+  function load(k) { try { return localStorage.getItem(k); } catch { return null; } }
+  const rnd = (a, b) => a + Math.random() * (b - a);
+  const pick = (a) => a[Math.floor(Math.random() * a.length)];
+  const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
+
+  // ---------- Canvas ----------
+  const canvas = document.getElementById("game");
+  const ctx = canvas.getContext("2d");
+  const wrap = document.getElementById("wrap");
+  const overlay = document.getElementById("overlay");
+  const touchEl = document.getElementById("touch");
+  const pauseBtn = document.getElementById("pauseBtn");
+  let pxRatio = 1, touchMode = !!(window.matchMedia && matchMedia("(pointer: coarse)").matches);
+  function resize() {
+    const portrait = window.innerHeight > window.innerWidth;
+    const showTouch = touchMode && isPlaying();
+    touchEl.style.display = showTouch ? "flex" : "none";
+    touchEl.classList.toggle("small", !portrait && window.innerHeight < 480);
+    wrap.style.paddingBottom = showTouch && portrait ? "calc(170px + env(safe-area-inset-bottom, 0px))" : "0";
+    let availW = window.innerWidth - 8, availH = window.innerHeight - 8;
+    if (showTouch && portrait) availH -= 170;
+    if (showTouch && !portrait) {
+      const side = Math.max(...[...touchEl.children].map((el) => el.offsetWidth)) + 20;
+      if (window.innerWidth - 2 * side > 200) availW = window.innerWidth - 2 * side;
+    }
+    const s = Math.max(0.2, Math.min(availW / W, availH / H));
+    pxRatio = Math.min(3, s * (window.devicePixelRatio || 1));
+    canvas.style.width = W * s + "px";
+    canvas.style.height = H * s + "px";
+    canvas.width = Math.round(W * pxRatio);
+    canvas.height = Math.round(H * pxRatio);
+  }
+  window.addEventListener("resize", () => syncControls());
+
+  // ---------- Audio ----------
+  let audioCtx = null;
+  function beep(freq, dur, type = "square", vol = 0.04, slide = 0, delay = 0) {
+    if (!audioCtx) return;
+    const t = audioCtx.currentTime + delay;
+    const osc = audioCtx.createOscillator(), gain = audioCtx.createGain();
+    osc.type = type;
+    osc.frequency.setValueAtTime(freq, t);
+    if (slide) osc.frequency.exponentialRampToValueAtTime(Math.max(20, freq + slide), t + dur);
+    gain.gain.setValueAtTime(vol, t);
+    gain.gain.exponentialRampToValueAtTime(0.0001, t + dur);
+    osc.connect(gain).connect(audioCtx.destination);
+    osc.start(t); osc.stop(t + dur + 0.02);
+  }
+  function noise(dur, vol, freq) {
+    if (!audioCtx) return;
+    const len = Math.floor(audioCtx.sampleRate * dur), buf = audioCtx.createBuffer(1, len, audioCtx.sampleRate), d = buf.getChannelData(0);
+    for (let i = 0; i < len; i++) d[i] = (Math.random() * 2 - 1) * (1 - i / len);
+    const src = audioCtx.createBufferSource(), f = audioCtx.createBiquadFilter(), g = audioCtx.createGain();
+    src.buffer = buf; f.type = "lowpass"; f.frequency.value = freq; g.gain.value = vol;
+    src.connect(f).connect(g).connect(audioCtx.destination); src.start();
+  }
+  const arp = (notes, gap, d, type = "square", vol = 0.04) => notes.forEach((f, i) => beep(f, d, type, vol, 0, i * gap));
+  let sfxN = 0;
+  const lim = (fn) => (...a) => { if (sfxN++ < 5) fn(...a); };
+  const sfx = {
+    shot: lim(() => beep(1100, 0.04, "square", 0.015, -500)),
+    boom: lim(() => { noise(0.3, 0.22, 1200); beep(180, 0.15, "square", 0.02, -100); }),
+    hit: lim(() => beep(520, 0.05, "square", 0.025, -150)),
+    big: lim(() => { noise(0.9, 0.35, 600); arp([330, 262, 196, 131], 0.08, 0.16, "sawtooth", 0.03); }),
+    loop: () => { beep(300, 0.6, "sawtooth", 0.025, 500); beep(800, 0.6, "triangle", 0.02, -500, 0.6); },
+    pow: () => arp([659, 880, 1047, 1319, 1760], 0.06, 0.1, "square", 0.04),
+    die: () => { noise(1, 0.35, 700); arp([523, 415, 330, 262, 196], 0.12, 0.2, "sawtooth", 0.035); },
+    start: () => arp([392, 523, 659, 784, 659, 784, 1047], 0.11, 0.16),
+    boss: () => arp([196, 262, 196, 262, 196, 311], 0.16, 0.22, "sawtooth", 0.035),
+    clear: () => arp([523, 659, 784, 1047, 784, 1047, 1319], 0.09, 0.15),
+    over: () => arp([523, 415, 330, 262], 0.18, 0.25),
+    life: () => arp([523, 784, 1047, 1319], 0.08, 0.12, "triangle", 0.05),
+    warn: lim(() => beep(1400, 0.08, "square", 0.02, 0)),
+  };
+
+  // ---------- State ----------
+  let difficulty = DIFFICULTIES[load(DIFF_KEY)] ? load(DIFF_KEY) : "normale";
+  let diff = DIFFICULTIES[difficulty];
+  let state = "menu", menu = null, pausedFrom = null, stateT = 0, clock = 0;
+  let score = 0, lives = 3, stage = 0, bestCache = 0, nextLife = 20000;
+  let P = null, foes = [], shots = [], eshots = [], pows = [], parts = [], popups = [], warns = [], message = null;
+  let stageT = 0, waveT = 0, redT = 0, bomberT = 0, boss = null, bossDone = false, spawned = 0, downed = 0, flash = 0, powCycle = 0;
+  let isles = [], clouds = [], waves = [], carrier = null, scroll = 0;
+  let stickV = [0, 0], fireHeld = false, loopPressed = false;
+  const keys = { left: false, right: false, up: false, down: false };
+  for (let i = 0; i < 60; i++) waves.push({ x: Math.random() * W, y: Math.random() * H, w: rnd(6, 16) });
+
+  const pace = () => diff.aggr * (1 + Math.min(0.8, stage * 0.08));
+
+  // ---------- Scenery ----------
+  function makeIsle(y) {
+    const r = rnd(26, 60), n = 12, pts = [];
+    for (let i = 0; i < n; i++) pts.push(r * rnd(0.7, 1.15));
+    return { x: rnd(20, W - 20), y, r, pts, rot: rnd(0, TAU), palms: Math.floor(rnd(1, 5)) };
+  }
+  function resetScenery() {
+    isles = []; clouds = [];
+    for (let y = -60; y < H; y += rnd(170, 260)) isles.push(makeIsle(y));
+    for (let i = 0; i < 4; i++) clouds.push({ x: rnd(0, W), y: rnd(0, H), s: rnd(0.7, 1.4) });
+  }
+  function scrollScenery(dt) {
+    const v = 36;
+    scroll += v * dt;
+    for (const w of waves) { w.y += v * dt; if (w.y > H + 4) { w.y = -4; w.x = Math.random() * W; } }
+    for (const s of isles) s.y += v * dt;
+    isles = isles.filter((s) => s.y < H + 90);
+    if (!isles.length || isles[isles.length - 1].y > rnd(120, 220)) isles.push(makeIsle(-90));
+    for (const c of clouds) { c.y += v * 2.2 * dt; if (c.y > H + 70) { c.y = -70; c.x = rnd(0, W); c.s = rnd(0.7, 1.4); } }
+    if (carrier) carrier.y += v * dt;
+  }
+
+  // ---------- Flow ----------
+  const isPlaying = () => ["intro", "play", "dead", "clear"].includes(state);
+  function newPlane() { return { x: W / 2, y: 400, inv: 2, cool: 0, quad: false, wing: 0, loop: 0, dead: false, bank: 0 }; }
+  function startGame() {
+    if (!audioCtx) { try { audioCtx = new (window.AudioContext || window.webkitAudioContext)(); } catch { audioCtx = null; } }
+    if (audioCtx && audioCtx.state === "suspended") audioCtx.resume();
+    score = 0; lives = diff.lives; stage = 0; nextLife = 20000; powCycle = 0;
+    bestCache = parseInt(load(bestKey(difficulty)), 10) || 0;
+    P = newPlane();
+    resetScenery();
+    beginStage();
+    sfx.start();
+    menu = null;
+    overlay.classList.add("hidden");
+    syncControls();
+    last = performance.now();
+  }
+  function beginStage() {
+    foes = []; shots = []; eshots = []; pows = []; warns = [];
+    stageT = 0; waveT = 2.2; redT = rnd(6, 9); bomberT = rnd(16, 22); boss = null; bossDone = false; spawned = 0; downed = 0;
+    P.x = W / 2; P.y = 400; P.inv = 2; P.loops = diff.loops; P.loop = 0;
+    carrier = { y: 300 };
+    message = { text: `MISSIONE ${stage + 1}`, sub: "Decollo dalla portaerei!", t: 0 };
+    state = "intro"; stateT = 2;
+  }
+  function addScore(n, x, y, color = "#f4f1e6") {
+    score += n;
+    if (x !== undefined && n >= 100) popups.push({ x, y, text: n.toLocaleString("it-IT"), color, t: 0 });
+    if (score >= nextLife) {
+      nextLife = nextLife === 20000 ? 80000 : nextLife + 80000;
+      if (lives < 9) lives++; sfx.life();
+      popups.push({ x: W / 2, y: H / 2 - 40, text: "AEREO EXTRA", color: "#ffc93a", t: 0, big: true });
+    }
+  }
+  function burst(x, y, color, n = 12, sp = 110, life = 0.5) {
+    for (let k = 0; k < n; k++) {
+      const a = Math.random() * TAU, s = sp * (0.2 + Math.random() * 0.9);
+      parts.push({ x, y, vx: Math.cos(a) * s, vy: Math.sin(a) * s, t: 0, life: life * (0.5 + Math.random() * 0.8), c: color });
+    }
+  }
+  function smoke(x, y) { parts.push({ x, y, vx: rnd(-10, 10), vy: rnd(20, 40), t: 0, life: 0.8, c: "#556", big: true }); }
+  function losePlane() {
+    if (state !== "play" || P.dead || P.inv > 0 || P.loop > 0) return;
+    lives--; P.dead = true;
+    sfx.die(); burst(P.x, P.y, "#ffffff", 26, 150, 1); burst(P.x, P.y, "#ff8a3a", 24, 120, 0.9); burst(P.x, P.y, "#ffc93a", 12, 70, 0.7);
+    state = "dead"; stateT = 2.4;
+  }
+  function afterDeath() {
+    if (lives <= 0) { gameOver(); return; }
+    const loops = P.loops;
+    P = newPlane(); P.loops = Math.max(loops, 1); P.inv = 2.5;
+    eshots = [];
+    state = "play";
+  }
+  function gameOver() {
+    state = "over";
+    const prev = parseInt(load(bestKey(difficulty)), 10) || 0;
+    const record = score > prev;
+    if (record) store(bestKey(difficulty), String(score));
+    const played = diff.label, st = stage + 1;
+    menu = () => showOverlay(
+      `<h2 class="lose">GAME OVER</h2>
+       <p>Punteggio: <b>${score.toLocaleString("it-IT")}</b> · Missione ${st} · ${played}</p>
+       ${record ? "<p style='color:var(--gold)'>★ NUOVO RECORD! ★</p>" : ""}
+       ${difficultyHTML()}
+       <button class="start" data-start>GIOCA ANCORA</button>`
+    );
+    menu();
+    sfx.over();
+    syncControls();
+  }
+  function togglePause() {
+    if (isPlaying()) {
+      pausedFrom = state; state = "paused";
+      showOverlay(`<h2>PAUSA</h2><button class="start" data-resume>CONTINUA</button><p class="muted">Premi P per continuare</p>`);
+    } else if (state === "paused") {
+      state = pausedFrom; overlay.classList.add("hidden"); last = performance.now();
+    }
+    syncControls();
+  }
+  function syncControls() {
+    const portrait = window.innerHeight > window.innerWidth;
+    pauseBtn.style.display = isPlaying() && touchMode ? "block" : "none";
+    Object.assign(pauseBtn.style, portrait
+      ? { top: "auto", bottom: "calc(40px + env(safe-area-inset-bottom, 0px))", right: "auto", left: "calc(50% - 20px)" }
+      : { top: "calc(10px + env(safe-area-inset-top, 0px))", bottom: "auto", right: "10px", left: "auto" });
+    resize();
+  }
+  pauseBtn.addEventListener("click", () => togglePause());
+  function showOverlay(html) { overlay.innerHTML = html; overlay.classList.remove("hidden"); }
+  function difficultyHTML() {
+    const buttons = DIFF_IDS.map((id) => {
+      const d = DIFFICULTIES[id];
+      return `<button type="button" data-diff="${id}" class="${id === difficulty ? "on" : ""}" style="--c:${d.color}">${d.label}</button>`;
+    }).join("");
+    const best = parseInt(load(bestKey(difficulty)), 10);
+    return `<div class="diff">${buttons}</div><p class="muted">${diff.desc}${best ? ` · Record: ${best.toLocaleString("it-IT")}` : ""}</p>`;
+  }
+  function setDifficulty(id) { if (!DIFFICULTIES[id]) return; difficulty = id; diff = DIFFICULTIES[id]; store(DIFF_KEY, id); if (menu) menu(); }
+  function showTitle() {
+    menu = showTitle;
+    showOverlay(
+      `<h1>ASSO DEI CIELI</h1>
+       <p>Decolla dalla portaerei e vola sopra l'oceano: squadriglie di caccia arrivano in picchiata, di lato e perfino da dietro. Col giro della morte schivi tutto per un istante. Abbatti la squadriglia rossa al completo per un potenziamento e, a fine missione, affronta la fortezza volante.</p>
+       <div class="pts">
+         <span><b>Caccia verde · grigio</b></span><span>50 · 80</span>
+         <span><b>Squadriglia rossa</b></span><span>100 l'uno · tutti e 5 lasciano un POW</span>
+         <span><b>Bombardiere</b></span><span>7 colpi · 500</span>
+         <span><b>Fortezza volante</b></span><span>5.000</span>
+         <span><b>POW</b></span><span>P fuoco quadruplo · G gregari · L giro extra · B bomba</span>
+         <span><b>Atterraggio</b></span><span>bonus in base alla percentuale di abbattuti</span>
+       </div>
+       ${touchMode
+         ? `<p class="muted help">Levetta per volare · FUOCO per sparare (tienilo premuto) · GIRO per il giro della morte</p>`
+         : `<p class="muted help">Frecce o WASD per volare · SPAZIO o Z per sparare (tienilo premuto) · X o SHIFT giro della morte · P pausa</p>`}
+       ${difficultyHTML()}
+       <button class="start" data-start>DECOLLA</button>`
+    );
+  }
+  overlay.addEventListener("click", (e) => {
+    const d = e.target.closest("[data-diff]");
+    if (d) { setDifficulty(d.dataset.diff); return; }
+    if (e.target.closest("[data-start]")) startGame();
+    if (e.target.closest("[data-resume]")) togglePause();
+  });
+
+  // ---------- Input ----------
+  const KEYMAP = { arrowleft: "left", a: "left", arrowright: "right", d: "right", arrowup: "up", w: "up", arrowdown: "down", s: "down" };
+  window.addEventListener("keydown", (e) => {
+    const k = e.key.toLowerCase();
+    if ([" ", "arrowup", "arrowdown", "arrowleft", "arrowright"].includes(k)) e.preventDefault();
+    if (state === "menu" || state === "over") {
+      if (e.key === "Enter") startGame();
+      else if (["1", "2", "3"].includes(k)) setDifficulty(DIFF_IDS[+k - 1]);
+      return;
+    }
+    if (k === "p" || k === "escape") { if (!e.repeat) togglePause(); return; }
+    if (state === "paused") { if (e.key === "Enter") togglePause(); return; }
+    if (k === " " || k === "z") fireHeld = true;
+    if ((k === "x" || k === "shift") && !e.repeat) loopPressed = true;
+    if (KEYMAP[k]) keys[KEYMAP[k]] = true;
+  });
+  window.addEventListener("keyup", (e) => {
+    const k = e.key.toLowerCase();
+    if (k === " " || k === "z") fireHeld = false;
+    if (KEYMAP[k]) keys[KEYMAP[k]] = false;
+  });
+  window.addEventListener("blur", () => { for (const k in keys) keys[k] = false; stickV = [0, 0]; fireHeld = false; if (isPlaying()) togglePause(); });
+  const fireBtn = touchEl.querySelector(".fire"), loopBtn = touchEl.querySelector(".loop");
+  let fireId = null;
+  fireBtn.addEventListener("pointerdown", (e) => { e.preventDefault(); fireId = e.pointerId; try { fireBtn.setPointerCapture(e.pointerId); } catch { /* ignore */ } fireHeld = true; fireBtn.classList.add("on"); });
+  for (const ev of ["pointerup", "pointercancel", "lostpointercapture"]) fireBtn.addEventListener(ev, (e) => { if (e.pointerId !== fireId) return; fireId = null; fireHeld = false; fireBtn.classList.remove("on"); });
+  loopBtn.addEventListener("pointerdown", (e) => { e.preventDefault(); loopPressed = true; loopBtn.classList.add("on"); setTimeout(() => loopBtn.classList.remove("on"), 200); });
+  // analog thumb stick: the further you push, the faster you fly
+  const stick = touchEl.querySelector(".stick"), knob = stick.querySelector(".knob");
+  let stickId = null;
+  function stickAt(e) {
+    const r = stick.getBoundingClientRect(), max = r.width / 2 - 14;
+    let dx = e.clientX - (r.left + r.width / 2), dy = e.clientY - (r.top + r.height / 2);
+    const len = Math.hypot(dx, dy);
+    if (len > max) { dx *= max / len; dy *= max / len; }
+    knob.style.transform = `translate(${dx}px, ${dy}px)`;
+    const m = Math.min(len, max) / max;
+    if (m < 0.12) { stickV = [0, 0]; return; }
+    const k = Math.min(1, (m - 0.12) / 0.6) / (Math.hypot(dx, dy) || 1);
+    stickV = [dx * k, dy * k];
+  }
+  const stickEnd = (e) => { if (e.pointerId !== stickId) return; stickId = null; knob.style.transform = ""; stickV = [0, 0]; };
+  stick.addEventListener("pointerdown", (e) => { e.preventDefault(); stickId = e.pointerId; try { stick.setPointerCapture(e.pointerId); } catch { /* ignore */ } stickAt(e); });
+  stick.addEventListener("pointermove", (e) => { if (e.pointerId === stickId) stickAt(e); });
+  for (const ev of ["pointerup", "pointercancel", "lostpointercapture"]) stick.addEventListener(ev, stickEnd);
+  window.addEventListener("pointerdown", (e) => { if (e.pointerType === "touch" && !touchMode) { touchMode = true; syncControls(); if (menu) menu(); } }, true);
+
+  // ---------- Enemies ----------
+  // every plane follows a scripted flight path p(t) → [x, y]
+  function addFoe(kind, delay, path, extra = {}) {
+    const k = KINDS[kind];
+    const [x, y] = path(0), hp = Math.round(k.hp * (kind === "boss" ? 1 + stage * 0.15 : 1));
+    foes.push({ kind, hp, max: hp, path, t: -delay, x, y, ang: Math.PI / 2, cool: rnd(0.6, 2.4) / diff.fire, shots: kind === "zero" ? 1 + (stage >= 2 ? 1 : 0) + (diff.fire > 1.2 ? 1 : 0) : kind === "red" ? 2 : kind === "grey" ? 0 : 99, ...extra });
+    if (kind !== "boss") spawned++;
+  }
+  function wave() {
+    const p = pace(), side = Math.random() < 0.5 ? -1 : 1;
+    const r = Math.random();
+    if (r < 0.28) {
+      // a column swooping down in an S
+      const x0 = rnd(80, W - 80), n = 5 + Math.min(3, Math.floor(stage / 2)), a = rnd(50, 90);
+      for (let i = 0; i < n; i++) addFoe("zero", i * 0.3, (t) => [x0 + side * a * Math.sin(t * 1.6), -20 + 150 * p * t]);
+    } else if (r < 0.52) {
+      // down, a hairpin turn and back up
+      const x0 = rnd(70, W - 70), n = 4 + (stage >= 3 ? 2 : 0), T = 3.4 / Math.min(1.4, p);
+      for (let i = 0; i < n; i++) {
+        const xi = clamp(x0 + (i - (n - 1) / 2) * 26, 20, W - 20);
+        addFoe("zero", i * 0.12 + (i % 2) * 0.1, (t) => { const k = Math.min(1, t / T); return [xi + side * 50 * k, -20 + 290 * Math.sin(Math.PI * k) - (t > T ? (t - T) * 200 : 0)]; });
+      }
+    } else if (r < 0.76) {
+      // straight across the sky in a wave
+      const y0 = rnd(70, 190), n = 5 + Math.min(3, Math.floor(stage / 2)), v = 125 * p;
+      for (let i = 0; i < n; i++) addFoe("zero", i * 0.28, (t) => [side < 0 ? -20 + v * t : W + 20 - v * t, y0 + 26 * Math.sin(t * 3) + t * 18]);
+    } else {
+      // a surprise from behind: they climb past you
+      const x0 = rnd(60, W - 60), n = 3;
+      warns.push({ x: x0, t: 0 }); sfx.warn();
+      for (let i = 0; i < n; i++) addFoe("grey", 1.1 + i * 0.25, (t) => [x0 + side * (i - 1) * 24 + side * 30 * t, H + 20 - 230 * p * t]);
+    }
+  }
+  function redSquad() {
+    // five red fighters in a chain: down, a loop, then away diagonally
+    const side = Math.random() < 0.5 ? -1 : 1, cx = side < 0 ? rnd(70, 130) : rnd(W - 130, W - 70), cy = rnd(170, 220), rr = 55;
+    const t1 = 1.3, t2 = 2.2;
+    const path = (t) => {
+      if (t < t1) return [cx, -20 + (cy + 20) * t / t1];
+      if (t < t1 + t2) { const a = (t - t1) / t2 * TAU; return [cx + side * rr - side * rr * Math.cos(a), cy - rr * Math.sin(a)]; }
+      const u = t - t1 - t2; return [cx + side * u * 140, cy + u * 150];
+    };
+    const squad = { left: 5, killed: 0 };
+    for (let i = 0; i < 5; i++) addFoe("red", i * 0.32, path, { squad });
+  }
+  function bomber() {
+    const x0 = rnd(90, W - 90), stop = rnd(100, 150), T = (stop + 30) / 45;
+    addFoe("bomber", 0, (t) => {
+      if (t < T) return [x0, -30 + 45 * t];
+      if (t < T + 6) return [x0 + 70 * Math.sin((t - T) * 0.9), stop];
+      return [x0 + 70 * Math.sin(6 * 0.9), stop + (t - T - 6) * 60];
+    });
+  }
+  function spawnBoss() {
+    addFoe("boss", 0, (t) => {
+      if (t < 3) return [W / 2, -50 + 150 * (t / 3)];
+      if (t < 33) return [W / 2 + 110 * Math.sin((t - 3) * 0.45), 100 + 18 * Math.sin((t - 3) * 0.9)];
+      return [W / 2 + 110 * Math.sin(30 * 0.45), 100 - (t - 33) * 80];
+    });
+    boss = foes[foes.length - 1];
+    message = { text: "FORTEZZA VOLANTE!", sub: "Abbattila prima che scappi", t: 0 };
+    sfx.boss();
+  }
+  function aimAt(f, spread = 0, speed = 175) {
+    const sp = (speed + stage * 5) * diff.bullet, a = Math.atan2(P.y - f.y, P.x - f.x) + spread;
+    eshots.push({ x: f.x, y: f.y + 6, vx: Math.cos(a) * sp, vy: Math.sin(a) * sp });
+  }
+  function killFoe(f, byPlayer) {
+    f.dead = true;
+    const k = KINDS[f.kind];
+    if (f.kind === "boss") { sfx.big(); for (let i = 0; i < 6; i++) burst(f.x + rnd(-40, 40), f.y + rnd(-15, 15), pick(["#ffffff", "#ff8a3a", "#ffc93a"]), 20, 150, 1.1); flash = 0.4; }
+    else if (f.kind === "bomber") { sfx.big(); burst(f.x, f.y, "#ff8a3a", 26, 140, 0.8); burst(f.x, f.y, "#ffffff", 10, 90, 0.5); }
+    else { sfx.boom(); burst(f.x, f.y, "#ff8a3a", 14, 110, 0.55); burst(f.x, f.y, k.col, 8, 80, 0.5); }
+    if (!byPlayer) return;
+    if (f.kind !== "boss") downed++;
+    addScore(k.pts, f.x, f.y - 12, f.kind === "boss" ? "#ffc93a" : "#f4f1e6");
+    if (f.squad) {
+      f.squad.killed++;
+      if (f.squad.killed === 5) dropPow(f.x, f.y);
+    }
+  }
+  function dropPow(x, y) {
+    const order = ["P", "G", "L", "B", "P", "S", "G", "L"];
+    let type = order[powCycle++ % order.length];
+    if (type === "P" && P.quad) type = "S";
+    if (type === "G" && P.wing) type = "S";
+    pows.push({ x: clamp(x, 20, W - 20), y: clamp(y, 60, 300), type, t: 0 });
+  }
+  function takePow(p) {
+    const d = POWS[p.type];
+    sfx.pow();
+    addScore(500);
+    if (p.type === "P") P.quad = true;
+    else if (p.type === "G") P.wing = 3;
+    else if (p.type === "L") P.loops++;
+    else if (p.type === "B") {
+      flash = 0.5;
+      for (const f of foes) if (!f.dead && f.t > 0 && f.kind !== "boss" && f.y > 0 && f.y < H) killFoe(f, true);
+      eshots = [];
+    } else addScore(1000);
+    message = { text: d.text, t: 0 };
+  }
+  function updateFoes(dt) {
+    const alive = state === "play" && !P.dead;
+    for (const f of foes) {
+      f.t += dt;
+      if (f.t < 0) continue;
+      const px = f.x, py = f.y;
+      [f.x, f.y] = f.path(f.t);
+      if (f.x !== px || f.y !== py) f.ang = Math.atan2(f.y - py, f.x - px);
+      if (f.hurt) f.hurt = Math.max(0, f.hurt - dt * 6);
+      if ((f.kind === "bomber" || f.kind === "boss") && f.hp <= f.max * 0.35 && Math.random() < dt * 8) smoke(f.x + rnd(-6, 6), f.y);
+      // gone past the edges
+      if (f.t > 1 && (f.y > H + 50 || f.y < -70 || f.x < -60 || f.x > W + 60)) { f.gone = true; if (f === boss) { message = { text: "LA FORTEZZA È SCAPPATA", t: 0 }; } continue; }
+      if (!alive || f.y < HUD + 10 || f.y > H - 30) continue;
+      // firing
+      f.cool -= dt;
+      if (f.cool <= 0) {
+        if (f.kind === "boss") {
+          f.cool = rnd(0.7, 1.2) / diff.fire;
+          const n = stage >= 2 ? 5 : 3;
+          for (let i = 0; i < n; i++) aimAt(f, (i - (n - 1) / 2) * 0.22, 120);
+        } else if (f.kind === "bomber") {
+          f.cool = rnd(1.4, 2.2) / diff.fire;
+          for (let i = -1; i <= 1; i++) aimAt(f, i * 0.25, 125);
+        } else if (f.shots > 0 && P.y - f.y > 80 && Math.hypot(P.x - f.x, P.y - f.y) > 100) {
+          f.shots--; f.cool = rnd(0.8, 2) / diff.fire;
+          if (Math.random() < (0.6 + Math.min(0.3, stage * 0.1)) * diff.fire) aimAt(f);
+        } else f.cool = 0.5;
+      }
+    }
+    foes = foes.filter((f) => !f.dead && !f.gone);
+  }
+
+  // ---------- Update ----------
+  function planeHit(x, y, r) {
+    // hits the plane (or one of its wingmen, who each take one hit)
+    if (P.dead || P.loop > 0) return false;
+    if (P.wing) for (const s of [-1, 1]) if ((P.wing & (s < 0 ? 1 : 2)) && Math.abs(x - (P.x + s * 24)) < r + 5 && Math.abs(y - (P.y + 4)) < r + 5) {
+      P.wing &= ~(s < 0 ? 1 : 2); burst(P.x + s * 24, P.y + 4, "#ff8a3a", 14, 100, 0.6); sfx.boom();
+      return true;
+    }
+    if (P.inv <= 0 && Math.abs(x - P.x) < r + 5 && Math.abs(y - P.y) < r + 5) { losePlane(); return true; }
+    return false;
+  }
+  function update(dt) {
+    clock += dt;
+    sfxN = 0;
+    for (const q of parts) { q.t += dt; q.x += q.vx * dt; q.y += q.vy * dt; q.vx *= 1 - dt; q.vy *= 1 - dt; }
+    parts = parts.filter((q) => q.t < q.life);
+    for (const q of popups) { q.t += dt; q.y -= 18 * dt; }
+    popups = popups.filter((q) => q.t < (q.big ? 1.6 : 0.9));
+    if (message) { message.t += dt; if (message.t > 2.4) message = null; }
+    flash = Math.max(0, flash - dt);
+    scrollScenery(isPlaying() || state === "menu" ? dt : 0);
+    if (!isPlaying()) return;
+    if (state === "intro") {
+      stateT -= dt;
+      P.y = 400 - (2 - stateT) * 20;
+      if (stateT <= 0) { state = "play"; P.y = 360; }
+      return;
+    }
+    if (state === "dead") { stateT -= dt; if (stateT <= 0) { afterDeath(); if (!isPlaying()) return; } }
+    if (state === "clear") {
+      // landing on the carrier
+      stateT -= dt;
+      carrier.y = Math.min(250, carrier.y + 110 * dt);
+      P.x += (W / 2 - P.x) * Math.min(1, dt * 2);
+      P.y += (clamp(carrier.y + 50, HUD + 60, H - 22) - P.y) * Math.min(1, dt * 1.5);
+      P.loop = 0;
+      if (stateT <= 0) { stage++; beginStage(); }
+      return;
+    }
+
+    if (state === "play") {
+      stageT += dt;
+      if (stageT < STAGE_LEN) {
+        waveT -= dt; redT -= dt; bomberT -= dt;
+        if (waveT <= 0) { wave(); waveT = rnd(1.5, 2.4) / pace(); }
+        if (redT <= 0) { redSquad(); redT = rnd(10, 14); }
+        if (bomberT <= 0) { bomber(); bomberT = rnd(11, 16) / Math.min(1.5, pace()); }
+      } else if (!boss && !bossDone && foes.length === 0) { spawnBoss(); bossDone = true; }
+    }
+
+    // the plane
+    if (!P.dead) {
+      let vx = stickV[0] + (keys.right ? 1 : 0) - (keys.left ? 1 : 0), vy = stickV[1] + (keys.down ? 1 : 0) - (keys.up ? 1 : 0);
+      const m = Math.hypot(vx, vy);
+      if (m > 1) { vx /= m; vy /= m; }
+      P.x = clamp(P.x + vx * 180 * dt, 16, W - 16);
+      P.y = clamp(P.y + vy * 160 * dt, HUD + 60, H - 22);
+      P.bank += (vx - P.bank) * Math.min(1, dt * 8);
+      P.inv = Math.max(0, P.inv - dt); P.cool -= dt;
+      if (loopPressed && P.loop <= 0 && P.loops > 0 && state === "play") { P.loop = 1.3; P.loops--; sfx.loop(); }
+      if (P.loop > 0) P.loop = Math.max(0, P.loop - dt);
+      else if (fireHeld && P.cool <= 0 && state === "play") {
+        P.cool = 0.12;
+        shots.push({ x: P.x - 4, y: P.y - 12, vx: 0 }, { x: P.x + 4, y: P.y - 12, vx: 0 });
+        if (P.quad) shots.push({ x: P.x - 11, y: P.y - 6, vx: -60 }, { x: P.x + 11, y: P.y - 6, vx: 60 });
+        if (P.wing & 1) shots.push({ x: P.x - 24, y: P.y - 4, vx: 0 });
+        if (P.wing & 2) shots.push({ x: P.x + 24, y: P.y - 4, vx: 0 });
+        sfx.shot();
+      }
+    }
+    loopPressed = false;
+    for (const b of shots) { b.x += b.vx * dt; b.y -= 520 * dt; }
+    for (const b of shots) {
+      for (const f of foes) {
+        if (f.dead || f.t < 0) continue;
+        const k = KINDS[f.kind], rx = f.kind === "boss" ? 56 : k.r, ry = f.kind === "boss" ? 24 : k.r;
+        if (Math.abs(b.x - f.x) < rx && Math.abs(b.y - f.y) < ry) {
+          f.hp--;
+          if (f.hp > 0) { f.hurt = 1; sfx.hit(); burst(b.x, b.y, "#ffe89a", 3, 60, 0.2); }
+          else killFoe(f, true);
+          b.y = -99;
+          break;
+        }
+      }
+    }
+    shots = shots.filter((b) => b.y > HUD && b.x > -10 && b.x < W + 10);
+
+    updateFoes(dt);
+    // collisions with planes
+    if (state === "play") for (const f of foes) {
+      if (f.dead || f.t < 0) continue;
+      const k = KINDS[f.kind];
+      if (f.kind === "boss") { if (Math.abs(f.x - P.x) < 58 && Math.abs(f.y - P.y) < 22) planeHit(P.x, P.y, 0); continue; }
+      if (planeHit(f.x, f.y, k.r - 3) && f.kind !== "bomber") killFoe(f, false);
+    }
+    // enemy bullets
+    for (const b of eshots) {
+      b.x += b.vx * dt; b.y += b.vy * dt;
+      if (state === "play" && planeHit(b.x, b.y, 2)) b.y = H + 99;
+    }
+    eshots = eshots.filter((b) => b.y < H + 10 && b.y > HUD - 10 && b.x > -10 && b.x < W + 10);
+    // power-ups
+    for (const p of pows) {
+      p.t += dt; p.y += 30 * dt; p.x += Math.sin(p.t * 2) * 30 * dt;
+      if (!P.dead && Math.abs(p.x - P.x) < 18 && Math.abs(p.y - P.y) < 18) { p.taken = true; takePow(p); }
+    }
+    pows = pows.filter((p) => !p.taken && p.y < H + 20);
+    for (const w of warns) w.t += dt;
+    warns = warns.filter((w) => w.t < 1.2);
+
+    // mission over: the carrier comes into view
+    if (state === "play" && bossDone && foes.length === 0) {
+      const pct = spawned ? Math.round(downed / spawned * 100) : 0;
+      const bonus = pct >= 100 ? 10000 : pct * 50;
+      addScore(bonus);
+      message = { text: "ATTERRAGGIO!", sub: `Abbattuti ${pct}% · bonus ${bonus.toLocaleString("it-IT")}${pct >= 100 ? " · PERFETTO!" : ""}`, t: 0 };
+      sfx.clear();
+      carrier = { y: -170 }; eshots = []; pows = [];
+      state = "clear"; stateT = 5;
+    }
+  }
+
+  // ---------- Drawing ----------
+  function drawP38(x, y, bank = 0, scale = 1, flipY = 1, col = "#d8dde4") {
+    ctx.save(); ctx.translate(x, y); ctx.scale(scale * (1 - Math.abs(bank) * 0.15), scale * flipY);
+    // wing
+    F(col); ctx.beginPath(); ctx.moveTo(-17, -2); ctx.lineTo(17, -2); ctx.lineTo(16, 3); ctx.lineTo(-16, 3); ctx.fill();
+    // twin booms and tail
+    F("#b8c0ca"); ctx.fillRect(-9, -10, 4, 22); ctx.fillRect(5, -10, 4, 22);
+    F(col); ctx.fillRect(-11, 10, 22, 3);
+    // central pod and canopy
+    ctx.beginPath(); ctx.ellipse(0, -1, 3.5, 10, 0, 0, TAU); ctx.fill();
+    F("#3a8ad8"); ctx.beginPath(); ctx.ellipse(0, -3, 2, 3.5, 0, 0, TAU); ctx.fill();
+    // propellers
+    F("rgba(255,255,255,0.6)"); const sp = Math.sin(clock * 60) * 5;
+    ctx.fillRect(-7 - sp, -12, sp * 2 || 1, 1.5); ctx.fillRect(7 - sp, -12, sp * 2 || 1, 1.5);
+    F("#ff5a4a"); ctx.fillRect(-16, -1, 3, 3); ctx.fillRect(13, -1, 3, 3);
+    ctx.restore();
+  }
+  function drawSmall(x, y, ang, k, s = 1) {
+    ctx.save(); ctx.translate(x, y); ctx.rotate(ang - Math.PI / 2); ctx.scale(s, s);
+    F(k.col);
+    ctx.beginPath(); ctx.moveTo(-13, -1); ctx.lineTo(13, -1); ctx.lineTo(11, 4); ctx.lineTo(-11, 4); ctx.fill();
+    ctx.beginPath(); ctx.ellipse(0, 0, 3.2, 10, 0, 0, TAU); ctx.fill();
+    F(k.col2); ctx.fillRect(-6, -9, 12, 3);
+    F("#f4f1e6"); ctx.beginPath(); ctx.arc(-8, 1.5, 1.8, 0, TAU); ctx.arc(8, 1.5, 1.8, 0, TAU); ctx.fill();
+    F("#1a2a3a"); ctx.beginPath(); ctx.ellipse(0, 3, 1.8, 3, 0, 0, TAU); ctx.fill();
+    F("rgba(255,255,255,0.55)"); const sp = Math.sin(clock * 60) * 5; ctx.fillRect(-sp, 10, sp * 2 || 1, 1.5);
+    ctx.restore();
+  }
+  function drawBomber(x, y, k, s, boss) {
+    ctx.save(); ctx.translate(x, y); ctx.scale(s, s);
+    const c = k.col;
+    // wing, engines, fuselage, tail (the plane faces down)
+    F(c); ctx.beginPath(); ctx.moveTo(-34, -3); ctx.lineTo(34, -3); ctx.lineTo(30, 5); ctx.lineTo(-30, 5); ctx.fill();
+    F(k.col2);
+    const eng = boss ? [-24, -12, 12, 24] : [-16, 16];
+    for (const e of eng) { ctx.fillRect(e - 3, -2, 6, 12); }
+    F("rgba(255,255,255,0.5)"); const sp = Math.sin(clock * 50) * 5;
+    for (const e of eng) ctx.fillRect(e - sp, 11, sp * 2 || 1, 1.5);
+    F(c); ctx.beginPath(); ctx.ellipse(0, 0, 5.5, 20, 0, 0, TAU); ctx.fill();
+    ctx.fillRect(-13, -19, 26, 5);
+    F("#1a2a3a"); ctx.beginPath(); ctx.ellipse(0, 12, 3, 5, 0, 0, TAU); ctx.fill();
+    F("#f4f1e6"); ctx.beginPath(); ctx.arc(-24, 1, 2.5, 0, TAU); ctx.arc(24, 1, 2.5, 0, TAU); ctx.fill();
+    ctx.restore();
+  }
+  function drawFoe(f) {
+    const k = KINDS[f.kind];
+    const hurt = f.hurt > 0 && Math.floor(clock * 30) % 2;
+    const kk = hurt ? { col: "#ffffff", col2: "#ffc93a" } : k;
+    if (f.kind === "boss") drawBomber(f.x, f.y, kk, 1.7, true);
+    else if (f.kind === "bomber") drawBomber(f.x, f.y, kk, 0.8, false);
+    else drawSmall(f.x, f.y, f.ang, kk, 1);
+  }
+  // shadows on the sea: the same shapes drawn dark and offset
+  let shade = false;
+  const F = (c) => { ctx.fillStyle = shade ? "#021a30" : c; };
+  function drawShadow(fn) { ctx.save(); ctx.translate(9, 14); ctx.globalAlpha = 0.3; shade = true; fn(); shade = false; ctx.restore(); }
+  function drawCarrier(y) {
+    ctx.save(); ctx.translate(W / 2, y);
+    ctx.fillStyle = "rgba(255,255,255,0.3)"; ctx.beginPath(); ctx.ellipse(0, 175, 40, 18, 0, 0, TAU); ctx.fill();
+    ctx.fillStyle = "#5a646e"; ctx.beginPath(); ctx.moveTo(0, -170); ctx.lineTo(34, -120); ctx.lineTo(36, 160); ctx.lineTo(-36, 160); ctx.lineTo(-34, -120); ctx.closePath(); ctx.fill();
+    ctx.fillStyle = "#7a6a52"; ctx.fillRect(-28, -130, 56, 285);
+    ctx.strokeStyle = "#f4f1e6"; ctx.lineWidth = 1.5; ctx.setLineDash([8, 8]); ctx.beginPath(); ctx.moveTo(0, -125); ctx.lineTo(0, 150); ctx.stroke(); ctx.setLineDash([]);
+    ctx.fillStyle = "#3a444e"; ctx.fillRect(30, -20, 10, 40);
+    ctx.fillStyle = "#ffc93a"; ctx.fillRect(-28, 140, 56, 3);
+    ctx.restore();
+  }
+  function drawIsle(s) {
+    ctx.save(); ctx.translate(s.x, s.y); ctx.rotate(s.rot);
+    const shape = (grow) => { ctx.beginPath(); s.pts.forEach((r, i) => { const a = i / s.pts.length * TAU, rr = r + grow; i ? ctx.lineTo(Math.cos(a) * rr, Math.sin(a) * rr) : ctx.moveTo(Math.cos(a) * rr, Math.sin(a) * rr); }); ctx.closePath(); };
+    ctx.fillStyle = "#2a8ab8"; shape(10); ctx.fill();
+    ctx.fillStyle = "#e8d49a"; shape(3); ctx.fill();
+    ctx.fillStyle = "#4a9a4a"; shape(-5); ctx.fill();
+    ctx.fillStyle = "#3a7a3a"; shape(-s.r * 0.5); ctx.fill();
+    ctx.fillStyle = "#2a5a2a";
+    for (let i = 0; i < s.palms; i++) { const a = i * 2.1, rr = s.r * 0.35; ctx.beginPath(); ctx.arc(Math.cos(a) * rr, Math.sin(a) * rr, 5, 0, TAU); ctx.fill(); }
+    ctx.restore();
+  }
+  function draw() {
+    ctx.setTransform(pxRatio, 0, 0, pxRatio, 0, 0);
+    // the ocean
+    const g = ctx.createLinearGradient(0, 0, 0, H);
+    g.addColorStop(0, "#0a4a7a"); g.addColorStop(1, "#0a3a64");
+    ctx.fillStyle = g; ctx.fillRect(0, 0, W, H);
+    ctx.fillStyle = "rgba(255,255,255,0.18)";
+    for (const w of waves) ctx.fillRect(w.x, w.y, w.w, 1.5);
+    for (const s of isles) drawIsle(s);
+    if (carrier && carrier.y < H + 200) drawCarrier(carrier.y);
+    if (state === "menu" || !P) { drawClouds(); return; }
+    // shadows then planes
+    for (const f of foes) if (f.t >= 0) drawShadow(() => drawFoe(f));
+    const showP = !P.dead && !(P.inv > 0 && state === "play" && Math.floor(clock * 12) % 2);
+    const lp = P.loop > 0 ? 1 - P.loop / 1.3 : 0;
+    const pScale = 1 + 0.6 * Math.sin(Math.PI * lp), pFlip = P.loop > 0 ? Math.cos(TAU * lp) : 1;
+    const pY = P.y - 40 * Math.sin(TAU * lp) * (1 - lp);
+    if (showP) drawShadow(() => drawP38(P.x, P.y, P.bank, 1, pFlip));
+    for (const p of pows) {
+      const c = POWS[p.type].col;
+      ctx.fillStyle = Math.floor(clock * 6) % 2 ? c : "#f4f1e6";
+      ctx.beginPath(); ctx.arc(p.x, p.y, 10, 0, TAU); ctx.fill();
+      ctx.strokeStyle = "#1a1a1a"; ctx.lineWidth = 1.5; ctx.stroke();
+      ctx.fillStyle = "#1a1a1a"; ctx.textAlign = "center"; ctx.textBaseline = "middle"; ctx.font = "900 11px system-ui, sans-serif";
+      ctx.fillText(p.type === "S" ? "★" : p.type, p.x, p.y + 1);
+      ctx.textBaseline = "alphabetic";
+    }
+    for (const f of foes) if (f.t >= 0) drawFoe(f);
+    ctx.fillStyle = "#ffe89a";
+    for (const b of shots) ctx.fillRect(b.x - 1, b.y - 5, 2, 8);
+    for (const b of eshots) { ctx.fillStyle = "#ff5a2a"; ctx.beginPath(); ctx.arc(b.x, b.y, 3, 0, TAU); ctx.fill(); ctx.fillStyle = "#ffe89a"; ctx.beginPath(); ctx.arc(b.x, b.y, 1.3, 0, TAU); ctx.fill(); }
+    if (showP) {
+      if (P.wing & 1) drawP38(P.x - 24, P.y + 4, P.bank, 0.65, 1, "#c8d4a8");
+      if (P.wing & 2) drawP38(P.x + 24, P.y + 4, P.bank, 0.65, 1, "#c8d4a8");
+      drawP38(P.x, pY, P.bank, pScale, pFlip);
+    }
+    for (const q of parts) {
+      ctx.globalAlpha = Math.max(0, 1 - q.t / q.life) * (q.big ? 0.5 : 1); ctx.fillStyle = q.c;
+      if (q.big) { ctx.beginPath(); ctx.arc(q.x, q.y, 3 + q.t * 6, 0, TAU); ctx.fill(); } else ctx.fillRect(q.x - 1.5, q.y - 1.5, 3, 3);
+    }
+    ctx.globalAlpha = 1;
+    drawClouds();
+    for (const w of warns) {
+      if (Math.floor(w.t * 8) % 2) continue;
+      ctx.fillStyle = "#ffc93a"; ctx.beginPath(); ctx.moveTo(w.x, H - 34); ctx.lineTo(w.x + 12, H - 14); ctx.lineTo(w.x - 12, H - 14); ctx.fill();
+      ctx.fillStyle = "#1a1a1a"; ctx.textAlign = "center"; ctx.font = "900 12px system-ui, sans-serif"; ctx.fillText("!", w.x, H - 17);
+    }
+    if (flash > 0) { ctx.fillStyle = `rgba(255,255,255,${flash})`; ctx.fillRect(0, 0, W, H); }
+    for (const q of popups) {
+      ctx.globalAlpha = Math.max(0, 1 - q.t / (q.big ? 1.6 : 0.9));
+      ctx.textAlign = "center"; ctx.font = q.big ? "900 18px system-ui, sans-serif" : "900 10px system-ui, sans-serif";
+      ctx.lineWidth = 3; ctx.strokeStyle = "#000"; ctx.strokeText(q.text, q.x, q.y); ctx.fillStyle = q.color; ctx.fillText(q.text, q.x, q.y);
+    }
+    ctx.globalAlpha = 1;
+    // status bar
+    ctx.fillStyle = "rgba(4,18,31,0.85)"; ctx.fillRect(0, 0, W, HUD);
+    ctx.textBaseline = "middle"; ctx.textAlign = "left"; ctx.font = "900 14px system-ui, sans-serif"; ctx.fillStyle = "#f4f1e6";
+    ctx.fillText(score.toLocaleString("it-IT"), 8, 12);
+    ctx.textAlign = "center"; ctx.font = "700 9px system-ui, sans-serif"; ctx.fillStyle = "#ff5a4a";
+    ctx.fillText(`REC ${Math.max(bestCache, score).toLocaleString("it-IT")}`, W / 2, 12);
+    ctx.textAlign = "right"; ctx.font = "800 11px system-ui, sans-serif"; ctx.fillStyle = "#6ac8ff";
+    ctx.fillText(`MISSIONE ${stage + 1}`, W - 8, 12);
+    ctx.textBaseline = "alphabetic";
+    // spare planes (left) and loops left (right)
+    for (let i = 0; i < Math.min(lives - (state === "dead" ? 0 : 1), 6); i++) drawP38(14 + i * 20, H - 12, 0, 0.55);
+    ctx.textAlign = "right"; ctx.font = "900 11px system-ui, sans-serif";
+    for (let i = 0; i < Math.min(P.loops, 8); i++) { ctx.fillStyle = "#ffc93a"; ctx.fillText("L", W - 8 - i * 11, H - 7); }
+    // mission progress
+    if (state === "play" && !bossDone) {
+      const k = Math.min(1, stageT / STAGE_LEN);
+      ctx.fillStyle = "rgba(255,255,255,0.2)"; ctx.fillRect(W - 5, HUD + 8, 2, 120);
+      ctx.fillStyle = "#ffc93a"; ctx.fillRect(W - 6, HUD + 8 + 120 * (1 - k) - 2, 4, 4);
+    }
+    if (boss && !boss.dead && !boss.gone && boss.t > 0) {
+      ctx.fillStyle = "rgba(0,0,0,0.5)"; ctx.fillRect(W / 2 - 60, HUD + 4, 120, 5);
+      ctx.fillStyle = "#ff5a4a"; ctx.fillRect(W / 2 - 60, HUD + 4, 120 * boss.hp / boss.max, 5);
+    }
+    if (message) {
+      ctx.globalAlpha = Math.min(1, (2.4 - message.t) * 2);
+      ctx.textAlign = "center"; ctx.font = "900 20px system-ui, sans-serif"; ctx.fillStyle = "#ffc93a";
+      ctx.lineWidth = 4; ctx.strokeStyle = "#000"; ctx.strokeText(message.text, W / 2, H / 2 - 20); ctx.fillText(message.text, W / 2, H / 2 - 20);
+      if (message.sub) { ctx.font = "700 11px system-ui, sans-serif"; ctx.fillStyle = "#f4f1e6"; ctx.strokeText(message.sub, W / 2, H / 2); ctx.fillText(message.sub, W / 2, H / 2); }
+      ctx.globalAlpha = 1;
+    }
+  }
+  function drawClouds() {
+    for (const c of clouds) {
+      ctx.fillStyle = "rgba(255,255,255,0.22)";
+      ctx.beginPath();
+      ctx.arc(c.x, c.y, 26 * c.s, 0, TAU); ctx.arc(c.x + 24 * c.s, c.y + 6 * c.s, 20 * c.s, 0, TAU); ctx.arc(c.x - 22 * c.s, c.y + 8 * c.s, 18 * c.s, 0, TAU);
+      ctx.fill();
+    }
+  }
+
+  // ---------- Loop ----------
+  const STEP = 1 / 120;
+  let last = performance.now(), acc = 0;
+  function loop(now) {
+    const dt = Math.min(0.1, (now - last) / 1000);
+    last = now;
+    if (isPlaying()) {
+      acc += dt;
+      while (acc >= STEP && isPlaying()) { update(STEP); acc -= STEP; }
+    } else { acc = 0; update(dt); }
+    draw();
+    requestAnimationFrame(loop);
+  }
+  resetScenery();
+  syncControls();
+  showTitle();
+  requestAnimationFrame(loop);
+})();
+</script>
+<script src="../../shared/iniziali.js" data-record="asso-best-" data-kind="score"></script>
+</body>
+</html>

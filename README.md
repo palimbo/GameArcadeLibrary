@@ -4,7 +4,7 @@ Raccolta di giochi arcade per il browser. Ogni gioco è un singolo file HTML sen
 
 ## 🕹️ Sala Giochi — `index.html`
 
-Apri `index.html` nella cartella principale per la pagina di raccolta: mostra tutti i 52 giochi con copertina, genere, comandi e i tuoi record per ogni difficoltà (Facile, Normale, Difficile). Tocca «Gioca» per avviare un gioco; in ogni gioco il pulsante «← Sala Giochi» in alto a sinistra (visibile nei menu) riporta alla raccolta.
+Apri `index.html` nella cartella principale per la pagina di raccolta: mostra tutti i 53 giochi con copertina, genere, comandi e i tuoi record per ogni difficoltà (Facile, Normale, Difficile). Tocca «Gioca» per avviare un gioco; in ogni gioco il pulsante «← Sala Giochi» in alto a sinistra (visibile nei menu) riporta alla raccolta.
 
 **Iniziali del record:** quando batti un record compare la schermata da sala giochi per inserire le tue tre iniziali (frecce ↑ ↓ per cambiare lettera, ← → per spostarti, oppure scrivile direttamente; su telefono i tasti ▲ ▼ e OK). Le iniziali vengono salvate insieme al record e compaiono nei menu del gioco e nella Sala Giochi. Il codice è condiviso da tutti i giochi in `shared/iniziali.js`.
 
@@ -820,3 +820,20 @@ Sparatutto nel labirinto in stile *Berzerk*: sei un intruso nella base dei robot
 - **Touch:** levetta a 8 direzioni a sinistra e tasto FUOCO a destra (tenendolo premuto resti fermo e spari dove punta la levetta)
 
 Per giocare apri `games/labirinto-elettrico/index.html` nel browser.
+
+### ✈️ Asso dei Cieli — `games/asso-dei-cieli/index.html`
+
+Sparatutto aereo a scorrimento verticale in stile *1942*: decolli dalla portaerei e voli sopra l'oceano, una missione dopo l'altra.
+
+- **Nemici:** caccia verdi (50) che arrivano in colonna, di lato o fanno inversione a U; caccia grigi (80) che sbucano da dietro, annunciati da un «!» in basso; bombardieri (7 colpi, 500) che si fermano e sparano a ventaglio
+- **Squadriglia rossa:** cinque caccia rossi (100 l'uno) che fanno un giro della morte; se li abbatti tutti lasciano un POW
+- **POW:** P fuoco quadruplo · G due gregari ai lati (ognuno regge un colpo) · L un giro extra · B bomba che abbatte tutto lo schermo · ★ 1.000 punti. Ogni POW vale anche 500 punti
+- **Giro della morte:** per un istante sei intoccabile; ne hai 3 per missione (4 a Facile)
+- **Fortezza volante:** a fine missione arriva il bombardiere gigante (5.000). Se non lo abbatti in tempo scappa
+- **Atterraggio:** si torna sulla portaerei, con un bonus in base alla percentuale di aerei abbattuti (10.000 se li prendi tutti)
+- **Aerei extra:** a 20.000 punti e poi ogni 80.000
+- **Difficoltà:** Facile (5 aerei, nemici lenti che sparano poco), Normale, Difficile; record separati per ogni difficoltà
+- **Comandi:** frecce o `W` `A` `S` `D` per volare · tieni premuto `SPAZIO` o `Z` per sparare · `X` o `SHIFT` giro della morte · `P` pausa
+- **Touch:** levetta analogica a sinistra, tasti GIRO e FUOCO a destra (tieni premuto FUOCO per la raffica)
+
+Per giocare apri `games/asso-dei-cieli/index.html` nel browser.
