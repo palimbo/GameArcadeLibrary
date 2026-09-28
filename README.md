@@ -4,7 +4,7 @@ Raccolta di giochi arcade per il browser. Ogni gioco è un singolo file HTML sen
 
 ## 🕹️ Sala Giochi — `index.html`
 
-Apri `index.html` nella cartella principale per la pagina di raccolta: mostra tutti i 66 giochi con copertina, genere, comandi e i tuoi record per ogni difficoltà (Facile, Normale, Difficile). Tocca «Gioca» per avviare un gioco; in ogni gioco il pulsante «← Sala Giochi» in alto a sinistra (visibile nei menu) riporta alla raccolta.
+Apri `index.html` nella cartella principale per la pagina di raccolta: mostra tutti i 67 giochi con copertina, genere, comandi e i tuoi record per ogni difficoltà (Facile, Normale, Difficile). Tocca «Gioca» per avviare un gioco; in ogni gioco il pulsante «← Sala Giochi» in alto a sinistra (visibile nei menu) riporta alla raccolta.
 
 **Iniziali del record:** quando batti un record compare la schermata da sala giochi per inserire le tue tre iniziali (frecce ↑ ↓ per cambiare lettera, ← → per spostarti, oppure scrivile direttamente; su telefono i tasti ▲ ▼ e OK). Le iniziali vengono salvate insieme al record e compaiono nei menu del gioco e nella Sala Giochi. Il codice è condiviso da tutti i giochi in `shared/iniziali.js`.
 
@@ -1043,3 +1043,18 @@ Gioco di riflessi in stile *Bank Panic*: sei lo sceriffo al bancone di una banca
 - **Touch:** la levetta fa girare la sala; tocca direttamente la porta per sparare (con il telefono in verticale ci sono anche i pulsanti ◀ ● ▶)
 
 Per giocare apri `games/banca-del-west/index.html` nel browser.
+
+### 🏰 Castelli e Cannoni — `games/castelli-e-cannoni/index.html`
+
+Strategia e azione in stile *Rampart*: difendi i tuoi castelli sulla costa dalle navi che arrivano dal mare.
+
+- **Tre fasi per turno:** in **battaglia** muovi il mirino e spari con i cannoni alle navi, mentre loro bombardano le tue mura e i tuoi cannoni; in **riparazione**, a tempo, piazzi pezzi di muro di forme diverse (il prossimo pezzo è in alto) per richiudere le mura; poi piazzi i nuovi **cannoni** (quadrati 2×2) dentro le mura chiuse
+- **Mura chiuse:** un castello è salvo se le mura lo circondano senza buchi; anche due blocchi che si toccano solo in diagonale chiudono. Il territorio chiuso si colora di azzurro e la bandiera del castello diventa d'oro. Se alla fine della riparazione non hai chiuso nessun castello perdi una vita, e i muratori rifanno le mura attorno al tuo castello
+- **Cannoni:** ogni cannone ha un colpo alla volta e spara solo se all'inizio della battaglia era dentro le mura; le navi possono distruggerlo in tre colpi. Più castelli chiudi, più cannoni ricevi
+- **Navi:** galeoni (300) e, dal terzo turno, corazzate con le vele rosse (800, due colpi, tre a Difficile). Ogni turno sono di più, sparano più spesso e la battaglia dura di più; affondarle tutte vale un bonus
+- **Punti:** a ogni riparazione riuscita 500 per castello chiuso, 500 in più per il tuo castello e 5 per ogni casella di territorio
+- **Difficoltà:** Facile (3 vite, 28 secondi per riparare, navi lente), Normale (2 vite, 22 secondi), Difficile (2 vite, 17 secondi, più navi e corazzate più resistenti); record separati per ogni difficoltà
+- **Comandi:** frecce per muovere · `Spazio` piazza il pezzo o il cannone, oppure spara · `X` o `R` ruota il pezzo · col mouse: clic per piazzare o sparare, tasto destro per ruotare · `P` pausa
+- **Touch:** tocca il campo per piazzare o per sparare in quel punto; oppure levetta per il cursore e i pulsanti RUOTA e AZIONE
+
+Per giocare apri `games/castelli-e-cannoni/index.html` nel browser.
