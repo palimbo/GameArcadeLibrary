@@ -4,7 +4,7 @@ Raccolta di giochi arcade per il browser. Ogni gioco è un singolo file HTML sen
 
 ## 🕹️ Sala Giochi — `index.html`
 
-Apri `index.html` nella cartella principale per la pagina di raccolta: mostra tutti i 74 giochi con copertina, genere, comandi e i tuoi record per ogni difficoltà (Facile, Normale, Difficile). Tocca «Gioca» per avviare un gioco; in ogni gioco il pulsante «← Sala Giochi» in alto a sinistra (visibile nei menu) riporta alla raccolta.
+Apri `index.html` nella cartella principale per la pagina di raccolta: mostra tutti i 75 giochi con copertina, genere, comandi e i tuoi record per ogni difficoltà (Facile, Normale, Difficile). Tocca «Gioca» per avviare un gioco; in ogni gioco il pulsante «← Sala Giochi» in alto a sinistra (visibile nei menu) riporta alla raccolta.
 
 **Iniziali del record:** quando batti un record compare la schermata da sala giochi per inserire le tue tre iniziali (frecce ↑ ↓ per cambiare lettera, ← → per spostarti, oppure scrivile direttamente; su telefono i tasti ▲ ▼ e OK). Le iniziali vengono salvate insieme al record e compaiono nei menu del gioco e nella Sala Giochi. Il codice è condiviso da tutti i giochi in `shared/iniziali.js`.
 
@@ -1167,3 +1167,19 @@ Calcio a cinque in stile *Tehkan World Cup*: campo al coperto visto dall'alto, c
 - **Touch:** levetta per correre, pulsanti PASSA e TIRA
 
 Per giocare apri `games/calcetto-arcade/index.html` nel browser.
+
+### 🐞 Coccinella — `games/coccinella/index.html`
+
+Labirinto in stile *Lady Bug*: una coccinella mangia i fiori di un giardino a labirinto, inseguita dagli insetti che escono uno alla volta dalla tana al centro.
+
+- **I cancelletti:** le sbarre verdi girano attorno al loro perno quando la coccinella le spinge, che passa sempre; gli insetti invece non possono attraversarle. Girandole si apre la strada e si chiude fuori chi insegue. Ogni giardino ha un labirinto nuovo, senza vicoli ciechi
+- **La tana:** la luce che corre lungo il bordo del labirinto fa uscire un insetto a ogni giro (quattro per giardino). Quando sono usciti tutti, al centro compare un ortaggio: mangiarlo vale 1.000 punti più 500 per giardino e congela gli insetti per 5 secondi
+- **Fiori e cuori:** fiore 10 · cuore 100; se mangi un cuore mentre è blu il moltiplicatore sale a ×2, ×3 e ×5 per tutto il giardino
+- **EXTRA:** le lettere valgono 300; prese quando sono gialle si accendono in basso, e completando la parola EXTRA si guadagna una vita
+- **Teschi:** veleno per la coccinella, ma anche per gli insetti che ci passano sopra. Non chiudono mai fuori nessuna parte del giardino
+- **Giardino pulito:** quando restano solo i teschi, bonus di 1.000 per il numero del giardino e si passa al successivo, con insetti più veloci e più teschi
+- **Difficoltà:** Facile (5 vite, insetti lenti e distratti), Normale (3 vite), Difficile (3 vite, insetti veloci che ti inseguono); record separati per ogni difficoltà
+- **Comandi:** frecce o `W` `A` `S` `D`: la coccinella gira al primo incrocio nella direzione scelta e prosegue da sola · `P` pausa
+- **Touch:** una levetta
+
+Per giocare apri `games/coccinella/index.html` nel browser.
