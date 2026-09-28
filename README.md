@@ -4,7 +4,7 @@ Raccolta di giochi arcade per il browser. Ogni gioco è un singolo file HTML sen
 
 ## 🕹️ Sala Giochi — `index.html`
 
-Apri `index.html` nella cartella principale per la pagina di raccolta: mostra tutti i 64 giochi con copertina, genere, comandi e i tuoi record per ogni difficoltà (Facile, Normale, Difficile). Tocca «Gioca» per avviare un gioco; in ogni gioco il pulsante «← Sala Giochi» in alto a sinistra (visibile nei menu) riporta alla raccolta.
+Apri `index.html` nella cartella principale per la pagina di raccolta: mostra tutti i 65 giochi con copertina, genere, comandi e i tuoi record per ogni difficoltà (Facile, Normale, Difficile). Tocca «Gioca» per avviare un gioco; in ogni gioco il pulsante «← Sala Giochi» in alto a sinistra (visibile nei menu) riporta alla raccolta.
 
 **Iniziali del record:** quando batti un record compare la schermata da sala giochi per inserire le tue tre iniziali (frecce ↑ ↓ per cambiare lettera, ← → per spostarti, oppure scrivile direttamente; su telefono i tasti ▲ ▼ e OK). Le iniziali vengono salvate insieme al record e compaiono nei menu del gioco e nella Sala Giochi. Il codice è condiviso da tutti i giochi in `shared/iniziali.js`.
 
@@ -1013,3 +1013,18 @@ Bowling in stile sala giochi: una pista al neon vista da dietro il lanciatore, c
 - **Touch:** levetta a sinistra e a destra, pulsante TIRA
 
 Per giocare apri `games/bowling-strike/index.html` nel browser.
+
+### 💎 Colonne di Gemme — `games/colonne-di-gemme/index.html`
+
+Rompicapo in stile *Columns*: nel pozzo di un tempio antico scendono colonne di tre gemme da mettere in fila.
+
+- **Le gemme:** rubino, smeraldo, zaffiro, topazio, ametista e corniola, ognuna con una forma diversa (quadrato, esagono, cerchio, triangolo, rombo, ottagono) per riconoscerle anche senza badare al colore
+- **Come si gioca:** sposta la colonna, fai scorrere l'ordine delle sue tre gemme e falla scendere. Tre o più gemme uguali in fila, in orizzontale, in verticale o in diagonale, spariscono; quelle sopra ricadono e, se formano altre file, è una catena
+- **Colonna magica:** ogni tanto (più spesso quando il pozzo è quasi pieno) scende una colonna che brilla di tutti i colori: dove atterra fa sparire tutte le gemme del colore che tocca
+- **Punti:** 10 per gemma × numero della catena × livello, più un premio per le file di quattro o più · 1 punto per riga scesa più in fretta, 2 per riga con la caduta immediata
+- **Livelli:** ogni 35 gemme eliminate si sale di livello e la colonna cade più veloce. La partita finisce quando non c'è più spazio dove entrano le colonne; il pozzo si arrossa quando le gemme arrivano in cima
+- **Difficoltà:** Facile (5 tipi di gemme, caduta lenta, un'ombra mostra dove atterrerà la colonna), Normale (6 tipi), Difficile (6 tipi, caduta veloce che accelera presto); record separati per ogni difficoltà
+- **Comandi:** `←` `→` sposta · `↓` scendi più in fretta · `↑` o `X` cambia l'ordine · `Spazio` caduta immediata · `P` pausa
+- **Touch:** levetta (sinistra e destra per spostare, giù per scendere, una spinta decisa in su per la caduta immediata) e i pulsanti CAMBIA e GIÙ
+
+Per giocare apri `games/colonne-di-gemme/index.html` nel browser.

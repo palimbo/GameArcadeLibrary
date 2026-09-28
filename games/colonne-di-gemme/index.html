@@ -1,0 +1,708 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no, viewport-fit=cover">
+<title>Colonne di Gemme</title>
+<style>
+  :root {
+    --bg: #0c0a1e;
+    --fg: #f6f0e0;
+    --muted: #b8aa90;
+    --gold: #e8c060;
+    --gold2: #ffe08a;
+    --red: #ff5a4a;
+    --cyan: #5ae0ff;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  html, body {
+    height: 100%;
+    background: var(--bg);
+    color: var(--fg);
+    font-family: Georgia, "Times New Roman", serif;
+    overflow: hidden;
+    user-select: none;
+    -webkit-user-select: none;
+    touch-action: none;
+  }
+  #wrap { position: fixed; inset: 0; display: flex; align-items: center; justify-content: center; }
+  canvas { display: block; touch-action: none; border-radius: 6px; box-shadow: 0 0 0 2px #3a2e18, 0 10px 40px rgba(0,0,0,0.6); }
+  #pauseBtn {
+    position: fixed; z-index: 3; display: none; right: 10px; top: calc(10px + env(safe-area-inset-top, 0px));
+    font: 700 13px system-ui, sans-serif; color: var(--fg);
+    background: rgba(0, 0, 0, 0.6); border: 1px solid rgba(232, 192, 96, 0.5);
+    border-radius: 8px; padding: 6px 10px; cursor: pointer;
+  }
+  #touch {
+    position: fixed; z-index: 2; display: none; left: 12px; right: 12px;
+    bottom: calc(14px + env(safe-area-inset-bottom, 0px));
+    justify-content: space-between; align-items: flex-end; pointer-events: none;
+  }
+  /* thumb stick (left and right to move, down to speed up, a push up drops at once), and the swap button */
+  #touch .stick { position: relative; width: 136px; height: 136px; border-radius: 50%; pointer-events: auto; touch-action: none;
+    border: 2px solid rgba(232, 192, 96, 0.6); background: radial-gradient(circle, rgba(232,192,96,0.14), rgba(232,192,96,0.04)); }
+  #touch .stick .knob { position: absolute; left: 50%; top: 50%; width: 58px; height: 58px; margin: -29px 0 0 -29px; border-radius: 50%;
+    background: rgba(232, 192, 96, 0.45); border: 2px solid rgba(255,255,255,0.7); box-shadow: 0 4px 10px rgba(0,0,0,0.4); pointer-events: none; }
+  #touch .stick .ring { position: absolute; inset: 10px; border-radius: 50%; border: 1px dashed rgba(246,240,224,0.25); pointer-events: none; }
+  #touch .btns { display: flex; gap: 10px; align-items: flex-end; }
+  #touch .btns button { border-radius: 50%; pointer-events: auto; touch-action: none; color: var(--fg); font: 800 12px system-ui, sans-serif; letter-spacing: 1px; }
+  #touch .drop { width: 70px; height: 70px; border: 2px solid rgba(90, 224, 255, 0.85); background: rgba(90, 224, 255, 0.16); margin-bottom: 40px; }
+  #touch .swap { width: 96px; height: 96px; border: 2px solid rgba(232, 192, 96, 0.95); background: rgba(232, 192, 96, 0.22); }
+  #touch .btns button.on { background: rgba(232, 192, 96, 0.55); }
+  #touch.small .stick { width: 112px; height: 112px; }
+  #touch.small .stick .knob { width: 48px; height: 48px; margin: -24px 0 0 -24px; }
+  #touch.small .drop { width: 58px; height: 58px; font-size: 10px; margin-bottom: 30px; }
+  #touch.small .swap { width: 78px; height: 78px; font-size: 11px; }
+  #overlay {
+    position: fixed; inset: 0; z-index: 5;
+    display: flex; flex-direction: column; align-items: center; justify-content: flex-start;
+    gap: 14px; padding: 16px; text-align: center; overflow-y: auto;
+    background: rgba(12, 10, 30, 0.9);
+  }
+  #overlay > :first-child { margin-top: auto; }
+  #overlay > :last-child { margin-bottom: auto; }
+  #overlay.hidden { display: none; }
+  #homeLink {
+    position: fixed; top: calc(10px + env(safe-area-inset-top, 0px)); left: 10px; z-index: 6;
+    font: 600 13px/1 system-ui, sans-serif; color: #fff; text-decoration: none;
+    padding: 8px 12px; border-radius: 999px; background: rgba(0,0,0,.55);
+    border: 1px solid rgba(255,255,255,.25);
+  }
+  #homeLink:hover { background: rgba(0,0,0,.8); }
+  #overlay.hidden ~ #homeLink { display: none; }
+  @media (max-width: 700px) { #overlay { padding-top: calc(52px + env(safe-area-inset-top, 0px)); } }
+  #overlay h1 { font-size: clamp(30px, 9vw, 56px); font-weight: 700; letter-spacing: 3px; color: var(--gold2);
+    text-shadow: 0 2px 0 #6a4a10, 0 0 24px rgba(232,192,96,0.4); font-variant: small-caps; }
+  #overlay h2 { font-size: clamp(26px, 7vw, 42px); font-weight: 700; letter-spacing: 2px; color: var(--gold2); font-variant: small-caps; }
+  #overlay h2.lose { color: var(--red); }
+  #overlay p { max-width: 540px; font-size: clamp(13px, 3.4vw, 16px); line-height: 1.55; }
+  #overlay p.muted { color: var(--muted); }
+  #overlay .gems { display: flex; gap: 8px; justify-content: center; }
+  #overlay .gems canvas { box-shadow: none; }
+  #overlay .pts { display: grid; grid-template-columns: repeat(2, auto); gap: 4px 18px; font-size: 13px; color: var(--muted); text-align: left; font-family: system-ui, sans-serif; }
+  #overlay .pts b { color: var(--fg); }
+  #overlay .diff { display: flex; gap: 10px; flex-wrap: wrap; justify-content: center; }
+  #overlay button {
+    font: 800 15px system-ui, sans-serif; letter-spacing: 1.5px; color: var(--fg);
+    background: transparent; cursor: pointer;
+    border: 2px solid rgba(246,240,224,0.3); border-radius: 10px; padding: 9px 16px;
+  }
+  #overlay .diff button.on { border-color: var(--c); color: var(--c); box-shadow: 0 0 12px var(--c); }
+  #overlay button.start { border-color: var(--gold); color: #2a1a00; background: linear-gradient(#ffe08a, #d8a840); padding: 11px 30px; box-shadow: 0 4px 0 #6a4a10; }
+  @media (max-height: 560px) {
+    #overlay { gap: 8px; }
+    #overlay h1 { font-size: 30px; }
+    #overlay p { font-size: 13px; line-height: 1.4; }
+    #overlay .help, #overlay .pts, #overlay .gems { display: none; }
+  }
+</style>
+</head>
+<body>
+<div id="wrap"><canvas id="game"></canvas></div>
+<div id="touch">
+  <div class="stick" aria-label="Levetta"><div class="ring"></div><div class="knob"></div></div>
+  <div class="btns">
+    <button type="button" class="drop" aria-label="Caduta immediata">GIÙ</button>
+    <button type="button" class="swap" aria-label="Cambia l'ordine">CAMBIA</button>
+  </div>
+</div>
+<button id="pauseBtn" type="button" aria-label="Pausa">❚❚</button>
+<div id="overlay"></div>
+<a id="homeLink" href="../../index.html">← Sala Giochi</a>
+
+<script>
+(() => {
+  "use strict";
+
+  const W = 360, H = 540, TAU = Math.PI * 2;
+  const COLS = 6, ROWS = 13, CELL = 36, GX = 14, GY = 52;
+  const PX = GX + COLS * CELL + 14;              // the side panel
+  const MAGIC = 99;
+  // six gems, each with its own shape so they can be told apart without colour
+  const GEMS = [
+    { name: "rubino", c0: "#ffb0a0", c1: "#e8203a", c2: "#6a0010", shape: "square" },
+    { name: "smeraldo", c0: "#b0ffc0", c1: "#20c050", c2: "#044a18", shape: "hex" },
+    { name: "zaffiro", c0: "#b0d8ff", c1: "#2a6aff", c2: "#081a60", shape: "circle" },
+    { name: "topazio", c0: "#fff4a0", c1: "#f0c010", c2: "#6a4a00", shape: "tri" },
+    { name: "ametista", c0: "#f0c0ff", c1: "#a040e8", c2: "#380a60", shape: "diamond" },
+    { name: "corniola", c0: "#ffd0a0", c1: "#ff7a1a", c2: "#6a2400", shape: "oct" },
+  ];
+
+  const DIFFICULTIES = {
+    facile:    { label: "FACILE",    color: "#7de0a0", desc: "5 tipi di gemme · caduta lenta · ombra di dove atterra", colors: 5, g0: 0.8, gL: 0.22, ghost: true, magic: 1.3 },
+    normale:   { label: "NORMALE",   color: "#e8c060", desc: "6 tipi di gemme · l'esperienza classica", colors: 6, g0: 1.1, gL: 0.32, ghost: false, magic: 1 },
+    difficile: { label: "DIFFICILE", color: "#ff5a4a", desc: "6 tipi di gemme · caduta veloce che accelera presto", colors: 6, g0: 1.7, gL: 0.45, ghost: false, magic: 0.7 },
+  };
+  const DIFF_IDS = Object.keys(DIFFICULTIES);
+  const DIFF_KEY = "colonne-difficulty";
+  const bestKey = (id) => `colonne-best-${id}`;
+  function store(k, v) { try { localStorage.setItem(k, v); } catch { /* ignore */ } }
+  function load(k) { try { return localStorage.getItem(k); } catch { return null; } }
+  const rnd = (a, b) => a + Math.random() * (b - a);
+  const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
+
+  // ---------- Canvas ----------
+  const canvas = document.getElementById("game");
+  const ctx = canvas.getContext("2d");
+  const wrapEl = document.getElementById("wrap");
+  const overlay = document.getElementById("overlay");
+  const touchEl = document.getElementById("touch");
+  const pauseBtn = document.getElementById("pauseBtn");
+  let pxRatio = 1, touchMode = !!(window.matchMedia && matchMedia("(pointer: coarse)").matches);
+  function resize() {
+    const portrait = window.innerHeight > window.innerWidth;
+    const showTouch = touchMode && isPlaying();
+    touchEl.style.display = showTouch ? "flex" : "none";
+    touchEl.classList.toggle("small", !portrait && window.innerHeight < 480);
+    wrapEl.style.paddingBottom = showTouch && portrait ? "calc(170px + env(safe-area-inset-bottom, 0px))" : "0";
+    let availW = window.innerWidth - 8, availH = window.innerHeight - 8;
+    if (showTouch && portrait) availH -= 170;
+    if (showTouch && !portrait) {
+      const side = Math.max(...[...touchEl.children].map((el) => el.offsetWidth)) + 20;
+      if (window.innerWidth - 2 * side > 200) availW = window.innerWidth - 2 * side;
+    }
+    const s = Math.max(0.2, Math.min(availW / W, availH / H));
+    pxRatio = Math.min(3, s * (window.devicePixelRatio || 1));
+    canvas.style.width = W * s + "px";
+    canvas.style.height = H * s + "px";
+    canvas.width = Math.round(W * pxRatio);
+    canvas.height = Math.round(H * pxRatio);
+  }
+  window.addEventListener("resize", () => syncControls());
+
+  // ---------- Audio ----------
+  let audioCtx = null;
+  function beep(freq, dur, type = "square", vol = 0.04, slide = 0, delay = 0) {
+    if (!audioCtx) return;
+    const t = audioCtx.currentTime + delay;
+    const osc = audioCtx.createOscillator(), gain = audioCtx.createGain();
+    osc.type = type;
+    osc.frequency.setValueAtTime(freq, t);
+    if (slide) osc.frequency.exponentialRampToValueAtTime(Math.max(20, freq + slide), t + dur);
+    gain.gain.setValueAtTime(vol, t);
+    gain.gain.exponentialRampToValueAtTime(0.0001, t + dur);
+    osc.connect(gain).connect(audioCtx.destination);
+    osc.start(t); osc.stop(t + dur + 0.02);
+  }
+  const arp = (notes, gap, d, type = "square", vol = 0.04) => notes.forEach((f, i) => beep(f, d, type, vol, 0, i * gap));
+  // a pentatonic scale in D, a little eastern
+  const SCALE = [294, 330, 370, 440, 494, 587, 659, 740, 880, 988, 1175, 1319];
+  const sfx = {
+    move: () => beep(520, 0.03, "triangle", 0.02),
+    swap: () => beep(880, 0.05, "triangle", 0.03, 200),
+    land: () => beep(160, 0.08, "square", 0.03, -60),
+    drop: () => beep(300, 0.12, "sawtooth", 0.02, -200),
+    clear: (chain) => arp(SCALE.slice(Math.min(6, chain), Math.min(6, chain) + 4), 0.05, 0.12, "triangle", 0.05),
+    magic: () => arp([1319, 1175, 988, 880, 988, 1175, 1319, 1568], 0.05, 0.1, "sine", 0.05),
+    level: () => arp([587, 740, 880, 1175], 0.09, 0.16, "triangle", 0.05),
+    start: () => arp([294, 440, 587, 740, 880], 0.1, 0.16, "triangle", 0.05),
+    over: () => arp([587, 494, 440, 370, 294], 0.18, 0.26, "triangle", 0.05),
+  };
+
+  // ---------- State ----------
+  let difficulty = DIFFICULTIES[load(DIFF_KEY)] ? load(DIFF_KEY) : "normale";
+  let diff = DIFFICULTIES[difficulty];
+  let state = "menu", menu = null, pausedFrom = null, stateT = 0, clock = 0;
+  let grid = [], piece = null, next = null, score = 0, level = 0, gems = 0, chain = 0, bestChain = 0, bestCache = 0, pieces = 0;
+  let clearing = [], falling = [], sparks = [], popups = [], message = null, lockT = 0, moves = 0;
+  let dasDir = 0, dasT = 0, softHeld = false, dropPressed = false, swapPressed = false, stickUpArmed = true;
+  const keys = { left: false, right: false, down: false };
+  const stick = { x: 0, y: 0 };
+  const gravity = () => Math.min(14, diff.g0 + level * diff.gL);
+
+  function newGrid() { grid = Array.from({ length: ROWS }, () => Array(COLS).fill(-1)); }
+  const cell = (r, c) => (r < 0 ? -1 : r >= ROWS || c < 0 || c >= COLS ? 100 : grid[r][c]);
+  function makePiece() {
+    // the magic column comes more often when the well is filling up
+    const high = stackTop() < 5;
+    const chance = (pieces > 8 ? (high ? 0.12 : 0.03) : 0) * diff.magic;
+    if (Math.random() < chance) return { magic: true, gems: [MAGIC, MAGIC, MAGIC] };
+    return { magic: false, gems: [0, 1, 2].map(() => Math.floor(Math.random() * diff.colors)) };
+  }
+  function stackTop() { for (let r = 0; r < ROWS; r++) for (let c = 0; c < COLS; c++) if (grid[r][c] >= 0) return r; return ROWS; }
+
+  // ---------- Flow ----------
+  const isPlaying = () => ["play", "clear", "fall", "spawn"].includes(state);
+  function startGame() {
+    if (!audioCtx) { try { audioCtx = new (window.AudioContext || window.webkitAudioContext)(); } catch { audioCtx = null; } }
+    if (audioCtx && audioCtx.state === "suspended") audioCtx.resume();
+    newGrid();
+    score = 0; level = 0; gems = 0; chain = 0; bestChain = 0; pieces = 0;
+    bestCache = parseInt(load(bestKey(difficulty)), 10) || 0;
+    clearing = []; falling = []; sparks = []; popups = [];
+    next = makePiece();
+    spawn();
+    sfx.start();
+    message = { text: "LIVELLO 1", t: 0 };
+    menu = null;
+    overlay.classList.add("hidden");
+    syncControls();
+    last = performance.now();
+  }
+  function spawn() {
+    piece = { ...next, col: 2, y: -1, gems: next.gems.slice(), flash: 0 };
+    next = makePiece();
+    pieces++;
+    lockT = 0; moves = 0; chain = 0;
+    // no room where the column comes in: the well is full
+    if (cell(0, piece.col) >= 0) { gameOver(); return; }
+    state = "play";
+  }
+  // the column's bottom gem is at row floor(y); the others are above it
+  const rowsOf = (p, y = p.y) => { const b = Math.floor(y); return [b - 2, b - 1, b]; };
+  function fits(col, y) {
+    for (const r of rowsOf(piece, y)) if (cell(r, col) !== -1) return false;
+    return true;
+  }
+  function landingY() {
+    let y = Math.floor(piece.y);
+    while (fits(piece.col, y + 1)) y++;
+    return y;
+  }
+  function move(d) {
+    if (state !== "play") return;
+    if (fits(piece.col + d, piece.y)) {
+      piece.col += d; sfx.move();
+      if (lockT > 0 && moves < 12) { lockT = 0; moves++; }
+    }
+  }
+  function swap() {
+    if (state !== "play" || piece.magic) return;
+    piece.gems.unshift(piece.gems.pop());
+    piece.flash = 0.12;
+    sfx.swap();
+    if (lockT > 0 && moves < 12) { lockT = 0; moves++; }
+  }
+  function hardDrop() {
+    if (state !== "play") return;
+    const y = landingY(), rows = y - Math.floor(piece.y);
+    score += rows * 2;
+    piece.y = y;
+    sfx.drop();
+    lock();
+  }
+  function lock() {
+    const rs = rowsOf(piece);
+    if (rs[0] < 0 && !piece.magic) {
+      // part of the column is still outside the well
+      for (let k = 0; k < 3; k++) if (rs[k] >= 0) grid[rs[k]][piece.col] = piece.gems[k];
+      gameOver(); return;
+    }
+    sfx.land();
+    if (piece.magic) {
+      // the magic column wipes out every gem of the colour it lands on
+      const below = cell(rs[2] + 1, piece.col);
+      const out = [];
+      if (below >= 0 && below < 100) for (let r = 0; r < ROWS; r++) for (let c = 0; c < COLS; c++) if (grid[r][c] === below) out.push([r, c]);
+      piece = null;
+      sfx.magic();
+      if (out.length) {
+        const pts = out.length * 30 * (level + 1);
+        score += pts;
+        popups.push({ x: GX + COLS * CELL / 2, y: GY + 120, text: `MAGIA! +${pts}`, color: "#ffe08a", t: 0, big: true });
+        startClear(out, true);
+      } else { popups.push({ x: GX + COLS * CELL / 2, y: GY + 120, text: "MAGIA SPRECATA", color: "#b8aa90", t: 0 }); state = "spawn"; stateT = 0.25; }
+      return;
+    }
+    for (let k = 0; k < 3; k++) grid[rs[k]][piece.col] = piece.gems[k];
+    piece = null;
+    resolve();
+  }
+  // find every run of three or more in the four directions
+  function findMatches() {
+    const hit = new Set();
+    const dirs = [[0, 1], [1, 0], [1, 1], [1, -1]];
+    for (let r = 0; r < ROWS; r++) for (let c = 0; c < COLS; c++) {
+      const g = grid[r][c];
+      if (g < 0) continue;
+      for (const [dr, dc] of dirs) {
+        if (cell(r - dr, c - dc) === g) continue;         // only from the start of a run
+        let n = 1;
+        while (cell(r + dr * n, c + dc * n) === g) n++;
+        if (n >= 3) for (let k = 0; k < n; k++) hit.add((r + dr * k) * COLS + (c + dc * k));
+      }
+    }
+    return [...hit].map((i) => [Math.floor(i / COLS), i % COLS]);
+  }
+  function resolve() {
+    const m = findMatches();
+    if (!m.length) {
+      if (chain > bestChain) bestChain = chain;
+      state = "spawn"; stateT = 0.12;
+      return;
+    }
+    chain++;
+    const pts = m.length * 10 * chain * (level + 1) + (m.length > 3 ? (m.length - 3) * 20 * (level + 1) : 0);
+    score += pts;
+    const cx = m.reduce((a, [, c]) => a + c, 0) / m.length, cy = m.reduce((a, [r]) => a + r, 0) / m.length;
+    popups.push({ x: GX + (cx + 0.5) * CELL, y: GY + (cy + 0.5) * CELL, text: `+${pts}`, color: "#f6f0e0", t: 0 });
+    if (chain >= 2) popups.push({ x: GX + COLS * CELL / 2, y: GY + 90, text: `CATENA ×${chain}!`, color: "#5ae0ff", t: 0, big: true });
+    sfx.clear(chain - 1);
+    startClear(m, false);
+  }
+  function startClear(cells, magic) {
+    clearing = cells.map(([r, c]) => ({ r, c, g: grid[r][c] }));
+    state = "clear"; stateT = magic ? 0.6 : 0.42;
+  }
+  function finishClear() {
+    for (const { r, c, g } of clearing) {
+      grid[r][c] = -1;
+      const col = GEMS[g] ? GEMS[g].c1 : "#fff";
+      for (let k = 0; k < 7; k++) { const a = Math.random() * TAU, s = rnd(40, 160); sparks.push({ x: GX + (c + 0.5) * CELL, y: GY + (r + 0.5) * CELL, vx: Math.cos(a) * s, vy: Math.sin(a) * s - 40, t: 0, c: col }); }
+    }
+    const before = Math.floor(gems / 35);
+    gems += clearing.length;
+    clearing = [];
+    if (Math.floor(gems / 35) > before) { level = Math.floor(gems / 35); sfx.level(); message = { text: `LIVELLO ${level + 1}`, t: 0 }; }
+    // gems left hanging drop down, animated
+    falling = [];
+    for (let c = 0; c < COLS; c++) {
+      let w = ROWS - 1;
+      for (let r = ROWS - 1; r >= 0; r--) {
+        const g = grid[r][c];
+        if (g < 0) continue;
+        if (w !== r) { grid[w][c] = g; grid[r][c] = -1; falling.push({ c, from: r, to: w, g }); }
+        w--;
+      }
+    }
+    if (falling.length) { state = "fall"; stateT = 0; }
+    else resolve();
+  }
+  function gameOver() {
+    state = "over";
+    piece = null;
+    const prev = parseInt(load(bestKey(difficulty)), 10) || 0;
+    const record = score > prev;
+    if (record) store(bestKey(difficulty), String(score));
+    sfx.over();
+    const played = diff.label, lv = level + 1, g = gems, bc = bestChain;
+    menu = () => showOverlay(
+      `<h2 class="lose">IL POZZO È PIENO</h2>
+       <p>Punteggio: <b>${score.toLocaleString("it-IT")}</b> · Livello ${lv} · ${played}</p>
+       <p class="muted">Gemme eliminate: ${g} · catena più lunga: ${bc}</p>
+       ${record ? "<p style='color:var(--gold2)'>★ NUOVO RECORD! ★</p>" : ""}
+       ${difficultyHTML()}
+       <button class="start" data-start>GIOCA ANCORA</button>`
+    );
+    menu();
+    syncControls();
+  }
+  function togglePause() {
+    if (isPlaying()) {
+      pausedFrom = state; state = "paused";
+      showOverlay(`<h2>PAUSA</h2><button class="start" data-resume>CONTINUA</button><p class="muted">Premi P per continuare</p>`);
+    } else if (state === "paused") {
+      state = pausedFrom; overlay.classList.add("hidden"); last = performance.now();
+    }
+    syncControls();
+  }
+  // the pause menu can end the game (shared/iniziali.js): it ends here the usual way, saving the record
+  window.addEventListener("sala:termina", () => { if (state !== "paused") return; state = pausedFrom; overlay.classList.add("hidden"); gameOver(); syncControls(); });
+  function syncControls() {
+    pauseBtn.style.display = isPlaying() && touchMode ? "block" : "none";
+    resize();
+  }
+  pauseBtn.addEventListener("click", () => togglePause());
+  function showOverlay(html) { overlay.innerHTML = html; overlay.classList.remove("hidden"); }
+  function difficultyHTML() {
+    const buttons = DIFF_IDS.map((id) => {
+      const d = DIFFICULTIES[id];
+      return `<button type="button" data-diff="${id}" class="${id === difficulty ? "on" : ""}" style="--c:${d.color}">${d.label}</button>`;
+    }).join("");
+    const best = parseInt(load(bestKey(difficulty)), 10);
+    return `<div class="diff">${buttons}</div><p class="muted">${diff.desc}${best ? ` · Record: ${best.toLocaleString("it-IT")}` : ""}</p>`;
+  }
+  function setDifficulty(id) { if (!DIFFICULTIES[id]) return; difficulty = id; diff = DIFFICULTIES[id]; store(DIFF_KEY, id); if (menu) menu(); }
+  function showTitle() {
+    menu = showTitle;
+    showOverlay(
+      `<h1>Colonne di Gemme</h1>
+       <div class="gems">${GEMS.map((_, i) => `<canvas width="56" height="56" data-gem="${i}" style="width:28px;height:28px"></canvas>`).join("")}</div>
+       <p>Dall'alto scendono colonne di tre gemme. Spostale, cambia l'ordine delle gemme e allinea tre o più gemme uguali in orizzontale, in verticale o in diagonale: spariscono, e quelle sopra cadono. Se ne allineano altre è una catena, e i punti si moltiplicano.</p>
+       <div class="pts">
+         <span><b>Gemme eliminate</b></span><span>10 l'una × catena × livello</span>
+         <span><b>Colonna magica</b></span><span>scintilla di tutti i colori: fa sparire ogni gemma del colore su cui atterra</span>
+         <span><b>Livello</b></span><span>ogni 35 gemme la caduta accelera</span>
+       </div>
+       ${touchMode
+         ? `<p class="muted help">Levetta: sinistra e destra per spostare, giù per scendere più veloce · CAMBIA fa scorrere le gemme · GIÙ la fa cadere subito</p>`
+         : `<p class="muted help">← → sposta · ↓ scendi · ↑ o X cambia l'ordine · SPAZIO caduta immediata · P pausa</p>`}
+       ${difficultyHTML()}
+       <button class="start" data-start>INIZIA</button>`
+    );
+    for (const cv of overlay.querySelectorAll("[data-gem]")) { const g = cv.getContext("2d"); g.scale(2, 2); drawGem(g, 14, 14, 13, +cv.dataset.gem, 0); }
+  }
+  overlay.addEventListener("click", (e) => {
+    const d = e.target.closest("[data-diff]");
+    if (d) { setDifficulty(d.dataset.diff); return; }
+    if (e.target.closest("[data-start]")) startGame();
+    if (e.target.closest("[data-resume]")) togglePause();
+  });
+
+  // ---------- Input ----------
+  window.addEventListener("keydown", (e) => {
+    const k = e.key.toLowerCase();
+    if ([" ", "arrowup", "arrowdown", "arrowleft", "arrowright"].includes(k)) e.preventDefault();
+    if (state === "menu" || state === "over") {
+      if (e.key === "Enter") startGame();
+      else if (["1", "2", "3"].includes(k)) setDifficulty(DIFF_IDS[+k - 1]);
+      return;
+    }
+    if (k === "p" || k === "escape") { if (!e.repeat) togglePause(); return; }
+    if (state === "paused") { if (e.key === "Enter") togglePause(); return; }
+    if (e.repeat) return;
+    if (k === "arrowleft" || k === "a") { keys.left = true; move(-1); dasDir = -1; dasT = 0.17; }
+    if (k === "arrowright" || k === "d") { keys.right = true; move(1); dasDir = 1; dasT = 0.17; }
+    if (k === "arrowdown" || k === "s") keys.down = true;
+    if (k === "arrowup" || k === "w" || k === "x" || k === "z") swapPressed = true;
+    if (k === " ") dropPressed = true;
+  });
+  window.addEventListener("keyup", (e) => {
+    const k = e.key.toLowerCase();
+    if (k === "arrowleft" || k === "a") keys.left = false;
+    if (k === "arrowright" || k === "d") keys.right = false;
+    if (k === "arrowdown" || k === "s") keys.down = false;
+  });
+  window.addEventListener("blur", () => { keys.left = keys.right = keys.down = false; stick.x = stick.y = 0; if (isPlaying()) togglePause(); });
+  const swapBtn = touchEl.querySelector(".swap"), dropBtn = touchEl.querySelector(".drop");
+  for (const [btn, fn] of [[swapBtn, () => { swapPressed = true; }], [dropBtn, () => { dropPressed = true; }]]) {
+    btn.addEventListener("pointerdown", (e) => { e.preventDefault(); fn(); btn.classList.add("on"); setTimeout(() => btn.classList.remove("on"), 150); });
+  }
+  const stickEl = touchEl.querySelector(".stick"), knob = stickEl.querySelector(".knob");
+  let stickId = null;
+  function stickAt(e) {
+    const r = stickEl.getBoundingClientRect(), max = r.width / 2 - 14;
+    let dx = e.clientX - (r.left + r.width / 2), dy = e.clientY - (r.top + r.height / 2);
+    const len = Math.hypot(dx, dy);
+    if (len > max) { dx *= max / len; dy *= max / len; }
+    knob.style.transform = `translate(${dx}px, ${dy}px)`;
+    const nx = dx / max, ny = dy / max;
+    const sx = Math.abs(nx) > 0.4 && Math.abs(nx) > Math.abs(ny) * 0.8 ? Math.sign(nx) : 0;
+    if (sx !== stick.x) { stick.x = sx; if (sx) { move(sx); dasDir = sx; dasT = 0.2; } }
+    stick.y = ny;
+    // a firm push up drops the column at once, once per push
+    if (ny < -0.75 && Math.abs(nx) < 0.5) { if (stickUpArmed) { dropPressed = true; stickUpArmed = false; } }
+    else if (ny > -0.4) stickUpArmed = true;
+  }
+  const stickEnd = (e) => { if (e.pointerId !== stickId) return; stickId = null; knob.style.transform = ""; stick.x = stick.y = 0; stickUpArmed = true; };
+  stickEl.addEventListener("pointerdown", (e) => { e.preventDefault(); stickId = e.pointerId; try { stickEl.setPointerCapture(e.pointerId); } catch { /* ignore */ } stickAt(e); });
+  stickEl.addEventListener("pointermove", (e) => { if (e.pointerId === stickId) stickAt(e); });
+  for (const ev of ["pointerup", "pointercancel", "lostpointercapture"]) stickEl.addEventListener(ev, stickEnd);
+  window.addEventListener("pointerdown", (e) => { if (e.pointerType === "touch" && !touchMode) { touchMode = true; syncControls(); if (menu) menu(); } }, true);
+
+  // ---------- Update ----------
+  function update(dt) {
+    clock += dt;
+    if (message) { message.t += dt; if (message.t > 1.8) message = null; }
+    for (const s of sparks) { s.t += dt; s.vy += 300 * dt; s.x += s.vx * dt; s.y += s.vy * dt; }
+    sparks = sparks.filter((s) => s.t < 0.8);
+    for (const p of popups) { p.t += dt; p.y -= 24 * dt; }
+    popups = popups.filter((p) => p.t < (p.big ? 1.4 : 0.9));
+    // a press while the gems are clearing must not carry over to the next column
+    if (state !== "play") { swapPressed = dropPressed = false; }
+    if (!isPlaying()) return;
+    if (state === "clear") { stateT -= dt; if (stateT <= 0) finishClear(); return; }
+    if (state === "fall") { stateT += dt; if (stateT >= 0.18) { falling = []; resolve(); } return; }
+    if (state === "spawn") { stateT -= dt; if (stateT <= 0) spawn(); return; }
+    // play
+    if (piece.flash > 0) piece.flash -= dt;
+    if (swapPressed) { swapPressed = false; swap(); }
+    if (dropPressed) { dropPressed = false; hardDrop(); if (state !== "play") return; }
+    const dir = (keys.right ? 1 : 0) - (keys.left ? 1 : 0) || stick.x;
+    if (dir && dir === dasDir) { dasT -= dt; if (dasT <= 0) { move(dir); dasT = 0.06; } }
+    else if (dir) { dasDir = dir; dasT = 0.17; }
+    else dasDir = 0;
+    const soft = keys.down || stick.y > 0.5;
+    const g = soft ? Math.max(gravity(), 20) : gravity();
+    if (fits(piece.col, Math.floor(piece.y) + 1)) {
+      const before = Math.floor(piece.y);
+      piece.y += g * dt;
+      // never pass through what is underneath
+      while (Math.floor(piece.y) > before && !fits(piece.col, Math.floor(piece.y))) piece.y = Math.floor(piece.y) - 0.001;
+      const land = landingY();
+      if (piece.y > land) piece.y = land;
+      if (soft) score += Math.max(0, Math.floor(piece.y) - before);
+      lockT = 0;
+    } else {
+      piece.y = Math.floor(piece.y);
+      lockT += dt;
+      if (lockT > (soft ? 0.12 : 0.45)) lock();
+    }
+  }
+
+  // ---------- Drawing ----------
+  function shapePath(g, x, y, r, shape) {
+    g.beginPath();
+    if (shape === "circle") g.arc(x, y, r, 0, TAU);
+    else if (shape === "square") g.rect(x - r * 0.85, y - r * 0.85, r * 1.7, r * 1.7);
+    else if (shape === "diamond") { g.moveTo(x, y - r); g.lineTo(x + r * 0.85, y); g.lineTo(x, y + r); g.lineTo(x - r * 0.85, y); g.closePath(); }
+    else if (shape === "tri") { g.moveTo(x, y - r); g.lineTo(x + r, y + r * 0.8); g.lineTo(x - r, y + r * 0.8); g.closePath(); }
+    else {
+      const n = shape === "hex" ? 6 : 8, off = shape === "hex" ? 0 : Math.PI / 8;
+      for (let k = 0; k < n; k++) { const a = off + k / n * TAU; const px = x + Math.cos(a) * r, py = y + Math.sin(a) * r; if (k) g.lineTo(px, py); else g.moveTo(px, py); }
+      g.closePath();
+    }
+  }
+  function drawGem(g, x, y, r, id, t, alpha = 1) {
+    g.save(); g.globalAlpha = alpha;
+    if (id === MAGIC) {
+      // the magic gem shimmers through every colour
+      const k = Math.floor(t * 8) % GEMS.length, G = GEMS[k];
+      const grd = g.createRadialGradient(x - r * 0.3, y - r * 0.4, r * 0.1, x, y, r);
+      grd.addColorStop(0, "#fff"); grd.addColorStop(0.5, G.c1); grd.addColorStop(1, G.c2);
+      g.fillStyle = grd; shapePath(g, x, y, r * 0.95, "oct"); g.fill();
+      g.strokeStyle = "#fff"; g.lineWidth = 1.5; g.stroke();
+      g.fillStyle = "#fff"; g.font = `900 ${r}px Georgia, serif`; g.textAlign = "center"; g.textBaseline = "middle"; g.fillText("★", x, y + 1);
+      g.restore(); return;
+    }
+    const G = GEMS[id];
+    const grd = g.createRadialGradient(x - r * 0.35, y - r * 0.4, r * 0.08, x, y, r * 1.1);
+    grd.addColorStop(0, G.c0); grd.addColorStop(0.45, G.c1); grd.addColorStop(1, G.c2);
+    g.fillStyle = grd; shapePath(g, x, y, r, G.shape); g.fill();
+    g.strokeStyle = "rgba(255,255,255,0.35)"; g.lineWidth = 1; g.stroke();
+    // facets: an inner smaller shape and a glint
+    g.strokeStyle = "rgba(255,255,255,0.25)"; shapePath(g, x, y, r * 0.5, G.shape); g.stroke();
+    g.fillStyle = "rgba(255,255,255,0.75)"; g.beginPath(); g.ellipse(x - r * 0.32, y - r * 0.38, r * 0.2, r * 0.1, -0.6, 0, TAU); g.fill();
+    g.restore();
+  }
+  function drawPillar(x, w) {
+    const g = ctx.createLinearGradient(x, 0, x + w, 0);
+    g.addColorStop(0, "#3a3048"); g.addColorStop(0.4, "#6a5a70"); g.addColorStop(1, "#2a2238");
+    ctx.fillStyle = g; ctx.fillRect(x, GY - 8, w, ROWS * CELL + 16);
+    ctx.strokeStyle = "rgba(0,0,0,0.3)"; ctx.lineWidth = 1;
+    for (let k = 3; k < w; k += 4) { ctx.beginPath(); ctx.moveTo(x + k, GY - 4); ctx.lineTo(x + k, GY + ROWS * CELL + 4); ctx.stroke(); }
+  }
+  function drawBack() {
+    const g = ctx.createLinearGradient(0, 0, 0, H);
+    g.addColorStop(0, "#141032"); g.addColorStop(1, "#2a1428");
+    ctx.fillStyle = g; ctx.fillRect(0, 0, W, H);
+    // stars over the temple
+    ctx.fillStyle = "rgba(255,240,200,0.6)";
+    for (let i = 0; i < 40; i++) { const x = (i * 97.3) % W, y = (i * 53.1) % 180; ctx.globalAlpha = 0.3 + 0.3 * Math.sin(clock * 1.5 + i); ctx.fillRect(x, y, 1.2, 1.2); }
+    ctx.globalAlpha = 1;
+    // the pediment
+    ctx.fillStyle = "#3a2e40";
+    ctx.beginPath(); ctx.moveTo(GX - 12, GY - 10); ctx.lineTo(GX + COLS * CELL / 2, 8); ctx.lineTo(GX + COLS * CELL + 12, GY - 10); ctx.fill();
+    ctx.strokeStyle = "#e8c060"; ctx.lineWidth = 1.5; ctx.stroke();
+    ctx.fillStyle = "#e8c060"; ctx.font = "700 13px Georgia, serif"; ctx.textAlign = "center";
+    ctx.fillText("COLONNE", GX + COLS * CELL / 2, GY - 18);
+    drawPillar(GX - 12, 10); drawPillar(GX + COLS * CELL + 2, 10);
+    // the well
+    ctx.fillStyle = "#0a0816"; ctx.fillRect(GX, GY, COLS * CELL, ROWS * CELL);
+    ctx.strokeStyle = "rgba(232,192,96,0.08)"; ctx.lineWidth = 1;
+    for (let c = 1; c < COLS; c++) { ctx.beginPath(); ctx.moveTo(GX + c * CELL, GY); ctx.lineTo(GX + c * CELL, GY + ROWS * CELL); ctx.stroke(); }
+    for (let r = 1; r < ROWS; r++) { ctx.beginPath(); ctx.moveTo(GX, GY + r * CELL); ctx.lineTo(GX + COLS * CELL, GY + r * CELL); ctx.stroke(); }
+    // danger glow when the gems reach the top
+    const top = stackTop();
+    if (isPlaying() && top <= 3) {
+      ctx.fillStyle = `rgba(255,60,40,${(0.12 + 0.1 * Math.sin(clock * 8)) * (4 - top) / 3})`;
+      ctx.fillRect(GX, GY, COLS * CELL, CELL * 3);
+    }
+    ctx.strokeStyle = "#e8c060"; ctx.lineWidth = 2; ctx.strokeRect(GX - 1, GY - 1, COLS * CELL + 2, ROWS * CELL + 2);
+  }
+  const cx = (c) => GX + (c + 0.5) * CELL, cy = (r) => GY + (r + 0.5) * CELL;
+  function drawBoard() {
+    const R = CELL * 0.44;
+    const fallMap = new Map(falling.map((f) => [f.to * COLS + f.c, f]));
+    const clearMap = new Set(clearing.map(({ r, c }) => r * COLS + c));
+    for (let r = 0; r < ROWS; r++) for (let c = 0; c < COLS; c++) {
+      const g = grid[r][c];
+      if (g < 0) continue;
+      let y = cy(r);
+      const f = fallMap.get(r * COLS + c);
+      if (f && state === "fall") { const k = Math.min(1, stateT / 0.18); y = cy(f.from) + (cy(f.to) - cy(f.from)) * k * k; }
+      if (clearMap.has(r * COLS + c)) {
+        const k = 1 - stateT / 0.42;
+        const flashOn = Math.floor(clock * 20) % 2;
+        drawGem(ctx, cx(c), y, R * (1 + k * 0.3), g, clock, Math.max(0, 1 - k * 0.8));
+        if (flashOn) { ctx.fillStyle = "rgba(255,255,255,0.55)"; shapePath(ctx, cx(c), y, R * 1.05, "circle"); ctx.fill(); }
+      } else drawGem(ctx, cx(c), y, R, g, clock);
+    }
+    if (piece && state === "play") {
+      if (diff.ghost && !piece.magic) {
+        const ly = landingY(), rs = rowsOf(piece, ly);
+        for (let k = 0; k < 3; k++) if (rs[k] >= 0) { ctx.strokeStyle = "rgba(246,240,224,0.35)"; ctx.lineWidth = 1.5; ctx.setLineDash([3, 3]); ctx.strokeRect(GX + piece.col * CELL + 3, GY + rs[k] * CELL + 3, CELL - 6, CELL - 6); ctx.setLineDash([]); }
+      }
+      // the column slides down smoothly between rows
+      const by = piece.y;
+      ctx.save(); ctx.beginPath(); ctx.rect(GX, GY, COLS * CELL, ROWS * CELL); ctx.clip();
+      for (let k = 0; k < 3; k++) {
+        const row = by - 2 + k;
+        const y = GY + (row + 0.5) * CELL;
+        drawGem(ctx, cx(piece.col), y, R * (piece.flash > 0 ? 1.08 : 1), piece.gems[k], clock + k * 0.3);
+      }
+      ctx.restore();
+    }
+    for (const s of sparks) { ctx.globalAlpha = Math.max(0, 1 - s.t / 0.8); ctx.fillStyle = s.c; ctx.fillRect(s.x - 1.5, s.y - 1.5, 3, 3); }
+    ctx.globalAlpha = 1;
+  }
+  function drawPanel() {
+    const x = PX, w = W - PX - 8;
+    ctx.fillStyle = "rgba(20,14,36,0.85)"; ctx.fillRect(x, GY - 8, w, ROWS * CELL + 16);
+    ctx.strokeStyle = "rgba(232,192,96,0.5)"; ctx.lineWidth = 1; ctx.strokeRect(x + 0.5, GY - 7.5, w - 1, ROWS * CELL + 15);
+    ctx.textAlign = "center";
+    const mid = x + w / 2;
+    ctx.fillStyle = "#e8c060"; ctx.font = "700 11px Georgia, serif"; ctx.fillText("PROSSIMA", mid, GY + 12);
+    ctx.fillStyle = "#0a0816"; ctx.fillRect(mid - 22, GY + 18, 44, 112);
+    ctx.strokeStyle = "rgba(232,192,96,0.5)"; ctx.strokeRect(mid - 22.5, GY + 17.5, 45, 113);
+    if (next && isPlaying()) for (let k = 0; k < 3; k++) drawGem(ctx, mid, GY + 38 + k * 36, CELL * 0.42, next.gems[k], clock + k * 0.3);
+    const rows = [
+      ["PUNTI", score.toLocaleString("it-IT")],
+      ["RECORD", Math.max(bestCache, score).toLocaleString("it-IT")],
+      ["LIVELLO", String(level + 1)],
+      ["GEMME", String(gems)],
+      ["CATENA", bestChain ? `×${bestChain}` : "—"],
+    ];
+    let y = GY + 160;
+    for (const [k, v] of rows) {
+      ctx.fillStyle = "#b8aa90"; ctx.font = "700 10px Georgia, serif"; ctx.fillText(k, mid, y);
+      ctx.fillStyle = k === "PUNTI" ? "#ffe08a" : "#f6f0e0"; ctx.font = `700 ${k === "PUNTI" ? 16 : 14}px Georgia, serif`; ctx.fillText(v, mid, y + 18);
+      y += 46;
+    }
+    // how far to the next level
+    const k = (gems % 35) / 35;
+    ctx.fillStyle = "#2a2238"; ctx.fillRect(x + 10, y - 4, w - 20, 6);
+    ctx.fillStyle = "#e8c060"; ctx.fillRect(x + 10, y - 4, (w - 20) * k, 6);
+  }
+  function draw() {
+    ctx.setTransform(pxRatio, 0, 0, pxRatio, 0, 0);
+    drawBack();
+    drawBoard();
+    drawPanel();
+    for (const p of popups) {
+      ctx.globalAlpha = Math.max(0, 1 - p.t / (p.big ? 1.4 : 0.9));
+      ctx.textAlign = "center"; ctx.font = p.big ? "700 20px Georgia, serif" : "700 13px Georgia, serif";
+      ctx.lineWidth = 4; ctx.strokeStyle = "#0a0816"; ctx.strokeText(p.text, p.x, p.y); ctx.fillStyle = p.color; ctx.fillText(p.text, p.x, p.y);
+    }
+    ctx.globalAlpha = 1;
+    if (message) {
+      ctx.globalAlpha = Math.min(1, (1.8 - message.t) * 2);
+      ctx.textAlign = "center"; ctx.font = "700 24px Georgia, serif";
+      ctx.lineWidth = 5; ctx.strokeStyle = "#0a0816"; ctx.strokeText(message.text, GX + COLS * CELL / 2, GY + 200);
+      ctx.fillStyle = "#ffe08a"; ctx.fillText(message.text, GX + COLS * CELL / 2, GY + 200);
+      ctx.globalAlpha = 1;
+    }
+  }
+
+  // ---------- Loop ----------
+  const STEP = 1 / 120;
+  let last = performance.now(), acc = 0;
+  function loop(now) {
+    const dt = Math.min(0.1, (now - last) / 1000);
+    last = now;
+    if (isPlaying()) {
+      acc += dt;
+      while (acc >= STEP && isPlaying()) { update(STEP); acc -= STEP; }
+    } else { acc = 0; update(dt); }
+    draw();
+    requestAnimationFrame(loop);
+  }
+  newGrid();
+  syncControls();
+  showTitle();
+  requestAnimationFrame(loop);
+})();
+</script>
+<script src="../../shared/iniziali.js" data-record="colonne-best-" data-kind="score"></script>
+</body>
+</html>
