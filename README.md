@@ -4,7 +4,7 @@ Raccolta di giochi arcade per il browser. Ogni gioco è un singolo file HTML sen
 
 ## 🕹️ Sala Giochi — `index.html`
 
-Apri `index.html` nella cartella principale per la pagina di raccolta: mostra tutti i 73 giochi con copertina, genere, comandi e i tuoi record per ogni difficoltà (Facile, Normale, Difficile). Tocca «Gioca» per avviare un gioco; in ogni gioco il pulsante «← Sala Giochi» in alto a sinistra (visibile nei menu) riporta alla raccolta.
+Apri `index.html` nella cartella principale per la pagina di raccolta: mostra tutti i 74 giochi con copertina, genere, comandi e i tuoi record per ogni difficoltà (Facile, Normale, Difficile). Tocca «Gioca» per avviare un gioco; in ogni gioco il pulsante «← Sala Giochi» in alto a sinistra (visibile nei menu) riporta alla raccolta.
 
 **Iniziali del record:** quando batti un record compare la schermata da sala giochi per inserire le tue tre iniziali (frecce ↑ ↓ per cambiare lettera, ← → per spostarti, oppure scrivile direttamente; su telefono i tasti ▲ ▼ e OK). Le iniziali vengono salvate insieme al record e compaiono nei menu del gioco e nella Sala Giochi. Il codice è condiviso da tutti i giochi in `shared/iniziali.js`.
 
@@ -1152,3 +1152,18 @@ Sparatutto in finto 3D in stile *Space Harrier*: con il cannone e lo zaino a raz
 - **Touch:** levetta per volare, pulsante FUOCO da tenere premuto
 
 Per giocare apri `games/volo-fantastico/index.html` nel browser.
+
+### ⚽ Calcetto Arcade — `games/calcetto-arcade/index.html`
+
+Calcio a cinque in stile *Tehkan World Cup*: campo al coperto visto dall'alto, con le sponde tutto intorno (la palla rimbalza e torna in campo), il pallone che si vede sempre e un radar in basso con tutti i giocatori.
+
+- **Il torneo:** a eliminazione diretta contro sei squadre sempre più forti (Gatti Rossi, Lupi Neri, Tori Gialli, Squali Verdi, Aquile Viola e Leoni d'Oro), poi una nuova coppa ancora più dura. Ogni partita dura 1 minuto e 40 secondi: se vinci passi il turno, se pareggi si va al golden goal (chi segna per primo vince), se perdi sei fuori
+- **Chi controlli:** sempre il giocatore degli Azzurri più vicino alla palla, segnato dall'anello giallo; quando passi il controllo va a chi riceve (se non muovi la levetta, corre da solo incontro alla palla). Il portiere gioca da solo
+- **In attacco:** PASSA verso il compagno a cui punti (senza direzione, al più avanzato e libero) · TIRA verso la porta: con su o giù miri all'angolo alto o basso. Da vicino e sull'angolo il portiere ci arriva a fatica, dal centro o da lontano para quasi sempre; i difensori possono murare il tiro
+- **In difesa:** PASSA cambia giocatore · TIRA fa la scivolata che toglie palla all'avversario; standogli attaccato puoi anche rubargliela. Anche gli avversari entrano in scivolata e ti pressano
+- **Punti:** gol 1.000 · vittoria 3.000 per il numero del turno · 500 per ogni gol di scarto · porta inviolata 1.000
+- **Difficoltà:** Facile (avversari lenti e imprecisi, il tuo portiere para di più), Normale, Difficile (avversari veloci, pressing e tiri precisi); record separati per ogni difficoltà
+- **Comandi:** frecce o `W` `A` `S` `D` per correre · `Z` o `J` passa (in difesa: cambia) · `X`, `K` o `Spazio` tira (in difesa: scivolata) · `P` pausa
+- **Touch:** levetta per correre, pulsanti PASSA e TIRA
+
+Per giocare apri `games/calcetto-arcade/index.html` nel browser.
