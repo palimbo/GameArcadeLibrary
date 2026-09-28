@@ -4,7 +4,7 @@ Raccolta di giochi arcade per il browser. Ogni gioco è un singolo file HTML sen
 
 ## 🕹️ Sala Giochi — `index.html`
 
-Apri `index.html` nella cartella principale per la pagina di raccolta: mostra tutti i 68 giochi con copertina, genere, comandi e i tuoi record per ogni difficoltà (Facile, Normale, Difficile). Tocca «Gioca» per avviare un gioco; in ogni gioco il pulsante «← Sala Giochi» in alto a sinistra (visibile nei menu) riporta alla raccolta.
+Apri `index.html` nella cartella principale per la pagina di raccolta: mostra tutti i 69 giochi con copertina, genere, comandi e i tuoi record per ogni difficoltà (Facile, Normale, Difficile). Tocca «Gioca» per avviare un gioco; in ogni gioco il pulsante «← Sala Giochi» in alto a sinistra (visibile nei menu) riporta alla raccolta.
 
 **Iniziali del record:** quando batti un record compare la schermata da sala giochi per inserire le tue tre iniziali (frecce ↑ ↓ per cambiare lettera, ← → per spostarti, oppure scrivile direttamente; su telefono i tasti ▲ ▼ e OK). Le iniziali vengono salvate insieme al record e compaiono nei menu del gioco e nella Sala Giochi. Il codice è condiviso da tutti i giochi in `shared/iniziali.js`.
 
@@ -1074,3 +1074,19 @@ Piattaforme d'azione in stile *Ghosts 'n Goblins*: un cavaliere va a salvare la 
 - **Touch:** levetta (giù per abbassarti) e i pulsanti SALTA e LANCIA
 
 Per giocare apri `games/cavaliere-in-mutande/index.html` nel browser.
+
+### 🛟 Giù per il Fiume — `games/giu-per-il-fiume/index.html`
+
+Discesa in ciambella in stile *Toobin'*: sdraiato su una ciambella rosa, scendi il fiume fino al traguardo a scacchi.
+
+- **Pagaiare:** la corrente ti porta giù; con la levetta o le frecce pagai di lato per sterzare, contro corrente per frenare e verso valle per andare più veloce. La corrente segue le curve del fiume
+- **Quattro fiumi:** il Canyon, la Palude (piena di alligatori), la Giungla (più rami e mulinelli) e il Fiume Ghiacciato, poi si ricomincia con la corrente più forte. Nelle **rapide** l'acqua corre più veloce e ci sono più rocce; i **mulinelli** ti trascinano in tondo
+- **Cosa buca la ciambella:** i rami spinosi che sporgono dalle rive, il morso degli alligatori e gli ami dei pescatori. Rocce e tronchi galleggianti ti fanno solo rimbalzare
+- **Alligatori:** si avvicinano piano, poi si fermano e spalancano le fauci rosse: è il momento di spostarsi, perché scattano verso il punto dove eri. Ogni tanto si immergono (si vedono solo gli occhi). Due lattine li mettono fuori gioco (300)
+- **Pescatori:** dalla riva lanciano l'amo vicino a dove stai andando; un cerchio rosso sull'acqua mostra dove cadrà, e poi lo riavvolgono attraversando il fiume. Una lattina li fa cadere in acqua (500)
+- **Punti:** porte tra due boe 500, poi 1.000, 1.500… se le passi tutte di fila · forziere 1.000 · all'arrivo 100 per ogni lattina rimasta, un bonus per il tempo e uno per il fiume. Le lattine si raccolgono galleggianti (fino a 9); una ciambella extra ogni 25.000 punti
+- **Difficoltà:** Facile (5 ciambelle, corrente lenta, meno pericoli), Normale (3 ciambelle), Difficile (3 ciambelle, corrente forte, alligatori più svelti); record separati per ogni difficoltà
+- **Comandi:** frecce o `W` `A` `S` `D` per pagaiare · `Spazio` o `J` lancia una lattina nella direzione delle frecce (verso valle se non ne premi) · `P` pausa
+- **Touch:** levetta per pagaiare, pulsante LANCIA (la lattina parte dove punta la levetta)
+
+Per giocare apri `games/giu-per-il-fiume/index.html` nel browser.
