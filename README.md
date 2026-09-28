@@ -4,7 +4,7 @@ Raccolta di giochi arcade per il browser. Ogni gioco è un singolo file HTML sen
 
 ## 🕹️ Sala Giochi — `index.html`
 
-Apri `index.html` nella cartella principale per la pagina di raccolta: mostra tutti i 62 giochi con copertina, genere, comandi e i tuoi record per ogni difficoltà (Facile, Normale, Difficile). Tocca «Gioca» per avviare un gioco; in ogni gioco il pulsante «← Sala Giochi» in alto a sinistra (visibile nei menu) riporta alla raccolta.
+Apri `index.html` nella cartella principale per la pagina di raccolta: mostra tutti i 63 giochi con copertina, genere, comandi e i tuoi record per ogni difficoltà (Facile, Normale, Difficile). Tocca «Gioca» per avviare un gioco; in ogni gioco il pulsante «← Sala Giochi» in alto a sinistra (visibile nei menu) riporta alla raccolta.
 
 **Iniziali del record:** quando batti un record compare la schermata da sala giochi per inserire le tue tre iniziali (frecce ↑ ↓ per cambiare lettera, ← → per spostarti, oppure scrivile direttamente; su telefono i tasti ▲ ▼ e OK). Le iniziali vengono salvate insieme al record e compaiono nei menu del gioco e nella Sala Giochi. Il codice è condiviso da tutti i giochi in `shared/iniziali.js`.
 
@@ -983,3 +983,18 @@ Salvataggio in elicottero in stile *Choplifter*: vola oltre il confine, libera i
 - **Touch:** levetta analogica per volare, pulsanti MISSILE (tieni premuto) e BOMBA
 
 Per giocare apri `games/elisoccorso/index.html` nel browser.
+
+### 🛡️ Zona di Battaglia — `games/zona-di-battaglia/index.html`
+
+Battaglia di carri armati in prima persona in stile *Battlezone*: grafica vettoriale verde, radar e una pianura sconfinata piena di ostacoli.
+
+- **Visuale:** sei nella torretta del carro. All'orizzonte montagne e un vulcano in eruzione; in alto il radar mostra i nemici entro 100 metri, e una scritta ti dice se il nemico più vicino è a sinistra, a destra o alle spalle
+- **Il colpo:** un proiettile alla volta, dritto davanti a te; il mirino diventa rosso quando un bersaglio è sulla traiettoria
+- **Riparo:** piramidi e cubi fermano i proiettili, i tuoi e quelli nemici, e bloccano il carro. I nemici li aggirano e cercano una linea di tiro libera prima di sparare
+- **Nemici:** carro armato (1.000), che prima di sparare si ferma e si allinea con te; supercarro (3.000, dalla terza ondata), più veloce e con colpi più rapidi; missile a ricerca (2.000, dalla seconda ondata), che arriva a zig-zag scavalcando gli ostacoli; disco volante (5.000), innocuo e di passaggio
+- **Ondate:** ogni ondata chiede di distruggere più nemici (4, poi 6, 8…) e ne mette in campo di più insieme; bonus di 1.000 per il numero dell'ondata · un carro extra ogni 30.000 punti (50.000 a Difficile)
+- **Difficoltà:** Facile (5 carri, nemici lenti a mirare e colpi lenti), Normale (3 carri), Difficile (3 carri, fuoco più rapido e missili più frequenti); record separati per ogni difficoltà
+- **Comandi:** `↑` `↓` o `W` `S` per avanzare e retrocedere · `←` `→` o `A` `D` per girare · `Spazio` fuoco · `P` pausa
+- **Touch:** una levetta analogica (su e giù per muoverti, sinistra e destra per girare) e il pulsante FUOCO
+
+Per giocare apri `games/zona-di-battaglia/index.html` nel browser.
