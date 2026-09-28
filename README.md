@@ -4,7 +4,7 @@ Raccolta di giochi arcade per il browser. Ogni gioco è un singolo file HTML sen
 
 ## 🕹️ Sala Giochi — `index.html`
 
-Apri `index.html` nella cartella principale per la pagina di raccolta: mostra tutti i 61 giochi con copertina, genere, comandi e i tuoi record per ogni difficoltà (Facile, Normale, Difficile). Tocca «Gioca» per avviare un gioco; in ogni gioco il pulsante «← Sala Giochi» in alto a sinistra (visibile nei menu) riporta alla raccolta.
+Apri `index.html` nella cartella principale per la pagina di raccolta: mostra tutti i 62 giochi con copertina, genere, comandi e i tuoi record per ogni difficoltà (Facile, Normale, Difficile). Tocca «Gioca» per avviare un gioco; in ogni gioco il pulsante «← Sala Giochi» in alto a sinistra (visibile nei menu) riporta alla raccolta.
 
 **Iniziali del record:** quando batti un record compare la schermata da sala giochi per inserire le tue tre iniziali (frecce ↑ ↓ per cambiare lettera, ← → per spostarti, oppure scrivile direttamente; su telefono i tasti ▲ ▼ e OK). Le iniziali vengono salvate insieme al record e compaiono nei menu del gioco e nella Sala Giochi. Il codice è condiviso da tutti i giochi in `shared/iniziali.js`.
 
@@ -968,3 +968,18 @@ Percorsi con la biglia in stile *Marble Madness*: porta la biglia fino al tragua
 - **Touch:** una levetta analogica: più la spingi, più la biglia accelera in quella direzione
 
 Per giocare apri `games/biglia-pazza/index.html` nel browser.
+
+### 🚁 Elisoccorso — `games/elisoccorso/index.html`
+
+Salvataggio in elicottero in stile *Choplifter*: vola oltre il confine, libera i prigionieri e riportali alla base.
+
+- **Missione:** colpisci le baracche (con un missile volando bassi o con una bomba) per aprirle; i prigionieri escono e ti fanno segno. Atterra vicino a loro e corrono a bordo, fino a 16 alla volta. Riportali alla base e atterra sulla piazzola: scendono ed entrano nell'hangar. La missione finisce quando non resta più nessuno da salvare
+- **Attenzione ai prigionieri:** atterrare sopra qualcuno lo schiaccia (si scansano se scendi piano), le tue bombe li colpiscono e i colpi dei carri che finiscono a terra pure. Se l'elicottero viene abbattuto, chi è a bordo è perso
+- **Nemici:** carri armati (100) che sparano a parabola, da colpire con le bombe o con i missili volando rasoterra; caccia (250) annunciati da un avviso lampeggiante sul bordo dello schermo, che sparano e sganciano bombe se sei vicino a terra, da abbattere con i missili alla loro quota; dalla terza missione mine volanti (200) che ti inseguono, da colpire con missili o bombe
+- **Punti:** 200 per ogni prigioniero salvato · a fine missione 50 in più per ciascuno e 3.000 se li hai salvati tutti · un elicottero extra ogni 25.000 punti
+- **Missioni:** ogni missione ha più baracche e prigionieri, più carri e più caccia; la mappa in alto mostra base, baracche, prigionieri e nemici
+- **Difficoltà:** Facile (4 elicotteri da 4 colpi, nemici lenti e imprecisi), Normale (3 da 3), Difficile (3 da 2, fuoco fitto e caccia frequenti); record separati per ogni difficoltà
+- **Comandi:** frecce o `W` `A` `S` `D` per volare (giù per atterrare, su per decollare) · `Spazio` o `J` missile (tieni premuto per sparare di continuo) · `B` o `K` bomba · `P` pausa
+- **Touch:** levetta analogica per volare, pulsanti MISSILE (tieni premuto) e BOMBA
+
+Per giocare apri `games/elisoccorso/index.html` nel browser.
