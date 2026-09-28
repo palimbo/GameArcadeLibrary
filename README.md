@@ -4,7 +4,7 @@ Raccolta di giochi arcade per il browser. Ogni gioco è un singolo file HTML sen
 
 ## 🕹️ Sala Giochi — `index.html`
 
-Apri `index.html` nella cartella principale per la pagina di raccolta: mostra tutti i 75 giochi con copertina, genere, comandi e i tuoi record per ogni difficoltà (Facile, Normale, Difficile). Tocca «Gioca» per avviare un gioco; in ogni gioco il pulsante «← Sala Giochi» in alto a sinistra (visibile nei menu) riporta alla raccolta.
+Apri `index.html` nella cartella principale per la pagina di raccolta: mostra tutti i 76 giochi con copertina, genere, comandi e i tuoi record per ogni difficoltà (Facile, Normale, Difficile). Tocca «Gioca» per avviare un gioco; in ogni gioco il pulsante «← Sala Giochi» in alto a sinistra (visibile nei menu) riporta alla raccolta.
 
 **Iniziali del record:** quando batti un record compare la schermata da sala giochi per inserire le tue tre iniziali (frecce ↑ ↓ per cambiare lettera, ← → per spostarti, oppure scrivile direttamente; su telefono i tasti ▲ ▼ e OK). Le iniziali vengono salvate insieme al record e compaiono nei menu del gioco e nella Sala Giochi. Il codice è condiviso da tutti i giochi in `shared/iniziali.js`.
 
@@ -1183,3 +1183,18 @@ Labirinto in stile *Lady Bug*: una coccinella mangia i fiori di un giardino a la
 - **Touch:** una levetta
 
 Per giocare apri `games/coccinella/index.html` nel browser.
+
+### 🌀 Spirale Galattica — `games/spirale-galattica/index.html`
+
+Sparatutto circolare in stile *Gyruss*: l'astronave gira lungo il bordo di un grande cerchio e spara verso il centro, in un viaggio a warp da Nettuno fino alla Terra (Nettuno, Urano, Saturno, Giove, Marte e Terra, poi si ricomincia più veloci).
+
+- **Come ci si muove:** punta la levetta (o le frecce, anche in diagonale) verso il punto del cerchio in cui vuoi andare, e l'astronave ci arriva per la strada più breve
+- **Gli stormi:** ogni warp arrivano tre stormi da otto che entrano a spirale, dal centro o da fuori, e si mettono in formazione al centro; da lì alcuni scendono in picchiata verso di te. 150 mentre arrivano, 100 in formazione, 200 in picchiata
+- **I colpi nemici:** viaggiano verso il bordo; quelli di chi arriva o scende in picchiata curvano verso il punto dove eri quando sono partiti, quindi basta spostarsi di lato
+- **Satelliti:** a volte al centro compaiono tre satelliti collegati: quelli laterali valgono 300, quello centrale che lampeggia regala il doppio colpo (1.000) fino alla prossima vita persa
+- **Pianeti e fase bonus:** dopo due warp si arriva sul pianeta (bonus) e parte la fase bonus: 40 nemici che non sparano, 100 l'uno e 10.000 se li abbatti tutti. Navicella extra a 30.000 punti e poi ogni 60.000
+- **Difficoltà:** Facile (5 navicelle, nemici un po' più lenti), Normale (3 navicelle), Difficile (3 navicelle, picchiate e colpi fitti); record separati per ogni difficoltà
+- **Comandi:** frecce o `W` `A` `S` `D` per scegliere il punto del cerchio · `Spazio`, `J` o `Z` fuoco (tieni premuto) · `P` pausa
+- **Touch:** levetta e pulsante FUOCO
+
+Per giocare apri `games/spirale-galattica/index.html` nel browser.

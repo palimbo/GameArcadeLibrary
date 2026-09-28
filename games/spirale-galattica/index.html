@@ -1,0 +1,715 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no, viewport-fit=cover">
+<title>Spirale Galattica</title>
+<style>
+  :root {
+    --bg: #04030e;
+    --fg: #f4f0ff;
+    --muted: #a8a0d0;
+    --violet: #b86aff;
+    --yellow: #ffe04a;
+    --red: #ff4a4a;
+    --cyan: #4ae8ff;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  html, body {
+    height: 100%;
+    background: var(--bg);
+    color: var(--fg);
+    font-family: system-ui, -apple-system, "Segoe UI", sans-serif;
+    overflow: hidden;
+    user-select: none;
+    -webkit-user-select: none;
+    touch-action: none;
+  }
+  #wrap { position: fixed; inset: 0; display: flex; align-items: center; justify-content: center; }
+  canvas { display: block; touch-action: none; border-radius: 6px; box-shadow: 0 0 0 2px #2a1a4a, 0 10px 40px rgba(0,0,0,0.6); }
+  #pauseBtn {
+    position: fixed; z-index: 3; display: none; right: 10px; top: calc(10px + env(safe-area-inset-top, 0px));
+    font: 700 13px system-ui, sans-serif; color: var(--fg);
+    background: rgba(0, 0, 0, 0.6); border: 1px solid rgba(244, 240, 255, 0.35);
+    border-radius: 8px; padding: 6px 10px; cursor: pointer;
+  }
+  #touch {
+    position: fixed; z-index: 2; display: none; left: 12px; right: 12px;
+    bottom: calc(14px + env(safe-area-inset-bottom, 0px));
+    justify-content: space-between; align-items: flex-end; pointer-events: none;
+  }
+  /* point the thumb stick where you want the ship on the circle; hold FUOCO */
+  #touch .stick { position: relative; width: 136px; height: 136px; border-radius: 50%; pointer-events: auto; touch-action: none;
+    border: 2px solid rgba(184, 106, 255, 0.6); background: radial-gradient(circle, rgba(184,106,255,0.14), rgba(184,106,255,0.04)); }
+  #touch .stick .knob { position: absolute; left: 50%; top: 50%; width: 58px; height: 58px; margin: -29px 0 0 -29px; border-radius: 50%;
+    background: rgba(184, 106, 255, 0.45); border: 2px solid rgba(255,255,255,0.7); box-shadow: 0 4px 10px rgba(0,0,0,0.4); pointer-events: none; }
+  #touch .stick .ring { position: absolute; inset: 10px; border-radius: 50%; border: 1px dashed rgba(244,240,255,0.25); pointer-events: none; }
+  #touch .fire { width: 96px; height: 96px; border-radius: 50%; pointer-events: auto; touch-action: none; color: var(--fg);
+    font: 800 13px system-ui, sans-serif; letter-spacing: 1px; border: 2px solid rgba(255, 224, 74, 0.9); background: rgba(255, 224, 74, 0.2); }
+  #touch .fire.on { background: rgba(255, 224, 74, 0.55); }
+  #touch.small .stick { width: 112px; height: 112px; }
+  #touch.small .stick .knob { width: 48px; height: 48px; margin: -24px 0 0 -24px; }
+  #touch.small .fire { width: 80px; height: 80px; font-size: 11px; }
+  #overlay {
+    position: fixed; inset: 0; z-index: 5;
+    display: flex; flex-direction: column; align-items: center; justify-content: flex-start;
+    gap: 14px; padding: 16px; text-align: center; overflow-y: auto;
+    background: rgba(4, 3, 14, 0.9);
+  }
+  #overlay > :first-child { margin-top: auto; }
+  #overlay > :last-child { margin-bottom: auto; }
+  #overlay.hidden { display: none; }
+  #homeLink {
+    position: fixed; top: calc(10px + env(safe-area-inset-top, 0px)); left: 10px; z-index: 6;
+    font: 600 13px/1 system-ui, sans-serif; color: #fff; text-decoration: none;
+    padding: 8px 12px; border-radius: 999px; background: rgba(0,0,0,.55);
+    border: 1px solid rgba(255,255,255,.25);
+  }
+  #homeLink:hover { background: rgba(0,0,0,.8); }
+  #overlay.hidden ~ #homeLink { display: none; }
+  @media (max-width: 700px) { #overlay { padding-top: calc(52px + env(safe-area-inset-top, 0px)); } }
+  #overlay h1 { font-size: clamp(30px, 9vw, 56px); font-weight: 900; letter-spacing: 2px; color: var(--violet);
+    text-shadow: 0 0 14px rgba(184,106,255,0.7), 0 0 34px rgba(184,106,255,0.35); }
+  #overlay h2 { font-size: clamp(26px, 7vw, 42px); font-weight: 900; letter-spacing: 2px; color: var(--cyan); }
+  #overlay h2.lose { color: var(--red); }
+  #overlay p { max-width: 540px; font-size: clamp(13px, 3.4vw, 16px); line-height: 1.55; }
+  #overlay p.muted { color: var(--muted); }
+  #overlay .pts { display: grid; grid-template-columns: repeat(2, auto); gap: 4px 18px; font-size: 13px; color: var(--muted); text-align: left; max-width: 560px; }
+  #overlay .pts b { color: var(--fg); }
+  #overlay .diff { display: flex; gap: 10px; flex-wrap: wrap; justify-content: center; }
+  #overlay button {
+    font: 800 15px system-ui, sans-serif; letter-spacing: 1.5px; color: var(--fg);
+    background: transparent; cursor: pointer;
+    border: 2px solid rgba(244,240,255,0.3); border-radius: 10px; padding: 9px 16px;
+  }
+  #overlay .diff button.on { border-color: var(--c); color: var(--c); box-shadow: 0 0 12px var(--c); }
+  #overlay button.start { border-color: var(--violet); color: #1a0030; background: var(--violet); padding: 11px 30px; box-shadow: 0 0 18px rgba(184,106,255,0.55); }
+  @media (max-height: 560px) {
+    #overlay { gap: 8px; }
+    #overlay h1 { font-size: 30px; }
+    #overlay p { font-size: 13px; line-height: 1.4; }
+    #overlay .help, #overlay .pts { display: none; }
+  }
+</style>
+</head>
+<body>
+<div id="wrap"><canvas id="game"></canvas></div>
+<div id="touch">
+  <div class="stick" aria-label="Levetta"><div class="ring"></div><div class="knob"></div></div>
+  <button type="button" class="fire" aria-label="Fuoco">FUOCO</button>
+</div>
+<button id="pauseBtn" type="button" aria-label="Pausa">❚❚</button>
+<div id="overlay"></div>
+<a id="homeLink" href="../../index.html">← Sala Giochi</a>
+
+<script>
+(() => {
+  "use strict";
+
+  const W = 400, H = 440, TAU = Math.PI * 2;
+  const CX = 200, CY = 250, R = 165;          // the ship runs round this circle; the centre is far away
+  const PLANETS = [
+    { name: "Nettuno", c1: "#4a7aff", c2: "#1a2a8a" }, { name: "Urano", c1: "#6ae8e8", c2: "#1a7a8a" },
+    { name: "Saturno", c1: "#e8c87a", c2: "#8a6a2a", ring: true }, { name: "Giove", c1: "#e8a86a", c2: "#8a4a2a", bands: true },
+    { name: "Marte", c1: "#e85a3a", c2: "#7a1a0a" }, { name: "Terra", c1: "#3a9aff", c2: "#2a8a3a", earth: true },
+  ];
+  const KINDS = [["#ff4a6a", "#ffe04a"], ["#4ae8ff", "#ffffff"], ["#7ae84a", "#ffe04a"], ["#ffb43a", "#ff4a3a"], ["#c86aff", "#4ae8ff"]];
+
+  const DIFFICULTIES = {
+    facile:    { label: "FACILE",    color: "#7ed87a", desc: "5 navicelle · nemici un po' più lenti", lives: 5, pace: 0.95, fire: 1, dive: 1 },
+    normale:   { label: "NORMALE",   color: "#b86aff", desc: "3 navicelle · l'esperienza classica", lives: 3, pace: 1, fire: 1, dive: 1 },
+    difficile: { label: "DIFFICILE", color: "#ff4a4a", desc: "3 navicelle · picchiate e colpi fitti", lives: 3, pace: 1.15, fire: 1.35, dive: 1.35 },
+  };
+  const DIFF_IDS = Object.keys(DIFFICULTIES);
+  const DIFF_KEY = "spirale-difficulty";
+  const bestKey = (id) => `spirale-best-${id}`;
+  function store(k, v) { try { localStorage.setItem(k, v); } catch { /* ignore */ } }
+  function load(k) { try { return localStorage.getItem(k); } catch { return null; } }
+  const rnd = (a, b) => a + Math.random() * (b - a);
+  const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
+  const sign = (v) => (v < 0 ? -1 : 1);
+  const wrapA = (a) => { a %= TAU; if (a > Math.PI) a -= TAU; if (a < -Math.PI) a += TAU; return a; };
+  const px = (a, r) => CX + Math.cos(a) * r, py = (a, r) => CY + Math.sin(a) * r;
+  const scaleAt = (r) => 0.25 + 0.75 * clamp(r / R, 0, 1.3);
+
+  // ---------- Canvas ----------
+  const canvas = document.getElementById("game");
+  const ctx = canvas.getContext("2d");
+  const wrapEl = document.getElementById("wrap");
+  const overlay = document.getElementById("overlay");
+  const touchEl = document.getElementById("touch");
+  const pauseBtn = document.getElementById("pauseBtn");
+  let pxRatio = 1, touchMode = !!(window.matchMedia && matchMedia("(pointer: coarse)").matches);
+  function resize() {
+    const portrait = window.innerHeight > window.innerWidth;
+    const showTouch = touchMode && isPlaying();
+    touchEl.style.display = showTouch ? "flex" : "none";
+    touchEl.classList.toggle("small", !portrait && window.innerHeight < 480);
+    wrapEl.style.paddingBottom = showTouch && portrait ? "calc(170px + env(safe-area-inset-bottom, 0px))" : "0";
+    let availW = window.innerWidth - 8, availH = window.innerHeight - 8;
+    if (showTouch && portrait) availH -= 170;
+    if (showTouch && !portrait) {
+      const side = Math.max(...[...touchEl.children].map((el) => el.offsetWidth)) + 20;
+      if (window.innerWidth - 2 * side > 200) availW = window.innerWidth - 2 * side;
+    }
+    const s = Math.max(0.2, Math.min(availW / W, availH / H));
+    pxRatio = Math.min(3, s * (window.devicePixelRatio || 1));
+    canvas.style.width = W * s + "px";
+    canvas.style.height = H * s + "px";
+    canvas.width = Math.round(W * pxRatio);
+    canvas.height = Math.round(H * pxRatio);
+  }
+  window.addEventListener("resize", () => syncControls());
+
+  // ---------- Audio ----------
+  let audioCtx = null;
+  function beep(freq, dur, type = "square", vol = 0.04, slide = 0, delay = 0) {
+    if (!audioCtx) return;
+    const t = audioCtx.currentTime + delay;
+    const osc = audioCtx.createOscillator(), gain = audioCtx.createGain();
+    osc.type = type;
+    osc.frequency.setValueAtTime(freq, t);
+    if (slide) osc.frequency.exponentialRampToValueAtTime(Math.max(20, freq + slide), t + dur);
+    gain.gain.setValueAtTime(vol, t);
+    gain.gain.exponentialRampToValueAtTime(0.0001, t + dur);
+    osc.connect(gain).connect(audioCtx.destination);
+    osc.start(t); osc.stop(t + dur + 0.02);
+  }
+  function noise(dur, vol, freq) {
+    if (!audioCtx) return;
+    const len = Math.floor(audioCtx.sampleRate * dur), buf = audioCtx.createBuffer(1, len, audioCtx.sampleRate), d = buf.getChannelData(0);
+    for (let i = 0; i < len; i++) d[i] = (Math.random() * 2 - 1) * (1 - i / len);
+    const src = audioCtx.createBufferSource(), f = audioCtx.createBiquadFilter(), g = audioCtx.createGain();
+    src.buffer = buf; f.type = "bandpass"; f.frequency.value = freq; g.gain.value = vol;
+    src.connect(f).connect(g).connect(audioCtx.destination); src.start();
+  }
+  const arp = (notes, gap, d, type = "square", vol = 0.04) => notes.forEach((f, i) => beep(f, d, type, vol, 0, i * gap));
+  let sfxN = 0;
+  const lim = (fn) => (...a) => { if (sfxN++ < 6) fn(...a); };
+  const sfx = {
+    shot: lim(() => beep(1300, 0.05, "square", 0.016, -800)),
+    pop: lim(() => { noise(0.12, 0.12, 1500); beep(300, 0.08, "square", 0.02, -200); }),
+    dive: lim(() => beep(900, 0.35, "sine", 0.02, -600)),
+    enemyShot: lim(() => beep(260, 0.1, "sawtooth", 0.015, 120)),
+    power: () => arp([523, 784, 1047, 1568, 2093], 0.05, 0.1),
+    die: () => { noise(0.5, 0.3, 700); arp([523, 392, 311, 262, 196], 0.09, 0.15, "triangle", 0.05); },
+    warp: () => beep(200, 1.4, "sawtooth", 0.02, 1400),
+    planet: () => arp([392, 523, 659, 784, 1047, 1319], 0.1, 0.18),
+    perfect: () => arp([523, 659, 784, 1047, 1319, 1568, 2093], 0.07, 0.14),
+    life: () => arp([784, 988, 1175, 1568], 0.07, 0.12),
+    start: () => arp([392, 523, 659, 784, 1047], 0.09, 0.14),
+    over: () => arp([523, 466, 415, 392, 330, 262], 0.15, 0.24, "triangle", 0.05),
+  };
+
+  // ---------- State ----------
+  let difficulty = DIFFICULTIES[load(DIFF_KEY)] ? load(DIFF_KEY) : "normale";
+  let diff = DIFFICULTIES[difficulty];
+  let state = "menu", menu = null, pausedFrom = null, stateT = 0, clock = 0;
+  let score = 0, lives = 3, planet = 0, warp = 0, loop = 0, bestCache = 0, nextLife = 30000;
+  let P = { a: Math.PI / 2, inv: 0, cool: 0, double: false }, enemies = [], shots = [], bullets = [], sats = null, stars = [];
+  let groupsLeft = 0, groupT = 0, waveT = 0, formRot = 0, chance = null, parts = [], popups = [], message = null;
+  let firing = false;
+  const keys = { left: false, right: false, up: false, down: false };
+  const stick = { x: 0, y: 0 };
+  const pace = () => diff.pace * (1 + Math.min(12, planet * 2 + warp + loop * 3) * 0.035);
+  const WARPS = 2;
+
+  // ---------- Flow ----------
+  const isPlaying = () => ["intro", "play", "dead", "warp", "planet", "chance"].includes(state);
+  function startGame() {
+    if (!audioCtx) { try { audioCtx = new (window.AudioContext || window.webkitAudioContext)(); } catch { audioCtx = null; } }
+    if (audioCtx && audioCtx.state === "suspended") audioCtx.resume();
+    score = 0; lives = diff.lives; planet = 0; warp = 0; loop = 0; nextLife = 30000;
+    bestCache = parseInt(load(bestKey(difficulty)), 10) || 0;
+    P = { a: Math.PI / 2, inv: 0, cool: 0, double: false };
+    beginWave();
+    sfx.start();
+    menu = null;
+    overlay.classList.add("hidden");
+    syncControls();
+    last = performance.now();
+  }
+  function beginWave() {
+    enemies = []; bullets = []; shots = []; sats = null; chance = null;
+    groupsLeft = 3; groupT = 0.4; waveT = 0; formRot = 0;
+    const pl = PLANETS[planet % PLANETS.length], left = WARPS - warp;
+    message = { text: `${left} WARP A ${pl.name.toUpperCase()}`, sub: loop ? `giro ${loop + 1} del sistema solare` : "", t: 0 };
+    state = "intro"; stateT = 1.6;
+  }
+  function addScore(n, x, y, color = "#f4f0ff") {
+    score += n;
+    if (x !== undefined) popups.push({ x, y, text: String(n), color, t: 0 });
+    if (score >= nextLife) { nextLife += 60000; if (lives < 9) { lives++; sfx.life(); popups.push({ x: CX, y: CY, text: "NAVICELLA EXTRA", color: "#ffe04a", t: 0 }); } }
+  }
+  function burst(x, y, c, n = 10, sp = 110, life = 0.5) {
+    for (let k = 0; k < n; k++) { const a = Math.random() * TAU, s = sp * rnd(0.3, 1); parts.push({ x, y, vx: Math.cos(a) * s, vy: Math.sin(a) * s, t: 0, life: life * rnd(0.6, 1.2), c }); }
+  }
+  function die(why) {
+    if (P.inv > 0 || (state !== "play" && state !== "chance")) return;
+    lives--; P.double = false;
+    sfx.die();
+    burst(px(P.a, R), py(P.a, R), "#ffe04a", 22, 160, 0.8); burst(px(P.a, R), py(P.a, R), "#ff4a4a", 14, 120, 0.6);
+    message = { text: "COLPITO!", sub: lives > 0 ? `Ne restano ${lives}` : "", t: 0 };
+    (window.__deaths = window.__deaths || []).push(why);
+    state = "dead"; stateT = 2;
+  }
+  function afterDeath() {
+    if (lives <= 0) { gameOver(); return; }
+    bullets = [];
+    // the ones on their way down go back up
+    for (const e of enemies) if (e.st === "dive") { e.st = "back"; e.t = 0; e.r = 10; }
+    P.inv = 2.2;
+    state = "play";
+  }
+  function waveCleared() {
+    bullets = []; shots = [];
+    warp++;
+    if (warp >= WARPS) {
+      const pl = PLANETS[planet % PLANETS.length], bonus = 1000 * (planet + 1 + loop * PLANETS.length);
+      addScore(bonus);
+      message = { text: `${pl.name.toUpperCase()}!`, sub: `Arrivo sul pianeta · bonus ${bonus.toLocaleString("it-IT")}`, t: 0 };
+      sfx.planet();
+      state = "planet"; stateT = 3;
+    } else {
+      message = { text: "WARP!", sub: "", t: 0 };
+      sfx.warp();
+      state = "warp"; stateT = 1.8;
+    }
+  }
+  function startChance() {
+    enemies = []; bullets = []; shots = [];
+    chance = { groups: 5, t: 1, kills: 0, total: 40 };
+    message = { text: "FASE BONUS", sub: "abbattili tutti: non sparano", t: 0 };
+    state = "chance";
+  }
+  function endChance() {
+    const perfect = chance.kills >= chance.total, bonus = chance.kills * 100 + (perfect ? 10000 : 0);
+    addScore(bonus);
+    message = { text: perfect ? "PERFETTO!" : "FASE BONUS FINITA", sub: `${chance.kills}/${chance.total} · bonus ${bonus.toLocaleString("it-IT")}`, t: 0 };
+    if (perfect) sfx.perfect();
+    planet++; warp = 0;
+    if (planet >= PLANETS.length) { planet = 0; loop++; }
+    chance = null;
+    state = "warp"; stateT = 2.4;
+  }
+  function gameOver() {
+    state = "over";
+    const prev = parseInt(load(bestKey(difficulty)), 10) || 0;
+    const record = score > prev;
+    if (record) store(bestKey(difficulty), String(score));
+    sfx.over();
+    const played = diff.label, where = PLANETS[planet % PLANETS.length].name;
+    menu = () => showOverlay(
+      `<h2 class="lose">FINE DEL VIAGGIO</h2>
+       <p>Punteggio: <b>${score.toLocaleString("it-IT")}</b> · verso ${where} · ${played}</p>
+       ${record ? "<p style='color:var(--yellow)'>★ NUOVO RECORD! ★</p>" : ""}
+       ${difficultyHTML()}
+       <button class="start" data-start>GIOCA ANCORA</button>`
+    );
+    menu();
+    syncControls();
+  }
+  function togglePause() {
+    if (isPlaying()) {
+      pausedFrom = state; state = "paused";
+      showOverlay(`<h2>PAUSA</h2><button class="start" data-resume>CONTINUA</button><p class="muted">Premi P per continuare</p>`);
+    } else if (state === "paused") {
+      state = pausedFrom; overlay.classList.add("hidden"); last = performance.now();
+    }
+    syncControls();
+  }
+  // the pause menu can end the game (shared/iniziali.js): it ends here the usual way, saving the record
+  window.addEventListener("sala:termina", () => { if (state !== "paused") return; state = pausedFrom; overlay.classList.add("hidden"); gameOver(); syncControls(); });
+  function syncControls() {
+    pauseBtn.style.display = isPlaying() && touchMode ? "block" : "none";
+    resize();
+  }
+  pauseBtn.addEventListener("click", () => togglePause());
+  function showOverlay(html) { overlay.innerHTML = html; overlay.classList.remove("hidden"); }
+  function difficultyHTML() {
+    const buttons = DIFF_IDS.map((id) => {
+      const d = DIFFICULTIES[id];
+      return `<button type="button" data-diff="${id}" class="${id === difficulty ? "on" : ""}" style="--c:${d.color}">${d.label}</button>`;
+    }).join("");
+    const best = parseInt(load(bestKey(difficulty)), 10);
+    return `<div class="diff">${buttons}</div><p class="muted">${diff.desc}${best ? ` · Record: ${best.toLocaleString("it-IT")}` : ""}</p>`;
+  }
+  function setDifficulty(id) { if (!DIFFICULTIES[id]) return; difficulty = id; diff = DIFFICULTIES[id]; store(DIFF_KEY, id); if (menu) menu(); }
+  function showTitle() {
+    menu = showTitle;
+    showOverlay(
+      `<h1>SPIRALE GALATTICA</h1>
+       <p>Viaggio da Nettuno fino alla Terra. La tua astronave gira lungo il bordo del cerchio e spara verso il centro, da dove arrivano gli stormi nemici a spirale. Dopo ogni pianeta, una fase bonus.</p>
+       <div class="pts">
+         <span><b>Nemici</b></span><span>100 in formazione · 150 mentre arrivano · 200 in picchiata</span>
+         <span><b>Satelliti</b></span><span>300 · colpisci quello centrale che lampeggia: doppio colpo!</span>
+         <span><b>Fase bonus</b></span><span>100 per nemico · 10.000 se li abbatti tutti e 40</span>
+         <span><b>Attenzione</b></span><span>i colpi nemici viaggiano verso l'esterno: spostati di lato</span>
+       </div>
+       ${touchMode
+         ? `<p class="muted help">Punta la levetta dove vuoi l'astronave sul cerchio · FUOCO (tieni premuto)</p>`
+         : `<p class="muted help">Frecce o WASD: l'astronave va verso il punto del cerchio che indichi (anche in diagonale) · SPAZIO, J o Z fuoco · P pausa</p>`}
+       ${difficultyHTML()}
+       <button class="start" data-start>DECOLLO!</button>`
+    );
+  }
+  overlay.addEventListener("click", (e) => {
+    const d = e.target.closest("[data-diff]");
+    if (d) { setDifficulty(d.dataset.diff); return; }
+    if (e.target.closest("[data-start]")) startGame();
+    if (e.target.closest("[data-resume]")) togglePause();
+  });
+
+  // ---------- Input ----------
+  const KEYMAP = { arrowleft: "left", a: "left", arrowright: "right", d: "right", arrowup: "up", w: "up", arrowdown: "down", s: "down" };
+  const FIRE_KEYS = [" ", "j", "z", "x", "k"];
+  window.addEventListener("keydown", (e) => {
+    const k = e.key.toLowerCase();
+    if ([" ", "arrowup", "arrowdown", "arrowleft", "arrowright"].includes(k)) e.preventDefault();
+    if (state === "menu" || state === "over") {
+      if (e.key === "Enter") startGame();
+      else if (["1", "2", "3"].includes(k)) setDifficulty(DIFF_IDS[+k - 1]);
+      return;
+    }
+    if (k === "p" || k === "escape") { if (!e.repeat) togglePause(); return; }
+    if (state === "paused") { if (e.key === "Enter") togglePause(); return; }
+    if (FIRE_KEYS.includes(k)) firing = true;
+    if (KEYMAP[k]) keys[KEYMAP[k]] = true;
+  });
+  window.addEventListener("keyup", (e) => {
+    const k = e.key.toLowerCase();
+    if (FIRE_KEYS.includes(k)) firing = false;
+    if (KEYMAP[k]) keys[KEYMAP[k]] = false;
+  });
+  window.addEventListener("blur", () => { for (const k in keys) keys[k] = false; stick.x = stick.y = 0; firing = false; if (isPlaying()) togglePause(); });
+  const fireBtn = touchEl.querySelector(".fire");
+  let fireId = null;
+  fireBtn.addEventListener("pointerdown", (e) => { e.preventDefault(); fireId = e.pointerId; try { fireBtn.setPointerCapture(e.pointerId); } catch { /* ignore */ } firing = true; fireBtn.classList.add("on"); });
+  for (const ev of ["pointerup", "pointercancel", "lostpointercapture"]) fireBtn.addEventListener(ev, (e) => { if (e.pointerId !== fireId) return; fireId = null; firing = false; fireBtn.classList.remove("on"); });
+  const stickEl = touchEl.querySelector(".stick"), knob = stickEl.querySelector(".knob");
+  let stickId = null;
+  function stickAt(e) {
+    const r = stickEl.getBoundingClientRect(), max = r.width / 2 - 14;
+    let dx = e.clientX - (r.left + r.width / 2), dy = e.clientY - (r.top + r.height / 2);
+    const len = Math.hypot(dx, dy);
+    if (len > max) { dx *= max / len; dy *= max / len; }
+    knob.style.transform = `translate(${dx}px, ${dy}px)`;
+    const f = (v) => { const a = Math.abs(v) / max; return a < 0.15 ? 0 : sign(v) * Math.min(1, (a - 0.15) / 0.7); };
+    stick.x = f(dx); stick.y = f(dy);
+  }
+  const stickEnd = (e) => { if (e.pointerId !== stickId) return; stickId = null; knob.style.transform = ""; stick.x = stick.y = 0; };
+  stickEl.addEventListener("pointerdown", (e) => { e.preventDefault(); stickId = e.pointerId; try { stickEl.setPointerCapture(e.pointerId); } catch { /* ignore */ } stickAt(e); });
+  stickEl.addEventListener("pointermove", (e) => { if (e.pointerId === stickId) stickAt(e); });
+  for (const ev of ["pointerup", "pointercancel", "lostpointercapture"]) stickEl.addEventListener(ev, stickEnd);
+  window.addEventListener("pointerdown", (e) => { if (e.pointerType === "touch" && !touchMode) { touchMode = true; syncControls(); if (menu) menu(); } }, true);
+
+  // ---------- Enemies ----------
+  // entry paths, as functions of the time since the enemy set off: angle and distance from the centre
+  const PATHS = {
+    out: (e, t) => ({ a: e.a0 + e.dir * t * 2.3 * Math.PI, r: 10 + R * 0.9 * Math.sin(Math.PI * Math.min(1, t)) }),
+    in: (e, t) => ({ a: e.a0 + e.dir * t * 1.5 * Math.PI, r: (R + 50) - (R + 50 - e.fr) * t }),
+    loop: (e, t) => ({ a: e.a0 + e.dir * t * Math.PI * 1.2, r: 30 + R * 0.75 * Math.sin(Math.PI * t) + 20 * t }),
+  };
+  function spawnGroup(idx, forChance) {
+    const kinds = Object.keys(PATHS), path = kinds[Math.floor(Math.random() * kinds.length)];
+    const a0 = rnd(0, TAU), dir = Math.random() < 0.5 ? 1 : -1, kind = Math.floor(rnd(0, KINDS.length));
+    const T = (forChance ? 3.6 : 3.1) / Math.sqrt(pace());
+    for (let i = 0; i < 8; i++) {
+      enemies.push({
+        path, a0, dir, T, delay: i * 0.17, t: 0, st: "enter", a: a0, r: path === "in" ? R + 50 : 10, kind,
+        slot: i * TAU / 8 + (idx % 2) * TAU / 16, fr: 50 + (idx % 3) * 22, chance: !!forChance, shot: 0, diveT: rnd(2, 6), hp: 1,
+      });
+    }
+  }
+  function spawnSats() {
+    const a0 = rnd(0, TAU);
+    sats = { t: 0, a0, list: [-0.45, 0, 0.45].map((off, i) => ({ off, core: i === 1, hp: i === 1 ? 3 : 1, dead: false, flash: 0 })) };
+  }
+  function slotPos(e) { return { a: e.slot + formRot, r: e.fr + Math.sin(clock * 2 + e.slot) * 5 }; }
+  function enemyShoot(e, aimed) {
+    if (state !== "play" || e.chance) return;
+    const sp = 175 * Math.sqrt(diff.fire * pace());
+    // an aimed shot curves toward where the ship is now: moving is enough to dodge it
+    const T = Math.max(0.3, (R - e.r) / sp), va = aimed ? clamp(wrapA(P.a - e.a), -0.9, 0.9) / T : 0;
+    bullets.push({ a: e.a, r: e.r, v: sp, va });
+    sfx.enemyShot();
+  }
+  function updateEnemies(dt) {
+    const sp = pace();
+    formRot += dt * 0.35 * (Math.floor(waveT / 8) % 2 ? -1 : 1);
+    const divers = enemies.filter((e) => e.st === "dive").length, cap = Math.round((2 + Math.min(4, planet + warp)) * diff.dive) + 1;
+    for (const e of enemies) {
+      e.t += dt;
+      if (e.st === "enter") {
+        const k = (e.t - e.delay) / e.T;
+        if (k < 0) { e.hidden = true; continue; }
+        e.hidden = false;
+        const q = PATHS[e.path](e, Math.min(1, k)); e.a = q.a; e.r = q.r;
+        if (!e.chance && e.shot === 0 && k > 0.35 && Math.random() < 0.3 * diff.fire) { e.shot = 1; enemyShoot(e, true); }
+        if (k >= 1) {
+          if (e.chance) { e.gone = true; continue; }
+          e.st = "join"; e.t = 0; e.ja = e.a; e.jr = e.r;
+        }
+      } else if (e.st === "join" || e.st === "back") {
+        const s = slotPos(e), k = Math.min(1, e.t / 0.9);
+        if (e.st === "back") { e.a = s.a; e.r = 10 + (s.r - 10) * k; }
+        else { e.a = e.ja + wrapA(s.a - e.ja) * k; e.r = e.jr + (s.r - e.jr) * k; }
+        if (k >= 1) { e.st = "form"; e.diveT = rnd(1.5, 6) / (diff.dive * sp); }
+      } else if (e.st === "form") {
+        const s = slotPos(e); e.a = s.a; e.r = s.r;
+        e.diveT -= dt;
+        if (Math.random() < dt * 0.09 * diff.fire * sp) enemyShoot(e);
+        if (e.diveT <= 0 && state === "play") {
+          if (divers < cap) { e.st = "dive"; e.t = 0; e.vr = rnd(110, 150) * sp; e.shots = Math.random() < 0.6 * diff.fire ? 2 : 1; e.fired = 0; sfx.dive(); }
+          else e.diveT = rnd(0.5, 1.5);
+        }
+      } else if (e.st === "dive" || e.st === "leave") {
+        const r0 = e.r;
+        e.r += e.vr * dt;
+        if (e.st === "dive" && e.r < R * 0.75) e.a += clamp(wrapA(P.a - e.a), -1, 1) * 1.4 * sp * dt;
+        if (e.st === "dive" && e.fired < e.shots && e.r > R * (0.3 + e.fired * 0.25)) { e.fired++; enemyShoot(e, true); }
+        // crossing the ship's circle
+        if (r0 < R - 4 && e.r >= R - 4 && Math.abs(wrapA(e.a - P.a)) * R < 20) { e.dead = true; burst(px(e.a, R), py(e.a, R), KINDS[e.kind][0], 12, 120); die("scontro"); }
+        if (e.r > R + 40) { if (e.st === "leave") e.gone = true; else { e.st = "back"; e.t = 0; e.r = 10; } }
+      }
+    }
+    enemies = enemies.filter((e) => !e.dead && !e.gone);
+  }
+  function updateSats(dt) {
+    if (!sats) return;
+    sats.t += dt;
+    for (const s of sats.list) s.flash = Math.max(0, s.flash - dt);
+    if (sats.t > 9 || sats.list.every((s) => s.dead)) sats = null;
+  }
+  const satPos = (s) => ({ a: sats.a0 + s.off + sats.t * 0.5, r: Math.min(80, 15 + sats.t * 40) });
+  function hitAt(a, r, ta, tr, size) { return Math.hypot(px(a, r) - px(ta, tr), py(a, r) - py(ta, tr)) < size * scaleAt(tr) + 4; }
+  function updateShots(dt) {
+    for (const s of shots) {
+      const r0 = s.r; s.r -= 560 * dt;
+      if (s.r < 12) { s.dead = true; continue; }
+      for (const e of enemies) {
+        if (e.hidden || e.dead) continue;
+        if (hitAt(s.a, s.r, e.a, e.r, 13) || (r0 > e.r && s.r <= e.r && Math.abs(wrapA(s.a - e.a)) * e.r < 13 * scaleAt(e.r) + 4)) {
+          s.dead = true; e.dead = true;
+          const pts = e.chance ? 100 : e.st === "dive" ? 200 : e.st === "form" ? 100 : 150;
+          addScore(pts, px(e.a, e.r), py(e.a, e.r) - 8, e.st === "dive" ? "#ffe04a" : "#f4f0ff");
+          if (e.chance && chance) chance.kills++;
+          burst(px(e.a, e.r), py(e.a, e.r), KINDS[e.kind][0], 12, 110 * scaleAt(e.r)); sfx.pop();
+          break;
+        }
+      }
+      if (s.dead || !sats) continue;
+      for (const st of sats.list) {
+        if (st.dead) continue;
+        const p = satPos(st);
+        if (hitAt(s.a, s.r, p.a, p.r, 14)) {
+          s.dead = true; st.hp--; st.flash = 0.1;
+          if (st.hp <= 0) {
+            st.dead = true; burst(px(p.a, p.r), py(p.a, p.r), st.core ? "#ffe04a" : "#4ae8ff", 16, 100); sfx.pop();
+            if (st.core) { P.double = true; addScore(1000, px(p.a, p.r), py(p.a, p.r) - 10, "#ffe04a"); popups.push({ x: CX, y: CY - 30, text: "DOPPIO COLPO!", color: "#ffe04a", t: 0 }); sfx.power(); }
+            else addScore(300, px(p.a, p.r), py(p.a, p.r) - 10);
+          }
+          break;
+        }
+      }
+    }
+    shots = shots.filter((s) => !s.dead);
+    for (const b of bullets) {
+      const r0 = b.r; b.r += b.v * dt; b.a += (b.va || 0) * dt;
+      if (r0 < R - 6 && b.r >= R - 6 && Math.abs(wrapA(b.a - P.a)) * R < 13) { b.dead = true; die("colpo"); }
+      if (b.r > R + 60) b.dead = true;
+    }
+    bullets = bullets.filter((b) => !b.dead);
+  }
+  function updatePlayer(dt) {
+    const ix = clamp((keys.right ? 1 : 0) - (keys.left ? 1 : 0) + stick.x, -1, 1);
+    const iy = clamp((keys.down ? 1 : 0) - (keys.up ? 1 : 0) + stick.y, -1, 1);
+    if (Math.hypot(ix, iy) > 0.35) {
+      const target = Math.atan2(iy, ix), d = wrapA(target - P.a), step = 3.6 * dt;
+      P.a = wrapA(P.a + clamp(d, -step, step));
+    }
+    P.inv = Math.max(0, P.inv - dt); P.cool -= dt;
+    if (firing && P.cool <= 0 && shots.length < (P.double ? 10 : 5)) {
+      P.cool = 0.16;
+      if (P.double) { shots.push({ a: P.a - 0.045, r: R - 14 }, { a: P.a + 0.045, r: R - 14 }); }
+      else shots.push({ a: P.a, r: R - 14 });
+      sfx.shot();
+    }
+  }
+  function updateStars(dt, fast) {
+    if (stars.length < 90) for (let i = 0; i < 90; i++) stars.push({ a: rnd(0, TAU), r: rnd(2, 260), c: Math.random() });
+    for (const s of stars) { s.r += (8 + s.r * (fast ? 3.2 : 0.55)) * dt; if (s.r > 300) { s.r = rnd(2, 12); s.a = rnd(0, TAU); } }
+  }
+  function update(dt) {
+    clock += dt; sfxN = 0;
+    if (message) { message.t += dt; if (message.t > 2.4) message = null; }
+    for (const p of parts) { p.t += dt; p.x += p.vx * dt; p.y += p.vy * dt; p.vx *= 0.96; p.vy *= 0.96; }
+    parts = parts.filter((p) => p.t < p.life);
+    for (const p of popups) { p.t += dt; p.y -= 20 * dt; }
+    popups = popups.filter((p) => p.t < 1.2);
+    updateStars(dt, state === "warp");
+    if (!isPlaying()) return;
+    if (state === "intro") { stateT -= dt; updatePlayer(dt); shots.length = 0; if (stateT <= 0) state = "play"; return; }
+    if (state === "dead") { stateT -= dt; updateEnemies(dt); if (stateT <= 0) afterDeath(); return; }
+    if (state === "warp") { stateT -= dt; updatePlayer(dt); shots.length = 0; if (stateT <= 0) beginWave(); return; }
+    if (state === "planet") { stateT -= dt; updatePlayer(dt); shots.length = 0; if (stateT <= 0) startChance(); return; }
+    if (window.__bot) window.__bot(dt);
+    updatePlayer(dt);
+    if (state === "chance") {
+      chance.t -= dt;
+      if (chance.t <= 0 && chance.groups > 0) { chance.groups--; chance.t = 3.4; spawnGroup(chance.groups, true); }
+      updateEnemies(dt); updateShots(dt);
+      if (chance.groups === 0 && !enemies.length) endChance();
+      return;
+    }
+    waveT += dt;
+    groupT -= dt;
+    if (groupT <= 0 && groupsLeft > 0) { groupsLeft--; groupT = 3.2; spawnGroup(2 - groupsLeft, false); if (groupsLeft === 1 && Math.random() < 0.55) spawnSats(); }
+    // stragglers don't stay for ever: after a while they fly off
+    if (waveT > 34 && groupsLeft === 0) for (const e of enemies) if (e.st === "form") { e.st = "leave"; e.vr = 140; }
+    updateEnemies(dt); updateSats(dt);
+    if (state !== "play") return;
+    updateShots(dt);
+    if (state === "play" && groupsLeft === 0 && !enemies.length) waveCleared();
+  }
+
+  // ---------- Drawing ----------
+  function drawSpace() {
+    ctx.fillStyle = "#04030e"; ctx.fillRect(0, 0, W, H);
+    for (const s of stars) {
+      const x = px(s.a, s.r), y = py(s.a, s.r), sz = 0.6 + s.r / 150;
+      ctx.fillStyle = s.c < 0.2 ? "#ffd0a0" : s.c < 0.4 ? "#a0c8ff" : "#ffffff";
+      if (state === "warp") { ctx.strokeStyle = ctx.fillStyle; ctx.lineWidth = sz; ctx.beginPath(); ctx.moveTo(x, y); ctx.lineTo(px(s.a, s.r * 0.8), py(s.a, s.r * 0.8)); ctx.stroke(); }
+      else ctx.fillRect(x - sz / 2, y - sz / 2, sz, sz);
+    }
+    const pl = PLANETS[planet % PLANETS.length];
+    // the planet ahead grows as we get closer
+    const size = state === "planet" ? 60 + (3 - stateT) * 30 : 8 + warp * 10;
+    const g = ctx.createRadialGradient(CX - size * 0.3, CY - size * 0.3, size * 0.1, CX, CY, size);
+    g.addColorStop(0, pl.c1); g.addColorStop(1, pl.c2);
+    ctx.globalAlpha = state === "planet" ? 1 : 0.55;
+    ctx.fillStyle = g; ctx.beginPath(); ctx.arc(CX, CY, size, 0, TAU); ctx.fill();
+    if (pl.ring) { ctx.strokeStyle = "rgba(232,200,122,0.7)"; ctx.lineWidth = size * 0.12; ctx.beginPath(); ctx.ellipse(CX, CY, size * 1.7, size * 0.45, -0.3, 0, TAU); ctx.stroke(); }
+    if (pl.bands) { ctx.fillStyle = "rgba(138,74,42,0.5)"; for (const k of [-0.4, 0, 0.35]) ctx.fillRect(CX - size, CY + k * size - size * 0.07, size * 2, size * 0.14); }
+    if (pl.earth) { ctx.fillStyle = "#3ac85a"; ctx.beginPath(); ctx.ellipse(CX - size * 0.3, CY - size * 0.1, size * 0.35, size * 0.25, 0.4, 0, TAU); ctx.fill(); ctx.beginPath(); ctx.ellipse(CX + size * 0.35, CY + size * 0.3, size * 0.25, size * 0.2, -0.3, 0, TAU); ctx.fill(); }
+    ctx.globalAlpha = 1;
+    // the ship's orbit
+    ctx.strokeStyle = "rgba(184,106,255,0.16)"; ctx.lineWidth = 1; ctx.setLineDash([3, 6]);
+    ctx.beginPath(); ctx.arc(CX, CY, R, 0, TAU); ctx.stroke(); ctx.setLineDash([]);
+  }
+  function drawEnemy(e) {
+    if (e.hidden) return;
+    const x = px(e.a, e.r), y = py(e.a, e.r), s = scaleAt(e.r), [c1, c2] = KINDS[e.kind];
+    ctx.save(); ctx.translate(x, y); ctx.rotate(e.a + Math.PI / 2); ctx.scale(s, s);
+    const flap = Math.sin(clock * 12 + e.slot * 3) * 3;
+    ctx.fillStyle = c1;
+    ctx.beginPath(); ctx.moveTo(0, 12); ctx.lineTo(12, -4 + flap); ctx.lineTo(6, -8); ctx.lineTo(0, -2); ctx.lineTo(-6, -8); ctx.lineTo(-12, -4 + flap); ctx.closePath(); ctx.fill();
+    ctx.fillStyle = c2; ctx.beginPath(); ctx.arc(0, 2, 4.5, 0, TAU); ctx.fill();
+    ctx.fillStyle = "#1a1a2a"; ctx.beginPath(); ctx.arc(0, 4, 2, 0, TAU); ctx.fill();
+    if (e.st === "dive") { ctx.fillStyle = "rgba(255,224,74,0.6)"; ctx.beginPath(); ctx.moveTo(-3, -9); ctx.lineTo(3, -9); ctx.lineTo(0, -15 - Math.random() * 4); ctx.fill(); }
+    ctx.restore();
+  }
+  function drawSats() {
+    if (!sats) return;
+    for (const st of sats.list) {
+      if (st.dead) continue;
+      const p = satPos(st), x = px(p.a, p.r), y = py(p.a, p.r), s = scaleAt(p.r);
+      if (st.core) {
+        const on = Math.floor(clock * 8) % 2;
+        ctx.fillStyle = st.flash > 0 ? "#fff" : on ? "#ffe04a" : "#ff8a3a"; ctx.beginPath(); ctx.arc(x, y, 11 * s, 0, TAU); ctx.fill();
+        ctx.strokeStyle = "#fff"; ctx.lineWidth = 2 * s; ctx.beginPath(); ctx.arc(x, y, 15 * s, 0, TAU); ctx.stroke();
+      } else {
+        ctx.fillStyle = st.flash > 0 ? "#fff" : "#4ae8ff"; ctx.fillRect(x - 9 * s, y - 9 * s, 18 * s, 18 * s);
+        ctx.fillStyle = "#1a3a6a"; ctx.fillRect(x - 5 * s, y - 5 * s, 10 * s, 10 * s);
+      }
+    }
+    // the beam between them
+    const alive = sats.list.filter((s) => !s.dead).map(satPos);
+    if (alive.length > 1) { ctx.strokeStyle = "rgba(74,232,255,0.35)"; ctx.lineWidth = 2; ctx.beginPath(); alive.forEach((p, i) => (i ? ctx.lineTo : ctx.moveTo).call(ctx, px(p.a, p.r), py(p.a, p.r))); ctx.stroke(); }
+  }
+  function drawShip() {
+    if (state === "dead" || state === "menu" || state === "over") return;
+    if (P.inv > 0 && Math.floor(P.inv * 10) % 2 === 0) return;
+    const x = px(P.a, R), y = py(P.a, R);
+    ctx.save(); ctx.translate(x, y); ctx.rotate(P.a - Math.PI / 2);
+    // nose toward the centre
+    const f = 6 + Math.sin(clock * 40) * 2;
+    ctx.fillStyle = "#ff8a3a"; ctx.beginPath(); ctx.moveTo(-4, 10); ctx.lineTo(4, 10); ctx.lineTo(0, 10 + f); ctx.fill();
+    ctx.fillStyle = "#e8e8f8"; ctx.beginPath(); ctx.moveTo(0, -15); ctx.lineTo(11, 9); ctx.lineTo(0, 5); ctx.lineTo(-11, 9); ctx.closePath(); ctx.fill();
+    ctx.fillStyle = "#ff4a6a"; ctx.fillRect(-11, 5, 4, 6); ctx.fillRect(7, 5, 4, 6);
+    ctx.fillStyle = "#4ae8ff"; ctx.beginPath(); ctx.ellipse(0, -3, 3, 5, 0, 0, TAU); ctx.fill();
+    if (P.double) { ctx.fillStyle = "#ffe04a"; ctx.fillRect(-9, -6, 3, 8); ctx.fillRect(6, -6, 3, 8); }
+    ctx.restore();
+  }
+  function drawHud() {
+    ctx.fillStyle = "rgba(4,3,14,0.7)"; ctx.fillRect(0, 0, W, 40);
+    ctx.textBaseline = "middle"; ctx.textAlign = "left";
+    ctx.fillStyle = "#f4f0ff"; ctx.font = "900 16px system-ui"; ctx.fillText(score.toLocaleString("it-IT"), 10, 14);
+    ctx.fillStyle = "#a8a0d0"; ctx.font = "700 9px system-ui"; ctx.fillText(`REC ${Math.max(bestCache, score).toLocaleString("it-IT")}`, 10, 31);
+    ctx.textAlign = "center"; ctx.fillStyle = "#b86aff"; ctx.font = "800 11px system-ui";
+    const pl = PLANETS[planet % PLANETS.length].name.toUpperCase();
+    ctx.fillText(state === "chance" ? `FASE BONUS · ${chance ? chance.kills : 0}/40` : `VERSO ${pl} · ${Math.max(0, WARPS - warp)} WARP`, W / 2, 14);
+    if (P.double && state !== "menu") { ctx.fillStyle = "#ffe04a"; ctx.font = "800 9px system-ui"; ctx.fillText("DOPPIO COLPO", W / 2, 31); }
+    ctx.textAlign = "right";
+    for (let i = 0; i < Math.min(lives, 6); i++) {
+      const x = W - 14 - i * 16, y = 20;
+      ctx.fillStyle = "#e8e8f8"; ctx.beginPath(); ctx.moveTo(x, y - 7); ctx.lineTo(x + 6, y + 6); ctx.lineTo(x, y + 3); ctx.lineTo(x - 6, y + 6); ctx.closePath(); ctx.fill();
+    }
+    ctx.textBaseline = "alphabetic";
+  }
+  function draw() {
+    ctx.setTransform(pxRatio, 0, 0, pxRatio, 0, 0);
+    if (state === "menu") updateStars(1 / 60, false);
+    drawSpace();
+    drawSats();
+    // far ones first
+    for (const e of [...enemies].sort((a, b) => a.r - b.r)) drawEnemy(e);
+    for (const s of shots) {
+      const x = px(s.a, s.r), y = py(s.a, s.r), sc = scaleAt(s.r);
+      ctx.strokeStyle = "#e8fcff"; ctx.lineWidth = 3 * sc; ctx.beginPath(); ctx.moveTo(x, y); ctx.lineTo(px(s.a, s.r + 10 * sc), py(s.a, s.r + 10 * sc)); ctx.stroke();
+    }
+    for (const b of bullets) {
+      const x = px(b.a, b.r), y = py(b.a, b.r), sc = scaleAt(b.r);
+      ctx.fillStyle = "rgba(255,90,60,0.35)"; ctx.beginPath(); ctx.arc(x, y, 7 * sc, 0, TAU); ctx.fill();
+      ctx.fillStyle = "#ffb43a"; ctx.beginPath(); ctx.arc(x, y, 3.5 * sc, 0, TAU); ctx.fill();
+    }
+    drawShip();
+    for (const p of parts) { ctx.globalAlpha = Math.max(0, 1 - p.t / p.life); ctx.fillStyle = p.c; ctx.fillRect(p.x - 1.5, p.y - 1.5, 3, 3); }
+    ctx.globalAlpha = 1;
+    for (const p of popups) {
+      ctx.globalAlpha = Math.max(0, 1 - p.t / 1.2);
+      ctx.textAlign = "center"; ctx.font = "900 11px system-ui";
+      ctx.lineWidth = 3; ctx.strokeStyle = "#04030e"; ctx.strokeText(p.text, p.x, p.y); ctx.fillStyle = p.color; ctx.fillText(p.text, p.x, p.y);
+    }
+    ctx.globalAlpha = 1;
+    if (state !== "menu") drawHud();
+    if (message) {
+      ctx.globalAlpha = Math.min(1, (2.4 - message.t) * 2);
+      ctx.textAlign = "center"; ctx.font = "900 26px system-ui";
+      ctx.lineWidth = 6; ctx.strokeStyle = "#04030e"; ctx.strokeText(message.text, W / 2, 104); ctx.fillStyle = "#b86aff"; ctx.fillText(message.text, W / 2, 104);
+      if (message.sub) { ctx.font = "800 12px system-ui"; ctx.lineWidth = 4; ctx.strokeText(message.sub, W / 2, 126); ctx.fillStyle = "#f4f0ff"; ctx.fillText(message.sub, W / 2, 126); }
+      ctx.globalAlpha = 1;
+    }
+  }
+
+  // ---------- Loop ----------
+  const STEP = 1 / 120;
+  let last = performance.now(), acc = 0;
+  function frame(now) {
+    const dt = Math.min(0.1, (now - last) / 1000);
+    last = now;
+    if (isPlaying()) {
+      acc += dt;
+      while (acc >= STEP && isPlaying()) { update(STEP); acc -= STEP; }
+    } else { acc = 0; update(dt); }
+    draw();
+    requestAnimationFrame(frame);
+  }
+  syncControls();
+  showTitle();
+  requestAnimationFrame(frame);
+})();
+</script>
+<script src="../../shared/iniziali.js" data-record="spirale-best-" data-kind="score"></script>
+</body>
+</html>
