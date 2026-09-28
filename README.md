@@ -4,7 +4,7 @@ Raccolta di giochi arcade per il browser. Ogni gioco è un singolo file HTML sen
 
 ## 🕹️ Sala Giochi — `index.html`
 
-Apri `index.html` nella cartella principale per la pagina di raccolta: mostra tutti i 54 giochi con copertina, genere, comandi e i tuoi record per ogni difficoltà (Facile, Normale, Difficile). Tocca «Gioca» per avviare un gioco; in ogni gioco il pulsante «← Sala Giochi» in alto a sinistra (visibile nei menu) riporta alla raccolta.
+Apri `index.html` nella cartella principale per la pagina di raccolta: mostra tutti i 55 giochi con copertina, genere, comandi e i tuoi record per ogni difficoltà (Facile, Normale, Difficile). Tocca «Gioca» per avviare un gioco; in ogni gioco il pulsante «← Sala Giochi» in alto a sinistra (visibile nei menu) riporta alla raccolta.
 
 **Iniziali del record:** quando batti un record compare la schermata da sala giochi per inserire le tue tre iniziali (frecce ↑ ↓ per cambiare lettera, ← → per spostarti, oppure scrivile direttamente; su telefono i tasti ▲ ▼ e OK). Le iniziali vengono salvate insieme al record e compaiono nei menu del gioco e nella Sala Giochi. Il codice è condiviso da tutti i giochi in `shared/iniziali.js`.
 
@@ -853,3 +853,20 @@ Inseguimento armato a scorrimento verticale in stile *Spy Hunter*: sei un agente
 - **Touch:** levetta analogica a sinistra (di lato sterzi, in su acceleri, in giù freni), tasti ARMA e FUOCO a destra
 
 Per giocare apri `games/caccia-su-strada/index.html` nel browser.
+
+### 🗝️ Cripta degli Eroi — `games/cripta-degli-eroi/index.html`
+
+Avventura nei sotterranei in stile *Gauntlet*: scendi livello dopo livello in una cripta sempre nuova, a caccia dell'uscita.
+
+- **Eroi:** Guerriero (colpi potenti, corazza robusta), Valchiria (lo scudo para metà dei colpi), Mago (la magia più forte), Elfo (velocissimo, frecce a raffica)
+- **Generatori:** mucchi d'ossa che sfornano mostri finché non li distruggi (100 punti per grado; i più forti richiedono più colpi e scendono di grado quando li colpisci)
+- **Mostri:** fantasmi che si scagliano su di te, orchi che ti bastonano, demoni che sputano fuoco (dal livello 2), stregoni che svaniscono (dal livello 3). Più alto il grado, più sono forti
+- **La vita cala col tempo:** mangia il cibo (+150) e non sparargli, altrimenti lo distruggi! Anche le pozioni si rompono se le colpisci
+- **Chiavi e porte:** ogni chiave apre una porta; ce n'è sempre una in più del necessario
+- **Pozioni:** usale per spazzare via tutti i mostri in vista e danneggiare i generatori
+- **La Morte:** dal livello 4 si aggira nella cripta, attraversa i muri e ti succhia la vita. Solo una pozione la sconfigge (1.000 punti)
+- **Difficoltà:** Facile (vita 1.500, mostri più deboli, una pozione iniziale), Normale (vita 1.000), Difficile (vita 800); record separati per ogni difficoltà
+- **Comandi:** frecce o `W` `A` `S` `D` per muoverti, anche in diagonale · tieni premuto `SPAZIO` o `Z` per fermarti e sparare nella direzione in cui punti · `X` o `SHIFT` pozione · `P` pausa
+- **Touch:** levetta a 8 direzioni a sinistra, tasti MAGIA e FUOCO a destra (tenendo FUOCO resti fermo e spari dove punta la levetta)
+
+Per giocare apri `games/cripta-degli-eroi/index.html` nel browser.
