@@ -1,0 +1,808 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no, viewport-fit=cover">
+<title>Basi Stellari</title>
+<style>
+  :root {
+    --bg: #03040c;
+    --fg: #eaf2ff;
+    --muted: #8a9ac0;
+    --green: #5aff8a;
+    --yellow: #ffe04a;
+    --red: #ff4a4a;
+    --cyan: #4ad8ff;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  html, body {
+    height: 100%;
+    background: var(--bg);
+    color: var(--fg);
+    font-family: system-ui, -apple-system, "Segoe UI", sans-serif;
+    overflow: hidden;
+    user-select: none;
+    -webkit-user-select: none;
+    touch-action: none;
+  }
+  #wrap { position: fixed; inset: 0; display: flex; align-items: center; justify-content: center; }
+  canvas { display: block; touch-action: none; border-radius: 6px; box-shadow: 0 0 0 2px #1a2240, 0 10px 40px rgba(0,0,0,0.6); }
+  #pauseBtn {
+    position: fixed; z-index: 3; display: none; right: 10px; top: calc(10px + env(safe-area-inset-top, 0px));
+    font: 700 13px system-ui, sans-serif; color: var(--fg);
+    background: rgba(0, 0, 0, 0.6); border: 1px solid rgba(234, 242, 255, 0.35);
+    border-radius: 8px; padding: 6px 10px; cursor: pointer;
+  }
+  #touch {
+    position: fixed; z-index: 2; display: none; left: 12px; right: 12px;
+    bottom: calc(14px + env(safe-area-inset-bottom, 0px));
+    justify-content: space-between; align-items: flex-end; pointer-events: none;
+  }
+  /* thumb stick sets the heading, one fire button (the ship fires ahead and behind at once) */
+  #touch .stick { position: relative; width: 136px; height: 136px; border-radius: 50%; pointer-events: auto; touch-action: none;
+    border: 2px solid rgba(90, 255, 138, 0.55); background: radial-gradient(circle, rgba(90,255,138,0.14), rgba(90,255,138,0.04)); }
+  #touch .stick .knob { position: absolute; left: 50%; top: 50%; width: 58px; height: 58px; margin: -29px 0 0 -29px; border-radius: 50%;
+    background: rgba(90, 255, 138, 0.4); border: 2px solid rgba(255,255,255,0.7); box-shadow: 0 4px 10px rgba(0,0,0,0.4); pointer-events: none; }
+  #touch .stick .ring { position: absolute; inset: 10px; border-radius: 50%; border: 1px dashed rgba(234,242,255,0.25); pointer-events: none; }
+  #touch .fire { width: 96px; height: 96px; border-radius: 50%; pointer-events: auto; touch-action: none; color: var(--fg);
+    font: 800 13px system-ui, sans-serif; letter-spacing: 1px; border: 2px solid rgba(255, 74, 74, 0.9); background: rgba(255, 74, 74, 0.2); }
+  #touch .fire.on { background: rgba(255, 74, 74, 0.55); }
+  #touch.small .stick { width: 112px; height: 112px; }
+  #touch.small .stick .knob { width: 48px; height: 48px; margin: -24px 0 0 -24px; }
+  #touch.small .fire { width: 78px; height: 78px; font-size: 11px; }
+  #overlay {
+    position: fixed; inset: 0; z-index: 5;
+    display: flex; flex-direction: column; align-items: center; justify-content: flex-start;
+    gap: 14px; padding: 16px; text-align: center; overflow-y: auto;
+    background: rgba(3, 4, 12, 0.92);
+  }
+  #overlay > :first-child { margin-top: auto; }
+  #overlay > :last-child { margin-bottom: auto; }
+  #overlay.hidden { display: none; }
+  #homeLink {
+    position: fixed; top: calc(10px + env(safe-area-inset-top, 0px)); left: 10px; z-index: 6;
+    font: 600 13px/1 system-ui, sans-serif; color: #fff; text-decoration: none;
+    padding: 8px 12px; border-radius: 999px; background: rgba(0,0,0,.55);
+    border: 1px solid rgba(255,255,255,.25);
+  }
+  #homeLink:hover { background: rgba(0,0,0,.8); }
+  #overlay.hidden ~ #homeLink { display: none; }
+  @media (max-width: 700px) { #overlay { padding-top: calc(52px + env(safe-area-inset-top, 0px)); } }
+  #overlay h1 { font-size: clamp(30px, 9vw, 56px); font-weight: 900; letter-spacing: 3px; color: var(--green); text-shadow: 0 0 14px rgba(90,255,138,0.6), 0 0 34px rgba(90,255,138,0.3); }
+  #overlay h2 { font-size: clamp(26px, 7vw, 42px); font-weight: 900; letter-spacing: 2px; color: var(--green); }
+  #overlay h2.lose { color: var(--red); }
+  #overlay p { max-width: 560px; font-size: clamp(13px, 3.4vw, 16px); line-height: 1.55; }
+  #overlay p.muted { color: var(--muted); }
+  #overlay .pts { display: grid; grid-template-columns: repeat(2, auto); gap: 4px 18px; font-size: 13px; color: var(--muted); text-align: left; max-width: 580px; }
+  #overlay .pts b { color: var(--fg); }
+  #overlay .diff { display: flex; gap: 10px; flex-wrap: wrap; justify-content: center; }
+  #overlay button {
+    font: 800 15px system-ui, sans-serif; letter-spacing: 1.5px; color: var(--fg);
+    background: transparent; cursor: pointer;
+    border: 2px solid rgba(234,242,255,0.3); border-radius: 10px; padding: 9px 16px;
+  }
+  #overlay .diff button.on { border-color: var(--c); color: var(--c); box-shadow: 0 0 12px var(--c); }
+  #overlay button.start { border-color: var(--green); color: #021a0a; background: var(--green); padding: 11px 30px; box-shadow: 0 0 18px rgba(90,255,138,0.5); }
+  @media (max-height: 560px) {
+    #overlay { gap: 8px; }
+    #overlay h1 { font-size: 30px; }
+    #overlay p { font-size: 13px; line-height: 1.4; }
+    #overlay .help, #overlay .pts { display: none; }
+  }
+</style>
+</head>
+<body>
+<div id="wrap"><canvas id="game"></canvas></div>
+<div id="touch">
+  <div class="stick" aria-label="Levetta"><div class="ring"></div><div class="knob"></div></div>
+  <button type="button" class="fire" aria-label="Fuoco">FUOCO</button>
+</div>
+<button id="pauseBtn" type="button" aria-label="Pausa">❚❚</button>
+<div id="overlay"></div>
+<a id="homeLink" href="../../index.html">← Sala Giochi</a>
+
+<script>
+(() => {
+  "use strict";
+
+  const W = 640, H = 360, TAU = Math.PI * 2;
+  const WW = 2600, WH = 2600;           // the sector wraps round at its edges
+  const RING = 44, POD_R = 13, CORE_R = 15, GAP = 0.42;
+
+  const DIFFICULTIES = {
+    facile:    { label: "FACILE",    color: "#7ed87a", desc: "5 astronavi · nemici lenti, colpi radi", lives: 5, speed: 155, fire: 0.6, pace: 0.8 },
+    normale:   { label: "NORMALE",   color: "#5aff8a", desc: "3 astronavi · l'esperienza classica", lives: 3, speed: 170, fire: 1, pace: 1 },
+    difficile: { label: "DIFFICILE", color: "#ff4a4a", desc: "3 astronavi · caccia numerosi, basi che sparano fitto", lives: 3, speed: 180, fire: 1.35, pace: 1.25 },
+  };
+  const DIFF_IDS = Object.keys(DIFFICULTIES);
+  const DIFF_KEY = "basi-difficulty";
+  const bestKey = (id) => `basi-best-${id}`;
+  function store(k, v) { try { localStorage.setItem(k, v); } catch { /* ignore */ } }
+  function load(k) { try { return localStorage.getItem(k); } catch { return null; } }
+  const rnd = (a, b) => a + Math.random() * (b - a);
+  const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
+  const sign = (v) => (v < 0 ? -1 : 1);
+  const wrapX = (v) => ((v % WW) + WW) % WW, wrapY = (v) => ((v % WH) + WH) % WH;
+  // the shortest way across the wrapped sector
+  const dX = (a, b) => { let d = b - a; if (d > WW / 2) d -= WW; if (d < -WW / 2) d += WW; return d; };
+  const dY = (a, b) => { let d = b - a; if (d > WH / 2) d -= WH; if (d < -WH / 2) d += WH; return d; };
+  const angDiff = (a, b) => { let d = (a - b) % TAU; if (d > Math.PI) d -= TAU; if (d < -Math.PI) d += TAU; return d; };
+
+  // ---------- Canvas ----------
+  const canvas = document.getElementById("game");
+  const ctx = canvas.getContext("2d");
+  const wrapEl = document.getElementById("wrap");
+  const overlay = document.getElementById("overlay");
+  const touchEl = document.getElementById("touch");
+  const pauseBtn = document.getElementById("pauseBtn");
+  let pxRatio = 1, touchMode = !!(window.matchMedia && matchMedia("(pointer: coarse)").matches);
+  function resize() {
+    const portrait = window.innerHeight > window.innerWidth;
+    const showTouch = touchMode && isPlaying();
+    touchEl.style.display = showTouch ? "flex" : "none";
+    touchEl.classList.toggle("small", !portrait && window.innerHeight < 480);
+    wrapEl.style.paddingBottom = showTouch && portrait ? "calc(170px + env(safe-area-inset-bottom, 0px))" : "0";
+    let availW = window.innerWidth - 8, availH = window.innerHeight - 8;
+    if (showTouch && portrait) availH -= 170;
+    if (showTouch && !portrait) {
+      const side = Math.max(...[...touchEl.children].map((el) => el.offsetWidth)) + 20;
+      if (window.innerWidth - 2 * side > 200) availW = window.innerWidth - 2 * side;
+    }
+    const s = Math.max(0.2, Math.min(availW / W, availH / H));
+    pxRatio = Math.min(3, s * (window.devicePixelRatio || 1));
+    canvas.style.width = W * s + "px";
+    canvas.style.height = H * s + "px";
+    canvas.width = Math.round(W * pxRatio);
+    canvas.height = Math.round(H * pxRatio);
+  }
+  window.addEventListener("resize", () => syncControls());
+
+  // ---------- Audio ----------
+  let audioCtx = null;
+  function beep(freq, dur, type = "square", vol = 0.04, slide = 0, delay = 0) {
+    if (!audioCtx) return;
+    const t = audioCtx.currentTime + delay;
+    const osc = audioCtx.createOscillator(), gain = audioCtx.createGain();
+    osc.type = type;
+    osc.frequency.setValueAtTime(freq, t);
+    if (slide) osc.frequency.exponentialRampToValueAtTime(Math.max(20, freq + slide), t + dur);
+    gain.gain.setValueAtTime(vol, t);
+    gain.gain.exponentialRampToValueAtTime(0.0001, t + dur);
+    osc.connect(gain).connect(audioCtx.destination);
+    osc.start(t); osc.stop(t + dur + 0.02);
+  }
+  function noise(dur, vol, freq) {
+    if (!audioCtx) return;
+    const len = Math.floor(audioCtx.sampleRate * dur), buf = audioCtx.createBuffer(1, len, audioCtx.sampleRate), d = buf.getChannelData(0);
+    for (let i = 0; i < len; i++) d[i] = (Math.random() * 2 - 1) * (1 - i / len);
+    const src = audioCtx.createBufferSource(), f = audioCtx.createBiquadFilter(), g = audioCtx.createGain();
+    src.buffer = buf; f.type = "lowpass"; f.frequency.value = freq; g.gain.value = vol;
+    src.connect(f).connect(g).connect(audioCtx.destination); src.start();
+  }
+  const arp = (notes, gap, d, type = "square", vol = 0.04) => notes.forEach((f, i) => beep(f, d, type, vol, 0, i * gap));
+  let sfxN = 0;
+  const lim = (fn) => (...a) => { if (sfxN++ < 6) fn(...a); };
+  const sfx = {
+    fire: lim(() => beep(1200, 0.06, "square", 0.018, -600)),
+    pop: lim(() => noise(0.15, 0.12, 1800)),
+    pod: lim(() => { noise(0.25, 0.2, 900); beep(300, 0.12, "square", 0.03, -150); }),
+    base: () => { noise(1.2, 0.4, 500); arp([784, 659, 523, 392, 523, 659, 784, 1047], 0.07, 0.12, "square", 0.04); },
+    mine: lim(() => { noise(0.6, 0.3, 700); beep(80, 0.5, "square", 0.05, -40); }),
+    shot: lim(() => beep(400, 0.08, "sawtooth", 0.015, 200)),
+    die: () => { noise(1, 0.35, 900); arp([523, 415, 330, 262, 196], 0.1, 0.18, "triangle", 0.05); },
+    alert: () => arp([880, 660, 880, 660], 0.15, 0.12, "square", 0.03),
+    spy: () => arp([1319, 1568, 1319], 0.08, 0.1, "square", 0.03),
+    clear: () => arp([523, 659, 784, 1047, 784, 1047, 1319], 0.1, 0.16),
+    start: () => arp([392, 523, 659, 784, 1047], 0.1, 0.14),
+    over: () => arp([523, 466, 415, 392, 330, 262], 0.15, 0.24, "triangle", 0.05),
+  };
+
+  // ---------- State ----------
+  let difficulty = DIFFICULTIES[load(DIFF_KEY)] ? load(DIFF_KEY) : "normale";
+  let diff = DIFFICULTIES[difficulty];
+  let state = "menu", menu = null, pausedFrom = null, stateT = 0, clock = 0;
+  let score = 0, lives = 3, round = 0, bestCache = 0, nextLife = 20000, condition = 0, condT = 0;
+  let S = null, stations = [], fighters = [], rocks = [], mines = [], bullets = [], shells = [], parts = [], popups = [], formation = null, message = null, shake = 0;
+  let spawnT = 0, formT = 0, firePressed = false, fireHeld = false;
+  const keys = { left: false, right: false, up: false, down: false };
+  const stick = { x: 0, y: 0 };
+  const STARS = Array.from({ length: 120 }, () => ({ x: Math.random() * WW, y: Math.random() * WH, z: rnd(0.2, 0.8) }));
+  const pace = () => diff.pace * (1 + Math.min(1, round * 0.1));
+
+  // ---------- The sector ----------
+  const podPos = (st, i) => { const a = st.rot + (i + 0.5) / 6 * TAU; return { x: st.x + Math.cos(a) * RING, y: st.y + Math.sin(a) * RING }; };
+  function farFrom(x, y, list, d) { return list.every((o) => Math.hypot(dX(o.x, x), dY(o.y, y)) > d); }
+  function buildRound() {
+    stations = []; fighters = []; rocks = []; mines = []; bullets = []; shells = []; parts = []; popups = []; formation = null;
+    const n = Math.min(8, 3 + round);
+    for (let k = 0; k < 400 && stations.length < n; k++) {
+      const x = rnd(0, WW), y = rnd(0, WH);
+      if (!farFrom(x, y, stations, 560) || Math.hypot(dX(x, WW / 2), dY(y, WH / 2)) < 420) continue;
+      stations.push({ x, y, rot: rnd(0, TAU), pods: [1, 1, 1, 1, 1, 1], fireT: rnd(1, 3), alive: true, pulse: 0 });
+    }
+    const avoid = stations.concat([{ x: WW / 2, y: WH / 2 }]);
+    for (let k = 0; k < 500 && rocks.length < 34; k++) { const x = rnd(0, WW), y = rnd(0, WH); if (farFrom(x, y, avoid, 150)) rocks.push({ x, y, r: rnd(12, 22), vx: rnd(-8, 8), vy: rnd(-8, 8), rot: rnd(0, TAU), spin: rnd(-1, 1), seed: Math.random() }); }
+    for (let k = 0; k < 500 && mines.length < 10 + round * 2; k++) { const x = rnd(0, WW), y = rnd(0, WH); if (farFrom(x, y, avoid, 170) && farFrom(x, y, rocks, 60)) mines.push({ x, y, r: 10 }); }
+    condition = 0; condT = 0; spawnT = 4; formT = rnd(25, 35);
+  }
+  function newShip() {
+    S = { x: WW / 2, y: WH / 2, a: -Math.PI / 2, cool: 0, inv: 2.5, dead: 0 };
+  }
+
+  // ---------- Flow ----------
+  const isPlaying = () => ["intro", "play", "dead", "clear"].includes(state);
+  function startGame() {
+    if (!audioCtx) { try { audioCtx = new (window.AudioContext || window.webkitAudioContext)(); } catch { audioCtx = null; } }
+    if (audioCtx && audioCtx.state === "suspended") audioCtx.resume();
+    score = 0; lives = diff.lives; round = 0; nextLife = 20000;
+    bestCache = parseInt(load(bestKey(difficulty)), 10) || 0;
+    beginRound();
+    sfx.start();
+    menu = null;
+    overlay.classList.add("hidden");
+    syncControls();
+    last = performance.now();
+  }
+  function beginRound() {
+    buildRound();
+    newShip();
+    message = { text: `SETTORE ${round + 1}`, sub: `${stations.length} basi nemiche da distruggere`, t: 0 };
+    state = "intro"; stateT = 2;
+  }
+  function addScore(n, x, y, color = "#eaf2ff") {
+    score += n;
+    if (x !== undefined) popups.push({ x, y, text: String(n), color, t: 0 });
+    if (score >= nextLife) { nextLife += 30000; if (lives < 9) { lives++; sfx.clear(); popups.push({ x: S.x, y: S.y - 30, text: "ASTRONAVE EXTRA", color: "#ffe04a", t: 0 }); } }
+  }
+  function burst(x, y, c, n = 12, sp = 140, life = 0.6) {
+    for (let k = 0; k < n; k++) { const a = Math.random() * TAU, s = sp * rnd(0.2, 1); parts.push({ x, y, vx: Math.cos(a) * s, vy: Math.sin(a) * s, t: 0, life: life * rnd(0.5, 1.2), c }); }
+  }
+  function die() {
+    if (state !== "play" || S.inv > 0) return;
+    lives--; S.dead = 0.001;
+    sfx.die(); shake = 0.6;
+    burst(S.x, S.y, "#ffe04a", 30, 220, 0.9); burst(S.x, S.y, "#eaf2ff", 16, 160, 0.7);
+    message = { text: "ASTRONAVE DISTRUTTA", sub: lives > 0 ? `Ne restano ${lives}` : "", t: 0 };
+    state = "dead"; stateT = 2.4;
+  }
+  function afterDeath() {
+    if (lives <= 0) { gameOver(); return; }
+    // a fresh ship, somewhere quiet
+    let best = null;
+    for (let k = 0; k < 60; k++) {
+      const x = rnd(0, WW), y = rnd(0, WH);
+      const d = Math.min(...stations.filter((s) => s.alive).map((s) => Math.hypot(dX(s.x, x), dY(s.y, y))), ...fighters.map((f) => Math.hypot(dX(f.x, x), dY(f.y, y))), 9999);
+      if (!best || d > best.d) best = { x, y, d };
+    }
+    S = { x: best.x, y: best.y, a: -Math.PI / 2, cool: 0, inv: 2.5, dead: 0 };
+    fighters = []; shells = []; formation = null; condition = 0; condT = 0;
+    state = "play";
+  }
+  function roundClear() {
+    const bonus = 1000 * (round + 1) + (condition === 0 ? 2000 : 0);
+    addScore(bonus);
+    message = { text: "SETTORE LIBERATO!", sub: `Bonus ${bonus.toLocaleString("it-IT")}`, t: 0 };
+    sfx.clear();
+    state = "clear"; stateT = 3;
+  }
+  function gameOver() {
+    state = "over";
+    const prev = parseInt(load(bestKey(difficulty)), 10) || 0;
+    const record = score > prev;
+    if (record) store(bestKey(difficulty), String(score));
+    sfx.over();
+    const played = diff.label, r = round + 1;
+    menu = () => showOverlay(
+      `<h2 class="lose">GAME OVER</h2>
+       <p>Punteggio: <b>${score.toLocaleString("it-IT")}</b> · Settore ${r} · ${played}</p>
+       ${record ? "<p style='color:var(--yellow)'>★ NUOVO RECORD! ★</p>" : ""}
+       ${difficultyHTML()}
+       <button class="start" data-start>GIOCA ANCORA</button>`
+    );
+    menu();
+    syncControls();
+  }
+  function togglePause() {
+    if (isPlaying()) {
+      pausedFrom = state; state = "paused";
+      showOverlay(`<h2>PAUSA</h2><button class="start" data-resume>CONTINUA</button><p class="muted">Premi P per continuare</p>`);
+    } else if (state === "paused") {
+      state = pausedFrom; overlay.classList.add("hidden"); last = performance.now();
+    }
+    syncControls();
+  }
+  // the pause menu can end the game (shared/iniziali.js): it ends here the usual way, saving the record
+  window.addEventListener("sala:termina", () => { if (state !== "paused") return; state = pausedFrom; overlay.classList.add("hidden"); gameOver(); syncControls(); });
+  function syncControls() {
+    pauseBtn.style.display = isPlaying() && touchMode ? "block" : "none";
+    resize();
+  }
+  pauseBtn.addEventListener("click", () => togglePause());
+  function showOverlay(html) { overlay.innerHTML = html; overlay.classList.remove("hidden"); }
+  function difficultyHTML() {
+    const buttons = DIFF_IDS.map((id) => {
+      const d = DIFFICULTIES[id];
+      return `<button type="button" data-diff="${id}" class="${id === difficulty ? "on" : ""}" style="--c:${d.color}">${d.label}</button>`;
+    }).join("");
+    const best = parseInt(load(bestKey(difficulty)), 10);
+    return `<div class="diff">${buttons}</div><p class="muted">${diff.desc}${best ? ` · Record: ${best.toLocaleString("it-IT")}` : ""}</p>`;
+  }
+  function setDifficulty(id) { if (!DIFFICULTIES[id]) return; difficulty = id; diff = DIFFICULTIES[id]; store(DIFF_KEY, id); if (menu) menu(); }
+  function showTitle() {
+    menu = showTitle;
+    showOverlay(
+      `<h1>BASI STELLARI</h1>
+       <p>La tua astronave vola sempre in avanti e spara in due direzioni insieme, davanti e dietro. Distruggi tutte le basi nemiche del settore: il radar in alto a destra ti mostra dove sono. Occhio ai caccia, agli asteroidi e alle mine.</p>
+       <div class="pts">
+         <span><b>Base</b></span><span>abbatti i suoi 6 cannoni (200 l'uno, 1.000 alla fine), oppure infila un colpo nell'apertura e centra il nucleo: 1.500 in un colpo solo. Se la urti, rimbalzi</span>
+         <span><b>Caccia</b></span><span>verde 50 · blu 60 · viola 70 (due colpi)</span>
+         <span><b>Formazione</b></span><span>colpisci il capo e i gregari si disperdono: fino a 1.500</span>
+         <span><b>Mina spaziale</b></span><span>20: colpita esplode e si porta dietro chi le sta intorno</span>
+       </div>
+       ${touchMode
+         ? `<p class="muted help">Levetta per scegliere la direzione · FUOCO (tieni premuto)</p>`
+         : `<p class="muted help">Frecce o WASD per la direzione (anche in diagonale) · SPAZIO o J fuoco · P pausa</p>`}
+       ${difficultyHTML()}
+       <button class="start" data-start>DECOLLO!</button>`
+    );
+  }
+  overlay.addEventListener("click", (e) => {
+    const d = e.target.closest("[data-diff]");
+    if (d) { setDifficulty(d.dataset.diff); return; }
+    if (e.target.closest("[data-start]")) startGame();
+    if (e.target.closest("[data-resume]")) togglePause();
+  });
+
+  // ---------- Input ----------
+  const KEYMAP = { arrowleft: "left", a: "left", arrowright: "right", d: "right", arrowup: "up", w: "up", arrowdown: "down", s: "down" };
+  window.addEventListener("keydown", (e) => {
+    const k = e.key.toLowerCase();
+    if ([" ", "arrowup", "arrowdown", "arrowleft", "arrowright"].includes(k)) e.preventDefault();
+    if (state === "menu" || state === "over") {
+      if (e.key === "Enter") startGame();
+      else if (["1", "2", "3"].includes(k)) setDifficulty(DIFF_IDS[+k - 1]);
+      return;
+    }
+    if (k === "p" || k === "escape") { if (!e.repeat) togglePause(); return; }
+    if (state === "paused") { if (e.key === "Enter") togglePause(); return; }
+    if (k === " " || k === "j" || k === "z" || k === "x") { if (!e.repeat) firePressed = true; fireHeld = true; }
+    if (KEYMAP[k]) keys[KEYMAP[k]] = true;
+  });
+  window.addEventListener("keyup", (e) => {
+    const k = e.key.toLowerCase();
+    if (k === " " || k === "j" || k === "z" || k === "x") fireHeld = false;
+    if (KEYMAP[k]) keys[KEYMAP[k]] = false;
+  });
+  window.addEventListener("blur", () => { for (const k in keys) keys[k] = false; stick.x = stick.y = 0; fireHeld = false; if (isPlaying()) togglePause(); });
+  const fireBtn = touchEl.querySelector(".fire");
+  let fireId = null;
+  fireBtn.addEventListener("pointerdown", (e) => { e.preventDefault(); fireId = e.pointerId; firePressed = true; fireHeld = true; fireBtn.classList.add("on"); try { fireBtn.setPointerCapture(e.pointerId); } catch { /* ignore */ } });
+  for (const ev of ["pointerup", "pointercancel", "lostpointercapture"]) fireBtn.addEventListener(ev, (e) => { if (e.pointerId !== fireId) return; fireId = null; fireHeld = false; fireBtn.classList.remove("on"); });
+  const stickEl = touchEl.querySelector(".stick"), knob = stickEl.querySelector(".knob");
+  let stickId = null;
+  function stickAt(e) {
+    const r = stickEl.getBoundingClientRect(), max = r.width / 2 - 14;
+    let dx = e.clientX - (r.left + r.width / 2), dy = e.clientY - (r.top + r.height / 2);
+    const len = Math.hypot(dx, dy);
+    if (len > max) { dx *= max / len; dy *= max / len; }
+    knob.style.transform = `translate(${dx}px, ${dy}px)`;
+    if (len < max * 0.25) { stick.x = stick.y = 0; return; }
+    stick.x = dx / len; stick.y = dy / len;
+  }
+  const stickEnd = (e) => { if (e.pointerId !== stickId) return; stickId = null; knob.style.transform = ""; stick.x = stick.y = 0; };
+  stickEl.addEventListener("pointerdown", (e) => { e.preventDefault(); stickId = e.pointerId; try { stickEl.setPointerCapture(e.pointerId); } catch { /* ignore */ } stickAt(e); });
+  stickEl.addEventListener("pointermove", (e) => { if (e.pointerId === stickId) stickAt(e); });
+  for (const ev of ["pointerup", "pointercancel", "lostpointercapture"]) stickEl.addEventListener(ev, stickEnd);
+  window.addEventListener("pointerdown", (e) => { if (e.pointerType === "touch" && !touchMode) { touchMode = true; syncControls(); if (menu) menu(); } }, true);
+
+  // ---------- The ship ----------
+  function updateShip(dt) {
+    if (S.inv > 0) S.inv -= dt;
+    const ix = (keys.right ? 1 : 0) - (keys.left ? 1 : 0) + stick.x, iy = (keys.down ? 1 : 0) - (keys.up ? 1 : 0) + stick.y;
+    if (ix || iy) {
+      const want = Math.atan2(iy, ix);
+      const d = angDiff(want, S.a);
+      S.a += clamp(d, -6 * dt, 6 * dt);
+    }
+    S.x = wrapX(S.x + Math.cos(S.a) * diff.speed * dt);
+    S.y = wrapY(S.y + Math.sin(S.a) * diff.speed * dt);
+    S.cool -= dt;
+    if ((firePressed || fireHeld) && S.cool <= 0 && bullets.length < 8) {
+      S.cool = 0.18;
+      // ahead and behind at once
+      for (const s of [1, -1]) {
+        const a = S.a + (s < 0 ? Math.PI : 0);
+        bullets.push({ x: S.x + Math.cos(a) * 12, y: S.y + Math.sin(a) * 12, vx: Math.cos(a) * 480 + Math.cos(S.a) * diff.speed, vy: Math.sin(a) * 480 + Math.sin(S.a) * diff.speed, t: 0 });
+      }
+      sfx.fire();
+    }
+    firePressed = false;
+  }
+  // what is the ship touching?
+  function shipHits() {
+    if (S.inv > 0) {
+      // while protected it cannot sink into a base or a rock, so it never comes out of it inside one
+      for (const st of stations) if (st.alive) { const dx = dX(st.x, S.x), dy = dY(st.y, S.y), d = Math.hypot(dx, dy), m = RING + POD_R + 8; if (d < m) { S.x = wrapX(st.x + dx / (d || 1) * m); S.y = wrapY(st.y + dy / (d || 1) * m); } }
+      for (const r of rocks) { const dx = dX(r.x, S.x), dy = dY(r.y, S.y), d = Math.hypot(dx, dy), m = r.r + 10; if (d < m) { S.x = wrapX(r.x + dx / (d || 1) * m); S.y = wrapY(r.y + dy / (d || 1) * m); } }
+      return;
+    }
+    for (const st of stations) {
+      if (!st.alive) continue;
+      // the ring itself, and the cannons still standing on it
+      const d = Math.hypot(dX(st.x, S.x), dY(st.y, S.y));
+      if (d > RING + POD_R + 8) continue;
+      // the base is solid: touching it you bounce off, shaken but whole
+      let hit = d < RING + 5;
+      for (let i = 0; i < 6 && !hit; i++) if (st.pods[i]) { const q = podPos(st, i); if (Math.hypot(dX(q.x, S.x), dY(q.y, S.y)) < POD_R + 5) hit = true; }
+      if (hit) {
+        const nx = dX(st.x, S.x) / (d || 1), ny = dY(st.y, S.y) / (d || 1), m = RING + POD_R + 9;
+        S.x = wrapX(st.x + nx * m); S.y = wrapY(st.y + ny * m);
+        const vx = Math.cos(S.a), vy = Math.sin(S.a), dot = vx * nx + vy * ny;
+        if (dot < 0) S.a = Math.atan2(vy - 2 * dot * ny, vx - 2 * dot * nx);
+        shake = Math.max(shake, 0.25); sfx.pop();
+        burst(S.x - nx * 8, S.y - ny * 8, "#5aff8a", 6, 80, 0.3);
+      }
+    }
+    for (const r of rocks) if (Math.hypot(dX(r.x, S.x), dY(r.y, S.y)) < r.r + 7) { die(); return; }
+    for (const m of mines) if (Math.hypot(dX(m.x, S.x), dY(m.y, S.y)) < m.r + 7) { mineBlast(m); die(); return; }
+    for (const f of fighters) if (Math.hypot(dX(f.x, S.x), dY(f.y, S.y)) < 14) { killFighter(f, false); die(); return; }
+    for (const s of shells) if (Math.hypot(dX(s.x, S.x), dY(s.y, S.y)) < 8) { s.dead = true; die(); return; }
+  }
+
+  // ---------- Stations ----------
+  function destroyStation(st, how) {
+    st.alive = false;
+    const pts = how === "core" ? 1500 : 1000;
+    addScore(pts, st.x, st.y - 30, "#ffe04a");
+    burst(st.x, st.y, "#5aff8a", 50, 260, 1.2); burst(st.x, st.y, "#ffe04a", 30, 200, 0.9);
+    sfx.base(); shake = 0.5;
+    if (how === "core") popups.push({ x: st.x, y: st.y - 50, text: "NUCLEO CENTRATO!", color: "#5aff8a", t: 0 });
+    if (stations.every((s) => !s.alive)) roundClear();
+  }
+  function updateStations(dt) {
+    const sp = pace();
+    for (const st of stations) {
+      if (!st.alive) continue;
+      st.pulse += dt;
+      const d = Math.hypot(dX(st.x, S.x), dY(st.y, S.y));
+      st.fireT -= dt;
+      if (st.fireT <= 0 && d < 380 && state === "play") {
+        st.fireT = rnd(1.4, 2.4) / (diff.fire * sp);
+        // the nearest working cannon shoots at you
+        let best = -1, bd = 1e9;
+        st.pods.forEach((p, i) => { if (!p) return; const q = podPos(st, i), dd = Math.hypot(dX(q.x, S.x), dY(q.y, S.y)); if (dd < bd) { bd = dd; best = i; } });
+        if (best >= 0) {
+          const q = podPos(st, best), a = Math.atan2(dY(q.y, S.y), dX(q.x, S.x)) + rnd(-0.08, 0.08);
+          shells.push({ x: q.x, y: q.y, vx: Math.cos(a) * 190 * sp, vy: Math.sin(a) * 190 * sp, t: 0 });
+          sfx.shot();
+        }
+      }
+    }
+  }
+  // a bullet reaching a station: pods, the ring, or the core through the opening
+  function bulletVsStation(b, st) {
+    const dx = dX(st.x, b.x), dy = dY(st.y, b.y), d = Math.hypot(dx, dy);
+    if (d > RING + POD_R + 4) return false;
+    for (let i = 0; i < 6; i++) {
+      if (!st.pods[i]) continue;
+      const q = podPos(st, i);
+      if (Math.hypot(dX(q.x, b.x), dY(q.y, b.y)) < POD_R + 3) {
+        st.pods[i] = 0;
+        addScore(200, q.x, q.y - 12, "#5aff8a"); burst(q.x, q.y, "#5aff8a", 14, 160, 0.6); sfx.pod();
+        if (st.pods.every((p) => !p)) destroyStation(st, "pods");
+        return true;
+      }
+    }
+    if (d < CORE_R + 2) { destroyStation(st, "core"); return true; }
+    // the ring stops everything except through the opening
+    if (d > RING - 8 && d < RING + 8) {
+      const a = Math.atan2(dy, dx);
+      if (Math.abs(angDiff(a, st.rot)) > GAP) { burst(b.x, b.y, "#8aa0c0", 4, 60, 0.2); sfx.pop(); return true; }
+    }
+    return false;
+  }
+
+  // ---------- Enemies ----------
+  const FIGHTERS = { I: { speed: 185, turn: 2.2, hp: 1, pts: 50, col: "#5aff8a" }, P: { speed: 160, turn: 2.6, hp: 1, pts: 60, col: "#4ad8ff" }, E: { speed: 135, turn: 3, hp: 2, pts: 70, col: "#c86aff" } };
+  function spawnFighter(type, x, y, a) {
+    fighters.push({ type, x, y, a, hp: FIGHTERS[type].hp, t: 0, wob: rnd(0, TAU) });
+  }
+  function offscreenPoint() {
+    const a = rnd(0, TAU), r = rnd(380, 460);
+    return { x: wrapX(S.x + Math.cos(a) * r), y: wrapY(S.y + Math.sin(a) * r), a: a + Math.PI };
+  }
+  function updateFighters(dt) {
+    const sp = pace();
+    // the longer you take, the angrier the sector: condition green, yellow, red
+    condT += dt;
+    const newCond = condT > 75 ? 2 : condT > 40 ? 1 : 0;
+    if (newCond > condition) { condition = newCond; message = { text: newCond === 2 ? "CONDIZIONE ROSSA!" : "CONDIZIONE GIALLA", sub: "", t: 0.5 }; sfx.alert(); }
+    spawnT -= dt;
+    const cap = Math.round((2 + round * 0.5 + condition * 2) * diff.pace);
+    if (spawnT <= 0 && state === "play") {
+      spawnT = rnd(2.5, 4.5) / (sp * (1 + condition * 0.5));
+      if (fighters.filter((f) => !f.form).length < cap) { const p = offscreenPoint(); spawnFighter(["I", "P", "E"][Math.floor(Math.random() * Math.min(3, 1 + round))], p.x, p.y, p.a); }
+    }
+    formT -= dt;
+    if (formT <= 0 && !formation && state === "play") {
+      formT = rnd(35, 50) / sp;
+      const p = offscreenPoint();
+      formation = { leader: null };
+      const la = p.a;
+      spawnFighter("E", p.x, p.y, la); formation.leader = fighters[fighters.length - 1]; formation.leader.leader = true; formation.leader.hp = 2;
+      for (const [ox, oy] of [[-28, -22], [-28, 22], [-56, -44], [-56, 44]]) {
+        const x = wrapX(p.x + Math.cos(la) * ox - Math.sin(la) * oy), y = wrapY(p.y + Math.sin(la) * ox + Math.cos(la) * oy);
+        spawnFighter("P", x, y, la); const f = fighters[fighters.length - 1]; f.form = { ox, oy };
+      }
+      formation.left = 4;
+      message = { text: "FORMAZIONE IN ARRIVO", sub: "", t: 0.8 }; sfx.spy();
+    }
+    for (const f of fighters) {
+      const T = FIGHTERS[f.type];
+      f.t += dt;
+      if (f.form && formation && formation.leader && !formation.leader.dead) {
+        // wingmen hold their place beside the leader
+        const L = formation.leader;
+        const tx = wrapX(L.x + Math.cos(L.a) * f.form.ox - Math.sin(L.a) * f.form.oy), ty = wrapY(L.y + Math.sin(L.a) * f.form.ox + Math.cos(L.a) * f.form.oy);
+        f.x = wrapX(f.x + dX(f.x, tx) * Math.min(1, dt * 6)); f.y = wrapY(f.y + dY(f.y, ty) * Math.min(1, dt * 6)); f.a = L.a;
+        continue;
+      }
+      // they dive at you, then break away at the last moment and come round again
+      const dist = Math.hypot(dX(f.x, S.x), dY(f.y, S.y));
+      f.breakT = (f.breakT || 0) - dt;
+      if (dist < 110 && f.breakT <= 0) { f.breakT = rnd(1, 1.5); f.breakDir = Math.random() < 0.5 ? -1 : 1; }
+      const want = f.breakT > 0 ? f.a + f.breakDir : Math.atan2(dY(f.y, S.y), dX(f.x, S.x)) + Math.sin(f.t * 2 + f.wob) * 0.5;
+      f.a += clamp(angDiff(want, f.a), -T.turn * dt, T.turn * dt);
+      const v = T.speed * (f.leader ? 0.8 : 1) * (0.65 + sp * 0.35);
+      f.x = wrapX(f.x + Math.cos(f.a) * v * dt); f.y = wrapY(f.y + Math.sin(f.a) * v * dt);
+    }
+    fighters = fighters.filter((f) => !f.dead);
+  }
+  function killFighter(f, byPlayer = true) {
+    if (f.dead) return;
+    f.dead = true;
+    const T = FIGHTERS[f.type];
+    burst(f.x, f.y, T.col, 12, 140, 0.5); sfx.pop();
+    if (!byPlayer) return;
+    if (f.leader && formation) {
+      // the leader down: the more wingmen still with it, the bigger the prize
+      const left = fighters.filter((q) => q.form && !q.dead).length;
+      const pts = [500, 800, 1000, 1200, 1500][left] || 500;
+      addScore(pts, f.x, f.y - 14, "#ffe04a");
+      for (const q of fighters) if (q.form) q.form = null;
+      formation = null;
+      popups.push({ x: f.x, y: f.y - 30, text: "CAPO ABBATTUTO!", color: "#ffe04a", t: 0 });
+    } else addScore(T.pts, f.x, f.y - 12);
+  }
+  function mineBlast(m) {
+    if (m.dead) return;
+    m.dead = true;
+    burst(m.x, m.y, "#ff8a4a", 30, 220, 0.7); sfx.mine(); shake = Math.max(shake, 0.3);
+    // it takes its neighbours with it
+    for (const f of fighters) if (Math.hypot(dX(m.x, f.x), dY(m.y, f.y)) < 70) killFighter(f);
+    for (const r of rocks) if (!r.dead && Math.hypot(dX(m.x, r.x), dY(m.y, r.y)) < 70) { r.dead = true; burst(r.x, r.y, "#a08a70", 8, 90); }
+    for (const o of mines) if (o !== m && !o.dead && Math.hypot(dX(m.x, o.x), dY(m.y, o.y)) < 70) o.chain = 0.15;
+    if (state === "play" && S.inv <= 0 && Math.hypot(dX(m.x, S.x), dY(m.y, S.y)) < 64) die();
+  }
+  function updateBullets(dt) {
+    for (const b of bullets) {
+      b.t += dt; b.x = wrapX(b.x + b.vx * dt); b.y = wrapY(b.y + b.vy * dt);
+      if (b.t > 0.75) { b.dead = true; continue; }
+      for (const st of stations) if (st.alive && bulletVsStation(b, st)) { b.dead = true; break; }
+      if (b.dead) continue;
+      for (const f of fighters) if (!f.dead && Math.hypot(dX(f.x, b.x), dY(f.y, b.y)) < 12) { b.dead = true; f.hp--; if (f.hp <= 0) killFighter(f); else { burst(b.x, b.y, "#fff", 4, 60, 0.2); sfx.pop(); } break; }
+      if (b.dead) continue;
+      for (const r of rocks) if (!r.dead && Math.hypot(dX(r.x, b.x), dY(r.y, b.y)) < r.r) { b.dead = true; r.dead = true; addScore(10); burst(r.x, r.y, "#a08a70", 10, 100); sfx.pop(); break; }
+      if (b.dead) continue;
+      for (const m of mines) if (!m.dead && Math.hypot(dX(m.x, b.x), dY(m.y, b.y)) < m.r + 3) { b.dead = true; addScore(20, m.x, m.y - 12); mineBlast(m); break; }
+      if (b.dead) continue;
+      for (const s of shells) if (!s.dead && Math.hypot(dX(s.x, b.x), dY(s.y, b.y)) < 7) { b.dead = s.dead = true; burst(s.x, s.y, "#ff8a4a", 5, 60, 0.2); break; }
+    }
+    bullets = bullets.filter((b) => !b.dead);
+    for (const s of shells) { s.t += dt; s.x = wrapX(s.x + s.vx * dt); s.y = wrapY(s.y + s.vy * dt); if (s.t > 2.6) s.dead = true; }
+    shells = shells.filter((s) => !s.dead);
+    for (const m of mines) if (m.chain !== undefined && !m.dead) { m.chain -= dt; if (m.chain <= 0) mineBlast(m); }
+    mines = mines.filter((m) => !m.dead);
+    for (const r of rocks) { r.x = wrapX(r.x + r.vx * dt); r.y = wrapY(r.y + r.vy * dt); r.rot += r.spin * dt; }
+    rocks = rocks.filter((r) => !r.dead);
+  }
+
+  // ---------- Update ----------
+  function update(dt) {
+    clock += dt; sfxN = 0;
+    if (message) { message.t += dt; if (message.t > 2.4) message = null; }
+    for (const p of parts) { p.t += dt; p.x += p.vx * dt; p.y += p.vy * dt; p.vx *= 0.97; p.vy *= 0.97; }
+    parts = parts.filter((p) => p.t < p.life);
+    for (const p of popups) { p.t += dt; p.y -= 20 * dt; }
+    popups = popups.filter((p) => p.t < 1.2);
+    if (shake > 0) shake -= dt;
+    if (!isPlaying()) { firePressed = false; return; }
+    if (state === "intro") { stateT -= dt; firePressed = false; if (stateT <= 0) state = "play"; return; }
+    if (state === "clear") { stateT -= dt; S.x = wrapX(S.x + Math.cos(S.a) * 260 * dt); S.y = wrapY(S.y + Math.sin(S.a) * 260 * dt); if (stateT <= 0) { round++; beginRound(); } return; }
+    if (state === "dead") { stateT -= dt; S.dead += dt; updateFighters(dt); updateBullets(dt); if (stateT <= 0) afterDeath(); return; }
+    if (window.__bot) window.__bot(dt);
+    updateShip(dt);
+    updateStations(dt);
+    updateFighters(dt);
+    updateBullets(dt);
+    if (state === "play") shipHits();
+  }
+
+  // ---------- Drawing ----------
+  // screen position of a world point, taking the shortest way round from the ship
+  const sx = (x) => W / 2 + dX(S.x, x), sy = (y) => H / 2 + dY(S.y, y);
+  const onScreen = (x, y, m = 60) => { const a = sx(x), b = sy(y); return a > -m && a < W + m && b > -m && b < H + m; };
+  function drawStars() {
+    ctx.fillStyle = "#03040c"; ctx.fillRect(0, 0, W, H);
+    for (const s of STARS) {
+      const x = ((s.x - S.x * s.z) % W + W) % W, y = ((s.y - S.y * s.z) % H + H) % H;
+      ctx.fillStyle = `rgba(200,220,255,${0.3 + s.z * 0.6})`;
+      ctx.fillRect(x, y, s.z > 0.6 ? 2 : 1, s.z > 0.6 ? 2 : 1);
+    }
+  }
+  function drawStation(st) {
+    if (!st.alive || !onScreen(st.x, st.y, 80)) return;
+    const x = sx(st.x), y = sy(st.y);
+    ctx.save(); ctx.translate(x, y);
+    // the ring, open on one side
+    ctx.strokeStyle = "#3a8a5a"; ctx.lineWidth = 9;
+    ctx.beginPath(); ctx.arc(0, 0, RING, st.rot + GAP, st.rot - GAP + TAU); ctx.stroke();
+    ctx.strokeStyle = "#5aff8a"; ctx.lineWidth = 2;
+    ctx.beginPath(); ctx.arc(0, 0, RING + 4.5, st.rot + GAP, st.rot - GAP + TAU); ctx.stroke();
+    ctx.beginPath(); ctx.arc(0, 0, RING - 4.5, st.rot + GAP, st.rot - GAP + TAU); ctx.stroke();
+    // spokes to the core
+    ctx.strokeStyle = "rgba(90,255,138,0.35)"; ctx.lineWidth = 2;
+    for (let i = 0; i < 6; i++) { const a = st.rot + (i + 0.5) / 6 * TAU; ctx.beginPath(); ctx.moveTo(Math.cos(a) * CORE_R, Math.sin(a) * CORE_R); ctx.lineTo(Math.cos(a) * (RING - 6), Math.sin(a) * (RING - 6)); ctx.stroke(); }
+    // the opening glows
+    const glow = 0.5 + 0.5 * Math.sin(st.pulse * 5);
+    ctx.strokeStyle = `rgba(255,224,74,${0.4 + glow * 0.5})`; ctx.lineWidth = 3;
+    ctx.beginPath(); ctx.arc(0, 0, RING, st.rot - GAP, st.rot + GAP); ctx.stroke();
+    // the core
+    ctx.fillStyle = `rgba(255,${120 + glow * 100},74,1)`; ctx.beginPath(); ctx.arc(0, 0, CORE_R, 0, TAU); ctx.fill();
+    ctx.fillStyle = "#fff"; ctx.beginPath(); ctx.arc(0, 0, 5, 0, TAU); ctx.fill();
+    ctx.restore();
+    // the cannons
+    for (let i = 0; i < 6; i++) {
+      const q = podPos(st, i), px = sx(q.x), py = sy(q.y);
+      if (st.pods[i]) {
+        ctx.fillStyle = "#1a4a2a"; ctx.beginPath(); ctx.arc(px, py, POD_R, 0, TAU); ctx.fill();
+        ctx.strokeStyle = "#5aff8a"; ctx.lineWidth = 2; ctx.stroke();
+        ctx.fillStyle = "#5aff8a"; ctx.beginPath(); ctx.arc(px, py, 4, 0, TAU); ctx.fill();
+      } else { ctx.fillStyle = "#1a2a22"; ctx.beginPath(); ctx.arc(px, py, POD_R * 0.7, 0, TAU); ctx.fill(); }
+    }
+  }
+  function drawFighter(f) {
+    if (!onScreen(f.x, f.y)) return;
+    const T = FIGHTERS[f.type];
+    ctx.save(); ctx.translate(sx(f.x), sy(f.y)); ctx.rotate(f.a);
+    ctx.fillStyle = f.leader ? "#ffe04a" : T.col;
+    if (f.type === "I") { ctx.beginPath(); ctx.moveTo(11, 0); ctx.lineTo(-8, -8); ctx.lineTo(-4, 0); ctx.lineTo(-8, 8); ctx.closePath(); ctx.fill(); }
+    else if (f.type === "P") { ctx.beginPath(); ctx.moveTo(10, 0); ctx.lineTo(0, -9); ctx.lineTo(-9, -5); ctx.lineTo(-9, 5); ctx.lineTo(0, 9); ctx.closePath(); ctx.fill(); }
+    else { ctx.beginPath(); ctx.arc(0, 0, 9, 0, TAU); ctx.fill(); ctx.fillStyle = "#03040c"; ctx.fillRect(-2, -9, 4, 18); }
+    ctx.fillStyle = "#fff"; ctx.fillRect(2, -1.5, 3, 3);
+    ctx.restore();
+  }
+  function drawShip() {
+    if (S.dead || (S.inv > 0 && Math.floor(clock * 14) % 2 && state === "play")) return;
+    ctx.save(); ctx.translate(W / 2, H / 2); ctx.rotate(S.a);
+    ctx.fillStyle = "rgba(255,160,60,0.8)"; ctx.beginPath(); ctx.moveTo(-8, -3); ctx.lineTo(-14 - Math.random() * 6, 0); ctx.lineTo(-8, 3); ctx.fill();
+    ctx.fillStyle = "#eaf2ff"; ctx.beginPath(); ctx.moveTo(13, 0); ctx.lineTo(-8, -9); ctx.lineTo(-5, 0); ctx.lineTo(-8, 9); ctx.closePath(); ctx.fill();
+    ctx.fillStyle = "#ff4a4a"; ctx.fillRect(-6, -8, 4, 3); ctx.fillRect(-6, 5, 4, 3);
+    ctx.fillStyle = "#4ad8ff"; ctx.beginPath(); ctx.ellipse(3, 0, 4, 2.5, 0, 0, TAU); ctx.fill();
+    ctx.restore();
+  }
+  function drawRadar() {
+    const rw = 104, rh = 104, rx = W - rw - 8, ry = 8;
+    ctx.fillStyle = "rgba(10,20,40,0.75)"; ctx.fillRect(rx, ry, rw, rh);
+    ctx.strokeStyle = "rgba(90,255,138,0.5)"; ctx.lineWidth = 1; ctx.strokeRect(rx + 0.5, ry + 0.5, rw - 1, rh - 1);
+    // centred on the ship, the whole sector in view
+    const k = rw / WW;
+    for (const st of stations) if (st.alive) {
+      const x = rx + rw / 2 + dX(S.x, st.x) * k, y = ry + rh / 2 + dY(S.y, st.y) * k;
+      ctx.fillStyle = "#5aff8a"; ctx.fillRect(x - 2.5, y - 2.5, 5, 5);
+    }
+    if (formation && formation.leader && !formation.leader.dead) { const L = formation.leader; ctx.fillStyle = Math.floor(clock * 4) % 2 ? "#ffe04a" : "#ff8a4a"; ctx.fillRect(rx + rw / 2 + dX(S.x, L.x) * k - 2, ry + rh / 2 + dY(S.y, L.y) * k - 2, 4, 4); }
+    ctx.fillStyle = "#fff"; ctx.fillRect(rx + rw / 2 - 1.5, ry + rh / 2 - 1.5, 3, 3);
+    // the part of space on screen
+    ctx.strokeStyle = "rgba(255,255,255,0.25)"; ctx.strokeRect(rx + rw / 2 - W * k / 2, ry + rh / 2 - H * k / 2, W * k, H * k);
+    // condition light
+    const cc = ["#5aff8a", "#ffe04a", "#ff4a4a"][condition];
+    ctx.fillStyle = cc; ctx.font = "800 9px system-ui"; ctx.textAlign = "center"; ctx.textBaseline = "top";
+    ctx.fillText(["CONDIZIONE VERDE", "CONDIZIONE GIALLA", "CONDIZIONE ROSSA"][condition], rx + rw / 2, ry + rh + 3);
+    ctx.textBaseline = "alphabetic";
+  }
+  function drawHud() {
+    ctx.textBaseline = "top"; ctx.textAlign = "left";
+    ctx.fillStyle = "#eaf2ff"; ctx.font = "900 15px system-ui"; ctx.fillText(score.toLocaleString("it-IT"), 10, 8);
+    ctx.fillStyle = "#ff4a4a"; ctx.font = "700 9px system-ui"; ctx.fillText(`REC ${Math.max(bestCache, score).toLocaleString("it-IT")}`, 10, 27);
+    ctx.fillStyle = "#8a9ac0"; ctx.font = "800 10px system-ui";
+    ctx.fillText(`SETTORE ${round + 1} · BASI ${stations.filter((s) => s.alive).length}`, 10, 40);
+    ctx.fillStyle = "#eaf2ff"; ctx.fillText(`${"▲".repeat(Math.max(0, Math.min(lives, 6)))}`, 10, 53);
+    ctx.textBaseline = "alphabetic";
+  }
+  function draw() {
+    ctx.setTransform(pxRatio, 0, 0, pxRatio, 0, 0);
+    if (!S) { buildRound(); newShip(); S.inv = 0; }
+    if (state === "menu") { S.a += 0.002; S.x = wrapX(S.x + Math.cos(S.a) * 0.8); S.y = wrapY(S.y + Math.sin(S.a) * 0.8); }
+    ctx.save();
+    if (shake > 0) ctx.translate(rnd(-4, 4) * shake, rnd(-4, 4) * shake);
+    drawStars();
+    for (const r of rocks) {
+      if (!onScreen(r.x, r.y)) continue;
+      ctx.save(); ctx.translate(sx(r.x), sy(r.y)); ctx.rotate(r.rot);
+      ctx.fillStyle = "#6a5a4a"; ctx.beginPath();
+      for (let k = 0; k < 8; k++) { const a = k / 8 * TAU, rr = r.r * (0.8 + 0.25 * Math.sin(k * 2.3 + r.seed * 9)); ctx.lineTo(Math.cos(a) * rr, Math.sin(a) * rr); }
+      ctx.closePath(); ctx.fill();
+      ctx.fillStyle = "rgba(0,0,0,0.25)"; ctx.beginPath(); ctx.arc(r.r * 0.2, r.r * 0.1, r.r * 0.3, 0, TAU); ctx.fill();
+      ctx.restore();
+    }
+    for (const m of mines) {
+      if (!onScreen(m.x, m.y)) continue;
+      const x = sx(m.x), y = sy(m.y);
+      ctx.strokeStyle = "#ff8a4a"; ctx.lineWidth = 2;
+      for (let k = 0; k < 8; k++) { const a = k / 8 * TAU + clock; ctx.beginPath(); ctx.moveTo(x + Math.cos(a) * 5, y + Math.sin(a) * 5); ctx.lineTo(x + Math.cos(a) * 12, y + Math.sin(a) * 12); ctx.stroke(); }
+      ctx.fillStyle = Math.floor(clock * 3) % 2 ? "#ff4a4a" : "#8a2a1a"; ctx.beginPath(); ctx.arc(x, y, 6, 0, TAU); ctx.fill();
+    }
+    for (const st of stations) drawStation(st);
+    for (const f of fighters) drawFighter(f);
+    if (state !== "menu") drawShip();
+    ctx.fillStyle = "#ffe04a";
+    for (const b of bullets) if (onScreen(b.x, b.y, 10)) { ctx.fillRect(sx(b.x) - 2, sy(b.y) - 2, 4, 4); }
+    ctx.fillStyle = "#ff8a4a";
+    for (const s of shells) if (onScreen(s.x, s.y, 10)) { ctx.beginPath(); ctx.arc(sx(s.x), sy(s.y), 3.2, 0, TAU); ctx.fill(); }
+    for (const p of parts) { if (!onScreen(p.x, p.y, 10)) continue; ctx.globalAlpha = Math.max(0, 1 - p.t / p.life); ctx.fillStyle = p.c; ctx.fillRect(sx(p.x) - 1.5, sy(p.y) - 1.5, 3, 3); }
+    ctx.globalAlpha = 1;
+    for (const p of popups) {
+      if (!onScreen(p.x, p.y)) continue;
+      ctx.globalAlpha = Math.max(0, 1 - p.t / 1.2);
+      ctx.textAlign = "center"; ctx.font = "900 11px system-ui";
+      ctx.lineWidth = 3; ctx.strokeStyle = "#000"; ctx.strokeText(p.text, sx(p.x), sy(p.y)); ctx.fillStyle = p.color; ctx.fillText(p.text, sx(p.x), sy(p.y));
+    }
+    ctx.globalAlpha = 1;
+    // arrows at the edge toward the nearest bases
+    if (state === "play") {
+      const alive = stations.filter((s) => s.alive).map((s) => ({ s, d: Math.hypot(dX(S.x, s.x), dY(S.y, s.y)) })).sort((a, b) => a.d - b.d).slice(0, 2);
+      for (const { s } of alive) {
+        if (onScreen(s.x, s.y, -10)) continue;
+        const a = Math.atan2(dY(S.y, s.y), dX(S.x, s.x));
+        // on the border of the screen, in the direction of the base
+        const c = Math.cos(a), sn = Math.sin(a), k = Math.min((W / 2 - 16) / Math.max(1e-3, Math.abs(c)), (H / 2 - 16) / Math.max(1e-3, Math.abs(sn)));
+        const x = W / 2 + c * k, y = H / 2 + sn * k;
+        ctx.save(); ctx.translate(x, y); ctx.rotate(a); ctx.fillStyle = "rgba(90,255,138,0.8)"; ctx.beginPath(); ctx.moveTo(8, 0); ctx.lineTo(-6, -6); ctx.lineTo(-6, 6); ctx.fill(); ctx.restore();
+      }
+    }
+    ctx.restore();
+    drawRadar();
+    drawHud();
+    if (message) {
+      ctx.globalAlpha = Math.min(1, (2.4 - message.t) * 2);
+      ctx.textAlign = "center"; ctx.font = "900 24px system-ui";
+      ctx.lineWidth = 5; ctx.strokeStyle = "#000"; ctx.strokeText(message.text, W / 2, 110);
+      ctx.fillStyle = message.text.includes("ROSSA") || message.text.includes("DISTRUTTA") ? "#ff4a4a" : message.text.includes("GIALLA") || message.text.includes("FORMAZIONE") ? "#ffe04a" : "#5aff8a";
+      ctx.fillText(message.text, W / 2, 110);
+      if (message.sub) { ctx.font = "800 12px system-ui"; ctx.lineWidth = 4; ctx.strokeText(message.sub, W / 2, 132); ctx.fillStyle = "#eaf2ff"; ctx.fillText(message.sub, W / 2, 132); }
+      ctx.globalAlpha = 1;
+    }
+  }
+
+  // ---------- Loop ----------
+  const STEP = 1 / 120;
+  let last = performance.now(), acc = 0;
+  function frame(now) {
+    const dt = Math.min(0.1, (now - last) / 1000);
+    last = now;
+    if (isPlaying()) {
+      acc += dt;
+      while (acc >= STEP && isPlaying()) { update(STEP); acc -= STEP; }
+    } else { acc = 0; update(dt); }
+    draw();
+    requestAnimationFrame(frame);
+  }
+  syncControls();
+  showTitle();
+  requestAnimationFrame(frame);
+})();
+</script>
+<script src="../../shared/iniziali.js" data-record="basi-best-" data-kind="score"></script>
+</body>
+</html>

@@ -4,7 +4,7 @@ Raccolta di giochi arcade per il browser. Ogni gioco è un singolo file HTML sen
 
 ## 🕹️ Sala Giochi — `index.html`
 
-Apri `index.html` nella cartella principale per la pagina di raccolta: mostra tutti i 69 giochi con copertina, genere, comandi e i tuoi record per ogni difficoltà (Facile, Normale, Difficile). Tocca «Gioca» per avviare un gioco; in ogni gioco il pulsante «← Sala Giochi» in alto a sinistra (visibile nei menu) riporta alla raccolta.
+Apri `index.html` nella cartella principale per la pagina di raccolta: mostra tutti i 70 giochi con copertina, genere, comandi e i tuoi record per ogni difficoltà (Facile, Normale, Difficile). Tocca «Gioca» per avviare un gioco; in ogni gioco il pulsante «← Sala Giochi» in alto a sinistra (visibile nei menu) riporta alla raccolta.
 
 **Iniziali del record:** quando batti un record compare la schermata da sala giochi per inserire le tue tre iniziali (frecce ↑ ↓ per cambiare lettera, ← → per spostarti, oppure scrivile direttamente; su telefono i tasti ▲ ▼ e OK). Le iniziali vengono salvate insieme al record e compaiono nei menu del gioco e nella Sala Giochi. Il codice è condiviso da tutti i giochi in `shared/iniziali.js`.
 
@@ -1090,3 +1090,18 @@ Discesa in ciambella in stile *Toobin'*: sdraiato su una ciambella rosa, scendi 
 - **Touch:** levetta per pagaiare, pulsante LANCIA (la lattina parte dove punta la levetta)
 
 Per giocare apri `games/giu-per-il-fiume/index.html` nel browser.
+
+### 🛰️ Basi Stellari — `games/basi-stellari/index.html`
+
+Sparatutto spaziale in stile *Bosconian*: la tua astronave vola sempre in avanti in uno spazio che si ripete all'infinito e spara insieme davanti e dietro.
+
+- **Settori:** in ogni settore ci sono da 3 a 8 basi nemiche; il radar in alto a destra mostra le basi (verdi), il capo della formazione (lampeggiante) e la tua posizione, e le frecce ai bordi dello schermo indicano le basi fuori vista. Distrutte tutte, il settore è liberato e ne arriva uno nuovo, con più basi e più mine
+- **Basi:** ogni base ha 6 cannoni attorno all'anello, che sparano verso di te. Abbattili tutti (200 l'uno, 1.000 alla fine) oppure infila un colpo nell'apertura dell'anello e centra il nucleo: 1.500 in un colpo solo. Se urti una base rimbalzi
+- **Caccia:** verdi (veloci, 50), blu (60) e viola (lenti ma resistono a due colpi, 70). Ogni tanto arriva una **formazione**: colpisci il capo e i gregari si disperdono, fino a 1.500 punti se lo abbatti per primo
+- **Pericoli:** asteroidi (10 punti) e mine spaziali (20): colpita, la mina esplode e si porta dietro caccia e asteroidi vicini, ma anche te se sei troppo vicino
+- **Condizione:** verde, poi gialla e rossa man mano che resti nel settore (i nemici si fanno più aggressivi); liberare il settore in condizione verde vale 2.000 punti in più. Astronave extra a 20.000 punti e poi ogni 30.000
+- **Difficoltà:** Facile (5 astronavi, nemici lenti, colpi radi), Normale (3 astronavi), Difficile (3 astronavi, caccia numerosi, basi che sparano fitto); record separati per ogni difficoltà
+- **Comandi:** frecce o `W` `A` `S` `D` per la direzione (anche in diagonale) · `Spazio` o `J` fuoco (tieni premuto) · `P` pausa
+- **Touch:** levetta per la direzione, pulsante FUOCO
+
+Per giocare apri `games/basi-stellari/index.html` nel browser.
