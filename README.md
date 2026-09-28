@@ -796,7 +796,7 @@ Distruzione in stile *Rampage*: sei Lucertolone, una lucertola alta come un pala
 - **Arrampicarsi:** davanti a una facciata premi su per aggrapparti; poi ti muovi in tutte le direzioni sulla facciata, sali fino al tetto o salti giù
 - **Pugni:** ogni finestra si crepa al primo pugno e si sfonda al secondo (10 e 50 punti). Con abbastanza danni, o con tutto il piano terra sfondato, il palazzo crolla (100 punti per piano); se ci sei sopra cadi giù
 - **Finestre:** soldati che sparano (200 punti se li mangi con un pugno), cittadini che chiedono aiuto e cibo: tutti ti ridanno energia
-- **Esercito:** carri armati che sparano proiettili a parabola (a pugni o saltandoci sopra, 500) ed elicotteri che ti girano intorno sparando (due pugni, 500)
+- **Esercito:** carri armati che sparano proiettili a parabola (a pugni o saltandoci sopra, 500) ed elicotteri che sparano da lontano e poi si avvicinano all'altezza del tuo pugno: è quello il momento di colpirli (due pugni, 500)
 - **Energia:** la barra in alto; a zero il mostro si rimpicciolisce e perdi una vita. Finita la città ricevi un bonus e ne recuperi un po'
 - **Giorni:** città con più palazzi, più alti, e un esercito sempre più numeroso
 - **Difficoltà:** Facile (5 vite, militari meno numerosi e meno dannosi), Normale, Difficile; record separati per ogni difficoltà
