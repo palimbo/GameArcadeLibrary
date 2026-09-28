@@ -4,7 +4,7 @@ Raccolta di giochi arcade per il browser. Ogni gioco è un singolo file HTML sen
 
 ## 🕹️ Sala Giochi — `index.html`
 
-Apri `index.html` nella cartella principale per la pagina di raccolta: mostra tutti i 50 giochi con copertina, genere, comandi e i tuoi record per ogni difficoltà (Facile, Normale, Difficile). Tocca «Gioca» per avviare un gioco; in ogni gioco il pulsante «← Sala Giochi» in alto a sinistra (visibile nei menu) riporta alla raccolta.
+Apri `index.html` nella cartella principale per la pagina di raccolta: mostra tutti i 51 giochi con copertina, genere, comandi e i tuoi record per ogni difficoltà (Facile, Normale, Difficile). Tocca «Gioca» per avviare un gioco; in ogni gioco il pulsante «← Sala Giochi» in alto a sinistra (visibile nei menu) riporta alla raccolta.
 
 **Iniziali del record:** quando batti un record compare la schermata da sala giochi per inserire le tue tre iniziali (frecce ↑ ↓ per cambiare lettera, ← → per spostarti, oppure scrivile direttamente; su telefono i tasti ▲ ▼ e OK). Le iniziali vengono salvate insieme al record e compaiono nei menu del gioco e nella Sala Giochi. Il codice è condiviso da tutti i giochi in `shared/iniziali.js`.
 
@@ -788,3 +788,19 @@ Sparatutto a formazione in stile *Galaga*: api, farfalle e comandanti alieni ent
 - **Touch:** levetta a sinistra (conta solo destra e sinistra) e tasto FUOCO a destra, da tenere premuto
 
 Per giocare apri `games/sciame-galattico/index.html` nel browser.
+
+### 🦎 Mostro in Città — `games/mostro-in-citta/index.html`
+
+Distruzione in stile *Rampage*: sei Lucertolone, una lucertola alta come un palazzo, e ogni giorno devi radere al suolo i grattacieli della città.
+
+- **Arrampicarsi:** davanti a una facciata premi su per aggrapparti; poi ti muovi in tutte le direzioni sulla facciata, sali fino al tetto o salti giù
+- **Pugni:** ogni finestra si crepa al primo pugno e si sfonda al secondo (10 e 50 punti). Con abbastanza danni, o con tutto il piano terra sfondato, il palazzo crolla (100 punti per piano); se ci sei sopra cadi giù
+- **Finestre:** soldati che sparano (200 punti se li mangi con un pugno), cittadini che chiedono aiuto e cibo: tutti ti ridanno energia
+- **Esercito:** carri armati che sparano proiettili a parabola (a pugni o saltandoci sopra, 500) ed elicotteri che ti girano intorno sparando (due pugni, 500)
+- **Energia:** la barra in alto; a zero il mostro si rimpicciolisce e perdi una vita. Finita la città ricevi un bonus e ne recuperi un po'
+- **Giorni:** città con più palazzi, più alti, e un esercito sempre più numeroso
+- **Difficoltà:** Facile (5 vite, militari meno numerosi e meno dannosi), Normale, Difficile; record separati per ogni difficoltà
+- **Comandi:** frecce per camminare e arrampicarti (un tocco dalla parte opposta ti gira sul posto) · `Z` pugno · `X` o `SPAZIO` salto · `P` pausa
+- **Touch:** levetta a sinistra (anche in diagonale sulla facciata), tasti SALTA e PUGNO a destra
+
+Per giocare apri `games/mostro-in-citta/index.html` nel browser.
