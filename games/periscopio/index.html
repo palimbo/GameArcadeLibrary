@@ -1,0 +1,606 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no, viewport-fit=cover">
+<title>Periscopio</title>
+<style>
+  :root {
+    --bg: #04101a;
+    --fg: #eaf4f2;
+    --muted: #9ab4b8;
+    --sea: #3ad8c8;
+    --gold: #ffd23a;
+    --red: #ff4a3a;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  html, body {
+    height: 100%;
+    background: var(--bg);
+    color: var(--fg);
+    font-family: system-ui, -apple-system, "Segoe UI", sans-serif;
+    overflow: hidden;
+    user-select: none;
+    -webkit-user-select: none;
+    touch-action: none;
+  }
+  #wrap { position: fixed; inset: 0; display: flex; align-items: center; justify-content: center; }
+  canvas { display: block; touch-action: none; border-radius: 6px; box-shadow: 0 0 0 2px #12303a, 0 10px 40px rgba(0,0,0,0.6); }
+  #pauseBtn {
+    position: fixed; z-index: 3; display: none; right: 10px; top: calc(10px + env(safe-area-inset-top, 0px));
+    font: 700 13px system-ui, sans-serif; color: var(--fg);
+    background: rgba(0, 0, 0, 0.6); border: 1px solid rgba(234, 244, 242, 0.35);
+    border-radius: 8px; padding: 6px 10px; cursor: pointer;
+  }
+  #touch {
+    position: fixed; z-index: 2; display: none; left: 12px; right: 12px;
+    bottom: calc(14px + env(safe-area-inset-bottom, 0px));
+    justify-content: space-between; align-items: flex-end; pointer-events: none;
+  }
+  /* thumb stick (left and right turn the periscope; pushing further turns faster) and a fire button */
+  #touch .stick { position: relative; width: 136px; height: 136px; border-radius: 50%; pointer-events: auto; touch-action: none;
+    border: 2px solid rgba(58, 216, 200, 0.55); background: radial-gradient(circle, rgba(58,216,200,0.14), rgba(58,216,200,0.04)); }
+  #touch .stick .knob { position: absolute; left: 50%; top: 50%; width: 58px; height: 58px; margin: -29px 0 0 -29px; border-radius: 50%;
+    background: rgba(58, 216, 200, 0.45); border: 2px solid rgba(255,255,255,0.7); box-shadow: 0 4px 10px rgba(0,0,0,0.4); pointer-events: none; }
+  #touch .stick i { position: absolute; top: 50%; transform: translateY(-50%); font: 900 14px system-ui, sans-serif; font-style: normal; color: rgba(234,244,242,0.35); pointer-events: none; }
+  #touch .stick i.on { color: var(--gold); }
+  #touch .stick i[data-d="left"] { left: 8px; }
+  #touch .stick i[data-d="right"] { right: 8px; }
+  #touch .fire { width: 96px; height: 96px; border-radius: 50%; pointer-events: auto; touch-action: none; color: var(--fg);
+    font: 800 13px system-ui, sans-serif; letter-spacing: 1px; border: 2px solid rgba(255, 74, 58, 0.9); background: rgba(255, 74, 58, 0.2); }
+  #touch .fire.on { background: rgba(255, 210, 58, 0.5); }
+  #touch.small .stick { width: 112px; height: 112px; }
+  #touch.small .stick .knob { width: 48px; height: 48px; margin: -24px 0 0 -24px; }
+  #touch.small .fire { width: 80px; height: 80px; font-size: 11px; }
+  #overlay {
+    position: fixed; inset: 0; z-index: 5;
+    display: flex; flex-direction: column; align-items: center; justify-content: flex-start;
+    gap: 14px; padding: 16px; text-align: center; overflow-y: auto;
+    background: rgba(4, 16, 26, 0.9);
+  }
+  #overlay > :first-child { margin-top: auto; }
+  #overlay > :last-child { margin-bottom: auto; }
+  #overlay.hidden { display: none; }
+  #homeLink {
+    position: fixed; top: calc(10px + env(safe-area-inset-top, 0px)); left: 10px; z-index: 6;
+    font: 600 13px/1 system-ui, sans-serif; color: #fff; text-decoration: none;
+    padding: 8px 12px; border-radius: 999px; background: rgba(0,0,0,.55);
+    border: 1px solid rgba(255,255,255,.25);
+  }
+  #homeLink:hover { background: rgba(0,0,0,.8); }
+  #overlay.hidden ~ #homeLink { display: none; }
+  @media (max-width: 700px) { #overlay { padding-top: calc(52px + env(safe-area-inset-top, 0px)); } }
+  #overlay h1 { font-size: clamp(32px, 10vw, 60px); font-weight: 900; letter-spacing: 2px; color: var(--sea); text-shadow: 0 3px 0 #0e4a4a, 0 0 22px rgba(58,216,200,0.4); }
+  #overlay h2 { font-size: clamp(26px, 7vw, 42px); font-weight: 900; letter-spacing: 2px; }
+  #overlay h2.lose { color: var(--gold); }
+  #overlay p { max-width: 540px; font-size: clamp(13px, 3.4vw, 16px); line-height: 1.55; }
+  #overlay p.muted { color: var(--muted); }
+  #overlay .pts { display: grid; grid-template-columns: repeat(2, auto); gap: 4px 18px; font-size: 13px; color: var(--muted); text-align: left; }
+  #overlay .pts b { color: var(--fg); }
+  #overlay .diff { display: flex; gap: 10px; flex-wrap: wrap; justify-content: center; }
+  #overlay button {
+    font: 800 15px system-ui, sans-serif; letter-spacing: 1.5px; color: var(--fg);
+    background: transparent; cursor: pointer;
+    border: 2px solid rgba(234,244,242,0.3); border-radius: 10px; padding: 9px 16px;
+  }
+  #overlay .diff button.on { border-color: var(--c); color: var(--c); box-shadow: 0 0 12px var(--c); }
+  #overlay button.start { border-color: var(--sea); color: #04202a; background: var(--sea); padding: 11px 30px; box-shadow: 0 4px 0 #0e4a4a; }
+  @media (max-height: 560px) {
+    #overlay { gap: 8px; }
+    #overlay h1 { font-size: 32px; }
+    #overlay p { font-size: 13px; line-height: 1.4; }
+    #overlay .help, #overlay .pts { display: none; }
+  }
+</style>
+</head>
+<body>
+<div id="wrap"><canvas id="game"></canvas></div>
+<div id="touch">
+  <div class="stick" aria-label="Levetta"><i data-d="left">◀</i><i data-d="right">▶</i><div class="knob"></div></div>
+  <button type="button" class="fire" aria-label="Fuoco">FUOCO</button>
+</div>
+<button id="pauseBtn" type="button" aria-label="Pausa">❚❚</button>
+<div id="overlay"></div>
+<a id="homeLink" href="../../index.html">← Sala Giochi</a>
+
+<script>
+(() => {
+  "use strict";
+
+  const W = 480, H = 300, HUD = 22, TAU = Math.PI * 2;
+  const HORIZON = 112, LAUNCH = 282;
+  // three lanes: far, middle, near (screen height of the waterline and how big things look there)
+  const LANES = [{ y: 146, s: 0.5, mult: 2 }, { y: 184, s: 0.72, mult: 1.5 }, { y: 228, s: 1, mult: 1 }];
+  const SHIPS = {
+    cargo:     { name: "mercantile", pts: 100, speed: 22, len: 70, hull: "#6a4a3a", deck: "#c8b89a" },
+    tanker:    { name: "petroliera", pts: 150, speed: 18, len: 86, hull: "#3a3a44", deck: "#b84a3a" },
+    destroyer: { name: "cacciatorpediniere", pts: 300, speed: 46, len: 64, hull: "#5a6470", deck: "#8a949e" },
+    pt:        { name: "motosilurante", pts: 500, speed: 88, len: 30, hull: "#4a5a4a", deck: "#8aa08a" },
+    hospital:  { name: "nave ospedale", pts: -500, speed: 24, len: 70, hull: "#f2f2ea", deck: "#ffffff" },
+  };
+  const TUBES = 5, RELOAD = 1.6;
+
+  const DIFFICULTIES = {
+    facile:    { label: "FACILE",    color: "#7dff9a", desc: "2 minuti · navi lente · poche navi ospedale", time: 120, pace: 0.8, hosp: 0.06 },
+    normale:   { label: "NORMALE",   color: "#3ad8c8", desc: "90 secondi · l'esperienza classica", time: 90, pace: 1, hosp: 0.1 },
+    difficile: { label: "DIFFICILE", color: "#ff4a3a", desc: "75 secondi · navi veloci e mine", time: 75, pace: 1.25, hosp: 0.14 },
+  };
+  const DIFF_IDS = Object.keys(DIFFICULTIES);
+  const DIFF_KEY = "periscopio-difficulty";
+  const bestKey = (id) => `periscopio-best-${id}`;
+  function store(k, v) { try { localStorage.setItem(k, v); } catch { /* ignore */ } }
+  function load(k) { try { return localStorage.getItem(k); } catch { return null; } }
+  const rnd = (a, b) => a + Math.random() * (b - a);
+  const pick = (a) => a[Math.floor(Math.random() * a.length)];
+  const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
+
+  // ---------- Canvas ----------
+  const canvas = document.getElementById("game");
+  const ctx = canvas.getContext("2d");
+  const wrap = document.getElementById("wrap");
+  const overlay = document.getElementById("overlay");
+  const touchEl = document.getElementById("touch");
+  const pauseBtn = document.getElementById("pauseBtn");
+  let pxRatio = 1, touchMode = !!(window.matchMedia && matchMedia("(pointer: coarse)").matches);
+  function resize() {
+    const portrait = window.innerHeight > window.innerWidth;
+    const showTouch = touchMode && isPlaying();
+    touchEl.style.display = showTouch ? "flex" : "none";
+    touchEl.classList.toggle("small", !portrait && window.innerHeight < 480);
+    wrap.style.paddingBottom = showTouch && portrait ? "calc(170px + env(safe-area-inset-bottom, 0px))" : "0";
+    let availW = window.innerWidth - 8, availH = window.innerHeight - 8;
+    if (showTouch && portrait) availH -= 170;
+    if (showTouch && !portrait) {
+      const side = Math.max(...[...touchEl.children].map((el) => el.offsetWidth)) + 20;
+      if (window.innerWidth - 2 * side > 240) availW = window.innerWidth - 2 * side;
+    }
+    const s = Math.max(0.2, Math.min(availW / W, availH / H));
+    pxRatio = Math.min(3, s * (window.devicePixelRatio || 1));
+    canvas.style.width = W * s + "px";
+    canvas.style.height = H * s + "px";
+    canvas.width = Math.round(W * pxRatio);
+    canvas.height = Math.round(H * pxRatio);
+  }
+  window.addEventListener("resize", () => syncControls());
+
+  // ---------- Audio ----------
+  let audioCtx = null;
+  function beep(freq, dur, type = "square", vol = 0.04, slide = 0, delay = 0) {
+    if (!audioCtx) return;
+    const t = audioCtx.currentTime + delay;
+    const osc = audioCtx.createOscillator(), gain = audioCtx.createGain();
+    osc.type = type;
+    osc.frequency.setValueAtTime(freq, t);
+    if (slide) osc.frequency.exponentialRampToValueAtTime(Math.max(20, freq + slide), t + dur);
+    gain.gain.setValueAtTime(vol, t);
+    gain.gain.exponentialRampToValueAtTime(0.0001, t + dur);
+    osc.connect(gain).connect(audioCtx.destination);
+    osc.start(t); osc.stop(t + dur + 0.02);
+  }
+  function noise(dur, vol, freq) {
+    if (!audioCtx) return;
+    const len = Math.floor(audioCtx.sampleRate * dur), buf = audioCtx.createBuffer(1, len, audioCtx.sampleRate), d = buf.getChannelData(0);
+    for (let i = 0; i < len; i++) d[i] = (Math.random() * 2 - 1) * (1 - i / len);
+    const src = audioCtx.createBufferSource(), f = audioCtx.createBiquadFilter(), g = audioCtx.createGain();
+    src.buffer = buf; f.type = "lowpass"; f.frequency.value = freq; g.gain.value = vol;
+    src.connect(f).connect(g).connect(audioCtx.destination); src.start();
+  }
+  const arp = (notes, gap, d, type = "square", vol = 0.04) => notes.forEach((f, i) => beep(f, d, type, vol, 0, i * gap));
+  let sfxN = 0;
+  const lim = (fn) => (...a) => { if (sfxN++ < 5) fn(...a); };
+  const sfx = {
+    fire: lim(() => { noise(0.35, 0.15, 500); beep(180, 0.3, "sine", 0.04, -90); }),
+    empty: lim(() => beep(120, 0.08, "square", 0.03)),
+    reload: lim(() => beep(900, 0.05, "square", 0.015)),
+    boom: lim(() => { noise(1, 0.4, 700); beep(80, 0.6, "sawtooth", 0.04, -40); }),
+    mine: lim(() => { noise(0.4, 0.25, 1400); beep(300, 0.2, "square", 0.03, -200); }),
+    miss: lim(() => noise(0.2, 0.06, 2500)),
+    hosp: () => arp([392, 311, 262], 0.15, 0.22, "triangle", 0.05),
+    extend: () => arp([523, 659, 784, 1047, 1319], 0.08, 0.14),
+    start: () => arp([262, 330, 392, 523, 392, 523], 0.12, 0.16, "triangle"),
+    over: () => arp([523, 415, 330, 262, 196], 0.18, 0.25, "triangle"),
+    ping: () => beep(1320, 0.4, "sine", 0.03, -40),
+  };
+
+  // ---------- State ----------
+  let difficulty = DIFFICULTIES[load(DIFF_KEY)] ? load(DIFF_KEY) : "normale";
+  let diff = DIFFICULTIES[difficulty];
+  let state = "menu", menu = null, pausedFrom = null, stateT = 0, clock = 0;
+  let score = 0, bestCache = 0, timeLeft = 0, extended = false, streak = 0, sunk = 0, fired = 0, hits = 0;
+  let aim = W / 2, tubes = [], ships = [], torps = [], mines = [], parts = [], popups = [], message = null;
+  let laneT = [0, 0, 0], mineT = 0, axis = 0, fireHeld = false, firePressed = false, pingT = 0;
+  const keys = { left: false, right: false };
+  const EXTEND_AT = () => (difficulty === "facile" ? 2500 : difficulty === "difficile" ? 4000 : 3000);
+
+  // ---------- Flow ----------
+  const isPlaying = () => ["play", "intro"].includes(state);
+  function startGame() {
+    if (!audioCtx) { try { audioCtx = new (window.AudioContext || window.webkitAudioContext)(); } catch { audioCtx = null; } }
+    if (audioCtx && audioCtx.state === "suspended") audioCtx.resume();
+    score = 0; timeLeft = diff.time; extended = false; streak = 0; sunk = 0; fired = 0; hits = 0;
+    bestCache = parseInt(load(bestKey(difficulty)), 10) || 0;
+    aim = W / 2; tubes = Array(TUBES).fill(0); ships = []; torps = []; mines = []; parts = []; popups = [];
+    laneT = [0.5, 1.5, 2.5]; mineT = rnd(8, 14);
+    message = { text: "SILURI PRONTI!", sub: "Anticipa il bersaglio: il siluro ci mette un po' ad arrivare", t: 0 };
+    state = "intro"; stateT = 1.5;
+    sfx.start();
+    menu = null;
+    overlay.classList.add("hidden");
+    syncControls();
+    last = performance.now();
+  }
+  function addScore(n, x, y, color = "#eaf4f2") {
+    score = Math.max(0, score + n);
+    if (x !== undefined) popups.push({ x, y, text: (n > 0 ? "+" : "−") + Math.abs(n).toLocaleString("it-IT"), color: n < 0 ? "#ff4a3a" : color, t: 0 });
+    if (!extended && score >= EXTEND_AT()) {
+      extended = true; timeLeft += 20; sfx.extend();
+      message = { text: "TEMPO EXTRA!", sub: "+20 secondi", t: 0 };
+    }
+  }
+  function burst(x, y, color, n = 12, sp = 90, life = 0.6, up = 0) {
+    for (let k = 0; k < n; k++) {
+      const a = Math.random() * TAU, s = sp * (0.2 + Math.random() * 0.9);
+      parts.push({ x, y, vx: Math.cos(a) * s, vy: Math.sin(a) * s - up, t: 0, life: life * (0.5 + Math.random() * 0.8), c: color, g: 120 });
+    }
+  }
+  function gameOver() {
+    state = "over";
+    const prev = parseInt(load(bestKey(difficulty)), 10) || 0;
+    const record = score > prev;
+    if (record) store(bestKey(difficulty), String(score));
+    sfx.over();
+    const played = diff.label, ratio = fired ? Math.round(hits / fired * 100) : 0;
+    menu = () => showOverlay(
+      `<h2 class="lose">FINE MISSIONE</h2>
+       <p>Punteggio: <b>${score.toLocaleString("it-IT")}</b> · Navi affondate ${sunk} · ${played}</p>
+       <p class="muted">Siluri lanciati ${fired} · a segno ${hits} · precisione ${ratio}%</p>
+       ${record ? "<p style='color:var(--gold)'>★ NUOVO RECORD! ★</p>" : ""}
+       ${difficultyHTML()}
+       <button class="start" data-start>GIOCA ANCORA</button>`
+    );
+    menu();
+    syncControls();
+  }
+  function togglePause() {
+    if (isPlaying()) {
+      pausedFrom = state; state = "paused";
+      showOverlay(`<h2>PAUSA</h2><button class="start" data-resume>CONTINUA</button><p class="muted">Premi P per continuare</p>`);
+    } else if (state === "paused") {
+      state = pausedFrom; overlay.classList.add("hidden"); last = performance.now();
+    }
+    syncControls();
+  }
+  function syncControls() {
+    const portrait = window.innerHeight > window.innerWidth;
+    pauseBtn.style.display = isPlaying() && touchMode ? "block" : "none";
+    Object.assign(pauseBtn.style, portrait
+      ? { top: "auto", bottom: "calc(40px + env(safe-area-inset-bottom, 0px))", right: "auto", left: "calc(50% - 20px)" }
+      : { top: "calc(10px + env(safe-area-inset-top, 0px))", bottom: "auto", right: "10px", left: "auto" });
+    resize();
+  }
+  pauseBtn.addEventListener("click", () => togglePause());
+  function showOverlay(html) { overlay.innerHTML = html; overlay.classList.remove("hidden"); }
+  function difficultyHTML() {
+    const buttons = DIFF_IDS.map((id) => {
+      const d = DIFFICULTIES[id];
+      return `<button type="button" data-diff="${id}" class="${id === difficulty ? "on" : ""}" style="--c:${d.color}">${d.label}</button>`;
+    }).join("");
+    const best = parseInt(load(bestKey(difficulty)), 10);
+    return `<div class="diff">${buttons}</div><p class="muted">${diff.desc}${best ? ` · Record: ${best.toLocaleString("it-IT")}` : ""}</p>`;
+  }
+  function setDifficulty(id) { if (!DIFFICULTIES[id]) return; difficulty = id; diff = DIFFICULTIES[id]; store(DIFF_KEY, id); if (menu) menu(); }
+  function showTitle() {
+    menu = showTitle;
+    showOverlay(
+      `<h1>PERISCOPIO</h1>
+       <p>Dal periscopio del tuo sottomarino vedi passare le navi nemiche. Punta, lancia il siluro e anticipa il bersaglio: il siluro ci mette tempo ad arrivare, e più la nave è lontana più punti vale. Hai cinque tubi che si ricaricano da soli. Non colpire le navi ospedale!</p>
+       <div class="pts">
+         <span><b>Mercantile · Petroliera</b></span><span>100 · 150</span>
+         <span><b>Cacciatorpediniere</b></span><span>300</span>
+         <span><b>Motosilurante</b></span><span>500 (velocissima)</span>
+         <span><b>Distanza</b></span><span>×1,5 a metà strada · ×2 all'orizzonte</span>
+         <span><b>Colpi di fila</b></span><span>+50 per ogni nave consecutiva (fino a +500)</span>
+         <span><b>Nave ospedale</b></span><span>−500</span>
+         <span><b>Mine</b></span><span>fermano i siluri</span>
+       </div>
+       <p class="muted">A ${EXTEND_AT().toLocaleString("it-IT")} punti ricevi 20 secondi di tempo extra.</p>
+       ${touchMode
+         ? `<p class="muted help">Levetta a destra e sinistra per girare il periscopio · FUOCO per lanciare un siluro</p>`
+         : `<p class="muted help">← → o A D per girare il periscopio · SPAZIO o Z per lanciare · P pausa</p>`}
+       ${difficultyHTML()}
+       <button class="start" data-start>IMMERSIONE!</button>`
+    );
+  }
+  overlay.addEventListener("click", (e) => {
+    const d = e.target.closest("[data-diff]");
+    if (d) { setDifficulty(d.dataset.diff); return; }
+    if (e.target.closest("[data-start]")) startGame();
+    if (e.target.closest("[data-resume]")) togglePause();
+  });
+
+  // ---------- Input ----------
+  window.addEventListener("keydown", (e) => {
+    const k = e.key.toLowerCase();
+    if ([" ", "arrowup", "arrowdown", "arrowleft", "arrowright"].includes(k)) e.preventDefault();
+    if (state === "menu" || state === "over") {
+      if (e.key === "Enter") startGame();
+      else if (["1", "2", "3"].includes(k)) setDifficulty(DIFF_IDS[+k - 1]);
+      return;
+    }
+    if (k === "p" || k === "escape") { if (!e.repeat) togglePause(); return; }
+    if (state === "paused") { if (e.key === "Enter") togglePause(); return; }
+    if ((k === " " || k === "z" || k === "x") && !e.repeat) { firePressed = true; fireHeld = true; }
+    if (k === "arrowleft" || k === "a") keys.left = true;
+    if (k === "arrowright" || k === "d") keys.right = true;
+  });
+  window.addEventListener("keyup", (e) => {
+    const k = e.key.toLowerCase();
+    if (k === " " || k === "z" || k === "x") fireHeld = false;
+    if (k === "arrowleft" || k === "a") keys.left = false;
+    if (k === "arrowright" || k === "d") keys.right = false;
+  });
+  window.addEventListener("blur", () => { keys.left = keys.right = false; axis = 0; fireHeld = false; if (isPlaying()) togglePause(); });
+  const fireBtn = touchEl.querySelector(".fire");
+  let fireId = null;
+  fireBtn.addEventListener("pointerdown", (e) => { e.preventDefault(); fireId = e.pointerId; try { fireBtn.setPointerCapture(e.pointerId); } catch { /* ignore */ } firePressed = true; fireHeld = true; fireBtn.classList.add("on"); });
+  for (const ev of ["pointerup", "pointercancel", "lostpointercapture"]) fireBtn.addEventListener(ev, (e) => { if (e.pointerId !== fireId) return; fireId = null; fireHeld = false; fireBtn.classList.remove("on"); });
+  const stick = touchEl.querySelector(".stick"), knob = stick.querySelector(".knob"), marks = {};
+  for (const m of stick.querySelectorAll("i")) marks[m.dataset.d] = m;
+  let stickId = null;
+  function stickAt(e) {
+    const r = stick.getBoundingClientRect(), max = r.width / 2 - 14;
+    let dx = e.clientX - (r.left + r.width / 2), dy = e.clientY - (r.top + r.height / 2);
+    const len = Math.hypot(dx, dy);
+    if (len > max) { dx *= max / len; dy *= max / len; }
+    knob.style.transform = `translate(${dx}px, ${dy * 0.4}px)`;
+    const v = dx / max;
+    axis = Math.abs(v) < 0.12 ? 0 : Math.sign(v) * Math.min(1, (Math.abs(v) - 0.12) / 0.6);
+    marks.left.classList.toggle("on", axis < 0); marks.right.classList.toggle("on", axis > 0);
+  }
+  const stickEnd = (e) => { if (e.pointerId !== stickId) return; stickId = null; knob.style.transform = ""; axis = 0; marks.left.classList.remove("on"); marks.right.classList.remove("on"); };
+  stick.addEventListener("pointerdown", (e) => { e.preventDefault(); stickId = e.pointerId; try { stick.setPointerCapture(e.pointerId); } catch { /* ignore */ } stickAt(e); });
+  stick.addEventListener("pointermove", (e) => { if (e.pointerId === stickId) stickAt(e); });
+  for (const ev of ["pointerup", "pointercancel", "lostpointercapture"]) stick.addEventListener(ev, stickEnd);
+  window.addEventListener("pointerdown", (e) => { if (e.pointerType === "touch" && !touchMode) { touchMode = true; syncControls(); if (menu) menu(); } }, true);
+
+  // ---------- The sea ----------
+  // the torpedo slows down (on screen) as it runs out towards the horizon
+  const torpSpeed = (y) => 150 * (0.35 + 0.65 * (y - HORIZON) / (LAUNCH - HORIZON));
+  function spawnShip(li) {
+    const lane = LANES[li];
+    let kind = pick(["cargo", "cargo", "tanker", "destroyer", "destroyer", "pt"]);
+    if (Math.random() < diff.hosp) kind = "hospital";
+    const k = SHIPS[kind], dir = Math.random() < 0.5 ? 1 : -1, len = k.len * lane.s;
+    ships.push({ kind, lane: li, dir, x: dir > 0 ? -len : W + len, v: k.speed * lane.s * diff.pace * rnd(0.85, 1.15) * dir, len, sink: 0, tilt: 0, smoke: rnd(0, 5) });
+  }
+  function fire() {
+    const i = tubes.findIndex((t) => t <= 0);
+    if (i < 0) { sfx.empty(); return; }
+    tubes[i] = RELOAD;
+    torps.push({ x: aim, y: LAUNCH, wake: [] });
+    fired++;
+    sfx.fire();
+  }
+  function hitShip(s, t) {
+    const k = SHIPS[s.kind], lane = LANES[s.lane];
+    s.sink = 0.01;
+    hits++;
+    burst(t.x, lane.y - 6 * lane.s, "#ffd23a", 16, 90 * lane.s, 0.6, 40);
+    burst(t.x, lane.y - 4 * lane.s, "#ffffff", 14, 60 * lane.s, 0.9, 90 * lane.s);
+    sfx.boom();
+    if (s.kind === "hospital") {
+      streak = 0; addScore(k.pts, s.x, lane.y - 30 * lane.s); sfx.hosp();
+      message = { text: "ERA UNA NAVE OSPEDALE!", sub: "−500 punti", t: 0 };
+      return;
+    }
+    sunk++;
+    const pts = Math.round(k.pts * lane.mult) + Math.min(10, streak) * 50;
+    streak++;
+    addScore(pts, s.x, lane.y - 30 * lane.s, lane.mult > 1 ? "#ffd23a" : "#eaf4f2");
+    if (streak >= 3) message = { text: `${streak} DI FILA!`, sub: `+${Math.min(10, streak - 1) * 50} di bonus`, t: 0 };
+  }
+
+  // ---------- Update ----------
+  function update(dt) {
+    clock += dt;
+    sfxN = 0;
+    for (const q of parts) { q.t += dt; q.x += q.vx * dt; q.y += q.vy * dt; q.vy += q.g * dt; }
+    parts = parts.filter((q) => q.t < q.life);
+    for (const q of popups) { q.t += dt; q.y -= 16 * dt; }
+    popups = popups.filter((q) => q.t < 1.1);
+    if (message) { message.t += dt; if (message.t > 2.4) message = null; }
+    if (!isPlaying()) return;
+    // turning the periscope
+    const dir = axis || ((keys.right ? 1 : 0) - (keys.left ? 1 : 0));
+    aim = clamp(aim + dir * 220 * dt, 16, W - 16);
+    if (state === "intro") { stateT -= dt; if (stateT <= 0) state = "play"; firePressed = false; return; }
+    timeLeft -= dt;
+    if (timeLeft <= 0) { timeLeft = 0; gameOver(); return; }
+    if (timeLeft < 10 && Math.floor(timeLeft) !== Math.floor(timeLeft + dt)) sfx.reload();
+    pingT -= dt; if (pingT <= 0) { pingT = rnd(4, 7); sfx.ping(); }
+    // reload the tubes
+    for (let i = 0; i < TUBES; i++) if (tubes[i] > 0) { tubes[i] -= dt; if (tubes[i] <= 0) sfx.reload(); }
+    if (firePressed) fire();
+    firePressed = false;
+    // ships come and go in each lane
+    for (let li = 0; li < 3; li++) {
+      laneT[li] -= dt;
+      if (laneT[li] <= 0 && ships.filter((s) => s.lane === li && !s.sink).length < 2) { spawnShip(li); laneT[li] = rnd(2.5, 5) / diff.pace; }
+    }
+    for (const s of ships) {
+      s.smoke += dt;
+      if (s.sink) { s.sink += dt; s.x += s.v * dt * 0.2; continue; }
+      s.x += s.v * dt;
+      if ((s.dir > 0 && s.x > W + s.len + 10) || (s.dir < 0 && s.x < -s.len - 10)) s.gone = true;
+    }
+    ships = ships.filter((s) => !s.gone && s.sink < 2.4);
+    // mines drift in the near lane
+    mineT -= dt;
+    if (mineT <= 0) { mineT = rnd(10, 16) / diff.pace; if (mines.length < (difficulty === "difficile" ? 3 : 2)) mines.push({ x: rnd(60, W - 60), y: rnd(236, 262), v: rnd(-8, 8), bob: rnd(0, 6) }); }
+    for (const m of mines) { m.x += m.v * dt; m.bob += dt; if (m.x < 20 || m.x > W - 20) m.v = -m.v; }
+    // torpedoes
+    for (const t of torps) {
+      t.y -= torpSpeed(t.y) * dt;
+      if (Math.random() < dt * 30) t.wake.push({ x: t.x + rnd(-1.5, 1.5), y: t.y + 3, t: 0 });
+      for (const w of t.wake) w.t += dt;
+      t.wake = t.wake.filter((w) => w.t < 1.2);
+      for (const m of mines) {
+        if (Math.abs(t.x - m.x) < 8 && Math.abs(t.y - m.y) < 6) {
+          t.done = true; m.dead = true; sfx.mine();
+          burst(m.x, m.y, "#ffffff", 14, 70, 0.7, 60); burst(m.x, m.y, "#ff8a3a", 10, 50, 0.5);
+          popups.push({ x: m.x, y: m.y - 16, text: "MINA!", color: "#ff8a3a", t: 0 });
+        }
+      }
+      if (t.done) continue;
+      // reaching a lane: is there a ship there?
+      for (let li = 2; li >= 0; li--) {
+        const lane = LANES[li];
+        if (Math.abs(t.y - lane.y) > 3 * lane.s + 1.5) continue;
+        for (const s of ships) {
+          if (s.lane !== li || s.sink) continue;
+          if (Math.abs(t.x - s.x) < s.len / 2) { t.done = true; hitShip(s, t); break; }
+        }
+        if (t.done) break;
+      }
+      if (!t.done && t.y < HORIZON + 4) { t.done = true; streak = 0; sfx.miss(); }
+    }
+    torps = torps.filter((t) => !t.done);
+    mines = mines.filter((m) => !m.dead);
+  }
+
+  // ---------- Drawing ----------
+  function drawShip(s) {
+    const k = SHIPS[s.kind], lane = LANES[s.lane], sc = lane.s;
+    const sinking = s.sink > 0;
+    ctx.save();
+    ctx.beginPath(); ctx.rect(0, 0, W, lane.y + 1); ctx.clip();          // below the waterline stays hidden
+    ctx.translate(s.x, lane.y + (sinking ? s.sink * 16 * sc : Math.sin(clock * 2 + s.smoke) * 0.6));
+    ctx.rotate(sinking ? s.dir * Math.min(0.5, s.sink * 0.3) : 0);
+    ctx.scale(sc * s.dir, sc);
+    const L = k.len, h = s.kind === "pt" ? 7 : 11;
+    // hull
+    ctx.fillStyle = k.hull;
+    ctx.beginPath(); ctx.moveTo(-L / 2, -h); ctx.lineTo(L / 2 + 6, -h); ctx.lineTo(L / 2 - 4, 0); ctx.lineTo(-L / 2 + 4, 0); ctx.closePath(); ctx.fill();
+    ctx.fillStyle = "rgba(0,0,0,0.25)"; ctx.fillRect(-L / 2 + 4, -3, L - 6, 3);
+    // superstructure
+    ctx.fillStyle = k.deck;
+    if (s.kind === "cargo") { ctx.fillRect(-L / 2 + 8, -h - 12, 14, 12); ctx.fillStyle = "#8a6a4a"; for (let i = 0; i < 3; i++) ctx.fillRect(-4 + i * 12, -h - 8, 10, 8); ctx.fillStyle = "#333"; ctx.fillRect(-L / 2 + 12, -h - 22, 5, 10); }
+    else if (s.kind === "tanker") { ctx.fillRect(-L / 2 + 6, -h - 14, 16, 14); ctx.fillStyle = "#6a6a74"; ctx.fillRect(-L / 2 + 26, -h - 3, L - 34, 3); ctx.fillStyle = "#333"; ctx.fillRect(-L / 2 + 10, -h - 22, 5, 8); }
+    else if (s.kind === "destroyer") { ctx.fillRect(-6, -h - 10, 18, 10); ctx.fillRect(-2, -h - 18, 8, 8); ctx.fillStyle = "#3a4450"; ctx.fillRect(-L / 2 + 8, -h - 5, 10, 5); ctx.fillRect(L / 2 - 16, -h - 5, 10, 5); ctx.fillRect(L / 2 - 8, -h - 3, 10, 1.5); ctx.fillRect(-L / 2 + 1, -h - 3, 10, 1.5); ctx.fillStyle = "#333"; ctx.fillRect(-12, -h - 16, 5, 6); }
+    else if (s.kind === "pt") { ctx.fillRect(-4, -h - 6, 10, 6); ctx.fillStyle = "#333"; ctx.fillRect(-12, -h - 2, 6, 2); }
+    else { ctx.fillRect(-L / 2 + 10, -h - 12, L - 26, 12); ctx.fillStyle = "#e83a3a"; ctx.fillRect(-4, -h - 10, 8, 2.5); ctx.fillRect(-1.25, -h - 12.5, 2.5, 7.5); ctx.fillRect(-L / 2 + 12, -h + 1, 3, 3); ctx.fillStyle = "#3a8a3a"; ctx.fillRect(-L / 2 + 2, -4, L - 4, 1.5); }
+    // portholes
+    if (s.kind !== "pt") { ctx.fillStyle = "rgba(255,240,180,0.6)"; for (let x = -L / 2 + 10; x < L / 2 - 6; x += 9) ctx.fillRect(x, -h + 3, 2, 2); }
+    ctx.restore();
+    // smoke from the funnel, and fire when hit
+    if (!sinking && s.kind !== "pt" && Math.random() < 0.3) parts.push({ x: s.x - s.dir * (L / 2 - 12) * sc, y: lane.y - (h + 22) * sc, vx: -s.v * 0.3 + rnd(-3, 3), vy: -8, t: 0, life: 1.4, c: "rgba(120,120,130,0.5)", g: -2, big: sc });
+    if (sinking && Math.random() < 0.6) parts.push({ x: s.x + rnd(-L / 3, L / 3) * sc, y: lane.y - rnd(0, h) * sc, vx: rnd(-6, 6), vy: -20, t: 0, life: 0.8, c: Math.random() < 0.5 ? "#ff8a3a" : "#444", g: -5, big: sc });
+    // the bow wave
+    if (!sinking) { ctx.fillStyle = "rgba(255,255,255,0.5)"; ctx.fillRect(s.x + s.dir * (L / 2) * sc - 2, lane.y - 1, 6 * sc, 1.5); ctx.fillRect(s.x - s.dir * L / 2 * sc - 8 * sc, lane.y, 14 * sc, 1); }
+  }
+  function draw() {
+    ctx.setTransform(pxRatio, 0, 0, pxRatio, 0, 0);
+    // sky, a low sun, the sea
+    const sky = ctx.createLinearGradient(0, HUD, 0, HORIZON);
+    sky.addColorStop(0, "#1a3a5a"); sky.addColorStop(1, "#e8a86a");
+    ctx.fillStyle = sky; ctx.fillRect(0, 0, W, HORIZON);
+    ctx.fillStyle = "rgba(255,220,150,0.8)"; ctx.beginPath(); ctx.arc(360, HORIZON - 4, 16, Math.PI, 0); ctx.fill();
+    ctx.fillStyle = "rgba(255,255,255,0.12)";
+    for (let k = 0; k < 4; k++) { const x = (k * 140 + clock * 4) % (W + 120) - 60; ctx.beginPath(); ctx.ellipse(x, 50 + k * 12, 40, 6, 0, 0, TAU); ctx.fill(); }
+    const sea = ctx.createLinearGradient(0, HORIZON, 0, H);
+    sea.addColorStop(0, "#2a5a70"); sea.addColorStop(1, "#0a2a3a");
+    ctx.fillStyle = sea; ctx.fillRect(0, HORIZON, W, H - HORIZON);
+    ctx.fillStyle = "rgba(255,200,140,0.35)"; ctx.fillRect(340, HORIZON, 40, 2);
+    // ripples, closer together near the horizon
+    ctx.fillStyle = "rgba(255,255,255,0.12)";
+    for (let r = 0; r < 26; r++) {
+      const f = r / 26, y = HORIZON + 4 + f * f * (H - HORIZON - 6), len = 4 + f * 18;
+      for (let k = 0; k < 7; k++) { const x = ((k * 83 + r * 47 + clock * (6 + f * 20)) % (W + 40)) - 20; ctx.fillRect(x, y, len, 1); }
+    }
+    if (state === "menu") { drawScope(); return; }
+    // far ships first
+    for (const li of [0, 1, 2]) for (const s of ships) if (s.lane === li) drawShip(s);
+    for (const m of mines) {
+      const y = m.y + Math.sin(m.bob * 2) * 1.2;
+      ctx.fillStyle = "#1a1a1a"; ctx.beginPath(); ctx.arc(m.x, y, 5, Math.PI, 0); ctx.fill();
+      ctx.strokeStyle = "#1a1a1a"; ctx.lineWidth = 1.5; for (let k = -1; k <= 1; k++) { ctx.beginPath(); ctx.moveTo(m.x + k * 3, y - 4); ctx.lineTo(m.x + k * 4, y - 7); ctx.stroke(); }
+      ctx.fillStyle = "rgba(255,255,255,0.3)"; ctx.fillRect(m.x - 7, y, 14, 1);
+    }
+    for (const t of torps) {
+      for (const w of t.wake) { ctx.fillStyle = `rgba(255,255,255,${0.5 * (1 - w.t / 1.2)})`; const sz = 1 + (w.y - HORIZON) / 100; ctx.fillRect(w.x - sz / 2, w.y, sz, sz); }
+      const sz = 1 + (t.y - HORIZON) / 90;
+      ctx.fillStyle = "#e8f4ff"; ctx.fillRect(t.x - sz / 2, t.y - sz, sz, sz * 2);
+    }
+    for (const q of parts) {
+      ctx.globalAlpha = Math.max(0, 1 - q.t / q.life); ctx.fillStyle = q.c;
+      if (q.big) { ctx.beginPath(); ctx.arc(q.x, q.y, (2 + q.t * 6) * q.big, 0, TAU); ctx.fill(); } else ctx.fillRect(q.x - 1.5, q.y - 1.5, 3, 3);
+    }
+    ctx.globalAlpha = 1;
+    for (const q of popups) {
+      ctx.globalAlpha = Math.max(0, 1 - q.t / 1.1);
+      ctx.textAlign = "center"; ctx.font = "900 11px system-ui, sans-serif";
+      ctx.lineWidth = 3; ctx.strokeStyle = "#000"; ctx.strokeText(q.text, q.x, q.y); ctx.fillStyle = q.color; ctx.fillText(q.text, q.x, q.y);
+    }
+    ctx.globalAlpha = 1;
+    drawScope();
+    // status bar: score, time, tubes
+    ctx.fillStyle = "rgba(4,16,26,0.9)"; ctx.fillRect(0, 0, W, HUD);
+    ctx.textBaseline = "middle"; ctx.textAlign = "left"; ctx.font = "900 13px system-ui, sans-serif"; ctx.fillStyle = "#eaf4f2";
+    ctx.fillText(score.toLocaleString("it-IT"), 8, 11);
+    ctx.font = "700 9px system-ui, sans-serif"; ctx.fillStyle = "#ff4a3a";
+    ctx.fillText(`REC ${Math.max(bestCache, score).toLocaleString("it-IT")}`, 76, 11);
+    ctx.textAlign = "center"; ctx.font = "900 14px system-ui, sans-serif";
+    ctx.fillStyle = timeLeft < 10 && Math.floor(clock * 4) % 2 ? "#ff4a3a" : "#ffd23a";
+    ctx.fillText(`${Math.ceil(timeLeft)}`, W / 2, 11);
+    ctx.textAlign = "right"; ctx.font = "800 10px system-ui, sans-serif"; ctx.fillStyle = "#3ad8c8";
+    ctx.fillText(`AFFONDATE ${sunk}`, W - 8, 11);
+    ctx.textBaseline = "alphabetic";
+    if (message) {
+      ctx.globalAlpha = Math.min(1, (2.4 - message.t) * 2);
+      ctx.textAlign = "center"; ctx.font = "900 18px system-ui, sans-serif"; ctx.fillStyle = "#3ad8c8";
+      ctx.lineWidth = 4; ctx.strokeStyle = "#000"; ctx.strokeText(message.text, W / 2, 70); ctx.fillText(message.text, W / 2, 70);
+      if (message.sub) { ctx.font = "700 11px system-ui, sans-serif"; ctx.fillStyle = "#eaf4f2"; ctx.strokeText(message.sub, W / 2, 88); ctx.fillText(message.sub, W / 2, 88); }
+      ctx.globalAlpha = 1;
+    }
+  }
+  function drawScope() {
+    // the aiming line and reticle, the torpedo tubes at the bottom
+    ctx.strokeStyle = "rgba(58,216,200,0.35)"; ctx.lineWidth = 1; ctx.setLineDash([3, 5]);
+    ctx.beginPath(); ctx.moveTo(aim, LAUNCH); ctx.lineTo(aim, HORIZON); ctx.stroke(); ctx.setLineDash([]);
+    ctx.strokeStyle = "#3ad8c8"; ctx.lineWidth = 1.5;
+    for (const lane of LANES) { ctx.beginPath(); ctx.moveTo(aim - 6 * lane.s - 3, lane.y); ctx.lineTo(aim - 2, lane.y); ctx.moveTo(aim + 2, lane.y); ctx.lineTo(aim + 6 * lane.s + 3, lane.y); ctx.stroke(); }
+    ctx.beginPath(); ctx.arc(aim, 228, 10, 0, TAU); ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(aim, LAUNCH - 6); ctx.lineTo(aim - 6, LAUNCH + 4); ctx.lineTo(aim + 6, LAUNCH + 4); ctx.closePath(); ctx.fillStyle = "#3ad8c8"; ctx.fill();
+    // the periscope's round frame
+    const g = ctx.createRadialGradient(W / 2, H / 2 + 10, H * 0.55, W / 2, H / 2 + 10, H * 1.05);
+    g.addColorStop(0, "rgba(0,0,0,0)"); g.addColorStop(1, "rgba(0,0,0,0.7)");
+    ctx.fillStyle = g; ctx.fillRect(0, HUD, W, H - HUD);
+    for (let i = 0; i < TUBES; i++) {
+      const x = 14 + i * 16, y = H - 12, ready = tubes[i] <= 0;
+      ctx.fillStyle = "rgba(0,0,0,0.5)"; ctx.fillRect(x - 6, y - 5, 12, 10);
+      ctx.fillStyle = ready ? "#3ad8c8" : "#2a4a50"; ctx.fillRect(x - 5, y - 4, 10 * (ready ? 1 : 1 - Math.max(0, tubes[i]) / RELOAD), 8);
+    }
+    ctx.textAlign = "left"; ctx.font = "800 8px system-ui, sans-serif"; ctx.fillStyle = "#9ab4b8"; ctx.fillText("SILURI", 14 + TUBES * 16, H - 9);
+  }
+
+  // ---------- Loop ----------
+  const STEP = 1 / 120;
+  let last = performance.now(), acc = 0;
+  function loop(now) {
+    const dt = Math.min(0.1, (now - last) / 1000);
+    last = now;
+    if (isPlaying()) {
+      acc += dt;
+      while (acc >= STEP && isPlaying()) { update(STEP); acc -= STEP; }
+    } else { acc = 0; update(dt); }
+    draw();
+    requestAnimationFrame(loop);
+  }
+  syncControls();
+  showTitle();
+  requestAnimationFrame(loop);
+})();
+</script>
+<script src="../../shared/iniziali.js" data-record="periscopio-best-" data-kind="score"></script>
+</body>
+</html>

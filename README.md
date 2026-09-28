@@ -4,7 +4,7 @@ Raccolta di giochi arcade per il browser. Ogni gioco è un singolo file HTML sen
 
 ## 🕹️ Sala Giochi — `index.html`
 
-Apri `index.html` nella cartella principale per la pagina di raccolta: mostra tutti i 58 giochi con copertina, genere, comandi e i tuoi record per ogni difficoltà (Facile, Normale, Difficile). Tocca «Gioca» per avviare un gioco; in ogni gioco il pulsante «← Sala Giochi» in alto a sinistra (visibile nei menu) riporta alla raccolta.
+Apri `index.html` nella cartella principale per la pagina di raccolta: mostra tutti i 59 giochi con copertina, genere, comandi e i tuoi record per ogni difficoltà (Facile, Normale, Difficile). Tocca «Gioca» per avviare un gioco; in ogni gioco il pulsante «← Sala Giochi» in alto a sinistra (visibile nei menu) riporta alla raccolta.
 
 **Iniziali del record:** quando batti un record compare la schermata da sala giochi per inserire le tue tre iniziali (frecce ↑ ↓ per cambiare lettera, ← → per spostarti, oppure scrivile direttamente; su telefono i tasti ▲ ▼ e OK). Le iniziali vengono salvate insieme al record e compaiono nei menu del gioco e nella Sala Giochi. Il codice è condiviso da tutti i giochi in `shared/iniziali.js`.
 
@@ -917,3 +917,19 @@ Battaglia di castelli in stile *Warlords*: quattro castelli agli angoli, ognuno 
 - **Touch:** punta la levetta dove vuoi lo scudo (in su o a destra), tasto PRENDI a destra
 
 Per giocare apri `games/quattro-re/index.html` nel browser.
+
+### 🔭 Periscopio — `games/periscopio/index.html`
+
+Battaglia navale a tempo in stile *Sea Wolf*: dal periscopio del tuo sottomarino vedi passare le navi nemiche su tre distanze diverse.
+
+- **Siluri:** il siluro ci mette tempo ad arrivare (e rallenta verso l'orizzonte), quindi devi anticipare il bersaglio. Hai cinque tubi che si ricaricano da soli
+- **Navi:** mercantile 100, petroliera 150, cacciatorpediniere 300, motosilurante 500 (velocissima). Valgono ×1,5 a metà strada e ×2 all'orizzonte
+- **Colpi di fila:** +50 per ogni nave affondata consecutivamente (fino a +500); un siluro a vuoto azzera la serie
+- **Nave ospedale:** bianca con la croce rossa, non colpirla: −500
+- **Mine:** galleggiano vicino a te e fermano i siluri
+- **Tempo extra:** 20 secondi quando raggiungi 2.500 (Facile), 3.000 (Normale) o 4.000 punti (Difficile)
+- **Difficoltà:** Facile (2 minuti, navi lente), Normale (90 secondi), Difficile (75 secondi, navi veloci, più mine e navi ospedale); record separati per ogni difficoltà
+- **Comandi:** `←` `→` o `A` `D` per girare il periscopio · `SPAZIO` o `Z` per lanciare · `P` pausa
+- **Touch:** levetta a destra e sinistra per il periscopio, tasto FUOCO a destra
+
+Per giocare apri `games/periscopio/index.html` nel browser.
