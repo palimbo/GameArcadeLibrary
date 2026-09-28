@@ -4,7 +4,7 @@ Raccolta di giochi arcade per il browser. Ogni gioco è un singolo file HTML sen
 
 ## 🕹️ Sala Giochi — `index.html`
 
-Apri `index.html` nella cartella principale per la pagina di raccolta: mostra tutti i 63 giochi con copertina, genere, comandi e i tuoi record per ogni difficoltà (Facile, Normale, Difficile). Tocca «Gioca» per avviare un gioco; in ogni gioco il pulsante «← Sala Giochi» in alto a sinistra (visibile nei menu) riporta alla raccolta.
+Apri `index.html` nella cartella principale per la pagina di raccolta: mostra tutti i 64 giochi con copertina, genere, comandi e i tuoi record per ogni difficoltà (Facile, Normale, Difficile). Tocca «Gioca» per avviare un gioco; in ogni gioco il pulsante «← Sala Giochi» in alto a sinistra (visibile nei menu) riporta alla raccolta.
 
 **Iniziali del record:** quando batti un record compare la schermata da sala giochi per inserire le tue tre iniziali (frecce ↑ ↓ per cambiare lettera, ← → per spostarti, oppure scrivile direttamente; su telefono i tasti ▲ ▼ e OK). Le iniziali vengono salvate insieme al record e compaiono nei menu del gioco e nella Sala Giochi. Il codice è condiviso da tutti i giochi in `shared/iniziali.js`.
 
@@ -998,3 +998,18 @@ Battaglia di carri armati in prima persona in stile *Battlezone*: grafica vettor
 - **Touch:** una levetta analogica (su e giù per muoverti, sinistra e destra per girare) e il pulsante FUOCO
 
 Per giocare apri `games/zona-di-battaglia/index.html` nel browser.
+
+### 🎳 Bowling Strike — `games/bowling-strike/index.html`
+
+Bowling in stile sala giochi: una pista al neon vista da dietro il lanciatore, con la telecamera che segue la boccia fino ai birilli.
+
+- **Il tiro, in tre tocchi:** sposta il lanciatore a destra o a sinistra e premi TIRA; la freccia della mira oscilla, fermala; poi sale e scende la barra della potenza e, intanto, con la levetta dai effetto. Premi TIRA per lanciare
+- **Pista vera:** misure reali di pista, boccia e birilli. L'olio copre i primi due terzi della pista: l'effetto fa curvare la boccia soprattutto verso la fine, dove l'olio non c'è più
+- **Birilli:** cadono a catena, si spingono tra loro, rimbalzano sulle pareti laterali e finiscono nella buca. Al momento dell'impatto il gioco rallenta per farti vedere lo scontro. Il riquadro in alto a destra mostra quali sono ancora in piedi
+- **La tasca:** colpire in pieno il birillo 1 lascia spesso uno split; gli strike nascono entrando tra l'1 e il 3 (o tra l'1 e il 2), meglio se con un po' d'effetto verso il centro
+- **Regole:** 10 frame, due tiri per frame; nel decimo un tiro in più se fai strike o spare. Strike vale 10 più i due tiri seguenti, spare 10 più il tiro seguente; partita perfetta 300. Il tabellone segna X, / e -, e il gioco annuncia strike, spare, split, doppio e tacchino
+- **Difficoltà:** Facile (mira e potenza lente, traiettoria disegnata fino ai birilli), Normale (solo il primo tratto della traiettoria), Difficile (mira e potenza veloci, nessuna traiettoria); record separati per ogni difficoltà
+- **Comandi:** `←` `→` per spostarti e poi per l'effetto · `Spazio` o `Invio` per fermare mira e potenza e lanciare · `P` pausa
+- **Touch:** levetta a sinistra e a destra, pulsante TIRA
+
+Per giocare apri `games/bowling-strike/index.html` nel browser.
