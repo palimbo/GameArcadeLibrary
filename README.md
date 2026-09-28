@@ -4,7 +4,7 @@ Raccolta di giochi arcade per il browser. Ogni gioco è un singolo file HTML sen
 
 ## 🕹️ Sala Giochi — `index.html`
 
-Apri `index.html` nella cartella principale per la pagina di raccolta: mostra tutti i 76 giochi con copertina, genere, comandi e i tuoi record per ogni difficoltà (Facile, Normale, Difficile). Tocca «Gioca» per avviare un gioco; in ogni gioco il pulsante «← Sala Giochi» in alto a sinistra (visibile nei menu) riporta alla raccolta.
+Apri `index.html` nella cartella principale per la pagina di raccolta: mostra tutti i 77 giochi con copertina, genere, comandi e i tuoi record per ogni difficoltà (Facile, Normale, Difficile). Tocca «Gioca» per avviare un gioco; in ogni gioco il pulsante «← Sala Giochi» in alto a sinistra (visibile nei menu) riporta alla raccolta.
 
 **Iniziali del record:** quando batti un record compare la schermata da sala giochi per inserire le tue tre iniziali (frecce ↑ ↓ per cambiare lettera, ← → per spostarti, oppure scrivile direttamente; su telefono i tasti ▲ ▼ e OK). Le iniziali vengono salvate insieme al record e compaiono nei menu del gioco e nella Sala Giochi. Il codice è condiviso da tutti i giochi in `shared/iniziali.js`.
 
@@ -1198,3 +1198,24 @@ Sparatutto circolare in stile *Gyruss*: l'astronave gira lungo il bordo di un gr
 - **Touch:** levetta e pulsante FUOCO
 
 Per giocare apri `games/spirale-galattica/index.html` nel browser.
+
+### 🐜 Formichine — `games/formichine/index.html`
+
+Rompicapo in stile *Lemmings*: le formichine escono dalla botola e camminano dritte, senza pensare. Cadono nei burroni, affogano nell'acqua e tornano indietro quando sbattono contro un muro. Il terreno si scava pixel per pixel, tranne l'acciaio.
+
+- **Lo scopo:** in ogni livello bisogna portarne a casa un certo numero (per esempio 7 su 10) prima che scada il tempo. Se non ce la fai perdi un tentativo e rifai il livello; senza tentativi la partita finisce
+- **I lavori** (ogni livello ne dà un numero limitato):
+  - **SALI**, per sempre: si arrampica sui muri verticali
+  - **OMBRELLO**, per sempre: plana dall'alto; senza, un salto troppo alto è fatale
+  - **BOMBA**: esplode dopo 5 secondi e apre un buco (serve anche a liberare uno STOP)
+  - **STOP**: si ferma a braccia aperte e fa tornare indietro le altre
+  - **SCALA**: costruisce 12 gradini in salita, anche sopra i burroni
+  - **SFONDA**: scava un tunnel dritto nei muri di terra
+  - **SCAVA**: scava in giù
+- **Otto livelli:** Basta una buca, Una scala per salire, Il muro, Il ponte, Ombrelli aperti, Scalatori, Giù e poi dritto, Il gran finale; poi si ricomincia con meno tempo. Ogni livello è stato verificato risolvibile su tutte le difficoltà
+- **Punti:** 100 per ogni formichina a casa, 5 per ogni secondo avanzato, 2.000 se le salvi tutte
+- **Difficoltà:** Facile (5 tentativi, un lavoro in più di ogni tipo, più tempo, bastano meno formichine), Normale (3 tentativi), Difficile (3 tentativi, meno tempo, bisogna salvarne di più); record separati per ogni difficoltà
+- **Comandi:** scegli il lavoro (tasti `1`–`7` o clic sulla barra in basso) e clicca una formichina, oppure muovi il mirino con le frecce e premi `Spazio` · `F` velocità ×3 · `B` fa esplodere tutte (quando sono bloccate) · `P` pausa
+- **Touch:** tocca il lavoro nella barra e poi la formichina (basta toccarle vicino); meglio col telefono in orizzontale
+
+Per giocare apri `games/formichine/index.html` nel browser.
