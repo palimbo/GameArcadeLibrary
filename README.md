@@ -4,7 +4,7 @@ Raccolta di giochi arcade per il browser. Ogni gioco è un singolo file HTML sen
 
 ## 🕹️ Sala Giochi — `index.html`
 
-Apri `index.html` nella cartella principale per la pagina di raccolta: mostra tutti i 67 giochi con copertina, genere, comandi e i tuoi record per ogni difficoltà (Facile, Normale, Difficile). Tocca «Gioca» per avviare un gioco; in ogni gioco il pulsante «← Sala Giochi» in alto a sinistra (visibile nei menu) riporta alla raccolta.
+Apri `index.html` nella cartella principale per la pagina di raccolta: mostra tutti i 68 giochi con copertina, genere, comandi e i tuoi record per ogni difficoltà (Facile, Normale, Difficile). Tocca «Gioca» per avviare un gioco; in ogni gioco il pulsante «← Sala Giochi» in alto a sinistra (visibile nei menu) riporta alla raccolta.
 
 **Iniziali del record:** quando batti un record compare la schermata da sala giochi per inserire le tue tre iniziali (frecce ↑ ↓ per cambiare lettera, ← → per spostarti, oppure scrivile direttamente; su telefono i tasti ▲ ▼ e OK). Le iniziali vengono salvate insieme al record e compaiono nei menu del gioco e nella Sala Giochi. Il codice è condiviso da tutti i giochi in `shared/iniziali.js`.
 
@@ -1058,3 +1058,19 @@ Strategia e azione in stile *Rampart*: difendi i tuoi castelli sulla costa dalle
 - **Touch:** tocca il campo per piazzare o per sparare in quel punto; oppure levetta per il cursore e i pulsanti RUOTA e AZIONE
 
 Per giocare apri `games/castelli-e-cannoni/index.html` nel browser.
+
+### 🛡️ Cavaliere in Mutande — `games/cavaliere-in-mutande/index.html`
+
+Piattaforme d'azione in stile *Ghosts 'n Goblins*: un cavaliere va a salvare la principessa rapita da un ciclope.
+
+- **Armatura:** al primo colpo l'armatura vola via e il cavaliere resta in mutande a cuori; al secondo colpo resta solo lo scheletro. Un'armatura nuova si trova nelle giare
+- **Quattro mondi:** il Cimitero, la Foresta, il Villaggio Fantasma e il Castello, poi si ricomincia con mostri più veloci. Buche da saltare (nella foresta c'è l'acqua), lapidi, ceppi, barili e colonne che fermano le lance, piattaforme sospese. A metà livello la bandiera segna il punto da cui si riparte
+- **Mostri:** zombi che escono dalla terra (100), corvi che si alzano dalle lapidi (100), fantasmi che fluttuano (150), piante carnivore che sputano occhi (200, due colpi) e il diavoletto rosso (1.000), che vola, si ferma sbattendo le ali prima di tuffarsi su di te e schiva le lance
+- **Il ciclope:** alla fine di ogni livello, nell'arena dietro il cancello, lancia massi e salta facendo tremare il terreno (5.000); la chiave che lascia apre il livello successivo. Lance e pugnali abbattono in volo occhi e massi
+- **Armi e giare:** si parte con la lancia; nelle giare (e da alcuni mostri) si trovano il pugnale (veloce, tre alla volta), la torcia (va ad arco e brucia a terra), l'armatura e sacchi d'oro
+- **Tempo:** ogni livello ha un tempo limite; quello che avanza diventa bonus. Una vita extra ogni 30.000 punti
+- **Difficoltà:** Facile (5 vite, mostri lenti, più armature, più tempo), Normale (3 vite), Difficile (3 vite, mostri veloci e numerosi, il diavoletto resiste e schiva di più, meno tempo); record separati per ogni difficoltà
+- **Comandi:** `←` `→` cammina · `↓` abbassati · `Spazio` o `↑` salta · `Z` `X` o `J` lancia (tieni premuto per lanciare di continuo) · `P` pausa
+- **Touch:** levetta (giù per abbassarti) e i pulsanti SALTA e LANCIA
+
+Per giocare apri `games/cavaliere-in-mutande/index.html` nel browser.
