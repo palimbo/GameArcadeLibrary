@@ -4,7 +4,7 @@ Raccolta di giochi arcade per il browser. Ogni gioco è un singolo file HTML sen
 
 ## 🕹️ Sala Giochi — `index.html`
 
-Apri `index.html` nella cartella principale per la pagina di raccolta: mostra tutti i 71 giochi con copertina, genere, comandi e i tuoi record per ogni difficoltà (Facile, Normale, Difficile). Tocca «Gioca» per avviare un gioco; in ogni gioco il pulsante «← Sala Giochi» in alto a sinistra (visibile nei menu) riporta alla raccolta.
+Apri `index.html` nella cartella principale per la pagina di raccolta: mostra tutti i 72 giochi con copertina, genere, comandi e i tuoi record per ogni difficoltà (Facile, Normale, Difficile). Tocca «Gioca» per avviare un gioco; in ogni gioco il pulsante «← Sala Giochi» in alto a sinistra (visibile nei menu) riporta alla raccolta.
 
 **Iniziali del record:** quando batti un record compare la schermata da sala giochi per inserire le tue tre iniziali (frecce ↑ ↓ per cambiare lettera, ← → per spostarti, oppure scrivile direttamente; su telefono i tasti ▲ ▼ e OK). Le iniziali vengono salvate insieme al record e compaiono nei menu del gioco e nella Sala Giochi. Il codice è condiviso da tutti i giochi in `shared/iniziali.js`.
 
@@ -1121,3 +1121,19 @@ Sparatutto a piedi in stile *Commando*: da solo contro un esercito, avanzi verso
 - **Touch:** levetta per camminare e mirare, pulsanti FUOCO (tieni premuto) e BOMBA
 
 Per giocare apri `games/sergente-di-ferro/index.html` nel browser.
+
+### 🏍️ Rampe e Fango — `games/rampe-e-fango/index.html`
+
+Motocross a salti in stile *Excitebike*: quattro corsie viste di lato, rampe che attraversano tutta la pista e un tempo limite per ogni gara.
+
+- **Gare:** arriva al traguardo a scacchi prima che scada il tempo, poi si passa alla gara successiva (più lunga, con più rampe e un tempo più stretto). Quattro piste: Deserto, Bosco, Stadio di Notte e Cava d'Argilla. Se il tempo finisce, la partita è finita
+- **Salti:** in volo inclini la moto; il segno sul terreno dove atterrerai diventa verde quando l'angolo è giusto (atterraggio perfetto +200), giallo se atterri sulla ruota dietro o davanti (rallenti) e rosso se cadrai
+- **Turbo:** più veloce del gas, ma scalda il motore: quando la temperatura arriva in fondo il motore si ferma per 3 secondi. Le frecce azzurre su una corsia lo raffreddano di colpo
+- **Corsie:** il fango rallenta; sui tronchi cadi, a meno di passarci sopra impennando (tieni ← a terra) o andando piano
+- **Rivali:** superarli vale 100; se tamponi un rivale cadi tu, se è lui a venirti addosso da dietro cade lui (+500)
+- **Punti:** a ogni traguardo 1.000 per il numero della gara più 100 per ogni secondo avanzato
+- **Difficoltà:** Facile (tempo largo, motore che scalda piano, 3 rivali), Normale (4 rivali), Difficile (tempo stretto, motore che scalda in fretta, 5 rivali); record separati per ogni difficoltà
+- **Comandi:** `↑` `↓` (o `W` `S`) cambiano corsia · `←` `→` (o `A` `D`) inclinano la moto (a terra `←` impenna) · `Z`, `J` o `Spazio` gas · `X` o `K` turbo · `P` pausa
+- **Touch:** levetta (su/giù corsia, sinistra/destra inclina), pulsanti GAS e TURBO da tenere premuti
+
+Per giocare apri `games/rampe-e-fango/index.html` nel browser.
