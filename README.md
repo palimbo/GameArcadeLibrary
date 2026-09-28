@@ -4,7 +4,7 @@ Raccolta di giochi arcade per il browser. Ogni gioco è un singolo file HTML sen
 
 ## 🕹️ Sala Giochi — `index.html`
 
-Apri `index.html` nella cartella principale per la pagina di raccolta: mostra tutti i 77 giochi con copertina, genere, comandi e i tuoi record per ogni difficoltà (Facile, Normale, Difficile). Tocca «Gioca» per avviare un gioco; in ogni gioco il pulsante «← Sala Giochi» in alto a sinistra (visibile nei menu) riporta alla raccolta.
+Apri `index.html` nella cartella principale per la pagina di raccolta: mostra tutti i 78 giochi con copertina, genere, comandi e i tuoi record per ogni difficoltà (Facile, Normale, Difficile). Tocca «Gioca» per avviare un gioco; in ogni gioco il pulsante «← Sala Giochi» in alto a sinistra (visibile nei menu) riporta alla raccolta.
 
 **Iniziali del record:** quando batti un record compare la schermata da sala giochi per inserire le tue tre iniziali (frecce ↑ ↓ per cambiare lettera, ← → per spostarti, oppure scrivile direttamente; su telefono i tasti ▲ ▼ e OK). Le iniziali vengono salvate insieme al record e compaiono nei menu del gioco e nella Sala Giochi. Il codice è condiviso da tutti i giochi in `shared/iniziali.js`.
 
@@ -1219,3 +1219,19 @@ Rompicapo in stile *Lemmings*: le formichine escono dalla botola e camminano dri
 - **Touch:** tocca il lavoro nella barra e poi la formichina (basta toccarle vicino); meglio col telefono in orizzontale
 
 Per giocare apri `games/formichine/index.html` nel browser.
+
+### 🏰 Fortezza Spaziale — `games/fortezza-spaziale/index.html`
+
+Sparatutto isometrico in stile *Zaxxon*: la nave avanza da sola sopra le fortezze nemiche, e tu la sposti di lato e cambi quota. L'ombra sul pavimento e l'altimetro a destra (con la quota del prossimo varco, della prossima barriera o del prossimo caccia) aiutano a capire a che altezza sei.
+
+- **Il percorso:** una fortezza, un tratto di spazio aperto, una seconda fortezza con il robot guardiano in fondo, poi si ricomincia più veloci
+- **Muri:** si passano solo dal varco evidenziato in giallo (giusta posizione di lato e giusta quota); anche i colpi si fermano sui mattoni
+- **Barriere elettriche:** raggi a una certa quota da un capo all'altro della fortezza; si passano sopra o sotto
+- **Bersagli:** torrette che sparano verso di te 100 · serbatoi 300 (e 30 di carburante) · radar 1.000 (due colpi) · nello spazio, caccia che arrivano di fronte 200 (colpiscili alla loro quota o schivali: urtarli è fatale)
+- **Carburante:** cala di continuo (più piano nello spazio); se finisce, la nave precipita. Si fa il pieno colpendo i serbatoi, che stanno a terra: bisogna volare bassi
+- **Robot guardiano:** si muove di lato e in quota e spara; va colpito al petto dieci volte (di più nei giri successivi) prima che se ne vada (5.000). Nave extra a 20.000 punti e poi ogni 30.000
+- **Difficoltà:** Facile (5 navi, torrette lente, varchi più larghi), Normale (3 navi), Difficile (3 navi, colpi fitti, varchi stretti); record separati per ogni difficoltà
+- **Comandi:** `←` `→` di lato · `↑` `↓` sali e scendi (o `W` `A` `S` `D`) · `Spazio`, `J` o `Z` fuoco (tieni premuto) · `P` pausa
+- **Touch:** levetta (destra/sinistra di lato, su/giù sali e scendi) e pulsante FUOCO
+
+Per giocare apri `games/fortezza-spaziale/index.html` nel browser.

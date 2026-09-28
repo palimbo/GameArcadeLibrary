@@ -1,0 +1,728 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no, viewport-fit=cover">
+<title>Fortezza Spaziale</title>
+<style>
+  :root {
+    --bg: #060812;
+    --fg: #eef4ff;
+    --muted: #9aa8c8;
+    --cyan: #4ae8ff;
+    --yellow: #ffe04a;
+    --red: #ff4a3a;
+    --green: #6ae86a;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  html, body {
+    height: 100%;
+    background: var(--bg);
+    color: var(--fg);
+    font-family: system-ui, -apple-system, "Segoe UI", sans-serif;
+    overflow: hidden;
+    user-select: none;
+    -webkit-user-select: none;
+    touch-action: none;
+  }
+  #wrap { position: fixed; inset: 0; display: flex; align-items: center; justify-content: center; }
+  canvas { display: block; touch-action: none; border-radius: 6px; box-shadow: 0 0 0 2px #1a2440, 0 10px 40px rgba(0,0,0,0.6); }
+  #pauseBtn {
+    position: fixed; z-index: 3; display: none; right: 10px; top: calc(10px + env(safe-area-inset-top, 0px));
+    font: 700 13px system-ui, sans-serif; color: var(--fg);
+    background: rgba(0, 0, 0, 0.6); border: 1px solid rgba(238, 244, 255, 0.35);
+    border-radius: 8px; padding: 6px 10px; cursor: pointer;
+  }
+  #touch {
+    position: fixed; z-index: 2; display: none; left: 12px; right: 12px;
+    bottom: calc(14px + env(safe-area-inset-bottom, 0px));
+    justify-content: space-between; align-items: flex-end; pointer-events: none;
+  }
+  /* thumb stick: left and right move the ship sideways, up and down change its height; hold FUOCO */
+  #touch .stick { position: relative; width: 136px; height: 136px; border-radius: 50%; pointer-events: auto; touch-action: none;
+    border: 2px solid rgba(74, 232, 255, 0.6); background: radial-gradient(circle, rgba(74,232,255,0.14), rgba(74,232,255,0.04)); }
+  #touch .stick .knob { position: absolute; left: 50%; top: 50%; width: 58px; height: 58px; margin: -29px 0 0 -29px; border-radius: 50%;
+    background: rgba(74, 232, 255, 0.45); border: 2px solid rgba(255,255,255,0.7); box-shadow: 0 4px 10px rgba(0,0,0,0.4); pointer-events: none; }
+  #touch .stick .ring { position: absolute; inset: 10px; border-radius: 50%; border: 1px dashed rgba(238,244,255,0.25); pointer-events: none; }
+  #touch .fire { width: 96px; height: 96px; border-radius: 50%; pointer-events: auto; touch-action: none; color: var(--fg);
+    font: 800 13px system-ui, sans-serif; letter-spacing: 1px; border: 2px solid rgba(255, 74, 58, 0.9); background: rgba(255, 74, 58, 0.2); }
+  #touch .fire.on { background: rgba(255, 74, 58, 0.55); }
+  #touch.small .stick { width: 112px; height: 112px; }
+  #touch.small .stick .knob { width: 48px; height: 48px; margin: -24px 0 0 -24px; }
+  #touch.small .fire { width: 80px; height: 80px; font-size: 11px; }
+  #overlay {
+    position: fixed; inset: 0; z-index: 5;
+    display: flex; flex-direction: column; align-items: center; justify-content: flex-start;
+    gap: 14px; padding: 16px; text-align: center; overflow-y: auto;
+    background: rgba(6, 8, 18, 0.92);
+  }
+  #overlay > :first-child { margin-top: auto; }
+  #overlay > :last-child { margin-bottom: auto; }
+  #overlay.hidden { display: none; }
+  #homeLink {
+    position: fixed; top: calc(10px + env(safe-area-inset-top, 0px)); left: 10px; z-index: 6;
+    font: 600 13px/1 system-ui, sans-serif; color: #fff; text-decoration: none;
+    padding: 8px 12px; border-radius: 999px; background: rgba(0,0,0,.55);
+    border: 1px solid rgba(255,255,255,.25);
+  }
+  #homeLink:hover { background: rgba(0,0,0,.8); }
+  #overlay.hidden ~ #homeLink { display: none; }
+  @media (max-width: 700px) { #overlay { padding-top: calc(52px + env(safe-area-inset-top, 0px)); } }
+  #overlay h1 { font-size: clamp(30px, 9vw, 56px); font-weight: 900; letter-spacing: 3px; color: var(--cyan);
+    text-shadow: 0 0 14px rgba(74,232,255,0.6), 0 0 34px rgba(74,232,255,0.3); }
+  #overlay h2 { font-size: clamp(26px, 7vw, 42px); font-weight: 900; letter-spacing: 2px; color: var(--cyan); }
+  #overlay h2.lose { color: var(--red); }
+  #overlay p { max-width: 560px; font-size: clamp(13px, 3.4vw, 16px); line-height: 1.55; }
+  #overlay p.muted { color: var(--muted); }
+  #overlay .pts { display: grid; grid-template-columns: repeat(2, auto); gap: 4px 18px; font-size: 13px; color: var(--muted); text-align: left; max-width: 580px; }
+  #overlay .pts b { color: var(--fg); }
+  #overlay .diff { display: flex; gap: 10px; flex-wrap: wrap; justify-content: center; }
+  #overlay button {
+    font: 800 15px system-ui, sans-serif; letter-spacing: 1.5px; color: var(--fg);
+    background: transparent; cursor: pointer;
+    border: 2px solid rgba(238,244,255,0.3); border-radius: 10px; padding: 9px 16px;
+  }
+  #overlay .diff button.on { border-color: var(--c); color: var(--c); box-shadow: 0 0 12px var(--c); }
+  #overlay button.start { border-color: var(--cyan); color: #021a22; background: var(--cyan); padding: 11px 30px; box-shadow: 0 0 18px rgba(74,232,255,0.5); }
+  @media (max-height: 560px) {
+    #overlay { gap: 8px; }
+    #overlay h1 { font-size: 30px; }
+    #overlay p { font-size: 13px; line-height: 1.4; }
+    #overlay .help, #overlay .pts { display: none; }
+  }
+</style>
+</head>
+<body>
+<div id="wrap"><canvas id="game"></canvas></div>
+<div id="touch">
+  <div class="stick" aria-label="Levetta"><div class="ring"></div><div class="knob"></div></div>
+  <button type="button" class="fire" aria-label="Fuoco">FUOCO</button>
+</div>
+<button id="pauseBtn" type="button" aria-label="Pausa">❚❚</button>
+<div id="overlay"></div>
+<a id="homeLink" href="../../index.html">← Sala Giochi</a>
+
+<script>
+(() => {
+  "use strict";
+
+  const W = 640, H = 360, TAU = Math.PI * 2;
+  // isometric view: forward runs up-right, sideways down-right, height straight up
+  const X0 = 110, Y0 = 235, K = 1.45, XW = 70, ZMAX = 80, SHIP_W = 8, SHIP_H = 5;
+  const FORT_LEN = 3600, SPACE_LEN = 2400;
+
+  const DIFFICULTIES = {
+    facile:    { label: "FACILE",    color: "#7ed87a", desc: "5 navi · torrette lente, varchi più larghi", lives: 5, fire: 0.65, speed: 0.9, gap: 1.2, fuel: 0.8 },
+    normale:   { label: "NORMALE",   color: "#4ae8ff", desc: "3 navi · l'esperienza classica", lives: 3, fire: 1, speed: 1, gap: 1, fuel: 1 },
+    difficile: { label: "DIFFICILE", color: "#ff4a3a", desc: "3 navi · colpi fitti, varchi stretti", lives: 3, fire: 1.35, speed: 1.1, gap: 0.88, fuel: 1.15 },
+  };
+  const DIFF_IDS = Object.keys(DIFFICULTIES);
+  const DIFF_KEY = "fortezza-difficulty";
+  const bestKey = (id) => `fortezza-best-${id}`;
+  function store(k, v) { try { localStorage.setItem(k, v); } catch { /* ignore */ } }
+  function load(k) { try { return localStorage.getItem(k); } catch { return null; } }
+  const rnd = (a, b) => a + Math.random() * (b - a);
+  const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
+  const sign = (v) => (v < 0 ? -1 : 1);
+
+  // ---------- Canvas ----------
+  const canvas = document.getElementById("game");
+  const ctx = canvas.getContext("2d");
+  const wrapEl = document.getElementById("wrap");
+  const overlay = document.getElementById("overlay");
+  const touchEl = document.getElementById("touch");
+  const pauseBtn = document.getElementById("pauseBtn");
+  let pxRatio = 1, touchMode = !!(window.matchMedia && matchMedia("(pointer: coarse)").matches);
+  function resize() {
+    const portrait = window.innerHeight > window.innerWidth;
+    const showTouch = touchMode && isPlaying();
+    touchEl.style.display = showTouch ? "flex" : "none";
+    touchEl.classList.toggle("small", !portrait && window.innerHeight < 480);
+    wrapEl.style.paddingBottom = showTouch && portrait ? "calc(170px + env(safe-area-inset-bottom, 0px))" : "0";
+    let availW = window.innerWidth - 8, availH = window.innerHeight - 8;
+    if (showTouch && portrait) availH -= 170;
+    if (showTouch && !portrait) {
+      const side = Math.max(...[...touchEl.children].map((el) => el.offsetWidth)) + 20;
+      if (window.innerWidth - 2 * side > 200) availW = window.innerWidth - 2 * side;
+    }
+    const s = Math.max(0.2, Math.min(availW / W, availH / H));
+    pxRatio = Math.min(3, s * (window.devicePixelRatio || 1));
+    canvas.style.width = W * s + "px";
+    canvas.style.height = H * s + "px";
+    canvas.width = Math.round(W * pxRatio);
+    canvas.height = Math.round(H * pxRatio);
+  }
+  window.addEventListener("resize", () => syncControls());
+
+  // ---------- Audio ----------
+  let audioCtx = null;
+  function beep(freq, dur, type = "square", vol = 0.04, slide = 0, delay = 0) {
+    if (!audioCtx) return;
+    const t = audioCtx.currentTime + delay;
+    const osc = audioCtx.createOscillator(), gain = audioCtx.createGain();
+    osc.type = type;
+    osc.frequency.setValueAtTime(freq, t);
+    if (slide) osc.frequency.exponentialRampToValueAtTime(Math.max(20, freq + slide), t + dur);
+    gain.gain.setValueAtTime(vol, t);
+    gain.gain.exponentialRampToValueAtTime(0.0001, t + dur);
+    osc.connect(gain).connect(audioCtx.destination);
+    osc.start(t); osc.stop(t + dur + 0.02);
+  }
+  function noise(dur, vol, freq) {
+    if (!audioCtx) return;
+    const len = Math.floor(audioCtx.sampleRate * dur), buf = audioCtx.createBuffer(1, len, audioCtx.sampleRate), d = buf.getChannelData(0);
+    for (let i = 0; i < len; i++) d[i] = (Math.random() * 2 - 1) * (1 - i / len);
+    const src = audioCtx.createBufferSource(), f = audioCtx.createBiquadFilter(), g = audioCtx.createGain();
+    src.buffer = buf; f.type = "bandpass"; f.frequency.value = freq; g.gain.value = vol;
+    src.connect(f).connect(g).connect(audioCtx.destination); src.start();
+  }
+  const arp = (notes, gap, d, type = "square", vol = 0.04) => notes.forEach((f, i) => beep(f, d, type, vol, 0, i * gap));
+  let sfxN = 0;
+  const lim = (fn) => (...a) => { if (sfxN++ < 6) fn(...a); };
+  const sfx = {
+    shot: lim(() => beep(1100, 0.05, "square", 0.015, -600)),
+    pop: lim(() => { noise(0.15, 0.14, 1200); beep(220, 0.1, "square", 0.025, -120); }),
+    fuel: lim(() => arp([659, 880, 1175], 0.05, 0.08, "square", 0.03)),
+    enemy: lim(() => beep(300, 0.12, "sawtooth", 0.015, 200)),
+    pass: lim(() => beep(1400, 0.04, "sine", 0.02)),
+    zap: lim(() => noise(0.08, 0.05, 3000)),
+    warn: lim(() => beep(880, 0.1, "square", 0.02)),
+    boss: () => arp([196, 262, 196, 262], 0.15, 0.14, "sawtooth", 0.03),
+    die: () => { noise(0.6, 0.3, 600); arp([392, 330, 262, 196, 131], 0.1, 0.16, "triangle", 0.05); },
+    clear: () => arp([523, 659, 784, 1047, 784, 1047, 1319, 1568], 0.09, 0.16),
+    start: () => arp([392, 523, 659, 784, 1047], 0.08, 0.14),
+    life: () => arp([784, 988, 1175, 1568], 0.07, 0.12),
+    over: () => arp([523, 466, 415, 392, 330, 262], 0.15, 0.24, "triangle", 0.05),
+  };
+
+  // ---------- State ----------
+  let difficulty = DIFFICULTIES[load(DIFF_KEY)] ? load(DIFF_KEY) : "normale";
+  let diff = DIFFICULTIES[difficulty];
+  let state = "menu", menu = null, pausedFrom = null, stateT = 0, clock = 0;
+  let score = 0, lives = 3, round = 0, bestCache = 0, nextLife = 20000;
+  let S = null, objs = [], shots = [], bullets = [], parts = [], popups = [], message = null;
+  let seg = "fort", segLen = 0, segDone = 0, nextSpawn = 0, fuel = 100, boss = null, scroll = 0, why = "";
+  let firing = false;
+  const keys = { left: false, right: false, up: false, down: false };
+  const stick = { x: 0, y: 0 };
+  const pace = () => diff.speed * (1 + Math.min(round, 5) * 0.06);
+  const V = () => 120 * pace();
+
+  // ---------- Projection ----------
+  const PX = (x, yr, z) => X0 + (x + yr) * 0.866 * K;
+  const PY = (x, yr, z) => Y0 + ((x - yr) * 0.5 - z) * K;
+
+  // ---------- Flow ----------
+  const isPlaying = () => ["intro", "play", "dead", "clear"].includes(state);
+  function startGame() {
+    if (!audioCtx) { try { audioCtx = new (window.AudioContext || window.webkitAudioContext)(); } catch { audioCtx = null; } }
+    if (audioCtx && audioCtx.state === "suspended") audioCtx.resume();
+    score = 0; lives = diff.lives; round = 0; nextLife = 20000;
+    bestCache = parseInt(load(bestKey(difficulty)), 10) || 0;
+    beginSegment("fort", 1);
+    S = { x: 0, z: 30, inv: 1.5, cool: 0, tilt: 0 };
+    fuel = 100;
+    sfx.start();
+    menu = null;
+    overlay.classList.add("hidden");
+    syncControls();
+    last = performance.now();
+  }
+  let fortNo = 1;
+  function beginSegment(kind, n) {
+    seg = kind; segDone = 0; nextSpawn = 200; boss = null;
+    if (kind === "fort") { fortNo = n; segLen = FORT_LEN; message = { text: `FORTEZZA ${round * 2 + n}`, sub: n === 2 ? "in fondo ti aspetta il robot guardiano" : "passa i muri dai varchi, colpisci i serbatoi", t: 0 }; }
+    else { segLen = SPACE_LEN; message = { text: "SPAZIO APERTO", sub: "caccia nemici: guarda l'altimetro", t: 0 }; }
+    state = "intro"; stateT = 1.4;
+  }
+  function addScore(n, x, yr, z, color = "#eef4ff") {
+    score += n;
+    if (x !== undefined) popups.push({ x, yr, z, text: String(n), color, t: 0 });
+    if (score >= nextLife) { nextLife += 30000; if (lives < 9) { lives++; sfx.life(); popups.push({ x: S.x, yr: 30, z: S.z + 20, text: "NAVE EXTRA", color: "#ffe04a", t: 0 }); } }
+  }
+  function burst(x, yr, z, c, n = 12, sp = 90, life = 0.6) {
+    for (let k = 0; k < n; k++) { const a = Math.random() * TAU, b = Math.random() * Math.PI, s = sp * rnd(0.3, 1); parts.push({ x, yr, z, vx: Math.cos(a) * Math.sin(b) * s, vy: Math.sin(a) * Math.sin(b) * s, vz: Math.cos(b) * s, t: 0, life: life * rnd(0.6, 1.2), c }); }
+  }
+  function die(reason) {
+    if (state !== "play" || S.inv > 0) return;
+    why = reason;
+    lives--;
+    sfx.die(); burst(S.x, 0, S.z, "#ffb43a", 30, 120, 0.9); burst(S.x, 0, S.z, "#ff4a3a", 16, 80, 0.7);
+    message = { text: "NAVE ABBATTUTA!", sub: `${reason}${lives > 0 ? ` · ne restano ${lives}` : ""}`, t: 0 };
+    state = "dead"; stateT = 2;
+  }
+  function afterDeath() {
+    if (lives <= 0) { gameOver(); return; }
+    // a clear stretch ahead to start again
+    objs = objs.filter((o) => o.yr > 260 || o.kind === "boss");
+    bullets = [];
+    S = { x: 0, z: 30, inv: 2.2, cool: 0, tilt: 0 };
+    fuel = Math.max(fuel, 70);
+    state = "play";
+  }
+  function gameOver() {
+    state = "over";
+    const prev = parseInt(load(bestKey(difficulty)), 10) || 0;
+    const record = score > prev;
+    if (record) store(bestKey(difficulty), String(score));
+    sfx.over();
+    const played = diff.label, f = round * 2 + fortNo;
+    menu = () => showOverlay(
+      `<h2 class="lose">MISSIONE FALLITA</h2>
+       <p>Punteggio: <b>${score.toLocaleString("it-IT")}</b> · Fortezza ${f} · ${played}</p>
+       ${record ? "<p style='color:var(--yellow)'>★ NUOVO RECORD! ★</p>" : ""}
+       ${difficultyHTML()}
+       <button class="start" data-start>GIOCA ANCORA</button>`
+    );
+    menu();
+    syncControls();
+  }
+  function togglePause() {
+    if (isPlaying()) {
+      pausedFrom = state; state = "paused";
+      showOverlay(`<h2>PAUSA</h2><button class="start" data-resume>CONTINUA</button><p class="muted">Premi P per continuare</p>`);
+    } else if (state === "paused") {
+      state = pausedFrom; overlay.classList.add("hidden"); last = performance.now();
+    }
+    syncControls();
+  }
+  // the pause menu can end the game (shared/iniziali.js): it ends here the usual way, saving the record
+  window.addEventListener("sala:termina", () => { if (state !== "paused") return; state = pausedFrom; overlay.classList.add("hidden"); gameOver(); syncControls(); });
+  function syncControls() {
+    pauseBtn.style.display = isPlaying() && touchMode ? "block" : "none";
+    resize();
+  }
+  pauseBtn.addEventListener("click", () => togglePause());
+  function showOverlay(html) { overlay.innerHTML = html; overlay.classList.remove("hidden"); }
+  function difficultyHTML() {
+    const buttons = DIFF_IDS.map((id) => {
+      const d = DIFFICULTIES[id];
+      return `<button type="button" data-diff="${id}" class="${id === difficulty ? "on" : ""}" style="--c:${d.color}">${d.label}</button>`;
+    }).join("");
+    const best = parseInt(load(bestKey(difficulty)), 10);
+    return `<div class="diff">${buttons}</div><p class="muted">${diff.desc}${best ? ` · Record: ${best.toLocaleString("it-IT")}` : ""}</p>`;
+  }
+  function setDifficulty(id) { if (!DIFFICULTIES[id]) return; difficulty = id; diff = DIFFICULTIES[id]; store(DIFF_KEY, id); if (menu) menu(); }
+  function showTitle() {
+    menu = showTitle;
+    showOverlay(
+      `<h1>FORTEZZA SPAZIALE</h1>
+       <p>Vola sopra le fortezze nemiche: la nave avanza da sola, tu la sposti di lato e cambi quota. L'ombra sul pavimento e l'altimetro a sinistra ti dicono a che altezza sei. Il carburante cala: colpisci i serbatoi per fare il pieno.</p>
+       <div class="pts">
+         <span><b>Muri</b></span><span>passa dal varco: l'altimetro mostra la quota giusta</span>
+         <span><b>Barriere</b></span><span>raggi elettrici a una certa quota: passa sopra o sotto</span>
+         <span><b>Bersagli</b></span><span>torrette 100 · serbatoi 300 e carburante · radar 1.000 · caccia 200</span>
+         <span><b>Robot guardiano</b></span><span>alla seconda fortezza: colpiscilo al petto prima che se ne vada (5.000)</span>
+       </div>
+       ${touchMode
+         ? `<p class="muted help">Levetta: destra/sinistra di lato, su/giù sali e scendi · FUOCO (tieni premuto)</p>`
+         : `<p class="muted help">← → di lato · ↑ ↓ sali e scendi (o WASD) · SPAZIO, J o Z fuoco · P pausa</p>`}
+       ${difficultyHTML()}
+       <button class="start" data-start>DECOLLO!</button>`
+    );
+  }
+  overlay.addEventListener("click", (e) => {
+    const d = e.target.closest("[data-diff]");
+    if (d) { setDifficulty(d.dataset.diff); return; }
+    if (e.target.closest("[data-start]")) startGame();
+    if (e.target.closest("[data-resume]")) togglePause();
+  });
+
+  // ---------- Input ----------
+  const KEYMAP = { arrowleft: "left", a: "left", arrowright: "right", d: "right", arrowup: "up", w: "up", arrowdown: "down", s: "down" };
+  const FIRE_KEYS = [" ", "j", "z", "x", "k"];
+  window.addEventListener("keydown", (e) => {
+    const k = e.key.toLowerCase();
+    if ([" ", "arrowup", "arrowdown", "arrowleft", "arrowright"].includes(k)) e.preventDefault();
+    if (state === "menu" || state === "over") {
+      if (e.key === "Enter") startGame();
+      else if (["1", "2", "3"].includes(k)) setDifficulty(DIFF_IDS[+k - 1]);
+      return;
+    }
+    if (k === "p" || k === "escape") { if (!e.repeat) togglePause(); return; }
+    if (state === "paused") { if (e.key === "Enter") togglePause(); return; }
+    if (FIRE_KEYS.includes(k)) firing = true;
+    if (KEYMAP[k]) keys[KEYMAP[k]] = true;
+  });
+  window.addEventListener("keyup", (e) => {
+    const k = e.key.toLowerCase();
+    if (FIRE_KEYS.includes(k)) firing = false;
+    if (KEYMAP[k]) keys[KEYMAP[k]] = false;
+  });
+  window.addEventListener("blur", () => { for (const k in keys) keys[k] = false; stick.x = stick.y = 0; firing = false; if (isPlaying()) togglePause(); });
+  const fireBtn = touchEl.querySelector(".fire");
+  let fireId = null;
+  fireBtn.addEventListener("pointerdown", (e) => { e.preventDefault(); fireId = e.pointerId; try { fireBtn.setPointerCapture(e.pointerId); } catch { /* ignore */ } firing = true; fireBtn.classList.add("on"); });
+  for (const ev of ["pointerup", "pointercancel", "lostpointercapture"]) fireBtn.addEventListener(ev, (e) => { if (e.pointerId !== fireId) return; fireId = null; firing = false; fireBtn.classList.remove("on"); });
+  const stickEl = touchEl.querySelector(".stick"), knob = stickEl.querySelector(".knob");
+  let stickId = null;
+  function stickAt(e) {
+    const r = stickEl.getBoundingClientRect(), max = r.width / 2 - 14;
+    let dx = e.clientX - (r.left + r.width / 2), dy = e.clientY - (r.top + r.height / 2);
+    const len = Math.hypot(dx, dy);
+    if (len > max) { dx *= max / len; dy *= max / len; }
+    knob.style.transform = `translate(${dx}px, ${dy}px)`;
+    const f = (v) => { const a = Math.abs(v) / max; return a < 0.15 ? 0 : sign(v) * Math.min(1, (a - 0.15) / 0.7); };
+    stick.x = f(dx); stick.y = f(dy);
+  }
+  const stickEnd = (e) => { if (e.pointerId !== stickId) return; stickId = null; knob.style.transform = ""; stick.x = stick.y = 0; };
+  stickEl.addEventListener("pointerdown", (e) => { e.preventDefault(); stickId = e.pointerId; try { stickEl.setPointerCapture(e.pointerId); } catch { /* ignore */ } stickAt(e); });
+  stickEl.addEventListener("pointermove", (e) => { if (e.pointerId === stickId) stickAt(e); });
+  for (const ev of ["pointerup", "pointercancel", "lostpointercapture"]) stickEl.addEventListener(ev, stickEnd);
+  window.addEventListener("pointerdown", (e) => { if (e.pointerType === "touch" && !touchMode) { touchMode = true; syncControls(); if (menu) menu(); } }, true);
+
+  // ---------- Spawning ----------
+  const SPAWN_YR = 400;
+  const FLOOR = { turret: { h: 14, w: 12, hp: 1, pts: 100 }, tank: { h: 18, w: 14, hp: 1, pts: 300 }, radar: { h: 22, w: 14, hp: 2, pts: 1000 } };
+  function floorThing(kind, x) { objs.push({ kind, x: clamp(x, -XW + 10, XW - 10), yr: SPAWN_YR + rnd(0, 40), z: 0, ...FLOOR[kind], cool: rnd(0.8, 2), flash: 0 }); }
+  function spawnPattern() {
+    const g = diff.gap;
+    if (seg === "space") {
+      const n = 3 + Math.floor(Math.random() * 3), x0 = rnd(-40, 40), z0 = rnd(15, 65), form = Math.random() < 0.5;
+      for (let i = 0; i < n; i++) objs.push({ kind: "plane", x: form ? x0 + (i - n / 2) * 18 : rnd(-55, 55), yr: SPAWN_YR + i * 40, z: form ? z0 : rnd(12, 70), hp: 1, pts: 200, ph: rnd(0, TAU), shot: false, flash: 0 });
+      nextSpawn = rnd(150, 230);
+      return;
+    }
+    const opts = [["wall", 2], ["field", 1.2], ["turret", 1.6], ["tank", 1.9], ["radar", 0.5]];
+    let pick = Math.random() * opts.reduce((a, o) => a + o[1], 0), f = opts[0][0];
+    for (const [k, w] of opts) { if ((pick -= w) < 0) { f = k; break; } }
+    if (f === "wall") {
+      const gw = 46 * g, gh = 34 * g, gx = rnd(-XW + gw / 2 + 4, XW - gw / 2 - 4), gz = Math.random() < 0.5 ? rnd(2, 12) : rnd(ZMAX - gh - 12, ZMAX - gh + 2);
+      objs.push({ kind: "wall", yr: SPAWN_YR, h: 96, g0: gx - gw / 2, g1: gx + gw / 2, h0: gz, h1: gz + gh });
+      nextSpawn = 130;
+    } else if (f === "field") {
+      const fz = rnd(22, 58);
+      objs.push({ kind: "field", yr: SPAWN_YR, fz, th: 7 });
+      nextSpawn = 110;
+    } else if (f === "turret") { const n = 1 + (Math.random() < 0.5 ? 1 : 0); for (let i = 0; i < n; i++) floorThing("turret", rnd(-60, 60)); nextSpawn = rnd(70, 110); }
+    else if (f === "tank") { const n = 1 + (Math.random() < 0.4 ? 1 : 0); for (let i = 0; i < n; i++) floorThing("tank", rnd(-60, 60)); nextSpawn = rnd(70, 100); }
+    else { floorThing("radar", rnd(-50, 50)); nextSpawn = rnd(80, 110); }
+  }
+  function aimAt(ox, oyr, oz, speed) {
+    // aimed at where the ship will be (it keeps moving forward)
+    const d = Math.hypot(S.x - ox, oyr, S.z - oz), T = d / speed;
+    return { vx: (S.x - ox) / T, vy: (0 - oyr) / T, vz: (S.z - oz) / T };
+  }
+
+  // ---------- Update ----------
+  function updateShip(dt) {
+    const ix = clamp((keys.right ? 1 : 0) - (keys.left ? 1 : 0) + stick.x, -1, 1);
+    const iy = clamp((keys.up ? 1 : 0) - (keys.down ? 1 : 0) - stick.y, -1, 1);
+    S.x = clamp(S.x + ix * 95 * dt, -XW + 6, XW - 6);
+    S.z = clamp(S.z + iy * 70 * dt, 3, ZMAX);
+    S.tilt += (ix - S.tilt) * Math.min(1, dt * 8);
+    S.inv = Math.max(0, S.inv - dt); S.cool -= dt;
+    if (firing && S.cool <= 0 && shots.length < 6) { S.cool = 0.16; shots.push({ x: S.x, yr: 14, z: S.z, t: 0 }); sfx.shot(); }
+  }
+  function hitThing(o, n = 1) {
+    o.hp -= n; o.flash = 0.08;
+    if (o.hp > 0) { sfx.pop(); return; }
+    o.dead = true;
+    addScore(o.pts, o.x, o.yr, (o.h || 10) + 8, o.kind === "radar" ? "#ffe04a" : o.kind === "tank" ? "#6ae86a" : "#eef4ff");
+    if (o.kind === "tank") { fuel = Math.min(100, fuel + 30); sfx.fuel(); popups.push({ x: o.x, yr: o.yr, z: 40, text: "CARBURANTE", color: "#6ae86a", t: 0 }); }
+    burst(o.x, o.yr, (o.h || 10) / 2, o.kind === "tank" ? "#6ae86a" : "#ffb43a", 16, 90); sfx.pop();
+  }
+  function updateObjs(dt) {
+    const v = V(), live = state === "play";
+    for (const o of objs) {
+      if (o.kind === "boss") continue;
+      const y0 = o.yr;
+      o.flash = Math.max(0, (o.flash || 0) - dt);
+      if (o.kind === "plane") { o.yr -= (v + 110 * pace()) * dt; o.ph += dt * 2; o.x = clamp(o.x + Math.sin(o.ph) * 25 * dt, -XW + 6, XW - 6); o.z = clamp(o.z + Math.cos(o.ph * 0.8) * 12 * dt, 8, ZMAX - 4); }
+      else o.yr -= v * dt;
+      // enemies shoot while they are well ahead
+      if (live && (o.kind === "turret" || o.kind === "plane") && o.yr > 140 && o.yr < 380) {
+        if (o.kind === "turret") { o.cool -= dt; if (o.cool <= 0) { o.cool = rnd(1.8, 2.8) / (diff.fire * pace()); const a = aimAt(o.x, o.yr, o.h, 170 * Math.sqrt(diff.fire)); bullets.push({ x: o.x, yr: o.yr, z: o.h, ...a, t: 0 }); sfx.enemy(); } }
+        else if (!o.shot && o.yr < 300 && Math.random() < dt * 1.2 * diff.fire) { o.shot = true; const a = aimAt(o.x, o.yr, o.z, 200 * Math.sqrt(diff.fire)); bullets.push({ x: o.x, yr: o.yr, z: o.z, ...a, t: 0 }); sfx.enemy(); }
+      }
+      // crossing the ship's plane
+      if (live && y0 > 0 && o.yr <= 0) {
+        if (o.kind === "wall") {
+          const inGap = S.x - SHIP_W >= o.g0 && S.x + SHIP_W <= o.g1 && S.z - SHIP_H >= o.h0 && S.z + SHIP_H <= o.h1;
+          if (!inGap && S.z - SHIP_H < o.h) die("contro il muro"); else if (inGap) { addScore(20); sfx.pass(); }
+        } else if (o.kind === "field") {
+          if (Math.abs(S.z - o.fz) < o.th + SHIP_H) die("barriera elettrica"); else addScore(50);
+        } else if (o.kind === "plane") {
+          if (!o.dead && Math.abs(S.x - o.x) < 14 && Math.abs(S.z - o.z) < 10) { o.dead = true; die("scontro con un caccia"); }
+        } else if (!o.dead && Math.abs(S.x - o.x) < o.w / 2 + SHIP_W && S.z - SHIP_H < o.h) die("contro una " + (o.kind === "turret" ? "torretta" : o.kind === "tank" ? "cisterna" : "antenna"));
+      }
+    }
+    objs = objs.filter((o) => o.kind === "boss" || (!o.dead && o.yr > -120));
+  }
+  function updateShots(dt) {
+    for (const s of shots) {
+      const y0 = s.yr; s.yr += 460 * dt; s.t += dt;
+      if (s.yr > 430) { s.dead = true; continue; }
+      for (const o of objs) {
+        if (o.dead) continue;
+        if (o.kind === "wall") {
+          if (y0 < o.yr && s.yr >= o.yr) { const inGap = s.x >= o.g0 && s.x <= o.g1 && s.z >= o.h0 && s.z <= o.h1; if (!inGap && s.z < o.h) { s.dead = true; burst(s.x, o.yr, s.z, "#ffffff", 4, 40, 0.2); } }
+        } else if (o.kind === "field") {
+          if (y0 < o.yr && s.yr >= o.yr && Math.abs(s.z - o.fz) < o.th) { s.dead = true; sfx.zap(); }
+        } else if (o.kind === "boss") {
+          const B = boss; if (!B || B.dead) continue;
+          if (y0 < B.yr && s.yr >= B.yr - 4 && Math.abs(s.x - B.x) < 14 && Math.abs(s.z - B.z) < 12) { s.dead = true; B.hp--; B.flash = 0.1; sfx.pop(); if (B.hp <= 0) killBoss(); }
+        } else if (o.kind === "plane") {
+          if (y0 < o.yr + 6 && s.yr >= o.yr - 6 && Math.abs(s.x - o.x) < 12 && Math.abs(s.z - o.z) < 10) { s.dead = true; hitThing(o); }
+        } else if (y0 < o.yr + 6 && s.yr >= o.yr - 6 && Math.abs(s.x - o.x) < o.w / 2 + 3 && s.z < o.h + 3) { s.dead = true; hitThing(o); }
+        if (s.dead) break;
+      }
+    }
+    shots = shots.filter((s) => !s.dead);
+    const v = V();
+    for (const b of bullets) {
+      b.t += dt; b.x += b.vx * dt; b.yr += b.vy * dt; b.z += b.vz * dt;
+      if (b.t > 4 || b.yr < -60 || b.z < 0) { b.dead = true; continue; }
+      if (state === "play" && Math.abs(b.yr) < 8 && Math.abs(b.x - S.x) < 9 && Math.abs(b.z - S.z) < 7) { b.dead = true; die("colpito"); }
+    }
+    bullets = bullets.filter((b) => !b.dead);
+  }
+  function spawnBoss() {
+    const hp = 10 + round * 3;
+    boss = { x: 0, yr: 520, z: 40, hp, max: hp, t: 0, cool: 2, flash: 0, left: 24, dead: false };
+    objs.push({ kind: "boss" });
+    message = { text: "ROBOT GUARDIANO!", sub: "colpiscilo al petto, alla sua altezza", t: 0 };
+    sfx.boss();
+  }
+  function killBoss() {
+    boss.dead = true;
+    const pts = 5000 + round * 1000;
+    addScore(pts, boss.x, boss.yr, boss.z + 30, "#ffe04a");
+    burst(boss.x, boss.yr, boss.z, "#ffb43a", 40, 160, 1); burst(boss.x, boss.yr, boss.z, "#4ae8ff", 20, 120, 0.8);
+    sfx.clear();
+  }
+  function updateBoss(dt) {
+    if (!boss) return;
+    const B = boss;
+    B.t += dt; B.flash = Math.max(0, B.flash - dt);
+    if (B.dead) { B.deadT = (B.deadT || 0) + dt; if (B.deadT > 1.5) { boss = null; objs = objs.filter((o) => o.kind !== "boss"); endFortress(true); } return; }
+    B.yr += (230 - B.yr) * Math.min(1, dt * 1.2);
+    B.x = Math.sin(B.t * 0.7) * 45; B.z = 36 + Math.sin(B.t * 1.1) * 22;
+    B.cool -= dt; B.left -= dt;
+    if (B.cool <= 0 && state === "play") {
+      B.cool = rnd(1.6, 2.2) / Math.sqrt(diff.fire);
+      const a = aimAt(B.x, B.yr, B.z, 150 * Math.sqrt(diff.fire));
+      bullets.push({ x: B.x, yr: B.yr - 10, z: B.z, ...a, t: 0, big: true });
+      sfx.enemy();
+    }
+    if (B.left <= 0) { message = { text: "IL ROBOT SE NE VA", sub: "niente bonus questa volta", t: 0 }; boss = null; objs = objs.filter((o) => o.kind !== "boss"); endFortress(false); }
+  }
+  function endFortress() {
+    round++;
+    beginSegment("fort", 1);
+    state = "clear"; stateT = 2.2;
+  }
+  function update(dt) {
+    clock += dt; sfxN = 0;
+    if (message) { message.t += dt; if (message.t > 2.6) message = null; }
+    for (const p of parts) { p.t += dt; p.x += p.vx * dt; p.yr += p.vy * dt - (state === "play" ? V() * dt : 0); p.z += p.vz * dt; p.vz -= 60 * dt; }
+    parts = parts.filter((p) => p.t < p.life && p.z > -2);
+    for (const p of popups) { p.t += dt; p.z += 20 * dt; }
+    popups = popups.filter((p) => p.t < 1.2);
+    if (!isPlaying()) return;
+    scroll += V() * dt;
+    if (state === "intro" || state === "clear") { stateT -= dt; updateShip(dt); shots.length = 0; updateObjs(dt); if (stateT <= 0) state = "play"; return; }
+    if (state === "dead") { stateT -= dt; if (stateT <= 0) afterDeath(); return; }
+    if (window.__bot) window.__bot(dt);
+    updateShip(dt);
+    // fuel runs down (more slowly in open space)
+    fuel -= dt * (seg === "fort" ? 2.4 : 1.2) * diff.fuel;
+    if (fuel <= 0) { fuel = 0; die("carburante finito"); if (state !== "play") return; }
+    segDone += V() * dt;
+    if (!boss) {
+      nextSpawn -= V() * dt;
+      if (nextSpawn <= 0 && segDone < segLen - 300) spawnPattern();
+      if (segDone >= segLen) {
+        if (seg === "fort" && fortNo === 1) beginSegment("space");
+        else if (seg === "space") beginSegment("fort", 2);
+        else if (seg === "fort" && fortNo === 2 && !boss) spawnBoss();
+      }
+    }
+    updateObjs(dt);
+    if (state !== "play") return;
+    updateBoss(dt);
+    updateShots(dt);
+  }
+
+  // ---------- Drawing ----------
+  function poly(pts, fill, stroke) { ctx.beginPath(); pts.forEach(([x, y], i) => (i ? ctx.lineTo(x, y) : ctx.moveTo(x, y))); ctx.closePath(); if (fill) { ctx.fillStyle = fill; ctx.fill(); } if (stroke) { ctx.strokeStyle = stroke; ctx.stroke(); } }
+  const P = (x, yr, z) => [PX(x, yr, z), PY(x, yr, z)];
+  function drawBackground() {
+    const g = ctx.createLinearGradient(0, 0, 0, H); g.addColorStop(0, "#02030a"); g.addColorStop(1, "#0a1026");
+    ctx.fillStyle = g; ctx.fillRect(0, 0, W, H);
+    for (let i = 0; i < 90; i++) { const x = ((i * 137 - scroll * 0.15 * (1 + (i % 3))) % W + W) % W, y = ((i * 71 + scroll * 0.08 * (1 + (i % 3))) % H + H) % H; ctx.fillStyle = `rgba(255,255,255,${0.2 + (i % 4) * 0.15})`; ctx.fillRect(x, y, 1.2, 1.2); }
+    if (seg !== "fort" && state !== "menu") return;
+    // the fortress floor with its scrolling grid
+    const y0 = -150, y1 = 520;
+    poly([P(-XW, y0, 0), P(XW, y0, 0), P(XW, y1, 0), P(-XW, y1, 0)], "#2a3450");
+    ctx.lineWidth = 1; ctx.strokeStyle = "rgba(120,150,210,0.35)";
+    const off = scroll % 40;
+    for (let yr = y0 - off; yr < y1; yr += 40) { ctx.beginPath(); ctx.moveTo(...P(-XW, yr, 0)); ctx.lineTo(...P(XW, yr, 0)); ctx.stroke(); }
+    for (let x = -XW; x <= XW; x += 35) { ctx.beginPath(); ctx.moveTo(...P(x, y0, 0)); ctx.lineTo(...P(x, y1, 0)); ctx.stroke(); }
+    // the far side wall of the fortress
+    poly([P(-XW, y0, 0), P(-XW, y1, 0), P(-XW, y1, 14), P(-XW, y0, 14)], "#3a4668");
+    ctx.fillStyle = "#1a2238"; for (let yr = y0 - (scroll % 24); yr < y1; yr += 24) { const [x, y] = P(-XW, yr, 14); ctx.fillRect(x, y, 6, 4); }
+  }
+  function drawShadow(x, yr, r) {
+    if (seg !== "fort") return;
+    const [sx, sy] = P(x, yr, 0);
+    ctx.fillStyle = "rgba(0,0,0,0.45)"; ctx.beginPath(); ctx.ellipse(sx, sy, r * 1.1 * K, r * 0.55 * K, 0, 0, TAU); ctx.fill();
+  }
+  function box(x, yr, w, d, h, top, left, right) {
+    // a block on the floor: w wide (sideways), d deep (forward), h tall
+    const a = P(x - w / 2, yr - d / 2, 0), b = P(x + w / 2, yr - d / 2, 0), c = P(x + w / 2, yr + d / 2, 0);
+    const at = P(x - w / 2, yr - d / 2, h), bt = P(x + w / 2, yr - d / 2, h), ct = P(x + w / 2, yr + d / 2, h), dt = P(x - w / 2, yr + d / 2, h);
+    poly([a, b, bt, at], left); poly([b, c, ct, bt], right); poly([at, bt, ct, dt], top);
+  }
+  function drawObj(o) {
+    if (o.kind === "wall") {
+      // bricks around the opening
+      const pieces = [[-XW, o.g0, 0, o.h], [o.g1, XW, 0, o.h], [o.g0, o.g1, 0, o.h0], [o.g0, o.g1, o.h1, o.h]];
+      for (const [xa, xb, za, zb] of pieces) {
+        if (xb - xa < 0.5 || zb - za < 0.5) continue;
+        poly([P(xa, o.yr, za), P(xb, o.yr, za), P(xb, o.yr, zb), P(xa, o.yr, zb)], "#8a4a3a");
+        ctx.strokeStyle = "rgba(40,16,10,0.6)"; ctx.lineWidth = 1;
+        for (let z = za + 8 - (za % 8); z < zb; z += 8) { ctx.beginPath(); ctx.moveTo(...P(xa, o.yr, z)); ctx.lineTo(...P(xb, o.yr, z)); ctx.stroke(); }
+      }
+      ctx.strokeStyle = "#ffe04a"; ctx.lineWidth = 1.5;
+      poly([P(o.g0, o.yr, o.h0), P(o.g1, o.yr, o.h0), P(o.g1, o.yr, o.h1), P(o.g0, o.yr, o.h1)], null, "#ffe04a");
+      poly([P(-XW, o.yr, o.h), P(XW, o.yr, o.h), P(XW, o.yr - 6, o.h), P(-XW, o.yr - 6, o.h)], "#b86a50");
+    } else if (o.kind === "field") {
+      for (const x of [-XW - 4, XW + 4]) { ctx.strokeStyle = "#8a9ac8"; ctx.lineWidth = 3; ctx.beginPath(); ctx.moveTo(...P(x, o.yr, 0)); ctx.lineTo(...P(x, o.yr, ZMAX + 6)); ctx.stroke(); }
+      ctx.lineWidth = 2;
+      for (const dz of [-o.th, 0, o.th]) {
+        ctx.strokeStyle = dz === 0 ? "#ffffff" : "rgba(74,232,255,0.8)"; ctx.beginPath();
+        for (let k = 0; k <= 12; k++) { const x = -XW - 4 + (k / 12) * (2 * XW + 8), z = o.fz + dz + Math.sin(clock * 30 + k * 2) * 1.5; const [sx, sy] = P(x, o.yr, z); if (k) ctx.lineTo(sx, sy); else ctx.moveTo(sx, sy); }
+        ctx.stroke();
+      }
+      // its height on the pylons
+      ctx.fillStyle = "rgba(74,232,255,0.25)"; poly([P(-XW - 4, o.yr, o.fz - o.th), P(XW + 4, o.yr, o.fz - o.th), P(XW + 4, o.yr, o.fz + o.th), P(-XW - 4, o.yr, o.fz + o.th)], "rgba(74,232,255,0.14)");
+    } else if (o.kind === "turret") {
+      box(o.x, o.yr, o.w, 12, o.h, o.flash > 0 ? "#fff" : "#8a8aa8", "#5a5a78", "#6a6a8a");
+      const [tx, ty] = P(o.x, o.yr, o.h);
+      ctx.strokeStyle = "#2a2a3a"; ctx.lineWidth = 3; ctx.beginPath(); ctx.moveTo(tx, ty); ctx.lineTo(tx - 8, ty - 2); ctx.stroke();
+      ctx.fillStyle = "#ff4a3a"; ctx.beginPath(); ctx.arc(tx, ty - 2, 3, 0, TAU); ctx.fill();
+    } else if (o.kind === "tank") {
+      box(o.x, o.yr, o.w, 14, o.h, o.flash > 0 ? "#fff" : "#6ae86a", "#2a7a2a", "#3a9a3a");
+      const [tx, ty] = P(o.x, o.yr, o.h / 2); ctx.fillStyle = "#0a2a0a"; ctx.font = "900 8px system-ui"; ctx.textAlign = "center"; ctx.fillText("F", tx + 4, ty + 3);
+    } else if (o.kind === "radar") {
+      box(o.x, o.yr, 8, 8, o.h - 6, "#9aa8c8", "#5a6488", "#6a78a0");
+      const [tx, ty] = P(o.x, o.yr, o.h);
+      ctx.save(); ctx.translate(tx, ty); ctx.rotate(Math.sin(clock * 2) * 0.6);
+      ctx.fillStyle = o.flash > 0 ? "#fff" : "#ffe04a"; ctx.beginPath(); ctx.ellipse(0, 0, 10, 5, 0, 0, TAU); ctx.fill();
+      ctx.fillStyle = "#8a6a10"; ctx.beginPath(); ctx.ellipse(0, 0, 5, 2.5, 0, 0, TAU); ctx.fill(); ctx.restore();
+    } else if (o.kind === "plane") {
+      drawShadow(o.x, o.yr, 7);
+      const [sx, sy] = P(o.x, o.yr, o.z);
+      // a thin height line down to the floor level helps to judge altitude
+      ctx.strokeStyle = "rgba(255,90,90,0.25)"; ctx.lineWidth = 1; ctx.beginPath(); ctx.moveTo(sx, sy); ctx.lineTo(...P(o.x, o.yr, 0)); ctx.stroke();
+      ctx.fillStyle = o.flash > 0 ? "#fff" : "#ff5a5a";
+      ctx.beginPath(); ctx.moveTo(sx - 12, sy + 5); ctx.lineTo(sx + 2, sy - 3); ctx.lineTo(sx + 12, sy - 1); ctx.lineTo(sx - 2, sy + 7); ctx.closePath(); ctx.fill();
+      ctx.fillStyle = "#ffe04a"; ctx.beginPath(); ctx.arc(sx - 4, sy + 3, 2, 0, TAU); ctx.fill();
+    } else if (o.kind === "boss" && boss) {
+      const B = boss; if (B.dead && Math.random() < 0.5) return;
+      drawShadow(B.x, B.yr, 18);
+      const [sx, sy] = P(B.x, B.yr, B.z);
+      ctx.fillStyle = B.flash > 0 ? "#fff" : "#6a7aa8"; ctx.fillRect(sx - 14, sy - 30, 28, 36);
+      ctx.fillStyle = "#8a9ac8"; ctx.fillRect(sx - 10, sy - 44, 20, 14);
+      ctx.fillStyle = Math.floor(clock * 6) % 2 ? "#ff4a3a" : "#ffe04a"; ctx.fillRect(sx - 7, sy - 40, 5, 4); ctx.fillRect(sx + 2, sy - 40, 5, 4);
+      ctx.fillStyle = "#4a5a88"; ctx.fillRect(sx - 24, sy - 26, 10, 28); ctx.fillRect(sx + 14, sy - 26, 10, 28);
+      // the chest: the only weak point, at the robot's own height
+      ctx.fillStyle = B.flash > 0 ? "#fff" : "#ff4a3a"; ctx.beginPath(); ctx.arc(sx, sy - 2, 6, 0, TAU); ctx.fill();
+      ctx.strokeStyle = "#ffe04a"; ctx.lineWidth = 1.5; ctx.beginPath(); ctx.arc(sx, sy - 2, 9 + Math.sin(clock * 6) * 1.5, 0, TAU); ctx.stroke();
+    }
+  }
+  function drawShip() {
+    if (state === "dead" || state === "menu" || state === "over") return;
+    if (S.inv > 0 && Math.floor(S.inv * 10) % 2 === 0) return;
+    drawShadow(S.x, 0, 9);
+    const [sx, sy] = P(S.x, 0, S.z);
+    ctx.save(); ctx.translate(sx, sy); ctx.scale(K, K);
+    const t = S.tilt * 3;
+    ctx.fillStyle = "#e8eef8"; ctx.beginPath(); ctx.moveTo(16, -9); ctx.lineTo(-8, 1 + t); ctx.lineTo(-4, 6); ctx.lineTo(-12, 7 - t); ctx.closePath(); ctx.fill();
+    ctx.fillStyle = "#4ae8ff"; ctx.beginPath(); ctx.moveTo(8, -5); ctx.lineTo(2, -1); ctx.lineTo(4, 1); ctx.closePath(); ctx.fill();
+    ctx.fillStyle = "#ff4a3a"; ctx.fillRect(-12, 1, 4, 3);
+    ctx.fillStyle = "#ffb43a"; ctx.beginPath(); ctx.moveTo(-10, 4); ctx.lineTo(-17 - Math.random() * 4, 8); ctx.lineTo(-8, 7); ctx.fill();
+    ctx.restore();
+  }
+  function drawAltimeter() {
+    const x = W - 40, y0 = 330, y1 = 150, h = y0 - y1, zf = (z) => y0 - (z / ZMAX) * h;
+    ctx.fillStyle = "rgba(0,0,0,0.45)"; ctx.fillRect(x - 6, y1 - 14, 30, h + 26);
+    ctx.fillStyle = "#9aa8c8"; ctx.font = "800 7px system-ui"; ctx.textAlign = "center"; ctx.fillText("QUOTA", x + 9, y1 - 5);
+    ctx.fillStyle = "rgba(255,255,255,0.15)"; ctx.fillRect(x + 6, y1, 6, h);
+    // what's coming next: the opening, the barrier, the aircraft
+    const next = objs.filter((o) => o.yr > 0 && o.yr < 360 && (o.kind === "wall" || o.kind === "field" || o.kind === "plane")).sort((a, b) => a.yr - b.yr)[0];
+    if (next) {
+      if (next.kind === "wall") { ctx.fillStyle = "rgba(255,224,74,0.7)"; ctx.fillRect(x, zf(next.h1), 18, zf(next.h0) - zf(next.h1)); }
+      else if (next.kind === "field") { ctx.fillStyle = "rgba(74,232,255,0.7)"; ctx.fillRect(x, zf(next.fz + next.th), 18, zf(next.fz - next.th) - zf(next.fz + next.th)); }
+      else { ctx.fillStyle = "#ff5a5a"; ctx.fillRect(x, zf(next.z) - 2, 18, 4); }
+    }
+    if (boss && !boss.dead) { ctx.fillStyle = "#ff4a3a"; ctx.fillRect(x, zf(boss.z) - 2, 18, 4); }
+    if (S) { ctx.fillStyle = "#eef4ff"; ctx.beginPath(); ctx.moveTo(x + 20, zf(S.z)); ctx.lineTo(x + 26, zf(S.z) - 4); ctx.lineTo(x + 26, zf(S.z) + 4); ctx.fill(); ctx.fillRect(x + 4, zf(S.z) - 1, 12, 2); }
+  }
+  function drawHud() {
+    ctx.fillStyle = "rgba(6,8,18,0.7)"; ctx.fillRect(0, 0, W, 26);
+    ctx.textBaseline = "middle"; ctx.textAlign = "left";
+    ctx.fillStyle = "#eef4ff"; ctx.font = "900 14px system-ui"; ctx.fillText(score.toLocaleString("it-IT"), 10, 9);
+    ctx.fillStyle = "#9aa8c8"; ctx.font = "700 8px system-ui"; ctx.fillText(`REC ${Math.max(bestCache, score).toLocaleString("it-IT")}`, 10, 20);
+    ctx.textAlign = "center"; ctx.fillStyle = "#4ae8ff"; ctx.font = "800 10px system-ui";
+    ctx.fillText(seg === "space" ? "SPAZIO APERTO" : `FORTEZZA ${round * 2 + fortNo}`, W / 2, 9);
+    ctx.fillStyle = "rgba(255,255,255,0.15)"; ctx.fillRect(W / 2 - 70, 16, 140, 4); ctx.fillStyle = "#4ae8ff"; ctx.fillRect(W / 2 - 70, 16, 140 * clamp(segDone / segLen, 0, 1), 4);
+    // fuel
+    const fx = W - 170, low = fuel < 25;
+    ctx.textAlign = "right"; ctx.fillStyle = low && Math.floor(clock * 4) % 2 ? "#ff4a3a" : "#9aa8c8"; ctx.font = "800 8px system-ui"; ctx.fillText("CARBURANTE", fx - 4, 13);
+    ctx.fillStyle = "rgba(255,255,255,0.15)"; ctx.fillRect(fx, 8, 100, 10);
+    ctx.fillStyle = low ? "#ff4a3a" : fuel < 50 ? "#ffe04a" : "#6ae86a"; ctx.fillRect(fx, 8, fuel, 10);
+    ctx.fillStyle = "#eef4ff"; ctx.font = "800 11px system-ui"; ctx.fillText(`✈×${Math.max(0, lives)}`, W - 10, 13);
+    if (boss && !boss.dead) { ctx.fillStyle = "rgba(255,255,255,0.15)"; ctx.fillRect(W / 2 - 70, 30, 140, 4); ctx.fillStyle = "#ff4a3a"; ctx.fillRect(W / 2 - 70, 30, 140 * boss.hp / boss.max, 4); }
+    ctx.textBaseline = "alphabetic";
+  }
+  function draw() {
+    ctx.setTransform(pxRatio, 0, 0, pxRatio, 0, 0);
+    if (state === "menu") scroll += 1;
+    drawBackground();
+    // far first; things more to the side-near drawn later
+    const list = [...objs.map((o) => ({ o, k: (o.kind === "boss" && boss ? boss.yr : o.yr) - (o.x || 0) * 0.6 })), { o: null, k: -(S ? S.x : 0) * 0.6 }];
+    list.sort((a, b) => b.k - a.k);
+    for (const it of list) if (it.o) drawObj(it.o); else if (S) drawShip();
+    for (const s of shots) { const [sx, sy] = P(s.x, s.yr, s.z); ctx.fillStyle = "#e8fcff"; ctx.fillRect(sx - 3, sy - 1, 6, 2); if (seg === "fort") { const [hx, hy] = P(s.x, s.yr, 0); ctx.fillStyle = "rgba(0,0,0,0.35)"; ctx.fillRect(hx - 2, hy - 1, 4, 2); } }
+    for (const b of bullets) { const [sx, sy] = P(b.x, b.yr, b.z); ctx.fillStyle = "rgba(255,90,40,0.35)"; ctx.beginPath(); ctx.arc(sx, sy, b.big ? 7 : 5, 0, TAU); ctx.fill(); ctx.fillStyle = "#ffb43a"; ctx.beginPath(); ctx.arc(sx, sy, b.big ? 3.5 : 2.5, 0, TAU); ctx.fill(); }
+    for (const p of parts) { const [sx, sy] = P(p.x, p.yr, p.z); ctx.globalAlpha = Math.max(0, 1 - p.t / p.life); ctx.fillStyle = p.c; ctx.fillRect(sx - 1.5, sy - 1.5, 3, 3); }
+    ctx.globalAlpha = 1;
+    for (const p of popups) {
+      const [sx, sy] = P(p.x, p.yr, p.z);
+      ctx.globalAlpha = Math.max(0, 1 - p.t / 1.2); ctx.textAlign = "center"; ctx.font = "900 11px system-ui";
+      ctx.lineWidth = 3; ctx.strokeStyle = "#060812"; ctx.strokeText(p.text, sx, sy); ctx.fillStyle = p.color; ctx.fillText(p.text, sx, sy);
+    }
+    ctx.globalAlpha = 1;
+    if (state !== "menu") { drawAltimeter(); drawHud(); }
+    if (message && state !== "menu") {
+      ctx.globalAlpha = Math.min(1, (2.6 - message.t) * 2);
+      ctx.textAlign = "center"; ctx.font = "900 26px system-ui";
+      ctx.lineWidth = 6; ctx.strokeStyle = "#060812"; ctx.strokeText(message.text, W / 2 + 60, 70); ctx.fillStyle = "#4ae8ff"; ctx.fillText(message.text, W / 2 + 60, 70);
+      if (message.sub) { ctx.font = "800 12px system-ui"; ctx.lineWidth = 4; ctx.strokeText(message.sub, W / 2 + 60, 92); ctx.fillStyle = "#eef4ff"; ctx.fillText(message.sub, W / 2 + 60, 92); }
+      ctx.globalAlpha = 1;
+    }
+  }
+
+  // ---------- Loop ----------
+  const STEP = 1 / 120;
+  let last = performance.now(), acc = 0;
+  function frame(now) {
+    const dt = Math.min(0.1, (now - last) / 1000);
+    last = now;
+    if (isPlaying()) {
+      acc += dt;
+      while (acc >= STEP && isPlaying()) { update(STEP); acc -= STEP; }
+    } else { acc = 0; update(dt); }
+    draw();
+    requestAnimationFrame(frame);
+  }
+  syncControls();
+  showTitle();
+  requestAnimationFrame(frame);
+})();
+</script>
+<script src="../../shared/iniziali.js" data-record="fortezza-best-" data-kind="score"></script>
+</body>
+</html>
