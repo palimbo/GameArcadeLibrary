@@ -4,7 +4,7 @@ Raccolta di giochi arcade per il browser. Ogni gioco è un singolo file HTML sen
 
 ## 🕹️ Sala Giochi — `index.html`
 
-Apri `index.html` nella cartella principale per la pagina di raccolta: mostra tutti i 60 giochi con copertina, genere, comandi e i tuoi record per ogni difficoltà (Facile, Normale, Difficile). Tocca «Gioca» per avviare un gioco; in ogni gioco il pulsante «← Sala Giochi» in alto a sinistra (visibile nei menu) riporta alla raccolta.
+Apri `index.html` nella cartella principale per la pagina di raccolta: mostra tutti i 61 giochi con copertina, genere, comandi e i tuoi record per ogni difficoltà (Facile, Normale, Difficile). Tocca «Gioca» per avviare un gioco; in ogni gioco il pulsante «← Sala Giochi» in alto a sinistra (visibile nei menu) riporta alla raccolta.
 
 **Iniziali del record:** quando batti un record compare la schermata da sala giochi per inserire le tue tre iniziali (frecce ↑ ↓ per cambiare lettera, ← → per spostarti, oppure scrivile direttamente; su telefono i tasti ▲ ▼ e OK). Le iniziali vengono salvate insieme al record e compaiono nei menu del gioco e nella Sala Giochi. Il codice è condiviso da tutti i giochi in `shared/iniziali.js`.
 
@@ -950,3 +950,19 @@ Piattaforme e pugni in stile *Kangaroo*: le scimmie hanno portato il tuo piccolo
 - **Touch:** levetta a sinistra, tasti SALTA e PUGNO a destra
 
 Per giocare apri `games/mamma-canguro/index.html` nel browser.
+
+### 🔮 Biglia Pazza — `games/biglia-pazza/index.html`
+
+Percorsi con la biglia in stile *Marble Madness*: porta la biglia fino al traguardo a scacchi lungo piste sospese nel vuoto.
+
+- **Inerzia:** la biglia accelera e frena piano; se esce dal pavimento cade e riparte dall'ultimo punto sicuro, ma il tempo continua a correre
+- **Percorsi:** Pista di Prova, I Ponti, Il Ghiacciaio, La Fossa e Follia, poi si ricomincia con meno tempo
+- **Ostacoli:** ponti stretti, pendenze (le frecce) che ti spingono verso il bordo, ghiaccio dove non si frena, blocchi rialzati su cui rimbalzi
+- **Nemici:** le biglie nere ti vengono addosso e ti spingono (se cadono loro, 500 punti); i vermi acidi, se li tocchi, ti sciolgono
+- **Tempo:** ogni percorso aggiunge secondi, e quelli che avanzi passano al percorso dopo. Quando finisce il tempo, la partita è finita
+- **Punti:** 10 per ogni fila di strada nuova · traguardo 1.000 più 20 per ogni secondo rimasto
+- **Difficoltà:** Facile (più tempo, nemici lenti, pendenze dolci), Normale, Difficile (meno tempo, nemici svelti, pendenze ripide); record separati per ogni difficoltà
+- **Comandi:** frecce o `W` `A` `S` `D` per spingere la biglia · `P` pausa
+- **Touch:** una levetta analogica: più la spingi, più la biglia accelera in quella direzione
+
+Per giocare apri `games/biglia-pazza/index.html` nel browser.
