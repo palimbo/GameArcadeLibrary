@@ -4,7 +4,7 @@ Raccolta di giochi arcade per il browser. Ogni gioco è un singolo file HTML sen
 
 ## 🕹️ Sala Giochi — `index.html`
 
-Apri `index.html` nella cartella principale per la pagina di raccolta: mostra tutti i 55 giochi con copertina, genere, comandi e i tuoi record per ogni difficoltà (Facile, Normale, Difficile). Tocca «Gioca» per avviare un gioco; in ogni gioco il pulsante «← Sala Giochi» in alto a sinistra (visibile nei menu) riporta alla raccolta.
+Apri `index.html` nella cartella principale per la pagina di raccolta: mostra tutti i 56 giochi con copertina, genere, comandi e i tuoi record per ogni difficoltà (Facile, Normale, Difficile). Tocca «Gioca» per avviare un gioco; in ogni gioco il pulsante «← Sala Giochi» in alto a sinistra (visibile nei menu) riporta alla raccolta.
 
 **Iniziali del record:** quando batti un record compare la schermata da sala giochi per inserire le tue tre iniziali (frecce ↑ ↓ per cambiare lettera, ← → per spostarti, oppure scrivile direttamente; su telefono i tasti ▲ ▼ e OK). Le iniziali vengono salvate insieme al record e compaiono nei menu del gioco e nella Sala Giochi. Il codice è condiviso da tutti i giochi in `shared/iniziali.js`.
 
@@ -870,3 +870,20 @@ Avventura nei sotterranei in stile *Gauntlet*: scendi livello dopo livello in un
 - **Touch:** levetta a 8 direzioni a sinistra, tasti MAGIA e FUOCO a destra (tenendo FUOCO resti fermo e spari dove punta la levetta)
 
 Per giocare apri `games/cripta-degli-eroi/index.html` nel browser.
+
+### 🌴 Esploratore della Giungla — `games/esploratore-giungla/index.html`
+
+Avventura a schermate in stile *Pitfall!*: 12 tesori nascosti in una giungla di 40 schermate che gira in tondo, e un tempo limite.
+
+- **Liane:** sopra stagni e pozze di catrame si passa solo dondolando. Salta per aggrapparti, salta di nuovo (o giù) per lasciarla quando sei dall'altra parte
+- **Coccodrilli:** salta sulle loro teste quando hanno la bocca chiusa; se la aprono mentre ci sei sopra, ti mangiano
+- **Sabbie mobili:** si aprono e si chiudono; attraversa quando sono chiuse
+- **Tronchi:** rotolano o stanno fermi; non uccidono, ma ogni botta costa 100 punti
+- **Fuoco e serpenti:** vanno saltati
+- **Tunnel:** scendi dai buchi con la scala. Sotto ogni schermata ne vale tre in superficie, ma ci sono scorpioni da saltare e muri di mattoni che sbarrano la strada
+- **Tesori:** sacco di monete 2.000, lingotto d'argento 3.000, lingotto d'oro 4.000, anello di diamanti 5.000. Si parte da 2.000 punti; trovarli tutti vale 10 punti per ogni secondo rimasto
+- **Difficoltà:** Facile (8 minuti, 5 vite, tutto più lento), Normale (6 minuti), Difficile (5 minuti e mezzo, tutto più veloce); record separati per ogni difficoltà
+- **Comandi:** `←` `→` per correre · `↑` `↓` per le scale e per lasciare la liana · `SPAZIO` per saltare · `P` pausa
+- **Touch:** levetta a sinistra, tasto SALTA a destra
+
+Per giocare apri `games/esploratore-giungla/index.html` nel browser.
