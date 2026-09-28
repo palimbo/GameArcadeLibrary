@@ -4,7 +4,7 @@ Raccolta di giochi arcade per il browser. Ogni gioco è un singolo file HTML sen
 
 ## 🕹️ Sala Giochi — `index.html`
 
-Apri `index.html` nella cartella principale per la pagina di raccolta: mostra tutti i 72 giochi con copertina, genere, comandi e i tuoi record per ogni difficoltà (Facile, Normale, Difficile). Tocca «Gioca» per avviare un gioco; in ogni gioco il pulsante «← Sala Giochi» in alto a sinistra (visibile nei menu) riporta alla raccolta.
+Apri `index.html` nella cartella principale per la pagina di raccolta: mostra tutti i 73 giochi con copertina, genere, comandi e i tuoi record per ogni difficoltà (Facile, Normale, Difficile). Tocca «Gioca» per avviare un gioco; in ogni gioco il pulsante «← Sala Giochi» in alto a sinistra (visibile nei menu) riporta alla raccolta.
 
 **Iniziali del record:** quando batti un record compare la schermata da sala giochi per inserire le tue tre iniziali (frecce ↑ ↓ per cambiare lettera, ← → per spostarti, oppure scrivile direttamente; su telefono i tasti ▲ ▼ e OK). Le iniziali vengono salvate insieme al record e compaiono nei menu del gioco e nella Sala Giochi. Il codice è condiviso da tutti i giochi in `shared/iniziali.js`.
 
@@ -1137,3 +1137,18 @@ Motocross a salti in stile *Excitebike*: quattro corsie viste di lato, rampe che
 - **Touch:** levetta (su/giù corsia, sinistra/destra inclina), pulsanti GAS e TURBO da tenere premuti
 
 Per giocare apri `games/rampe-e-fango/index.html` nel browser.
+
+### 🚀 Volo Fantastico — `games/volo-fantastico/index.html`
+
+Sparatutto in finto 3D in stile *Space Harrier*: con il cannone e lo zaino a razzo voli sopra un pavimento a scacchi che ti corre incontro, muovendoti liberamente in tutto lo schermo.
+
+- **Quattro mondi:** la Valle dei Funghi, il Deserto di Cristallo, il Mare di Nuvole e il Pianeta Rosso, poi si ricomincia più veloci. Ogni stage dura una quarantina di secondi (la barra in alto), poi arriva il drago
+- **Ostacoli:** funghi, cristalli, nuvole e guglie si schivano o si abbattono con un colpo (50); le colonne sono troppo alte da sorvolare, fermano i colpi e non si distruggono: passa di lato, anche quando arrivano a coppie come un cancello
+- **Nemici:** caccia in formazione (200), anelli che girano in tondo e poi si lanciano verso di te (300), rocce volanti (100, due colpi) e robot che camminano verso di te sparando (1.000, cinque colpi)
+- **Palle di fuoco:** vanno verso il punto dove eri quando sono partite, quindi basta spostarsi; non si possono abbattere
+- **Il drago:** vola a zig-zag in fondo allo stage; solo la testa è vulnerabile, il corpo para i colpi. Apre la bocca prima di sputare fuoco. Sconfitto vale 5.000 più il bonus dello stage. Vita extra ogni 40.000 punti
+- **Difficoltà:** Facile (5 vite, nemici più lenti e colpi più radi), Normale (3 vite), Difficile (3 vite, più nemici, colpi più fitti e veloci); record separati per ogni difficoltà
+- **Comandi:** frecce o `W` `A` `S` `D` per volare · `Spazio`, `J` o `Z` fuoco (tieni premuto) · `P` pausa. Vicino a terra l'eroe corre
+- **Touch:** levetta per volare, pulsante FUOCO da tenere premuto
+
+Per giocare apri `games/volo-fantastico/index.html` nel browser.
