@@ -1,0 +1,703 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no, viewport-fit=cover">
+<title>Mamma Canguro</title>
+<style>
+  :root {
+    --bg: #140c06;
+    --fg: #f6ecd8;
+    --muted: #c0a888;
+    --orange: #ff9a3a;
+    --gold: #ffd23a;
+    --red: #ff4a3a;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  html, body {
+    height: 100%;
+    background: var(--bg);
+    color: var(--fg);
+    font-family: system-ui, -apple-system, "Segoe UI", sans-serif;
+    overflow: hidden;
+    user-select: none;
+    -webkit-user-select: none;
+    touch-action: none;
+  }
+  #wrap { position: fixed; inset: 0; display: flex; align-items: center; justify-content: center; }
+  canvas { display: block; touch-action: none; border-radius: 6px; box-shadow: 0 0 0 2px #3a2410, 0 10px 40px rgba(0,0,0,0.6); }
+  #pauseBtn {
+    position: fixed; z-index: 3; display: none; right: 10px; top: calc(10px + env(safe-area-inset-top, 0px));
+    font: 700 13px system-ui, sans-serif; color: var(--fg);
+    background: rgba(0, 0, 0, 0.6); border: 1px solid rgba(246, 236, 216, 0.35);
+    border-radius: 8px; padding: 6px 10px; cursor: pointer;
+  }
+  #touch {
+    position: fixed; z-index: 2; display: none; left: 12px; right: 12px;
+    bottom: calc(14px + env(safe-area-inset-bottom, 0px));
+    justify-content: space-between; align-items: flex-end; pointer-events: none;
+  }
+  /* thumb stick (left, right; up and down on ladders, down alone to duck), a jump and a punch button */
+  #touch .stick { position: relative; width: 136px; height: 136px; border-radius: 50%; pointer-events: auto; touch-action: none;
+    border: 2px solid rgba(255, 154, 58, 0.55); background: radial-gradient(circle, rgba(255,154,58,0.14), rgba(255,154,58,0.04)); }
+  #touch .stick .knob { position: absolute; left: 50%; top: 50%; width: 58px; height: 58px; margin: -29px 0 0 -29px; border-radius: 50%;
+    background: rgba(255, 154, 58, 0.45); border: 2px solid rgba(255,255,255,0.7); box-shadow: 0 4px 10px rgba(0,0,0,0.4); pointer-events: none; }
+  #touch .stick .ring { position: absolute; inset: 10px; border-radius: 50%; border: 1px dashed rgba(246,236,216,0.25); pointer-events: none; }
+  #touch .btns { display: flex; gap: 10px; align-items: flex-end; }
+  #touch .btns button { border-radius: 50%; pointer-events: auto; touch-action: none; color: var(--fg); font: 800 12px system-ui, sans-serif; letter-spacing: 1px; }
+  #touch .jump { width: 78px; height: 78px; border: 2px solid rgba(255, 210, 58, 0.9); background: rgba(255, 210, 58, 0.18); margin-bottom: 40px; }
+  #touch .punch { width: 90px; height: 90px; border: 2px solid rgba(255, 74, 58, 0.9); background: rgba(255, 74, 58, 0.2); }
+  #touch .btns button.on { background: rgba(255, 210, 58, 0.5); }
+  #touch.small .stick { width: 112px; height: 112px; }
+  #touch.small .stick .knob { width: 48px; height: 48px; margin: -24px 0 0 -24px; }
+  #touch.small .jump { width: 64px; height: 64px; font-size: 10px; margin-bottom: 30px; }
+  #touch.small .punch { width: 74px; height: 74px; font-size: 11px; }
+  #overlay {
+    position: fixed; inset: 0; z-index: 5;
+    display: flex; flex-direction: column; align-items: center; justify-content: flex-start;
+    gap: 14px; padding: 16px; text-align: center; overflow-y: auto;
+    background: rgba(20, 12, 6, 0.9);
+  }
+  #overlay > :first-child { margin-top: auto; }
+  #overlay > :last-child { margin-bottom: auto; }
+  #overlay.hidden { display: none; }
+  #homeLink {
+    position: fixed; top: calc(10px + env(safe-area-inset-top, 0px)); left: 10px; z-index: 6;
+    font: 600 13px/1 system-ui, sans-serif; color: #fff; text-decoration: none;
+    padding: 8px 12px; border-radius: 999px; background: rgba(0,0,0,.55);
+    border: 1px solid rgba(255,255,255,.25);
+  }
+  #homeLink:hover { background: rgba(0,0,0,.8); }
+  #overlay.hidden ~ #homeLink { display: none; }
+  @media (max-width: 700px) { #overlay { padding-top: calc(52px + env(safe-area-inset-top, 0px)); } }
+  #overlay h1 { font-size: clamp(30px, 9vw, 58px); font-weight: 900; letter-spacing: 1px; color: var(--orange); text-shadow: 0 3px 0 #6a3a10, 0 0 22px rgba(255,154,58,0.4); }
+  #overlay h2 { font-size: clamp(26px, 7vw, 42px); font-weight: 900; letter-spacing: 2px; }
+  #overlay h2.lose { color: var(--red); }
+  #overlay p { max-width: 540px; font-size: clamp(13px, 3.4vw, 16px); line-height: 1.55; }
+  #overlay p.muted { color: var(--muted); }
+  #overlay .pts { display: grid; grid-template-columns: repeat(2, auto); gap: 4px 18px; font-size: 13px; color: var(--muted); text-align: left; }
+  #overlay .pts b { color: var(--fg); }
+  #overlay .diff { display: flex; gap: 10px; flex-wrap: wrap; justify-content: center; }
+  #overlay button {
+    font: 800 15px system-ui, sans-serif; letter-spacing: 1.5px; color: var(--fg);
+    background: transparent; cursor: pointer;
+    border: 2px solid rgba(246,236,216,0.3); border-radius: 10px; padding: 9px 16px;
+  }
+  #overlay .diff button.on { border-color: var(--c); color: var(--c); box-shadow: 0 0 12px var(--c); }
+  #overlay button.start { border-color: var(--orange); color: #2a1400; background: var(--orange); padding: 11px 30px; box-shadow: 0 4px 0 #6a3a10; }
+  @media (max-height: 560px) {
+    #overlay { gap: 8px; }
+    #overlay h1 { font-size: 30px; }
+    #overlay p { font-size: 13px; line-height: 1.4; }
+    #overlay .help, #overlay .pts { display: none; }
+  }
+</style>
+</head>
+<body>
+<div id="wrap"><canvas id="game"></canvas></div>
+<div id="touch">
+  <div class="stick" aria-label="Levetta"><div class="ring"></div><div class="knob"></div></div>
+  <div class="btns">
+    <button type="button" class="jump" aria-label="Salta">SALTA</button>
+    <button type="button" class="punch" aria-label="Pugno">PUGNO</button>
+  </div>
+</div>
+<button id="pauseBtn" type="button" aria-label="Pausa">❚❚</button>
+<div id="overlay"></div>
+<a id="homeLink" href="../../index.html">← Sala Giochi</a>
+
+<script>
+(() => {
+  "use strict";
+
+  const W = 360, H = 480, HUD = 24, TAU = Math.PI * 2;
+  const FLOORS = [452, 346, 240, 134];          // feet height on each floor, from the ground up
+  const TREE_L = 14, TREE_R = W - 14;
+  const TALL = 38, SHORT = 20, BODY_W = 14;
+  // where the ladders stand, level by level (between floor i and i+1)
+  const LAYOUTS = [
+    [300, 60, 300],
+    [60, 300, 180],
+    [180, 300, 60],
+    [300, 180, 300],
+  ];
+  const FRUITS = [
+    { name: "mela", col: "#e83a3a", pts: 100 },
+    { name: "fragola", col: "#ff4a6a", pts: 200 },
+    { name: "banana", col: "#ffd23a", pts: 300 },
+    { name: "uva", col: "#9a4aff", pts: 400 },
+  ];
+
+  const DIFFICULTIES = {
+    facile:    { label: "FACILE",    color: "#7dff9a", desc: "5 vite · scimmie lente e poche mele", lives: 5, pace: 0.7, bonus: 4 },
+    normale:   { label: "NORMALE",   color: "#ff9a3a", desc: "3 vite · l'esperienza classica", lives: 3, pace: 1, bonus: 3 },
+    difficile: { label: "DIFFICILE", color: "#ff4a3a", desc: "3 vite · scimmie scatenate", lives: 3, pace: 1.3, bonus: 2.4 },
+  };
+  const DIFF_IDS = Object.keys(DIFFICULTIES);
+  const DIFF_KEY = "canguro-difficulty";
+  const bestKey = (id) => `canguro-best-${id}`;
+  function store(k, v) { try { localStorage.setItem(k, v); } catch { /* ignore */ } }
+  function load(k) { try { return localStorage.getItem(k); } catch { return null; } }
+  const rnd = (a, b) => a + Math.random() * (b - a);
+  const pick = (a) => a[Math.floor(Math.random() * a.length)];
+  const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
+
+  // ---------- Canvas ----------
+  const canvas = document.getElementById("game");
+  const ctx = canvas.getContext("2d");
+  const wrap = document.getElementById("wrap");
+  const overlay = document.getElementById("overlay");
+  const touchEl = document.getElementById("touch");
+  const pauseBtn = document.getElementById("pauseBtn");
+  let pxRatio = 1, touchMode = !!(window.matchMedia && matchMedia("(pointer: coarse)").matches);
+  function resize() {
+    const portrait = window.innerHeight > window.innerWidth;
+    const showTouch = touchMode && isPlaying();
+    touchEl.style.display = showTouch ? "flex" : "none";
+    touchEl.classList.toggle("small", !portrait && window.innerHeight < 480);
+    wrap.style.paddingBottom = showTouch && portrait ? "calc(170px + env(safe-area-inset-bottom, 0px))" : "0";
+    let availW = window.innerWidth - 8, availH = window.innerHeight - 8;
+    if (showTouch && portrait) availH -= 170;
+    if (showTouch && !portrait) {
+      const side = Math.max(...[...touchEl.children].map((el) => el.offsetWidth)) + 20;
+      if (window.innerWidth - 2 * side > 200) availW = window.innerWidth - 2 * side;
+    }
+    const s = Math.max(0.2, Math.min(availW / W, availH / H));
+    pxRatio = Math.min(3, s * (window.devicePixelRatio || 1));
+    canvas.style.width = W * s + "px";
+    canvas.style.height = H * s + "px";
+    canvas.width = Math.round(W * pxRatio);
+    canvas.height = Math.round(H * pxRatio);
+  }
+  window.addEventListener("resize", () => syncControls());
+
+  // ---------- Audio ----------
+  let audioCtx = null;
+  function beep(freq, dur, type = "square", vol = 0.04, slide = 0, delay = 0) {
+    if (!audioCtx) return;
+    const t = audioCtx.currentTime + delay;
+    const osc = audioCtx.createOscillator(), gain = audioCtx.createGain();
+    osc.type = type;
+    osc.frequency.setValueAtTime(freq, t);
+    if (slide) osc.frequency.exponentialRampToValueAtTime(Math.max(20, freq + slide), t + dur);
+    gain.gain.setValueAtTime(vol, t);
+    gain.gain.exponentialRampToValueAtTime(0.0001, t + dur);
+    osc.connect(gain).connect(audioCtx.destination);
+    osc.start(t); osc.stop(t + dur + 0.02);
+  }
+  function noise(dur, vol, freq) {
+    if (!audioCtx) return;
+    const len = Math.floor(audioCtx.sampleRate * dur), buf = audioCtx.createBuffer(1, len, audioCtx.sampleRate), d = buf.getChannelData(0);
+    for (let i = 0; i < len; i++) d[i] = (Math.random() * 2 - 1) * (1 - i / len);
+    const src = audioCtx.createBufferSource(), f = audioCtx.createBiquadFilter(), g = audioCtx.createGain();
+    src.buffer = buf; f.type = "lowpass"; f.frequency.value = freq; g.gain.value = vol;
+    src.connect(f).connect(g).connect(audioCtx.destination); src.start();
+  }
+  const arp = (notes, gap, d, type = "square", vol = 0.04) => notes.forEach((f, i) => beep(f, d, type, vol, 0, i * gap));
+  let sfxN = 0;
+  const lim = (fn) => (...a) => { if (sfxN++ < 5) fn(...a); };
+  const sfx = {
+    jump: lim(() => beep(330, 0.15, "square", 0.03, 330)),
+    punch: lim(() => noise(0.08, 0.12, 1500)),
+    smack: lim(() => { noise(0.12, 0.2, 900); beep(180, 0.08, "square", 0.04, -60); }),
+    throw: lim(() => beep(600, 0.12, "triangle", 0.02, -200)),
+    fruit: lim(() => arp([659, 880, 1175], 0.05, 0.08, "square", 0.035)),
+    bell: () => arp([1319, 1047, 1319, 1047], 0.12, 0.3, "sine", 0.05),
+    ladder: lim(() => beep(240, 0.04, "triangle", 0.02)),
+    die: () => arp([523, 440, 349, 262, 196], 0.12, 0.18, "triangle", 0.05),
+    rescue: () => arp([523, 659, 784, 1047, 784, 1047, 1319, 1568], 0.09, 0.16),
+    start: () => arp([392, 523, 659, 523, 659, 784], 0.11, 0.15),
+    over: () => arp([523, 415, 330, 262], 0.18, 0.25),
+    tick: lim(() => beep(1400, 0.03, "square", 0.015)),
+    whistle: lim(() => beep(1400, 0.6, "sine", 0.025, -1000)),
+  };
+
+  // ---------- State ----------
+  let difficulty = DIFFICULTIES[load(DIFF_KEY)] ? load(DIFF_KEY) : "normale";
+  let diff = DIFFICULTIES[difficulty];
+  let state = "menu", menu = null, pausedFrom = null, stateT = 0, clock = 0;
+  let score = 0, lives = 3, level = 0, bestCache = 0, bonus = 0, bonusT = 0, nextLife = 20000;
+  let K = null, monkeys = [], apples = [], fruits = [], parts = [], popups = [], message = null, ladders = [], ape = null, bell = null;
+  let monkeyT = 0, dropT = 0, jumpPressed = false, punchPressed = false;
+  const ctl = { left: false, right: false, up: false, down: false };
+  const keys = { left: false, right: false, up: false, down: false };
+  const pace = () => diff.pace * (1 + Math.min(0.8, level * 0.12));
+
+  // ---------- Level ----------
+  function buildLevel() {
+    const lay = LAYOUTS[level % LAYOUTS.length];
+    ladders = lay.map((x, i) => ({ x, from: i, top: FLOORS[i + 1], bottom: FLOORS[i] }));
+    // fruit hangs over each floor; the kind goes up with the level
+    fruits = [];
+    const f = FRUITS[Math.min(FRUITS.length - 1, level)];
+    for (let i = 0; i < 4; i++) for (let k = 0; k < 3; k++) {
+      const x = 70 + k * 110 + (i % 2) * 25;
+      if (ladders.some((l) => Math.abs(l.x - x) < 26)) continue;
+      fruits.push({ x, floor: i, y: FLOORS[i] - 58, kind: f, taken: false });
+    }
+    bell = { x: W / 2, y: FLOORS[3] - 62, rung: 0 };
+    monkeys = []; apples = []; parts = []; popups = [];
+    ape = level >= 1 ? { x: W - 40, t: 0 } : null;
+    K = { x: 40, y: FLOORS[0], vx: 0, vy: 0, face: 1, floor: 0, mode: "walk", duck: false, punch: 0, punchCool: 0, walk: 0, inv: 1, climb: null };
+    monkeyT = 2; dropT = 5;
+    bonus = 3000; bonusT = diff.bonus;
+  }
+  const joey = () => ({ x: (LAYOUTS[level % LAYOUTS.length][2] > W / 2 ? 44 : W - 44), y: FLOORS[3] });
+
+  // ---------- Flow ----------
+  const isPlaying = () => ["intro", "play", "dead", "rescue"].includes(state);
+  function startGame() {
+    if (!audioCtx) { try { audioCtx = new (window.AudioContext || window.webkitAudioContext)(); } catch { audioCtx = null; } }
+    if (audioCtx && audioCtx.state === "suspended") audioCtx.resume();
+    score = 0; lives = diff.lives; level = 0; nextLife = 20000;
+    bestCache = parseInt(load(bestKey(difficulty)), 10) || 0;
+    beginLevel();
+    sfx.start();
+    menu = null;
+    overlay.classList.add("hidden");
+    syncControls();
+    last = performance.now();
+  }
+  function beginLevel() {
+    buildLevel();
+    message = { text: `LIVELLO ${level + 1}`, sub: "Sali fino al tuo piccolo!", t: 0 };
+    state = "intro"; stateT = 1.5;
+  }
+  function addScore(n, x, y, color = "#f6ecd8") {
+    score += n;
+    if (x !== undefined) popups.push({ x, y, text: String(n), color, t: 0 });
+    if (score >= nextLife) { nextLife += 20000; if (lives < 9) lives++; sfx.rescue(); popups.push({ x: W / 2, y: H / 2, text: "VITA EXTRA", color: "#ffd23a", t: 0, big: true }); }
+  }
+  function burst(x, y, color, n = 10, sp = 90, life = 0.45) {
+    for (let k = 0; k < n; k++) {
+      const a = Math.random() * TAU, s = sp * (0.2 + Math.random() * 0.9);
+      parts.push({ x, y, vx: Math.cos(a) * s, vy: Math.sin(a) * s, t: 0, life: life * (0.5 + Math.random() * 0.8), c: color });
+    }
+  }
+  function die(why) {
+    if (state !== "play" || K.inv > 0) return;
+    lives--; sfx.die();
+    message = { text: why, sub: lives > 0 ? `Vite rimaste: ${lives}` : "", t: 0 };
+    burst(K.x, K.y - 20, "#c86a2a", 18, 110, 0.8);
+    state = "dead"; stateT = 2;
+  }
+  function afterDeath() {
+    if (lives <= 0) { gameOver(); return; }
+    // back to the ground floor; the fruit stays as it was
+    K = { x: 40, y: FLOORS[0], vx: 0, vy: 0, face: 1, floor: 0, mode: "walk", duck: false, punch: 0, punchCool: 0, walk: 0, inv: 2, climb: null };
+    monkeys = []; apples = []; bonus = Math.max(bonus, 1000); bonusT = diff.bonus;
+    state = "play";
+  }
+  function gameOver() {
+    state = "over";
+    const prev = parseInt(load(bestKey(difficulty)), 10) || 0;
+    const record = score > prev;
+    if (record) store(bestKey(difficulty), String(score));
+    sfx.over();
+    const played = diff.label;
+    menu = () => showOverlay(
+      `<h2 class="lose">GAME OVER</h2>
+       <p>Punteggio: <b>${score.toLocaleString("it-IT")}</b> · Livello ${level + 1} · ${played}</p>
+       ${record ? "<p style='color:var(--gold)'>★ NUOVO RECORD! ★</p>" : ""}
+       ${difficultyHTML()}
+       <button class="start" data-start>GIOCA ANCORA</button>`
+    );
+    menu();
+    syncControls();
+  }
+  function togglePause() {
+    if (isPlaying()) {
+      pausedFrom = state; state = "paused";
+      showOverlay(`<h2>PAUSA</h2><button class="start" data-resume>CONTINUA</button><p class="muted">Premi P per continuare</p>`);
+    } else if (state === "paused") {
+      state = pausedFrom; overlay.classList.add("hidden"); last = performance.now();
+    }
+    syncControls();
+  }
+  function syncControls() {
+    const portrait = window.innerHeight > window.innerWidth;
+    pauseBtn.style.display = isPlaying() && touchMode ? "block" : "none";
+    Object.assign(pauseBtn.style, portrait
+      ? { top: "auto", bottom: "calc(40px + env(safe-area-inset-bottom, 0px))", right: "auto", left: "calc(50% - 20px)" }
+      : { top: "calc(10px + env(safe-area-inset-top, 0px))", bottom: "auto", right: "10px", left: "auto" });
+    resize();
+  }
+  pauseBtn.addEventListener("click", () => togglePause());
+  function showOverlay(html) { overlay.innerHTML = html; overlay.classList.remove("hidden"); }
+  function difficultyHTML() {
+    const buttons = DIFF_IDS.map((id) => {
+      const d = DIFFICULTIES[id];
+      return `<button type="button" data-diff="${id}" class="${id === difficulty ? "on" : ""}" style="--c:${d.color}">${d.label}</button>`;
+    }).join("");
+    const best = parseInt(load(bestKey(difficulty)), 10);
+    return `<div class="diff">${buttons}</div><p class="muted">${diff.desc}${best ? ` · Record: ${best.toLocaleString("it-IT")}` : ""}</p>`;
+  }
+  function setDifficulty(id) { if (!DIFFICULTIES[id]) return; difficulty = id; diff = DIFFICULTIES[id]; store(DIFF_KEY, id); if (menu) menu(); }
+  function showTitle() {
+    menu = showTitle;
+    showOverlay(
+      `<h1>MAMMA CANGURO</h1>
+       <p>Le scimmie hanno rapito il tuo piccolo e l'hanno portato in cima all'albero! Sali le scale piano dopo piano. Le scimmie lanciano mele: abbassati per quelle alte, salta quelle basse o prendile a pugni con i tuoi guantoni. Dal secondo livello lo scimmione le lascia cadere dall'alto.</p>
+       <div class="pts">
+         <span><b>Frutta</b></span><span>mela 100 · fragola 200 · banana 300 · uva 400</span>
+         <span><b>Mela colpita · Scimmia</b></span><span>100 · 200</span>
+         <span><b>Campanella</b></span><span>salta e dalle un pugno: la frutta ricompare</span>
+         <span><b>Piccolo salvato</b></span><span>il bonus che resta (cala col tempo)</span>
+       </div>
+       ${touchMode
+         ? `<p class="muted help">Levetta per camminare, su e giù sulle scale, giù per abbassarti · SALTA · PUGNO</p>`
+         : `<p class="muted help">← → per camminare · ↑ ↓ scale · ↓ abbassati · SPAZIO salta · Z o X pugno · P pausa</p>`}
+       ${difficultyHTML()}
+       <button class="start" data-start>SALVA IL PICCOLO!</button>`
+    );
+  }
+  overlay.addEventListener("click", (e) => {
+    const d = e.target.closest("[data-diff]");
+    if (d) { setDifficulty(d.dataset.diff); return; }
+    if (e.target.closest("[data-start]")) startGame();
+    if (e.target.closest("[data-resume]")) togglePause();
+  });
+
+  // ---------- Input ----------
+  const KEYMAP = { arrowleft: "left", a: "left", arrowright: "right", d: "right", arrowup: "up", w: "up", arrowdown: "down", s: "down" };
+  window.addEventListener("keydown", (e) => {
+    const k = e.key.toLowerCase();
+    if ([" ", "arrowup", "arrowdown", "arrowleft", "arrowright"].includes(k)) e.preventDefault();
+    if (state === "menu" || state === "over") {
+      if (e.key === "Enter") startGame();
+      else if (["1", "2", "3"].includes(k)) setDifficulty(DIFF_IDS[+k - 1]);
+      return;
+    }
+    if (k === "p" || k === "escape") { if (!e.repeat) togglePause(); return; }
+    if (state === "paused") { if (e.key === "Enter") togglePause(); return; }
+    if (k === " " && !e.repeat) jumpPressed = true;
+    if ((k === "z" || k === "x") && !e.repeat) punchPressed = true;
+    if (KEYMAP[k]) keys[KEYMAP[k]] = true;
+  });
+  window.addEventListener("keyup", (e) => {
+    const k = e.key.toLowerCase();
+    if (KEYMAP[k]) keys[KEYMAP[k]] = false;
+  });
+  window.addEventListener("blur", () => { for (const k in keys) keys[k] = false; for (const k in ctl) ctl[k] = false; if (isPlaying()) togglePause(); });
+  const jumpBtn = touchEl.querySelector(".jump"), punchBtn = touchEl.querySelector(".punch");
+  for (const [btn, fn] of [[jumpBtn, () => { jumpPressed = true; }], [punchBtn, () => { punchPressed = true; }]]) {
+    btn.addEventListener("pointerdown", (e) => { e.preventDefault(); fn(); btn.classList.add("on"); setTimeout(() => btn.classList.remove("on"), 150); });
+  }
+  const stick = touchEl.querySelector(".stick"), knob = stick.querySelector(".knob");
+  let stickId = null;
+  function stickAt(e) {
+    const r = stick.getBoundingClientRect(), max = r.width / 2 - 14;
+    let dx = e.clientX - (r.left + r.width / 2), dy = e.clientY - (r.top + r.height / 2);
+    const len = Math.hypot(dx, dy);
+    if (len > max) { dx *= max / len; dy *= max / len; }
+    knob.style.transform = `translate(${dx}px, ${dy}px)`;
+    for (const k in ctl) ctl[k] = false;
+    if (len < max * 0.3) return;
+    ctl.right = dx > max * 0.35; ctl.left = dx < -max * 0.35;
+    ctl.down = dy > max * 0.45; ctl.up = dy < -max * 0.45;
+  }
+  const stickEnd = (e) => { if (e.pointerId !== stickId) return; stickId = null; knob.style.transform = ""; for (const k in ctl) ctl[k] = false; };
+  stick.addEventListener("pointerdown", (e) => { e.preventDefault(); stickId = e.pointerId; try { stick.setPointerCapture(e.pointerId); } catch { /* ignore */ } stickAt(e); });
+  stick.addEventListener("pointermove", (e) => { if (e.pointerId === stickId) stickAt(e); });
+  for (const ev of ["pointerup", "pointercancel", "lostpointercapture"]) stick.addEventListener(ev, stickEnd);
+  window.addEventListener("pointerdown", (e) => { if (e.pointerType === "touch" && !touchMode) { touchMode = true; syncControls(); if (menu) menu(); } }, true);
+
+  // ---------- Monkeys and apples ----------
+  function spawnMonkey() {
+    // down one of the two trees, stopping on the kangaroo's floor (or one near it)
+    const side = Math.random() < 0.5 ? -1 : 1;
+    const target = clamp(K.floor + (Math.random() < 0.7 ? 0 : pick([-1, 1])), 0, 3);
+    monkeys.push({ x: side < 0 ? TREE_L : TREE_R, y: 30, side, floor: target, mode: "down", throws: 1 + Math.floor(rnd(0, 1 + level * 0.5)), t: rnd(0.6, 1.2), walk: level >= 2 && Math.random() < 0.35 });
+  }
+  function throwApple(m) {
+    const high = Math.random() < 0.5;
+    const y = FLOORS[m.floor] - (high ? 30 : 8);
+    apples.push({ x: m.x - m.side * 8, y, vx: -m.side * (95 + level * 8) * diff.pace, vy: 0, kind: high ? "high" : "low", floor: m.floor, spin: 0 });
+    sfx.throw();
+  }
+  function updateMonkeys(dt) {
+    for (const m of monkeys) {
+      m.t -= dt;
+      const fy = FLOORS[m.floor];
+      if (m.mode === "down") { m.y += 90 * dt * Math.min(1.4, pace()); if (m.y >= fy) { m.y = fy; m.mode = "aim"; m.t = rnd(0.5, 1) / pace(); } }
+      else if (m.mode === "aim") {
+        if (m.t <= 0) {
+          if (m.throws > 0) { throwApple(m); m.throws--; m.t = rnd(0.9, 1.6) / pace(); }
+          else if (m.walk) { m.mode = "walk"; }
+          else m.mode = "up";
+        }
+      } else if (m.mode === "walk") {
+        // bolder monkeys walk along the floor towards you
+        m.x -= m.side * 45 * pace() * dt;
+        if (m.x < 10 || m.x > W - 10) m.gone = true;
+      } else if (m.mode === "up") { m.y -= 110 * dt; if (m.y < 20) m.gone = true; }
+    }
+    monkeys = monkeys.filter((m) => !m.gone && !m.dead);
+    for (const a of apples) {
+      a.spin += dt * 8;
+      if (a.kind === "drop") { a.vy += 260 * dt; a.y += a.vy * dt; if (a.y > H + 10) a.gone = true; }
+      else { a.x += a.vx * dt; if (a.x < -10 || a.x > W + 10) a.gone = true; }
+    }
+    apples = apples.filter((a) => !a.gone);
+    // the big ape at the top drops apples where you are heading
+    if (ape) {
+      ape.t += dt;
+      dropT -= dt;
+      if (dropT <= 0 && state === "play") {
+        dropT = rnd(3.5, 6) / pace();
+        const x = clamp(K.x + K.vx * 0.8 + rnd(-20, 20), 20, W - 20);
+        apples.push({ x, y: HUD + 30, vx: 0, vy: 0, kind: "drop", warn: 0.8, spin: 0 });
+        ape.x = x; sfx.whistle();
+      }
+    }
+  }
+
+  // ---------- Update ----------
+  const onLadder = (x, floor, up) => ladders.find((l) => Math.abs(l.x - x) < 10 && (up ? l.from === floor : l.from === floor - 1));
+  function update(dt) {
+    clock += dt;
+    sfxN = 0;
+    for (const q of parts) { q.t += dt; q.x += q.vx * dt; q.y += q.vy * dt; q.vy += 200 * dt; }
+    parts = parts.filter((q) => q.t < q.life);
+    for (const q of popups) { q.t += dt; q.y -= 18 * dt; }
+    popups = popups.filter((q) => q.t < (q.big ? 1.5 : 0.9));
+    if (message) { message.t += dt; if (message.t > 2.4) message = null; }
+    if (!isPlaying()) return;
+    if (state === "intro") { stateT -= dt; if (stateT <= 0) state = "play"; return; }
+    if (state === "rescue") { stateT -= dt; if (stateT <= 0) { level++; beginLevel(); } return; }
+    if (state === "dead") { stateT -= dt; updateMonkeys(dt); if (stateT <= 0) afterDeath(); return; }
+    // the bonus counts down
+    bonusT -= dt;
+    if (bonusT <= 0) { bonusT = diff.bonus; bonus = Math.max(0, bonus - 100); if (bonus <= 500) sfx.tick(); if (bonus <= 0) { die("TEMPO SCADUTO!"); return; } }
+    K.inv = Math.max(0, K.inv - dt);
+    K.punch = Math.max(0, K.punch - dt); K.punchCool = Math.max(0, K.punchCool - dt);
+    const ix = (ctl.right || keys.right ? 1 : 0) - (ctl.left || keys.left ? 1 : 0);
+    const up = ctl.up || keys.up, down = ctl.down || keys.down;
+    if (K.mode === "climb") {
+      // on a ladder
+      const l = K.climb, v = (down ? 1 : 0) - (up ? 1 : 0);
+      K.x = l.x; K.y += v * 70 * dt;
+      if (v && Math.floor(clock * 6) !== Math.floor((clock - dt) * 6)) sfx.ladder();
+      if (K.y <= l.top) { K.y = l.top; K.floor = l.from + 1; K.mode = "walk"; }
+      if (K.y >= l.bottom) { K.y = l.bottom; K.floor = l.from; K.mode = "walk"; }
+    } else {
+      const ground = FLOORS[K.floor];
+      const onGround = K.mode === "walk";
+      K.duck = onGround && down && !onLadder(K.x, K.floor, false);
+      if (onGround) {
+        K.vx = K.duck || K.punch > 0 ? 0 : ix * 80;
+        if (ix) { K.face = ix; K.walk += dt; }
+        if (up) { const l = onLadder(K.x, K.floor, true); if (l) { K.mode = "climb"; K.climb = l; K.x = l.x; } }
+        if (down) { const l = onLadder(K.x, K.floor, false); if (l) { K.mode = "climb"; K.climb = l; K.x = l.x; K.floor = l.from; } }
+        if (jumpPressed && K.mode === "walk") { K.vy = -240; K.mode = "air"; sfx.jump(); }
+      } else {
+        K.vy += 720 * dt;
+        K.y += K.vy * dt;
+        if (K.y >= ground) { K.y = ground; K.vy = 0; K.mode = "walk"; }
+      }
+      K.x = clamp(K.x + K.vx * dt, 28, W - 28);
+      if (punchPressed && K.punchCool <= 0 && K.mode !== "climb") { K.punch = 0.22; K.punchCool = 0.32; sfx.punch(); }
+    }
+    jumpPressed = false; punchPressed = false;
+    updateMonkeys(dt);
+    // punching: apples and monkeys within reach of the glove
+    if (K.punch > 0.08) {
+      const gx = K.x + K.face * 22, gy = K.y - (K.duck ? 14 : 26);
+      for (const a of apples) if (!a.hit && Math.abs(a.x - gx) < 16 && Math.abs(a.y - gy) < 18) { a.gone = true; a.hit = true; addScore(100, a.x, a.y - 8, "#ffd23a"); sfx.smack(); burst(a.x, a.y, "#e83a3a", 8, 80, 0.3); }
+      for (const m of monkeys) if (!m.dead && m.mode !== "up" && Math.abs(m.x - gx) < 20 && Math.abs(m.y - 12 - gy) < 22) { m.dead = true; addScore(200, m.x, m.y - 30, "#ffd23a"); sfx.smack(); burst(m.x, m.y - 12, "#8a5a2a", 14, 100, 0.5); }
+      if (bell && Math.abs(bell.x - gx) < 16 && Math.abs(bell.y - gy) < 24 && K.floor === 3 && bell.rung <= 0) {
+        bell.rung = 1.2; sfx.bell(); addScore(50, bell.x, bell.y - 16);
+        for (const f of fruits) f.taken = false;
+        message = { text: "DING DONG!", sub: "La frutta è tornata", t: 0 };
+      }
+    }
+    if (bell && bell.rung > 0) bell.rung -= dt;
+    // getting hit
+    const top = K.y - (K.duck ? SHORT : TALL), bottom = K.y;
+    for (const a of apples) {
+      if (a.hit) continue;
+      if (a.kind === "drop") { if (a.warn > 0) { a.warn -= dt; a.vy = 0; a.y = HUD + 30; continue; } }
+      if (Math.abs(a.x - K.x) < BODY_W / 2 + 4 && a.y + 4 > top && a.y - 4 < bottom) { die("COLPITO DA UNA MELA!"); return; }
+    }
+    for (const m of monkeys) if (m.mode === "walk" && m.floor === K.floor && K.mode !== "climb" && Math.abs(m.x - K.x) < 16 && K.y > FLOORS[K.floor] - 20) { die("PRESO DA UNA SCIMMIA!"); return; }
+    // fruit
+    for (const f of fruits) if (!f.taken && Math.abs(f.x - K.x) < 14 && f.y > top - 8 && f.y < bottom) { f.taken = true; addScore(f.kind.pts, f.x, f.y - 8, f.kind.col); sfx.fruit(); }
+    // monkeys come down the trees
+    monkeyT -= dt;
+    if (monkeyT <= 0) { monkeyT = rnd(2.2, 3.8) / pace(); if (monkeys.length < 2 + Math.min(2, Math.floor(level / 2))) spawnMonkey(); }
+    // the little one
+    const j = joey();
+    if (K.floor === 3 && K.mode === "walk" && Math.abs(K.x - j.x) < 20) {
+      addScore(bonus, j.x, j.y - 50, "#ffd23a");
+      message = { text: "PICCOLO SALVATO!", sub: `Bonus ${bonus.toLocaleString("it-IT")}`, t: 0 };
+      sfx.rescue(); state = "rescue"; stateT = 2.6;
+      burst(j.x, j.y - 20, "#ffd23a", 24, 120, 0.9);
+    }
+  }
+
+  // ---------- Drawing ----------
+  function drawKangaroo(x, y, face, duck, punch, walk, mode, small = false) {
+    ctx.save(); ctx.translate(x, y); ctx.scale(face * (small ? 0.5 : 1), small ? 0.5 : 1);
+    const hop = mode === "walk" && walk ? Math.abs(Math.sin(walk * 10)) * 3 : 0;
+    ctx.translate(0, -hop);
+    const h = duck ? 0.55 : 1;
+    // tail and legs
+    ctx.fillStyle = "#b8662a";
+    ctx.beginPath(); ctx.moveTo(-6, -8 * h); ctx.quadraticCurveTo(-20, -2, -22, 0); ctx.lineTo(-18, 1); ctx.quadraticCurveTo(-10, -2, -4, -4); ctx.fill();
+    ctx.beginPath(); ctx.ellipse(0, -6, 7, 6, 0, 0, TAU); ctx.fill();
+    ctx.fillRect(-2, -2, 12, 3);
+    // body
+    ctx.fillStyle = "#c8762e";
+    ctx.beginPath(); ctx.ellipse(2, -20 * h, 8, 14 * h, 0.2, 0, TAU); ctx.fill();
+    ctx.fillStyle = "#e8b880"; ctx.beginPath(); ctx.ellipse(5, -18 * h, 4, 9 * h, 0.2, 0, TAU); ctx.fill();
+    // head and ears
+    const hy = -36 * h;
+    ctx.fillStyle = "#c8762e";
+    ctx.beginPath(); ctx.ellipse(7, hy, 6, 5, 0.3, 0, TAU); ctx.fill();
+    ctx.beginPath(); ctx.ellipse(2, hy - 7, 2, 5, -0.3, 0, TAU); ctx.fill();
+    ctx.fillStyle = "#1a1a1a"; ctx.fillRect(8, hy - 2, 2, 2); ctx.fillRect(12, hy, 1.5, 1.5);
+    // the boxing glove
+    const reach = punch > 0 ? 18 : 6;
+    ctx.strokeStyle = "#c8762e"; ctx.lineWidth = 3; ctx.beginPath(); ctx.moveTo(6, -24 * h); ctx.lineTo(6 + reach, -26 * h); ctx.stroke();
+    ctx.fillStyle = "#e83a3a"; ctx.beginPath(); ctx.arc(8 + reach, -26 * h, 5, 0, TAU); ctx.fill();
+    ctx.fillStyle = "rgba(255,255,255,0.4)"; ctx.fillRect(7 + reach, -29 * h, 3, 2);
+    ctx.restore();
+  }
+  function drawMonkey(m) {
+    ctx.save(); ctx.translate(m.x, m.y); ctx.scale(-m.side, 1);
+    ctx.fillStyle = "#6a4222";
+    ctx.beginPath(); ctx.ellipse(0, -12, 7, 10, 0, 0, TAU); ctx.fill();
+    ctx.beginPath(); ctx.arc(2, -25, 6, 0, TAU); ctx.fill();
+    ctx.fillStyle = "#d8a878"; ctx.beginPath(); ctx.ellipse(4, -24, 4, 3.5, 0, 0, TAU); ctx.fill();
+    ctx.fillStyle = "#1a1a1a"; ctx.fillRect(3, -27, 1.5, 1.5); ctx.fillRect(6, -27, 1.5, 1.5);
+    ctx.strokeStyle = "#6a4222"; ctx.lineWidth = 2.5;
+    ctx.beginPath(); ctx.moveTo(-6, -8); ctx.quadraticCurveTo(-14, -14, -12, -24 + Math.sin(clock * 6) * 3); ctx.stroke();
+    const arm = m.mode === "aim" && m.t < 0.3 ? -8 : 0;
+    ctx.beginPath(); ctx.moveTo(4, -16); ctx.lineTo(10, -12 + arm); ctx.stroke();
+    ctx.restore();
+  }
+  function drawApple(a) {
+    if (a.kind === "drop" && a.warn > 0) {
+      // the ape's shadow warning where it will fall
+      ctx.fillStyle = `rgba(255,74,58,${0.3 + 0.3 * Math.sin(clock * 20)})`;
+      for (const fy of FLOORS) ctx.fillRect(a.x - 6, fy - 2, 12, 2);
+      return;
+    }
+    ctx.fillStyle = "#e83a3a"; ctx.beginPath(); ctx.arc(a.x, a.y, 5, 0, TAU); ctx.fill();
+    ctx.fillStyle = "rgba(255,255,255,0.4)"; ctx.beginPath(); ctx.arc(a.x - 1.5, a.y - 1.5, 1.5, 0, TAU); ctx.fill();
+    ctx.strokeStyle = "#5a3a1a"; ctx.lineWidth = 1.2; ctx.beginPath(); ctx.moveTo(a.x, a.y - 5); ctx.lineTo(a.x + Math.cos(a.spin) * 2, a.y - 8); ctx.stroke();
+  }
+  function draw() {
+    ctx.setTransform(pxRatio, 0, 0, pxRatio, 0, 0);
+    const g = ctx.createLinearGradient(0, 0, 0, H);
+    g.addColorStop(0, "#1a3a6a"); g.addColorStop(1, "#e8a060");
+    ctx.fillStyle = g; ctx.fillRect(0, 0, W, H);
+    // distant hills
+    ctx.fillStyle = "#6a5a3a"; ctx.beginPath(); ctx.moveTo(0, H); for (let x = 0; x <= W; x += 20) ctx.lineTo(x, 380 + Math.sin(x * 0.03) * 20); ctx.lineTo(W, H); ctx.fill();
+    // the two trees at the sides
+    for (const tx of [TREE_L, TREE_R]) {
+      ctx.fillStyle = "#5a3a1a"; ctx.fillRect(tx - 8, HUD, 16, H - HUD);
+      ctx.fillStyle = "#4a2e12"; for (let y = HUD; y < H; y += 18) ctx.fillRect(tx - 8, y, 16, 2);
+    }
+    ctx.fillStyle = "#2a6a2a";
+    for (let x = -10; x < W + 20; x += 36) { ctx.beginPath(); ctx.arc(x, HUD + 6 + Math.sin(x) * 4, 24, 0, TAU); ctx.fill(); }
+    // floors: wooden planks
+    for (let i = 0; i < 4; i++) {
+      const y = FLOORS[i];
+      ctx.fillStyle = "#8a5a2a"; ctx.fillRect(20, y, W - 40, 8);
+      ctx.fillStyle = "#a87a3a"; ctx.fillRect(20, y, W - 40, 2);
+      ctx.fillStyle = "#5a3a1a"; for (let x = 30; x < W - 20; x += 30) ctx.fillRect(x, y + 2, 1.5, 6);
+    }
+    // ladders
+    for (const l of ladders) {
+      ctx.strokeStyle = "#d8b878"; ctx.lineWidth = 2.5;
+      ctx.beginPath(); ctx.moveTo(l.x - 8, l.top); ctx.lineTo(l.x - 8, l.bottom); ctx.moveTo(l.x + 8, l.top); ctx.lineTo(l.x + 8, l.bottom);
+      for (let y = l.top + 8; y < l.bottom; y += 12) { ctx.moveTo(l.x - 8, y); ctx.lineTo(l.x + 8, y); }
+      ctx.stroke();
+    }
+    if (state === "menu" || !K) return;
+    // fruit hanging on a string
+    for (const f of fruits) {
+      if (f.taken) continue;
+      ctx.strokeStyle = "rgba(255,255,255,0.35)"; ctx.lineWidth = 1; ctx.beginPath(); ctx.moveTo(f.x, FLOORS[f.floor] - 106 < HUD ? HUD : f.y - 14); ctx.lineTo(f.x, f.y - 5); ctx.stroke();
+      ctx.fillStyle = f.kind.col;
+      if (f.kind.name === "banana") { ctx.beginPath(); ctx.arc(f.x, f.y - 3, 7, 0.3, 2.6); ctx.arc(f.x, f.y - 7, 7, 2.4, 0.5, true); ctx.fill(); }
+      else if (f.kind.name === "uva") { for (const [dx, dy] of [[-3, -2], [3, -2], [0, 2], [-3, 5], [3, 5], [0, 8]]) { ctx.beginPath(); ctx.arc(f.x + dx, f.y + dy - 3, 2.6, 0, TAU); ctx.fill(); } }
+      else { ctx.beginPath(); ctx.arc(f.x, f.y, 5, 0, TAU); ctx.fill(); ctx.fillStyle = "#3a8a3a"; ctx.fillRect(f.x - 1, f.y - 7, 3, 3); }
+    }
+    // the bell and the little one at the top
+    if (bell) {
+      const sw = bell.rung > 0 ? Math.sin(clock * 30) * 0.4 : 0;
+      ctx.save(); ctx.translate(bell.x, bell.y - 12); ctx.rotate(sw);
+      ctx.strokeStyle = "rgba(255,255,255,0.4)"; ctx.lineWidth = 1; ctx.beginPath(); ctx.moveTo(0, -30); ctx.lineTo(0, 0); ctx.stroke();
+      ctx.fillStyle = "#ffd23a"; ctx.beginPath(); ctx.moveTo(-8, 14); ctx.quadraticCurveTo(-8, 0, 0, 0); ctx.quadraticCurveTo(8, 0, 8, 14); ctx.fill();
+      ctx.fillStyle = "#c89a1a"; ctx.beginPath(); ctx.arc(0, 15, 2.5, 0, TAU); ctx.fill();
+      ctx.restore();
+    }
+    const j = joey();
+    // the cage the monkeys put the little one in
+    drawKangaroo(j.x, j.y, j.x < W / 2 ? 1 : -1, false, 0, clock, "walk", true);
+    ctx.strokeStyle = "#8a8a8a"; ctx.lineWidth = 1.5; ctx.strokeRect(j.x - 14, j.y - 28, 28, 28);
+    for (let k = -7; k <= 7; k += 7) { ctx.beginPath(); ctx.moveTo(j.x + k, j.y - 28); ctx.lineTo(j.x + k, j.y); ctx.stroke(); }
+    if (Math.floor(clock * 2) % 2) { ctx.fillStyle = "#fff"; ctx.font = "800 9px system-ui, sans-serif"; ctx.textAlign = "center"; ctx.fillText("MAMMA!", j.x, j.y - 34); }
+    if (ape) {
+      // the big ape up in the canopy
+      ctx.save(); ctx.translate(ape.x, HUD + 22);
+      ctx.fillStyle = "#3a2a1a"; ctx.beginPath(); ctx.ellipse(0, 0, 14, 10, 0, 0, TAU); ctx.fill();
+      ctx.beginPath(); ctx.arc(0, -8, 8, 0, TAU); ctx.fill();
+      ctx.fillStyle = "#8a6a4a"; ctx.beginPath(); ctx.ellipse(0, -6, 5, 4, 0, 0, TAU); ctx.fill();
+      ctx.fillStyle = "#ff4a3a"; ctx.fillRect(-3, -10, 2, 2); ctx.fillRect(2, -10, 2, 2);
+      ctx.restore();
+    }
+    for (const m of monkeys) drawMonkey(m);
+    for (const a of apples) drawApple(a);
+    if (!(K.inv > 0 && Math.floor(clock * 14) % 2) && state !== "dead") drawKangaroo(K.x, K.y, K.face, K.duck, K.punch, K.walk, K.mode);
+    for (const q of parts) { ctx.globalAlpha = Math.max(0, 1 - q.t / q.life); ctx.fillStyle = q.c; ctx.fillRect(q.x - 1.5, q.y - 1.5, 3, 3); }
+    ctx.globalAlpha = 1;
+    for (const q of popups) {
+      ctx.globalAlpha = Math.max(0, 1 - q.t / (q.big ? 1.5 : 0.9));
+      ctx.textAlign = "center"; ctx.font = q.big ? "900 18px system-ui, sans-serif" : "900 10px system-ui, sans-serif";
+      ctx.lineWidth = 3; ctx.strokeStyle = "#000"; ctx.strokeText(q.text, q.x, q.y); ctx.fillStyle = q.color; ctx.fillText(q.text, q.x, q.y);
+    }
+    ctx.globalAlpha = 1;
+    // status bar
+    ctx.fillStyle = "rgba(20,12,6,0.9)"; ctx.fillRect(0, 0, W, HUD);
+    ctx.textBaseline = "middle"; ctx.textAlign = "left"; ctx.font = "900 13px system-ui, sans-serif"; ctx.fillStyle = "#f6ecd8";
+    ctx.fillText(score.toLocaleString("it-IT"), 8, 12);
+    ctx.font = "700 9px system-ui, sans-serif"; ctx.fillStyle = "#ff4a3a";
+    ctx.fillText(`REC ${Math.max(bestCache, score).toLocaleString("it-IT")}`, 72, 12);
+    ctx.textAlign = "center"; ctx.font = "900 12px system-ui, sans-serif"; ctx.fillStyle = bonus <= 500 && Math.floor(clock * 4) % 2 ? "#ff4a3a" : "#ffd23a";
+    ctx.fillText(`BONUS ${bonus.toLocaleString("it-IT")}`, W / 2 + 34, 12);
+    ctx.textAlign = "right"; ctx.font = "800 11px system-ui, sans-serif"; ctx.fillStyle = "#ff9a3a";
+    ctx.fillText(`LIV ${level + 1} · ♥ ${Math.max(0, lives)}`, W - 8, 12);
+    ctx.textBaseline = "alphabetic";
+    if (message) {
+      ctx.globalAlpha = Math.min(1, (2.4 - message.t) * 2);
+      ctx.textAlign = "center"; ctx.font = "900 20px system-ui, sans-serif"; ctx.fillStyle = "#ff9a3a";
+      ctx.lineWidth = 4; ctx.strokeStyle = "#000"; ctx.strokeText(message.text, W / 2, 200); ctx.fillText(message.text, W / 2, 200);
+      if (message.sub) { ctx.font = "700 11px system-ui, sans-serif"; ctx.fillStyle = "#f6ecd8"; ctx.strokeText(message.sub, W / 2, 220); ctx.fillText(message.sub, W / 2, 220); }
+      ctx.globalAlpha = 1;
+    }
+  }
+
+  // ---------- Loop ----------
+  const STEP = 1 / 120;
+  let last = performance.now(), acc = 0;
+  function loop(now) {
+    const dt = Math.min(0.1, (now - last) / 1000);
+    last = now;
+    if (isPlaying()) {
+      acc += dt;
+      while (acc >= STEP && isPlaying()) { update(STEP); acc -= STEP; }
+    } else { acc = 0; update(dt); }
+    draw();
+    requestAnimationFrame(loop);
+  }
+  syncControls();
+  showTitle();
+  requestAnimationFrame(loop);
+})();
+</script>
+<script src="../../shared/iniziali.js" data-record="canguro-best-" data-kind="score"></script>
+</body>
+</html>

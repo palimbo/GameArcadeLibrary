@@ -4,7 +4,7 @@ Raccolta di giochi arcade per il browser. Ogni gioco è un singolo file HTML sen
 
 ## 🕹️ Sala Giochi — `index.html`
 
-Apri `index.html` nella cartella principale per la pagina di raccolta: mostra tutti i 59 giochi con copertina, genere, comandi e i tuoi record per ogni difficoltà (Facile, Normale, Difficile). Tocca «Gioca» per avviare un gioco; in ogni gioco il pulsante «← Sala Giochi» in alto a sinistra (visibile nei menu) riporta alla raccolta.
+Apri `index.html` nella cartella principale per la pagina di raccolta: mostra tutti i 60 giochi con copertina, genere, comandi e i tuoi record per ogni difficoltà (Facile, Normale, Difficile). Tocca «Gioca» per avviare un gioco; in ogni gioco il pulsante «← Sala Giochi» in alto a sinistra (visibile nei menu) riporta alla raccolta.
 
 **Iniziali del record:** quando batti un record compare la schermata da sala giochi per inserire le tue tre iniziali (frecce ↑ ↓ per cambiare lettera, ← → per spostarti, oppure scrivile direttamente; su telefono i tasti ▲ ▼ e OK). Le iniziali vengono salvate insieme al record e compaiono nei menu del gioco e nella Sala Giochi. Il codice è condiviso da tutti i giochi in `shared/iniziali.js`.
 
@@ -933,3 +933,20 @@ Battaglia navale a tempo in stile *Sea Wolf*: dal periscopio del tuo sottomarino
 - **Touch:** levetta a destra e sinistra per il periscopio, tasto FUOCO a destra
 
 Per giocare apri `games/periscopio/index.html` nel browser.
+
+### 🦘 Mamma Canguro — `games/mamma-canguro/index.html`
+
+Piattaforme e pugni in stile *Kangaroo*: le scimmie hanno portato il tuo piccolo in cima all'albero e tu devi salire piano dopo piano per salvarlo.
+
+- **Mele:** le scimmie scendono dagli alberi ai lati e lanciano mele alte (abbassati) o basse (saltale). Puoi anche prenderle a pugni: quelle alte stando in piedi, quelle basse da abbassata
+- **Scimmione:** dal secondo livello lascia cadere mele dall'alto; dove stanno per cadere lampeggia un segnale rosso
+- **Scimmie a piedi:** dal terzo livello alcune scendono sul piano e vengono verso di te: un pugno e via
+- **Frutta:** appesa sopra ogni piano, si prende saltando (mela 100, fragola 200, banana 300, uva 400 secondo il livello)
+- **Campanella:** in cima; salta e dalle un pugno per far ricomparire la frutta
+- **Bonus:** parte da 3.000 e cala col tempo; salvando il piccolo lo incassi, se arriva a zero perdi una vita
+- **Punti:** mela colpita 100 · scimmia 200 · vita extra ogni 20.000
+- **Difficoltà:** Facile (5 vite, scimmie lente), Normale (3 vite), Difficile (3 vite, scimmie scatenate); record separati per ogni difficoltà
+- **Comandi:** `←` `→` per camminare · `↑` `↓` scale · `↓` abbassati · `SPAZIO` salta · `Z` o `X` pugno · `P` pausa
+- **Touch:** levetta a sinistra, tasti SALTA e PUGNO a destra
+
+Per giocare apri `games/mamma-canguro/index.html` nel browser.
