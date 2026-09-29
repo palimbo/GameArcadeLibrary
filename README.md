@@ -4,7 +4,7 @@ Raccolta di giochi arcade per il browser. Ogni gioco è un singolo file HTML sen
 
 ## 🕹️ Sala Giochi — `index.html`
 
-Apri `index.html` nella cartella principale per la pagina di raccolta: mostra tutti i 86 giochi con copertina, genere, comandi e i tuoi record per ogni difficoltà (Facile, Normale, Difficile). Tocca «Gioca» per avviare un gioco; in ogni gioco il pulsante «← Sala Giochi» in alto a sinistra (visibile nei menu) riporta alla raccolta.
+Apri `index.html` nella cartella principale per la pagina di raccolta: mostra tutti i 87 giochi con copertina, genere, comandi e i tuoi record per ogni difficoltà (Facile, Normale, Difficile). Tocca «Gioca» per avviare un gioco; in ogni gioco il pulsante «← Sala Giochi» in alto a sinistra (visibile nei menu) riporta alla raccolta.
 
 **Iniziali del record:** quando batti un record compare la schermata da sala giochi per inserire le tue tre iniziali (frecce ↑ ↓ per cambiare lettera, ← → per spostarti, oppure scrivile direttamente; su telefono i tasti ▲ ▼ e OK). Le iniziali vengono salvate insieme al record e compaiono nei menu del gioco e nella Sala Giochi. Il codice è condiviso da tutti i giochi in `shared/iniziali.js`.
 
@@ -1354,3 +1354,18 @@ Gioco di riflessi in stile *Kaboom!*. In cima a un muro di mattoni un bombarolo 
 - **Touch:** trascina il dito a destra e a sinistra in qualsiasi punto dello schermo, anche fuori dal campo: i secchi seguono il movimento
 
 Per giocare apri `games/acchiappabombe/index.html` nel browser.
+
+### 🏀 Canestro Pazzo — `games/canestro-pazzo/index.html`
+
+Sfida di tiri a canestro a tempo, come le macchine *Pop-A-Shot* delle sale giochi, vista di lato. Il pallone vola con una vera traiettoria e rimbalza sul ferro e sul tabellone; i palloni sono infiniti, ma ci vuole mezzo secondo per prenderne un altro.
+
+- **Round:** 40 secondi per fare almeno il punteggio richiesto (che cresce a ogni round). Dal secondo round il canestro scorre avanti e indietro, dal terzo anche su e giù, sempre più veloce
+- **Punti:** canestro 2 · da oltre la linea dei 3 punti 3 · +1 se entra senza toccare ferro né tabellone («ciuf!»). 3 canestri di fila: **a fuoco**, punti doppi finché non sbagli
+- **Posizioni:** 3 tiri da ogni posizione, poi il tiratore si sposta lungo il campo (le ultime sono da 3 punti)
+- **Fine round:** 2 punti bonus per ogni punto oltre il minimo
+- **Mira:** mentre prendi la mira si vede l'inizio della traiettoria e la barra della forza accanto al tiratore
+- **Difficoltà:** Facile (traiettoria mostrata a lungo, minimo basso, canestro lento), Normale, Difficile (traiettoria appena accennata, minimo alto, canestro più veloce); record separati per ogni difficoltà
+- **Comandi:** trascina col mouse all'indietro e lascia per tirare, come una fionda · in alternativa `↑` `↓` angolo, `←` `→` forza, `Spazio` tira · `P` pausa
+- **Touch:** trascina all'indietro in qualsiasi punto dello schermo e lascia: più tiri lontano, più il tiro è forte
+
+Per giocare apri `games/canestro-pazzo/index.html` nel browser.
