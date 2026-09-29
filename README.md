@@ -4,7 +4,7 @@ Raccolta di giochi arcade per il browser. Ogni gioco è un singolo file HTML sen
 
 ## 🕹️ Sala Giochi — `index.html`
 
-Apri `index.html` nella cartella principale per la pagina di raccolta: mostra tutti i 99 giochi con copertina, genere, comandi e i tuoi record per ogni difficoltà (Facile, Normale, Difficile). Tocca «Gioca» per avviare un gioco; in ogni gioco il pulsante «← Sala Giochi» in alto a sinistra (visibile nei menu) riporta alla raccolta.
+Apri `index.html` nella cartella principale per la pagina di raccolta: mostra tutti i 100 giochi con copertina, genere, comandi e i tuoi record per ogni difficoltà (Facile, Normale, Difficile). Tocca «Gioca» per avviare un gioco; in ogni gioco il pulsante «← Sala Giochi» in alto a sinistra (visibile nei menu) riporta alla raccolta.
 
 **Iniziali del record:** quando batti un record compare la schermata da sala giochi per inserire le tue tre iniziali (frecce ↑ ↓ per cambiare lettera, ← → per spostarti, oppure scrivile direttamente; su telefono i tasti ▲ ▼ e OK). Le iniziali vengono salvate insieme al record e compaiono nei menu del gioco e nella Sala Giochi. Il codice è condiviso da tutti i giochi in `shared/iniziali.js`.
 
@@ -1542,3 +1542,18 @@ Labirinto da dipingere in stile *Amidar*. Un imbianchino col rullo corre lungo l
 - **Touch:** levetta per correre e pulsante SALTA
 
 Per giocare apri `games/pennello-svelto/index.html` nel browser.
+
+### 💠 Castelli di Cristallo — `games/castelli-di-cristallo/index.html`
+
+Raccogli-gemme isometrico in stile *Crystal Castles*. Un orsetto gira per castelli fatti di terrazze, torri, rampe e ponti su tre altezze, e deve raccogliere tutte le gemme sparse sui pavimenti. Le pareti possono nasconderlo alla vista: in quel caso se ne vede la sagoma in trasparenza.
+
+- **I castelli:** sei castelli disegnati a mano (Il Cortile, Le Due Torri, Il Labirinto, La Fortezza, Le Scalinate, Il Ponte). Si sale e si scende solo dalle rampe; dopo il sesto si ricomincia con più nemici e più veloci
+- **Nemici:** i mangiagemme puntano alle gemme e se le mangiano, e toccarli mentre masticano li elimina (500). Gli alberi maligni (dal primo castello) e le sfere di cristallo (dal secondo, dal terzo su Facile) ti inseguono lungo i corridoi: si scavalcano con un salto
+- **Cappello magico:** uno per castello, in un punto fisso; per qualche secondo elimini chiunque tocchi (500, sfera 700, api 1.500). I nemici eliminati tornano dopo qualche secondo
+- **Api:** se resti troppo in un castello (90 s su Facile, 70 s su Normale, 55 s su Difficile) arriva uno sciame di api che vola sopra muri e buchi e non si può saltare. Con le api ricompare il cappello magico, se l'avevi già usato
+- **Punti:** 10 per gemma; l'ultima gemma del castello vale da 1.000 in su (cresce col castello, fino a 5.000); castello perfetto (nessuna gemma mangiata) 2.000. Vita extra ogni 15.000 punti
+- **Difficoltà:** Facile (5 vite, nemici lenti, cappello lungo), Normale (3 vite), Difficile (3 vite, nemici svelti e più numerosi, cappello breve); record separati per ogni difficoltà
+- **Comandi:** frecce o `WASD` per muoverti (le direzioni sono quelle dello schermo) · `Spazio`, `J` o `Z` salta · `P` pausa
+- **Touch:** levetta per muoverti e pulsante SALTA
+
+Per giocare apri `games/castelli-di-cristallo/index.html` nel browser.

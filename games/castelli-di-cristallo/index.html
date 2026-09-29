@@ -1,0 +1,919 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no, viewport-fit=cover">
+<title>Castelli di Cristallo</title>
+<style>
+  :root {
+    --bg: #110c22;
+    --fg: #f4f6ee;
+    --muted: #aaa0c8;
+    --pink: #7ae4ff;
+    --yellow: #ff7ad8;
+    --red: #ff4a3a;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  html, body {
+    height: 100%;
+    background: var(--bg);
+    color: var(--fg);
+    font-family: system-ui, -apple-system, "Segoe UI", sans-serif;
+    overflow: hidden;
+    user-select: none;
+    -webkit-user-select: none;
+    touch-action: none;
+  }
+  #wrap { position: fixed; inset: 0; display: flex; align-items: center; justify-content: center; }
+  canvas { display: block; touch-action: none; border-radius: 6px; box-shadow: 0 0 0 2px #2a1e4a, 0 10px 40px rgba(0,0,0,0.6); }
+  #pauseBtn {
+    position: fixed; z-index: 3; display: none; right: 10px; top: calc(10px + env(safe-area-inset-top, 0px));
+    font: 700 13px system-ui, sans-serif; color: var(--fg);
+    background: rgba(0, 0, 0, 0.6); border: 1px solid rgba(244, 246, 238, 0.35);
+    border-radius: 8px; padding: 6px 10px; cursor: pointer;
+  }
+  #touch {
+    position: fixed; z-index: 2; display: none; left: 12px; right: 12px;
+    bottom: calc(14px + env(safe-area-inset-bottom, 0px));
+    justify-content: space-between; align-items: flex-end; pointer-events: none;
+  }
+  /* thumb stick: walk the bear around the castle; SALTA jumps over the enemies */
+  #touch .stick { position: relative; width: 136px; height: 136px; border-radius: 50%; pointer-events: auto; touch-action: none;
+    border: 2px solid rgba(122, 228, 255, 0.6); background: radial-gradient(circle, rgba(122,228,255,0.14), rgba(122,228,255,0.04)); }
+  #touch .stick .knob { position: absolute; left: 50%; top: 50%; width: 58px; height: 58px; margin: -29px 0 0 -29px; border-radius: 50%;
+    background: rgba(122, 228, 255, 0.45); border: 2px solid rgba(255,255,255,0.7); box-shadow: 0 4px 10px rgba(0,0,0,0.4); pointer-events: none; }
+  #touch .stick .ring { position: absolute; inset: 10px; border-radius: 50%; border: 1px dashed rgba(244,246,238,0.25); pointer-events: none; }
+  #touch .jump { width: 96px; height: 96px; border-radius: 50%; pointer-events: auto; touch-action: none; color: var(--fg);
+    font: 800 13px system-ui, sans-serif; letter-spacing: 1px; border: 2px solid rgba(255, 122, 216, 0.9); background: rgba(255, 122, 216, 0.22); }
+  #touch .jump.on { background: rgba(255, 122, 216, 0.55); }
+  #touch.small .stick { width: 112px; height: 112px; }
+  #touch.small .stick .knob { width: 48px; height: 48px; margin: -24px 0 0 -24px; }
+  #touch.small .jump { width: 80px; height: 80px; font-size: 11px; }
+  #overlay {
+    position: fixed; inset: 0; z-index: 5;
+    display: flex; flex-direction: column; align-items: center; justify-content: flex-start;
+    gap: 14px; padding: 16px; text-align: center; overflow-y: auto;
+    background: rgba(17, 12, 34, 0.93);
+  }
+  #overlay > :first-child { margin-top: auto; }
+  #overlay > :last-child { margin-bottom: auto; }
+  #overlay.hidden { display: none; }
+  #homeLink {
+    position: fixed; top: calc(10px + env(safe-area-inset-top, 0px)); left: 10px; z-index: 6;
+    font: 600 13px/1 system-ui, sans-serif; color: #fff; text-decoration: none;
+    padding: 8px 12px; border-radius: 999px; background: rgba(0,0,0,.55);
+    border: 1px solid rgba(255,255,255,.25);
+  }
+  #homeLink:hover { background: rgba(0,0,0,.8); }
+  #overlay.hidden ~ #homeLink { display: none; }
+  @media (max-width: 700px) { #overlay { padding-top: calc(52px + env(safe-area-inset-top, 0px)); } }
+  #overlay h1 { font-size: clamp(32px, 10vw, 58px); font-weight: 900; font-style: italic; letter-spacing: 1px; color: var(--pink);
+    text-shadow: 3px 3px 0 #3a1a6a, 0 0 22px rgba(122,228,255,0.35); }
+  #overlay h2 { font-size: clamp(26px, 7vw, 42px); font-weight: 900; letter-spacing: 2px; color: var(--pink); }
+  #overlay h2.lose { color: var(--red); }
+  #overlay p { max-width: 540px; font-size: clamp(13px, 3.4vw, 16px); line-height: 1.55; }
+  #overlay p.muted { color: var(--muted); }
+  #overlay .pts { display: grid; grid-template-columns: repeat(2, auto); gap: 4px 18px; font-size: 13px; color: var(--muted); text-align: left; max-width: 560px; }
+  #overlay .pts b { color: var(--fg); }
+  #overlay .diff { display: flex; gap: 10px; flex-wrap: wrap; justify-content: center; }
+  #overlay button {
+    font: 800 15px system-ui, sans-serif; letter-spacing: 1.5px; color: var(--fg);
+    background: transparent; cursor: pointer;
+    border: 2px solid rgba(244,246,238,0.3); border-radius: 10px; padding: 9px 16px;
+  }
+  #overlay .diff button.on { border-color: var(--c); color: var(--c); box-shadow: 0 0 12px var(--c); }
+  #overlay button.start { border-color: var(--pink); color: #0a1a2a; background: var(--pink); padding: 11px 30px; box-shadow: 0 4px 0 #3a8aa8; }
+  @media (max-height: 560px) {
+    #overlay { gap: 8px; }
+    #overlay h1 { font-size: 30px; }
+    #overlay p { font-size: 13px; line-height: 1.4; }
+    #overlay .help, #overlay .pts { display: none; }
+  }
+</style>
+</head>
+<body>
+<div id="wrap"><canvas id="game"></canvas></div>
+<div id="touch">
+  <div class="stick" aria-label="Levetta"><div class="ring"></div><div class="knob"></div></div>
+  <button type="button" class="jump" aria-label="Salta">SALTA</button>
+</div>
+<button id="pauseBtn" type="button" aria-label="Pausa">❚❚</button>
+<div id="overlay"></div>
+<a id="homeLink" href="../../index.html">← Sala Giochi</a>
+
+
+<script>
+(() => {
+  "use strict";
+
+  const W = 640, H = 360, TAU = Math.PI * 2;
+  // isometric board: N x N tiles, a tile is 2*TX wide and 2*TY tall on screen, one height step is HZ pixels
+  const N = 14, TX = 18, TY = 9, HZ = 16, OX = 320, OY = 66;
+  const PSPEED = 3.6, PR = 0.24, JUMP = 0.62, HIT = 0.55;
+  // "." is a hole, 0-2 a floor at that height, > < v ^ a ramp rising towards +x, -x, +y, -y
+  const CASTLES = [
+    { name: "IL CORTILE", hue: 262, hat: [6, 6], map: [
+      "00000000000000",
+      "0..00000000..0",
+      "0..00000000..0",
+      "000000vv000000",
+      "00001111110000",
+      "00001111110000",
+      "000>111111<000",
+      "000>111111<000",
+      "00001111110000",
+      "00001111110000",
+      "000000^^000000",
+      "0..00000000..0",
+      "0..00000000..0",
+      "00000000000000"] },
+    { name: "LE DUE TORRI", hue: 205, hat: [4, 3], map: [
+      "00000000000..0",
+      "01111110000..0",
+      "01>22210000000",
+      "0112221<000000",
+      "01122210000000",
+      "01111110000000",
+      "000^0000000000",
+      "0000..00000000",
+      "00000001111110",
+      "00000001222110",
+      "000000>1222<10",
+      "00000001222110",
+      "00000001111110",
+      "00000000000000"] },
+    { name: "IL LABIRINTO", hue: 290, hat: [6, 6], map: [
+      "00000000000000",
+      "0....0..0....0",
+      "0.0000..0000.0",
+      "0.0..0000..0.0",
+      "0000.0vv0.0000",
+      "0.00.1111.00.0",
+      "0.00.1111.00.0",
+      "0.00.1111.00.0",
+      "0.00.1111.00.0",
+      "0000.0^^0.0000",
+      "0.0..0000..0.0",
+      "0.0000..0000.0",
+      "0....0..0....0",
+      "00000000000000"] },
+    { name: "LA FORTEZZA", hue: 330, hat: [6, 5], map: [
+      "00000000000000",
+      "011111vv111110",
+      "01..111111..10",
+      "01..11vv11..10",
+      "01111222211110",
+      "01111222211110",
+      "0>1112222111<0",
+      "01111222211110",
+      "01..11^^11..10",
+      "01..111111..10",
+      "01111111111110",
+      "01111111111110",
+      "011111^^111110",
+      "00000000000000"] },
+    { name: "LE SCALINATE", hue: 175, hat: [1, 1], map: [
+      "22222111110000",
+      "22222111110000",
+      "22.22111..0000",
+      "22222<1111<000",
+      "22222111110000",
+      "11^11111110000",
+      "11111..1110000",
+      "1111111111<000",
+      "11111..1110000",
+      "1111111^110000",
+      "00000000000000",
+      "00..000000..00",
+      "00..000000..00",
+      "00000000000000"] },
+    { name: "IL PONTE", hue: 235, hat: [6, 6], map: [
+      "00000000000000",
+      "01111000011110",
+      "0111<0000>1110",
+      "01111000011110",
+      "01111000011110",
+      "01111....11110",
+      "0>1111111111<0",
+      "01111111111110",
+      "01111....11110",
+      "01111000011110",
+      "01111000011110",
+      "0111<0000>1110",
+      "01111000011110",
+      "00000000000000"] },
+  ];
+  const RAMPS = { ">": [1, 0], "<": [-1, 0], "v": [0, 1], "^": [0, -1] };
+  const START = [13, 13];
+  const KINDS = {
+    eater: { v: 1.9, pts: 500, name: "PRESO DA UN MANGIAGEMME!" },
+    tree: { v: 1.55, pts: 500, name: "PRESO DA UN ALBERO MALIGNO!" },
+    ball: { v: 2.3, pts: 700, name: "PRESO DA UNA SFERA DI CRISTALLO!" },
+    bees: { v: 2.45, pts: 1500, name: "PUNTO DALLE API!" },
+  };
+
+  const DIFFICULTIES = {
+    facile:    { label: "FACILE",    color: "#7ed87a", desc: "5 vite · nemici lenti · cappello magico lungo · api dopo 90 s", lives: 5, speed: 0.8, hat: 9, bees: 90, extra: -1 },
+    normale:   { label: "NORMALE",   color: "#7ae4ff", desc: "3 vite · api dopo 70 s", lives: 3, speed: 1, hat: 7, bees: 70, extra: 0 },
+    difficile: { label: "DIFFICILE", color: "#ff5a5a", desc: "3 vite · nemici svelti · cappello breve · api dopo 55 s", lives: 3, speed: 1.15, hat: 5, bees: 55, extra: 1 },
+  };
+  const DIFF_IDS = Object.keys(DIFFICULTIES);
+  const DIFF_KEY = "cristallo-difficulty";
+  const bestKey = (id) => `cristallo-best-${id}`;
+  function store(k, v) { try { localStorage.setItem(k, v); } catch { /* ignore */ } }
+  function load(k) { try { return localStorage.getItem(k); } catch { return null; } }
+  const rnd = (a, b) => a + Math.random() * (b - a);
+  const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
+  const pick = (arr) => arr[Math.floor(Math.random() * arr.length)];
+
+  // ---------- Canvas ----------
+  const canvas = document.getElementById("game");
+  const ctx = canvas.getContext("2d");
+  const wrapEl = document.getElementById("wrap");
+  const overlay = document.getElementById("overlay");
+  const touchEl = document.getElementById("touch");
+  const pauseBtn = document.getElementById("pauseBtn");
+  let pxRatio = 1, touchMode = !!(window.matchMedia && matchMedia("(pointer: coarse)").matches);
+  function resize() {
+    const portrait = window.innerHeight > window.innerWidth;
+    const showTouch = touchMode && isPlaying();
+    touchEl.style.display = showTouch ? "flex" : "none";
+    touchEl.classList.toggle("small", !portrait && window.innerHeight < 480);
+    wrapEl.style.paddingBottom = showTouch && portrait ? "calc(170px + env(safe-area-inset-bottom, 0px))" : "0";
+    let availW = window.innerWidth - 8, availH = window.innerHeight - 8;
+    if (showTouch && portrait) availH -= 170;
+    if (showTouch && !portrait) {
+      const side = Math.max(...[...touchEl.children].map((el) => el.offsetWidth)) + 20;
+      if (window.innerWidth - 2 * side > 200) availW = window.innerWidth - 2 * side;
+    }
+    const s = Math.max(0.2, Math.min(availW / W, availH / H));
+    pxRatio = Math.min(3, s * (window.devicePixelRatio || 1));
+    canvas.style.width = W * s + "px";
+    canvas.style.height = H * s + "px";
+    canvas.width = Math.round(W * pxRatio);
+    canvas.height = Math.round(H * pxRatio);
+  }
+  window.addEventListener("resize", () => syncControls());
+
+  // ---------- Audio ----------
+  let audioCtx = null;
+  function beep(freq, dur, type = "square", vol = 0.04, slide = 0, delay = 0) {
+    if (!audioCtx) return;
+    const t = audioCtx.currentTime + delay;
+    const osc = audioCtx.createOscillator(), gain = audioCtx.createGain();
+    osc.type = type;
+    osc.frequency.setValueAtTime(freq, t);
+    if (slide) osc.frequency.exponentialRampToValueAtTime(Math.max(20, freq + slide), t + dur);
+    gain.gain.setValueAtTime(vol, t);
+    gain.gain.exponentialRampToValueAtTime(0.0001, t + dur);
+    osc.connect(gain).connect(audioCtx.destination);
+    osc.start(t); osc.stop(t + dur + 0.02);
+  }
+  function noise(dur, vol, freq) {
+    if (!audioCtx) return;
+    const len = Math.floor(audioCtx.sampleRate * dur), buf = audioCtx.createBuffer(1, len, audioCtx.sampleRate), d = buf.getChannelData(0);
+    for (let i = 0; i < len; i++) d[i] = (Math.random() * 2 - 1) * (1 - i / len);
+    const src = audioCtx.createBufferSource(), f = audioCtx.createBiquadFilter(), g = audioCtx.createGain();
+    src.buffer = buf; f.type = "bandpass"; f.frequency.value = freq; g.gain.value = vol;
+    src.connect(f).connect(g).connect(audioCtx.destination); src.start();
+  }
+  const arp = (notes, gap, d, type = "square", vol = 0.04) => notes.forEach((f, i) => beep(f, d, type, vol, 0, i * gap));
+  let sfxN = 0, gemNote = 0;
+  const lim = (fn) => (...a) => { if (sfxN++ < 6) fn(...a); };
+  const sfx = {
+    gem: lim(() => { beep(1320 + (gemNote++ % 4) * 110, 0.05, "square", 0.018); }),
+    munch: lim(() => { beep(300, 0.08, "square", 0.03, -120); beep(240, 0.08, "square", 0.03, -100, 0.09); }),
+    jump: lim(() => beep(360, 0.22, "square", 0.03, 420)),
+    hat: lim(() => arp([523, 659, 784, 1047, 1319], 0.05, 0.1, "triangle", 0.05)),
+    kill: lim(() => { arp([1568, 1175, 1568, 2093], 0.04, 0.08, "square", 0.04); noise(0.15, 0.08, 1500); }),
+    bees: lim(() => { for (let i = 0; i < 4; i++) beep(180 + i * 7, 0.5, "sawtooth", 0.02, 30, i * 0.05); }),
+    warn: lim(() => beep(880, 0.08, "square", 0.03)),
+    hatEnd: lim(() => beep(660, 0.1, "triangle", 0.04, -200)),
+    die: () => { noise(0.4, 0.18, 500); arp([660, 554, 440, 330, 220], 0.09, 0.14, "sawtooth", 0.045); },
+    clear: () => arp([523, 659, 784, 1047, 784, 1047, 1319, 1568], 0.09, 0.15),
+    over: () => arp([523, 466, 415, 392, 330, 262], 0.15, 0.24, "triangle", 0.05),
+  };
+
+  // ---------- State ----------
+  let difficulty = DIFFICULTIES[load(DIFF_KEY)] ? load(DIFF_KEY) : "normale";
+  let diff = DIFFICULTIES[difficulty];
+  let state = "menu", menu = null, pausedFrom = null, stateT = 0, clock = 0;
+  let score = 0, lives = 3, level = 1, bestCache = 0, nextLife = 15000;
+  let tiles = [], castle = null, pal = null, gemsLeft = 0, gemsTotal = 0, lost = 0;
+  let P = null, enemies = [], parts = [], popups = [], message = null;
+  let hat = null, hatT = 0, levelT = 0, beesOut = false, dist = new Int16Array(N * N), distT = 0, lastBy = null;
+  let jumpPressed = false;
+  const keys = { left: false, right: false, up: false, down: false };
+  const stick = { x: 0, y: 0 };
+  const stars = Array.from({ length: 60 }, (_, i) => ({ x: (i * 197) % W, y: 30 + ((i * 89) % (H - 30)), s: 0.5 + (i % 3) * 0.5, p: i * 0.7 }));
+
+  // ---------- The castle ----------
+  const tileAt = (x, y) => (x >= 0 && y >= 0 && x < N && y < N ? tiles[y * N + x] : null);
+  const tileOf = (o) => tileAt(Math.floor(o.x), Math.floor(o.y));
+  function buildCastle(c) {
+    tiles = new Array(N * N).fill(null);
+    for (let y = 0; y < N; y++) for (let x = 0; x < N; x++) {
+      const ch = c.map[y][x];
+      if (ch === ".") continue;
+      tiles[y * N + x] = { x, y, i: y * N + x, h: RAMPS[ch] ? 0 : +ch, ramp: RAMPS[ch] || null, gem: false, adj: [] };
+    }
+    // a ramp starts at the height of the floor on its low side
+    for (const t of tiles) if (t && t.ramp) t.h = tileAt(t.x - t.ramp[0], t.y - t.ramp[1]).h;
+    for (const t of tiles) if (t) for (const [dx, dy] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) { const n = tileAt(t.x + dx, t.y + dy); if (passable(t, n, dx, dy)) t.adj.push(n); }
+  }
+  // the height of a tile along one of its edges (a ramp has no side edges)
+  function edgeH(t, dx, dy) {
+    if (!t.ramp) return t.h;
+    if (dx === t.ramp[0] && dy === t.ramp[1]) return t.h + 1;
+    if (dx === -t.ramp[0] && dy === -t.ramp[1]) return t.h;
+    return null;
+  }
+  function passable(a, b, dx, dy) {
+    if (!a || !b) return false;
+    const ea = edgeH(a, dx, dy), eb = edgeH(b, -dx, -dy);
+    if (ea === null && eb === null) return a.ramp === b.ramp && a.h === b.h;
+    return ea !== null && ea === eb;
+  }
+  function compat(a, b) {
+    if (a === b) return true;
+    if (!a || !b) return false;
+    const dx = b.x - a.x, dy = b.y - a.y;
+    if (Math.abs(dx) + Math.abs(dy) === 1) return passable(a, b, dx, dy);
+    if (Math.abs(dx) === 1 && Math.abs(dy) === 1) {
+      const ox = tileAt(a.x + dx, a.y), oy = tileAt(a.x, a.y + dy);
+      return (passable(a, ox, dx, 0) && passable(ox, b, 0, dy)) || (passable(a, oy, 0, dy) && passable(oy, b, dx, 0));
+    }
+    return false;
+  }
+  // can a body of half-size r stand at (x, y), coming from tile "from"?
+  function canBe(x, y, from, r) {
+    const c = tileAt(Math.floor(x), Math.floor(y));
+    if (!c || !compat(from, c)) return false;
+    for (const [ox, oy] of [[-r, -r], [r, -r], [-r, r], [r, r]]) if (!compat(c, tileAt(Math.floor(x + ox), Math.floor(y + oy)))) return false;
+    return true;
+  }
+  function surfaceZ(x, y) {
+    const t = tileAt(Math.floor(x), Math.floor(y));
+    if (!t) return 0;
+    if (!t.ramp) return t.h;
+    const fx = x - t.x, fy = y - t.y, r = t.ramp;
+    return t.h + (r[0] ? (r[0] > 0 ? fx : 1 - fx) : (r[1] > 0 ? fy : 1 - fy));
+  }
+  function bfsStep(src, goal) {
+    const prev = new Map([[src, null]]), q = [src];
+    for (let qi = 0; qi < q.length; qi++) {
+      for (const n of q[qi].adj) {
+        if (prev.has(n)) continue;
+        prev.set(n, q[qi]);
+        if (goal(n)) { let s = n; while (prev.get(s) !== src) s = prev.get(s); return s; }
+        q.push(n);
+      }
+    }
+    return null;
+  }
+  function computeDist() {
+    dist.fill(999);
+    const src = tileOf(P); if (!src) return;
+    dist[src.i] = 0; const q = [src];
+    for (let qi = 0; qi < q.length; qi++) for (const n of q[qi].adj) if (dist[n.i] === 999) { dist[n.i] = dist[q[qi].i] + 1; q.push(n); }
+  }
+  function farTile(minD) {
+    const ok = tiles.filter((t) => t && !t.ramp && dist[t.i] < 999 && dist[t.i] >= minD && !enemies.some((e) => e.at === t));
+    if (ok.length) return pick(ok);
+    return tiles.filter((t) => t && dist[t.i] < 999).sort((a, b) => dist[b.i] - dist[a.i])[0];
+  }
+
+  // ---------- Enemies ----------
+  const speedMul = () => diff.speed * Math.min(1.3, 1 + 0.04 * (level - 1));
+  function roster() {
+    const list = [];
+    const nE = clamp(2 + Math.floor((level - 1) / 3) + diff.extra, 1, 5);
+    const nT = clamp(1 + Math.floor((level - 1) / 2) + (diff.extra > 0 ? 1 : 0), 1, 3);
+    const nB = level >= (diff.extra < 0 ? 3 : 2) ? clamp(1 + Math.floor((level - 2) / 4), 1, 2) : 0;
+    for (let i = 0; i < nE; i++) list.push("eater");
+    for (let i = 0; i < nT; i++) list.push("tree");
+    for (let i = 0; i < nB; i++) list.push("ball");
+    return list;
+  }
+  function placeEnemy(e, minD, wait = rnd(0.3, 1.2)) {
+    const t = farTile(minD);
+    e.at = e.to = e.prev = t; e.x = t.x + 0.5; e.y = t.y + 0.5; e.eat = 0; e.dead = 0; e.wait = wait;
+  }
+  // at the start of a castle (and after losing a life) the enemies wait a moment, far from the bear
+  function makeEnemy(kind) { const e = { kind, anim: rnd(0, 6), face: 1 }; placeEnemy(e, 12, rnd(1.5, 3)); return e; }
+  function decide(e) {
+    const at = e.at;
+    if (e.kind === "eater") {
+      if (at.gem) { e.eat = 1.1; e.to = at; return; }
+      const s = bfsStep(at, (t) => t.gem);
+      const back = at.adj.filter((n) => n !== e.prev);
+      e.to = s || (back.length ? pick(back) : pick(at.adj)) || at;
+    } else if (!at.adj.length) e.to = at;
+    else if (Math.random() < (e.kind === "tree" ? 0.8 : 0.6)) {
+      let best = Infinity, opts = [];
+      for (const n of at.adj) { const d = dist[n.i]; if (d < best) { best = d; opts = [n]; } else if (d === best) opts.push(n); }
+      e.to = pick(opts);
+    } else {
+      const back = at.adj.filter((n) => n !== e.prev);
+      e.to = pick(back.length ? back : at.adj);
+    }
+    e.prev = at;
+  }
+  function killEnemy(e, pts) {
+    const [sx, sy] = P3(e.x, e.y, surfaceZ(e.x, e.y) + 0.4);
+    addScore(pts, sx, sy - 10, "#7ae4ff");
+    burst(sx, sy, e.kind === "tree" ? "#6ad84a" : e.kind === "ball" ? "#c89aff" : e.kind === "bees" ? "#ffd23a" : "#8ae05a", 16, 110, 0.6);
+    sfx.kill();
+    if (e.kind === "bees") e.gone = true;
+    else { e.dead = 6; e.eat = 0; }
+  }
+  function updateEnemies(dt) {
+    const sm = speedMul();
+    for (const e of enemies) {
+      if (e.gone) continue;
+      e.anim += dt * 6;
+      if (e.dead > 0) { e.dead -= dt; if (e.dead <= 0) { placeEnemy(e, 8); e.pop = 0.6; } continue; }
+      e.pop = Math.max(0, (e.pop || 0) - dt);
+      if (e.kind === "bees") {
+        // the swarm flies straight over walls and holes
+        const dx = P.x - e.x, dy = P.y - e.y, d = Math.hypot(dx, dy) || 1, v = KINDS.bees.v * sm * dt;
+        e.x += dx / d * Math.min(v, d); e.y += dy / d * Math.min(v, d);
+        e.face = dx - dy < 0 ? -1 : 1;
+        continue;
+      }
+      if (e.wait > 0) { e.wait -= dt; continue; }
+      if (e.eat > 0) {
+        e.eat -= dt;
+        if (e.eat <= 0 && e.at.gem) {
+          e.at.gem = false; gemsLeft--; lost++; sfx.munch();
+          const [sx, sy] = P3(e.x, e.y, e.at.h + 0.3); burst(sx, sy, "#e8fbff", 6, 50, 0.4);
+          if (gemsLeft <= 0) { castleDone(false); return; }
+        }
+        if (e.eat <= 0) decide(e);
+        continue;
+      }
+      const tx = e.to.x + 0.5, ty = e.to.y + 0.5, dx = tx - e.x, dy = ty - e.y, d = Math.hypot(dx, dy), step = KINDS[e.kind].v * sm * dt;
+      if (dx - dy) e.face = dx - dy < 0 ? -1 : 1;
+      if (d <= step) { e.x = tx; e.y = ty; e.at = e.to; decide(e); }
+      else { e.x += dx / d * step; e.y += dy / d * step; }
+    }
+  }
+  function checkHits() {
+    const pz = surfaceZ(P.x, P.y), air = P.jt > 0.05 && P.jt < JUMP - 0.03;
+    for (const e of enemies) {
+      if (e.gone || e.dead > 0 || (e.wait > 0 && e.kind !== "bees")) continue;
+      if (Math.hypot(e.x - P.x, e.y - P.y) > (e.kind === "bees" ? HIT + 0.1 : HIT)) continue;
+      if (e.kind !== "bees" && Math.abs(surfaceZ(e.x, e.y) - pz) > 0.6) continue;
+      if (hatT > 0) { killEnemy(e, KINDS[e.kind].pts); continue; }
+      if (e.kind === "eater" && e.eat > 0) { killEnemy(e, 500); continue; }
+      if (e.kind !== "bees" && air) continue;
+      if (P.safe > 0) continue;
+      die(e); return;
+    }
+  }
+
+  // ---------- Flow ----------
+  const isPlaying = () => ["intro", "play", "dead", "clear"].includes(state);
+  function startGame() {
+    if (!audioCtx) { try { audioCtx = new (window.AudioContext || window.webkitAudioContext)(); } catch { audioCtx = null; } }
+    if (audioCtx && audioCtx.state === "suspended") audioCtx.resume();
+    score = 0; lives = diff.lives; level = 1; nextLife = 15000;
+    bestCache = parseInt(load(bestKey(difficulty)), 10) || 0;
+    beginLevel();
+    menu = null;
+    overlay.classList.add("hidden");
+    syncControls();
+    last = performance.now();
+  }
+  function setupCastle() {
+    castle = CASTLES[(level - 1) % CASTLES.length];
+    buildCastle(castle);
+    pal = [0, 1, 2].map((h) => ({
+      top: `hsl(${castle.hue},48%,${52 + h * 9}%)`, left: `hsl(${castle.hue},40%,${34 + h * 6}%)`, right: `hsl(${castle.hue},38%,${25 + h * 6}%)`,
+      line: `hsla(${castle.hue + 40},90%,${80 + h * 5}%,0.55)`,
+    }));
+    gemsTotal = 0;
+    for (const t of tiles) if (t && !t.ramp && !(t.x === START[0] && t.y === START[1])) { t.gem = true; gemsTotal++; }
+    gemsLeft = gemsTotal; lost = 0;
+    hat = { x: castle.hat[0], y: castle.hat[1] }; hatT = 0;
+    spawnPlayer();
+  }
+  function beginLevel() {
+    setupCastle();
+    enemies = roster().map(makeEnemy);
+    levelT = 0; beesOut = false;
+    const cycle = Math.floor((level - 1) / CASTLES.length);
+    message = { text: `CASTELLO ${level}`, sub: `${castle.name}${cycle ? ` · giro ${cycle + 1}` : ""} · ${gemsTotal} gemme da raccogliere`, t: 0 };
+    state = "intro"; stateT = 1.6;
+  }
+  function spawnPlayer() {
+    P = { x: START[0] + 0.5, y: START[1] + 0.5, jt: 0, safe: 2, face: -1, step: 0, moving: false };
+    computeDist();
+  }
+  function addScore(n, x, y, color = "#f4f0ff", text) {
+    score += n;
+    if (score >= nextLife) { lives++; nextLife += 15000; arp([523, 659, 784, 1047, 1319], 0.07, 0.12); popups.push({ x: W / 2, y: 70, text: "VITA EXTRA!", color: "#7ae4ff", t: 0 }); }
+    if (x !== undefined) popups.push({ x, y, text: text || String(n), color, t: 0 });
+  }
+  function burst(x, y, c, n = 12, sp = 110, life = 0.6) {
+    for (let k = 0; k < n; k++) { const a = Math.random() * TAU, s = sp * rnd(0.3, 1); parts.push({ x, y, vx: Math.cos(a) * s, vy: Math.sin(a) * s, t: 0, life: life * rnd(0.6, 1.2), c }); }
+  }
+  function die(e) {
+    if (state !== "play") return;
+    lives--; sfx.die(); lastBy = e.kind;
+    const [sx, sy] = P3(P.x, P.y, surfaceZ(P.x, P.y) + 0.5);
+    burst(sx, sy, "#c8844a", 18, 120, 0.7);
+    hatT = 0;
+    state = "dead"; stateT = 1.8;
+  }
+  function castleDone(byPlayer) {
+    if (state !== "play") return;
+    let bonus = 0; const lines = [];
+    if (byPlayer) { const b = Math.min(5000, 1000 + 250 * (level - 1)); bonus += b; lines.push(`ultima gemma ${b.toLocaleString("it-IT")}`); }
+    if (!lost) { bonus += 2000; lines.push("castello perfetto 2.000"); }
+    if (bonus) addScore(bonus);
+    message = { text: "CASTELLO LIBERATO!", sub: lines.length ? lines.join(" · ") : "i mangiagemme hanno preso l'ultima gemma", t: 0 };
+    sfx.clear();
+    state = "clear"; stateT = 2.8;
+  }
+  function gameOver() {
+    state = "over";
+    const prev = parseInt(load(bestKey(difficulty)), 10) || 0;
+    const record = score > prev;
+    if (record) store(bestKey(difficulty), String(score));
+    sfx.over();
+    menu = () => showOverlay(
+      `<h2 class="lose">${lives <= 0 ? "VITE FINITE!" : "PARTITA FINITA"}</h2>
+       <p>Punteggio: <b>${score.toLocaleString("it-IT")}</b> · castello ${level} · ${diff.label}</p>
+       ${record ? "<p style='color:var(--pink)'>★ NUOVO RECORD! ★</p>" : ""}
+       ${difficultyHTML()}
+       <button class="start" data-start>GIOCA ANCORA</button>`
+    );
+    menu();
+    syncControls();
+  }
+  function togglePause() {
+    if (isPlaying()) {
+      pausedFrom = state; state = "paused";
+      showOverlay(`<h2>PAUSA</h2><button class="start" data-resume>CONTINUA</button><p class="muted">Premi P per continuare</p>`);
+    } else if (state === "paused") {
+      state = pausedFrom; overlay.classList.add("hidden"); last = performance.now();
+    }
+    syncControls();
+  }
+  // the pause menu can end the game (shared/iniziali.js): it ends here the usual way, saving the record
+  window.addEventListener("sala:termina", () => { if (state !== "paused") return; state = pausedFrom; overlay.classList.add("hidden"); gameOver(); syncControls(); });
+  function syncControls() {
+    pauseBtn.style.display = isPlaying() && touchMode ? "block" : "none";
+    resize();
+  }
+  pauseBtn.addEventListener("click", () => togglePause());
+  function showOverlay(html) { overlay.innerHTML = html; overlay.classList.remove("hidden"); }
+  function difficultyHTML() {
+    const buttons = DIFF_IDS.map((id) => {
+      const d = DIFFICULTIES[id];
+      return `<button type="button" data-diff="${id}" class="${id === difficulty ? "on" : ""}" style="--c:${d.color}">${d.label}</button>`;
+    }).join("");
+    const best = parseInt(load(bestKey(difficulty)), 10);
+    return `<div class="diff">${buttons}</div><p class="muted">${diff.desc}${best ? ` · Record: ${best.toLocaleString("it-IT")}` : ""}</p>`;
+  }
+  function setDifficulty(id) { if (!DIFFICULTIES[id]) return; difficulty = id; diff = DIFFICULTIES[id]; store(DIFF_KEY, id); if (menu) menu(); }
+  function showTitle() {
+    menu = showTitle;
+    showOverlay(
+      `<h1>CASTELLI DI CRISTALLO</h1>
+       <p>Guida l'orsetto tra torri, rampe e ponti dei castelli incantati e raccogli tutte le gemme prima che se le mangino i mangiagemme. Alberi maligni e sfere di cristallo ti inseguono: saltali, oppure prendi il cappello magico e spazzali via. Se ci metti troppo arriva lo sciame di api!</p>
+       <div class="pts">
+         <span><b>Gemma</b></span><span>10 · l'ultima gemma del castello vale un premio (da 1.000 in su)</span>
+         <span><b>Mangiagemme</b></span><span>500 se lo tocchi mentre mastica una gemma</span>
+         <span><b>Cappello magico</b></span><span>per qualche secondo elimini chi tocchi: 500 · sfera 700 · api 1.500</span>
+         <span><b>Castello perfetto</b></span><span>2.000 se nessuna gemma è stata mangiata · vita extra ogni 15.000</span>
+       </div>
+       ${touchMode
+         ? `<p class="muted help">Levetta per muovere l'orsetto · SALTA per scavalcare i nemici</p>`
+         : `<p class="muted help">Frecce o WASD per muoverti · SPAZIO per saltare · P pausa</p>`}
+       ${difficultyHTML()}
+       <button class="start" data-start>ENTRA NEL CASTELLO</button>`
+    );
+  }
+  overlay.addEventListener("click", (e) => {
+    const d = e.target.closest("[data-diff]");
+    if (d) { setDifficulty(d.dataset.diff); return; }
+    if (e.target.closest("[data-start]")) startGame();
+    if (e.target.closest("[data-resume]")) togglePause();
+  });
+
+  // ---------- Input ----------
+  const KEYMAP = { arrowleft: "left", a: "left", arrowright: "right", d: "right", arrowup: "up", w: "up", arrowdown: "down", s: "down" };
+  window.addEventListener("keydown", (e) => {
+    const k = e.key.toLowerCase();
+    if ([" ", "arrowup", "arrowdown", "arrowleft", "arrowright"].includes(k)) e.preventDefault();
+    if (state === "menu" || state === "over") {
+      if (e.key === "Enter") startGame();
+      else if (["1", "2", "3"].includes(k)) setDifficulty(DIFF_IDS[+k - 1]);
+      return;
+    }
+    if (k === "p" || k === "escape") { if (!e.repeat) togglePause(); return; }
+    if (state === "paused") { if (e.key === "Enter") togglePause(); return; }
+    if ((k === " " || k === "j" || k === "z") && !e.repeat) jumpPressed = true;
+    if (KEYMAP[k]) keys[KEYMAP[k]] = true;
+  });
+  window.addEventListener("keyup", (e) => { const m = KEYMAP[e.key.toLowerCase()]; if (m) keys[m] = false; });
+  window.addEventListener("blur", () => { for (const k in keys) keys[k] = false; stick.x = stick.y = 0; if (isPlaying()) togglePause(); });
+  const jumpBtn = touchEl.querySelector(".jump");
+  jumpBtn.addEventListener("pointerdown", (e) => { e.preventDefault(); jumpPressed = true; jumpBtn.classList.add("on"); });
+  for (const ev of ["pointerup", "pointercancel", "pointerleave"]) jumpBtn.addEventListener(ev, () => jumpBtn.classList.remove("on"));
+  const stickEl = touchEl.querySelector(".stick"), knob = stickEl.querySelector(".knob");
+  let stickId = null;
+  function stickAt(e) {
+    const r = stickEl.getBoundingClientRect(), max = r.width / 2 - 14;
+    let dx = e.clientX - (r.left + r.width / 2), dy = e.clientY - (r.top + r.height / 2);
+    const len = Math.hypot(dx, dy);
+    if (len > max) { dx *= max / len; dy *= max / len; }
+    knob.style.transform = `translate(${dx}px, ${dy}px)`;
+    const m = Math.hypot(dx, dy) / max, s = m < 0.15 ? 0 : Math.min(1, (m - 0.15) / 0.6) / m;
+    stick.x = dx / max * s; stick.y = dy / max * s;
+  }
+  const stickEnd = (e) => { if (e.pointerId !== stickId) return; stickId = null; knob.style.transform = ""; stick.x = stick.y = 0; };
+  stickEl.addEventListener("pointerdown", (e) => { e.preventDefault(); stickId = e.pointerId; try { stickEl.setPointerCapture(e.pointerId); } catch { /* ignore */ } stickAt(e); });
+  stickEl.addEventListener("pointermove", (e) => { if (e.pointerId === stickId) stickAt(e); });
+  for (const ev of ["pointerup", "pointercancel", "lostpointercapture"]) stickEl.addEventListener(ev, stickEnd);
+  window.addEventListener("pointerdown", (e) => { if (e.pointerType === "touch" && !touchMode) { touchMode = true; syncControls(); if (menu) menu(); } }, true);
+
+  // ---------- Update ----------
+  // one axis of a move: 1 = moved, 2 = nudged into the lane instead, 0 = blocked
+  function tryAxis(o, ax, m, r, sp, assist) {
+    if (!m) return 0;
+    const from = tileOf(o), nx = ax ? o.x : o.x + m, ny = ax ? o.y + m : o.y;
+    if (canBe(nx, ny, from, r)) { o.x = nx; o.y = ny; return 1; }
+    if (!assist) return 0;
+    // slide into the lane: centre on the row (or column) when that lets the move through
+    if (!ax) { const cy = Math.floor(o.y) + 0.5; if (Math.abs(cy - o.y) > 1e-3 && canBe(o.x + m, cy, from, r)) { o.y += clamp(cy - o.y, -sp, sp); return 2; } }
+    else { const cx = Math.floor(o.x) + 0.5; if (Math.abs(cx - o.x) > 1e-3 && canBe(cx, o.y + m, from, r)) { o.x += clamp(cx - o.x, -sp, sp); return 2; } }
+    return 0;
+  }
+  // the main direction goes first and may line itself up; the other one only slides (no jitter at the corners of holes)
+  function moveBody(o, mx, my, r, sp) {
+    if (Math.abs(mx) >= Math.abs(my)) { if (tryAxis(o, 0, mx, r, sp, true) !== 2) tryAxis(o, 1, my, r, sp, false); }
+    else if (tryAxis(o, 1, my, r, sp, true) !== 2) tryAxis(o, 0, mx, r, sp, false);
+  }
+  function updatePlayer(dt) {
+    P.safe = Math.max(0, P.safe - dt);
+    let ux = clamp(stick.x + (keys.right ? 1 : 0) - (keys.left ? 1 : 0), -1, 1), uy = clamp(stick.y + (keys.down ? 1 : 0) - (keys.up ? 1 : 0), -1, 1);
+    const m = Math.min(1, Math.hypot(ux, uy));
+    // the stick points on the screen: turn it into a direction on the isometric floor
+    let gx = ux + 2 * uy, gy = 2 * uy - ux;
+    const gm = Math.hypot(gx, gy);
+    P.moving = m > 0.1 && gm > 0;
+    if (P.moving) {
+      gx /= gm; gy /= gm;
+      const sp = PSPEED * m * dt;
+      moveBody(P, gx * sp, gy * sp, PR, sp);
+      if (Math.abs(ux) > 0.1) P.face = ux < 0 ? -1 : 1;
+      P.step += dt * 12;
+    }
+    if (jumpPressed) { jumpPressed = false; if (P.jt <= 0) { P.jt = JUMP; sfx.jump(); } }
+    if (P.jt > 0) P.jt = Math.max(0, P.jt - dt);
+    const t = tileOf(P);
+    distT -= dt;
+    if (t !== P.tile || distT <= 0) { P.tile = t; distT = 0.25; computeDist(); }
+    if (t && t.gem) {
+      t.gem = false; gemsLeft--; addScore(10); sfx.gem();
+      const [sx, sy] = P3(t.x + 0.5, t.y + 0.5, t.h + 0.2); burst(sx, sy, "#e8fbff", 4, 40, 0.3);
+      if (gemsLeft <= 0) { castleDone(true); return; }
+    }
+    if (hat && t && t.x === hat.x && t.y === hat.y) {
+      hat = null; hatT = diff.hat; sfx.hat();
+      const [sx, sy] = P3(P.x, P.y, surfaceZ(P.x, P.y) + 1); popups.push({ x: sx, y: sy - 10, text: "CAPPELLO MAGICO!", color: "#ff7ad8", t: 0 });
+    }
+  }
+  function update(dt) {
+    clock += dt; sfxN = 0;
+    if (message) { message.t += dt; if (message.t > 2.2) message = null; }
+    for (const p of parts) { p.t += dt; p.x += p.vx * dt; p.y += p.vy * dt; p.vx *= 0.94; p.vy *= 0.94; }
+    parts = parts.filter((p) => p.t < p.life);
+    for (const p of popups) { p.t += dt; p.y -= 20 * dt; }
+    popups = popups.filter((p) => p.t < 1.1);
+    if (!isPlaying()) return;
+    if (state === "intro") { stateT -= dt; if (stateT <= 0) state = "play"; return; }
+    if (state === "dead") {
+      stateT -= dt;
+      if (stateT <= 0) {
+        if (lives <= 0) { gameOver(); return; }
+        spawnPlayer();
+        for (const e of enemies) if (!e.gone && e.kind !== "bees") placeEnemy(e, 10, rnd(1, 2));
+        for (const e of enemies) if (e.kind === "bees" && !e.gone) { const t = farTile(10); e.x = t.x + 0.5; e.y = t.y + 0.5; }
+        state = "play";
+      }
+      return;
+    }
+    if (state === "clear") { stateT -= dt; if (stateT <= 0) { level++; beginLevel(); } return; }
+    if (window.__bot) window.__bot(dt);
+    updatePlayer(dt);
+    if (state !== "play") return;
+    if (hatT > 0) { const b = hatT; hatT = Math.max(0, hatT - dt); if (b > 2 && hatT <= 2) sfx.hatEnd(); }
+    // taking too long: the bees come (and a new magic hat with them)
+    levelT += dt;
+    const left = diff.bees - levelT;
+    if (!beesOut && left < 5 && Math.ceil(left) !== Math.ceil(left + dt)) sfx.warn();
+    if (!beesOut && left <= 0) {
+      beesOut = true;
+      const e = { kind: "bees", anim: 0, face: 1 }, t = farTile(10);
+      e.x = t.x + 0.5; e.y = t.y + 0.5; enemies.push(e);
+      if (!hat && hatT <= 0) hat = { x: castle.hat[0], y: castle.hat[1] };
+      sfx.bees();
+      message = { text: "LO SCIAME DI API!", sub: hat ? "prendi il cappello magico per scacciarlo" : "", t: 0 };
+    }
+    updateEnemies(dt);
+    if (state !== "play") return;
+    checkHits();
+  }
+
+  // ---------- Drawing ----------
+  const P3 = (x, y, z) => [OX + (x - y) * TX, OY + (x + y) * TY - z * HZ];
+  function poly(pts, fill) { ctx.beginPath(); ctx.moveTo(pts[0][0], pts[0][1]); for (let i = 1; i < pts.length; i++) ctx.lineTo(pts[i][0], pts[i][1]); ctx.closePath(); ctx.fillStyle = fill; ctx.fill(); }
+  function drawTile(t) {
+    const { x, y, h, ramp } = t, zb = -0.5;
+    const cz = (cx, cy) => (ramp ? h + (ramp[0] ? (ramp[0] > 0 ? cx : 1 - cx) : (ramp[1] > 0 ? cy : 1 - cy)) : h);
+    const A = P3(x, y, cz(0, 0)), B = P3(x + 1, y, cz(1, 0)), C = P3(x + 1, y + 1, cz(1, 1)), D = P3(x, y + 1, cz(0, 1));
+    const c = pal[Math.min(2, h)];
+    poly([B, C, P3(x + 1, y + 1, zb), P3(x + 1, y, zb)], c.right);
+    poly([D, C, P3(x + 1, y + 1, zb), P3(x, y + 1, zb)], c.left);
+    poly([A, B, C, D], ramp ? pal[Math.min(2, h + 1)].left : c.top);
+    ctx.strokeStyle = c.line; ctx.lineWidth = 1;
+    ctx.beginPath(); ctx.moveTo(A[0], A[1]); ctx.lineTo(B[0], B[1]); ctx.lineTo(C[0], C[1]); ctx.lineTo(D[0], D[1]); ctx.closePath(); ctx.stroke();
+    if (ramp) {
+      // the steps of the ramp
+      ctx.strokeStyle = "rgba(255,255,255,0.3)"; ctx.beginPath();
+      for (let k = 1; k < 4; k++) {
+        const f = k / 4, a = ramp[0] ? [ramp[0] > 0 ? f : 1 - f, 0] : [0, ramp[1] > 0 ? f : 1 - f], b = ramp[0] ? [a[0], 1] : [1, a[1]];
+        const p = P3(x + a[0], y + a[1], cz(a[0], a[1])), q = P3(x + b[0], y + b[1], cz(b[0], b[1]));
+        ctx.moveTo(p[0], p[1]); ctx.lineTo(q[0], q[1]);
+      }
+      ctx.stroke();
+    }
+    if (t.gem) {
+      const [gx, gy] = P3(x + 0.5, y + 0.5, h + 0.12), tw = Math.sin(clock * 3 + x * 1.7 + y * 2.3);
+      ctx.fillStyle = tw > 0.85 ? "#ffffff" : "#d8f6ff";
+      ctx.beginPath(); ctx.moveTo(gx, gy - 4); ctx.lineTo(gx + 3, gy - 1); ctx.lineTo(gx, gy + 2); ctx.lineTo(gx - 3, gy - 1); ctx.closePath(); ctx.fill();
+      ctx.fillStyle = "#ff7ad8"; ctx.fillRect(gx - 1, gy - 2, 2, 2);
+      if (tw > 0.9) { ctx.fillStyle = "rgba(255,255,255,0.8)"; ctx.fillRect(gx - 5, gy - 1.5, 10, 1); ctx.fillRect(gx - 0.5, gy - 6, 1, 10); }
+    }
+    if (hat && hat.x === x && hat.y === y) drawHat(...P3(x + 0.5, y + 0.5, h), Math.sin(clock * 4) * 2 - 4, true);
+  }
+  function drawHat(sx, sy, lift, glow) {
+    const y0 = sy + lift;
+    if (glow) { ctx.fillStyle = "rgba(255,122,216,0.25)"; ctx.beginPath(); ctx.ellipse(sx, sy, 10, 5, 0, 0, TAU); ctx.fill(); }
+    ctx.fillStyle = "#6a3ac8"; ctx.beginPath(); ctx.ellipse(sx, y0, 9, 3, 0, 0, TAU); ctx.fill();
+    ctx.fillStyle = "#8a5ae8"; ctx.beginPath(); ctx.moveTo(sx - 5, y0 - 1); ctx.lineTo(sx + 2, y0 - 16); ctx.lineTo(sx + 5, y0 - 1); ctx.closePath(); ctx.fill();
+    ctx.fillStyle = "#ffd23a"; ctx.fillRect(sx - 5, y0 - 4, 10, 2);
+    if (glow && Math.sin(clock * 7) > 0.3) { ctx.fillStyle = "#ffffff"; ctx.fillRect(sx + 6, y0 - 14, 2, 2); ctx.fillRect(sx - 8, y0 - 8, 2, 2); }
+  }
+  function shadow(x, y, z, w) { const [sx, sy] = P3(x, y, z); ctx.fillStyle = "rgba(0,0,0,0.28)"; ctx.beginPath(); ctx.ellipse(sx, sy, w, w * 0.45, 0, 0, TAU); ctx.fill(); }
+  function drawBear(alpha) {
+    const z = surfaceZ(P.x, P.y), hop = P.jt > 0 ? Math.sin((1 - P.jt / JUMP) * Math.PI) * 1.1 : 0;
+    if (alpha === 1) shadow(P.x, P.y, z, 6 - hop * 1.5);
+    const [sx, sy] = P3(P.x, P.y, z + hop);
+    ctx.save(); ctx.globalAlpha = alpha; ctx.translate(sx, sy); ctx.scale(P.face, 1);
+    const leg = P.moving && !hop ? Math.sin(P.step) * 2 : 0;
+    ctx.fillStyle = "#6a3a1a"; ctx.fillRect(-4, -4, 3, 4 + leg); ctx.fillRect(1, -4, 3, 4 - leg);
+    ctx.fillStyle = "#a8683a"; ctx.beginPath(); ctx.ellipse(0, -8, 6, 6, 0, 0, TAU); ctx.fill();
+    ctx.fillStyle = "#e8c090"; ctx.beginPath(); ctx.ellipse(1, -7, 3.5, 3.5, 0, 0, TAU); ctx.fill();
+    ctx.fillStyle = "#a8683a"; ctx.beginPath(); ctx.arc(0, -17, 5.5, 0, TAU); ctx.fill();
+    ctx.beginPath(); ctx.arc(-4, -21, 2.2, 0, TAU); ctx.arc(4, -21, 2.2, 0, TAU); ctx.fill();
+    ctx.fillStyle = "#e8c090"; ctx.beginPath(); ctx.ellipse(3, -16, 2.6, 2, 0, 0, TAU); ctx.fill();
+    ctx.fillStyle = "#1a0a0a"; ctx.fillRect(1, -19, 1.6, 1.6); ctx.fillRect(4.5, -17, 1.6, 1.4);
+    ctx.restore();
+    if (hatT > 0 && (hatT > 2 || Math.floor(clock * 8) % 2)) { ctx.save(); ctx.globalAlpha = alpha; drawHat(sx, sy - 21, 0, false); ctx.restore(); }
+  }
+  function drawEnemy(e) {
+    if (e.gone || e.dead > 0) return;
+    const z = surfaceZ(e.x, e.y);
+    if (e.kind !== "bees") shadow(e.x, e.y, z, e.kind === "tree" ? 7 : 6);
+    const [sx, sy] = P3(e.x, e.y, z), sc = e.pop > 0 ? 1 - e.pop / 0.6 : 1;
+    ctx.save(); ctx.translate(sx, sy); ctx.scale(e.face * sc, sc);
+    if (e.wait > 0 && e.kind !== "bees") ctx.globalAlpha = 0.6;
+    if (e.kind === "eater") {
+      const chew = e.eat > 0 ? Math.abs(Math.sin(e.anim * 2.5)) * 3 : 0;
+      for (let i = 2; i >= 0; i--) {
+        const wob = Math.sin(e.anim + i) * 1.2;
+        ctx.fillStyle = i ? (i % 2 ? "#4ab83a" : "#6ad84a") : "#8ae85a";
+        ctx.beginPath(); ctx.arc(-i * 5, -5 + wob - (i ? 0 : chew * 0.5), i ? 4.5 : 5.5, 0, TAU); ctx.fill();
+      }
+      ctx.fillStyle = "#ffffff"; ctx.fillRect(1, -10, 3, 3); ctx.fillStyle = "#1a1a1a"; ctx.fillRect(2.5, -9, 1.5, 1.5);
+      ctx.fillStyle = "#3a0a0a"; ctx.fillRect(2, -5 - chew * 0.5, 4, 1 + chew);
+      if (e.eat > 0) { ctx.fillStyle = "#ffffff"; ctx.fillRect(7, -8 + Math.sin(e.anim * 5) * 3, 2, 2); }
+    } else if (e.kind === "tree") {
+      const step = Math.sin(e.anim * 1.5) * 2;
+      ctx.fillStyle = "#5a3a1a"; ctx.fillRect(-4, -3, 2, 3 + step); ctx.fillRect(2, -3, 2, 3 - step);
+      ctx.fillStyle = "#7a4a2a"; ctx.fillRect(-2.5, -12, 5, 10);
+      ctx.fillStyle = "#2a8a3a"; for (const [cx, cy, r] of [[-5, -16, 5], [5, -16, 5], [0, -21, 6], [0, -14, 5]]) { ctx.beginPath(); ctx.arc(cx, cy, r, 0, TAU); ctx.fill(); }
+      ctx.fillStyle = "#3aaa4a"; ctx.beginPath(); ctx.arc(-1, -21, 3, 0, TAU); ctx.fill();
+      ctx.fillStyle = "#ff3a3a"; ctx.fillRect(-3, -9, 2, 2); ctx.fillRect(1.5, -9, 2, 2);
+    } else if (e.kind === "ball") {
+      const g = ctx.createRadialGradient(-2, -10, 1, 0, -7, 8);
+      g.addColorStop(0, "#ffffff"); g.addColorStop(0.35, "#c8a8ff"); g.addColorStop(1, "#5a3ab8");
+      ctx.fillStyle = g; ctx.beginPath(); ctx.arc(0, -7, 7, 0, TAU); ctx.fill();
+      ctx.strokeStyle = "rgba(255,255,255,0.5)"; ctx.lineWidth = 1; ctx.beginPath(); ctx.arc(0, -7, 4.5, e.anim, e.anim + 2); ctx.stroke();
+    } else {
+      const zz = -18 - Math.sin(e.anim * 0.7) * 3;
+      ctx.fillStyle = "rgba(0,0,0,0.25)"; ctx.beginPath(); ctx.ellipse(0, 0, 9, 4, 0, 0, TAU); ctx.fill();
+      for (let i = 0; i < 7; i++) {
+        const a = e.anim * (1.3 + i * 0.13) + i * 2.1, bx = Math.cos(a) * 8, by = zz + Math.sin(a * 1.3) * 5;
+        ctx.fillStyle = "#ffd23a"; ctx.fillRect(bx - 2, by - 1.5, 4, 3); ctx.fillStyle = "#1a1a1a"; ctx.fillRect(bx, by - 1.5, 1, 3);
+        ctx.fillStyle = "rgba(255,255,255,0.7)"; ctx.fillRect(bx - 1, by - 3.5, 2, 1.5);
+      }
+    }
+    ctx.restore();
+  }
+  function drawBoard() {
+    const g = ctx.createLinearGradient(0, 0, 0, H); g.addColorStop(0, "#0a0618"); g.addColorStop(1, "#1c1034");
+    ctx.fillStyle = g; ctx.fillRect(0, 0, W, H);
+    for (const s of stars) { ctx.fillStyle = `rgba(220,210,255,${0.35 + 0.35 * Math.sin(clock * 1.5 + s.p)})`; ctx.fillRect(s.x, s.y, s.s, s.s); }
+    // painter's order: the tiles and whoever stands on them, from the back to the front
+    const byDepth = new Map();
+    const add = (k, fn) => { if (!byDepth.has(k)) byDepth.set(k, []); byDepth.get(k).push(fn); };
+    if (state !== "menu") for (const e of enemies) if (!e.gone && !(e.dead > 0)) add(Math.floor(e.x) + Math.floor(e.y), () => drawEnemy(e));
+    const showBear = P && state !== "menu" && !(state === "dead" && Math.floor(clock * 6) % 2 === 0) && !(P.safe > 0 && Math.floor(clock * 10) % 2);
+    if (showBear) add(Math.floor(P.x) + Math.floor(P.y), () => drawBear(1));
+    for (let d = 0; d <= 2 * (N - 1); d++) {
+      for (let x = Math.max(0, d - N + 1); x <= Math.min(N - 1, d); x++) { const t = tileAt(x, d - x); if (t) drawTile(t); }
+      const list = byDepth.get(d); if (list) for (const fn of list) fn();
+    }
+    // a faint outline of the bear when a wall hides it
+    if (showBear) drawBear(0.3);
+  }
+  function drawHud() {
+    ctx.fillStyle = "rgba(10,6,24,0.88)"; ctx.fillRect(0, 0, W, 28);
+    ctx.textBaseline = "middle"; ctx.textAlign = "left";
+    const x0 = touchMode ? 130 : 10;
+    ctx.fillStyle = "#f4f0ff"; ctx.font = "900 15px system-ui"; ctx.fillText(score.toLocaleString("it-IT"), x0, 14);
+    ctx.fillStyle = "#a89ac8"; ctx.font = "700 9px system-ui"; ctx.fillText(`REC ${Math.max(bestCache, score).toLocaleString("it-IT")}`, x0 + 80, 9);
+    ctx.fillStyle = "#7ae4ff"; ctx.font = "900 10px system-ui"; ctx.fillText(`CASTELLO ${level}`, x0 + 80, 21);
+    // gems still on the floor
+    const bx = x0 + 160, bw = 110;
+    ctx.fillStyle = "#2a1e4a"; ctx.fillRect(bx, 10, bw, 8);
+    ctx.fillStyle = "#d8f6ff"; ctx.fillRect(bx, 10, bw * clamp(gemsLeft / Math.max(1, gemsTotal), 0, 1), 8);
+    ctx.fillStyle = "#f4f0ff"; ctx.font = "800 9px system-ui"; ctx.fillText(`${gemsLeft} gemme`, bx + bw + 6, 14);
+    let ix = bx + bw + 62;
+    if (hatT > 0) { ctx.fillStyle = "#ff7ad8"; ctx.font = "900 10px system-ui"; ctx.fillText(`CAPPELLO ${Math.ceil(hatT)}`, ix, 14); ix += 76; }
+    const left = diff.bees - levelT;
+    if (!beesOut && left < 10 && state === "play" && Math.floor(clock * 4) % 2) { ctx.fillStyle = "#ffd23a"; ctx.font = "900 10px system-ui"; ctx.fillText(`API TRA ${Math.ceil(left)}`, ix, 14); }
+    const lx = touchMode ? W - 60 : W - 12;
+    for (let i = 0; i < Math.min(lives - (state === "dead" ? 0 : 1), 6); i++) {
+      const cx = lx - i * 14; ctx.fillStyle = "#a8683a";
+      ctx.beginPath(); ctx.arc(cx, 16, 5, 0, TAU); ctx.arc(cx - 4, 11, 2, 0, TAU); ctx.arc(cx + 4, 11, 2, 0, TAU); ctx.fill();
+      ctx.fillStyle = "#e8c090"; ctx.beginPath(); ctx.arc(cx + 1, 17, 2, 0, TAU); ctx.fill();
+    }
+    ctx.textBaseline = "alphabetic";
+  }
+  function draw() {
+    ctx.setTransform(pxRatio, 0, 0, pxRatio, 0, 0);
+    if (!castle) setupCastle();
+    drawBoard();
+    for (const p of parts) { ctx.globalAlpha = Math.max(0, 1 - p.t / p.life); ctx.fillStyle = p.c; ctx.fillRect(p.x - 1.5, p.y - 1.5, 3, 3); }
+    ctx.globalAlpha = 1;
+    for (const p of popups) {
+      ctx.globalAlpha = Math.max(0, 1 - p.t / 1.1);
+      ctx.textAlign = "center"; ctx.font = "900 11px system-ui";
+      ctx.lineWidth = 3; ctx.strokeStyle = "#0a0618"; ctx.strokeText(p.text, p.x, p.y); ctx.fillStyle = p.color; ctx.fillText(p.text, p.x, p.y);
+    }
+    ctx.globalAlpha = 1;
+    if (state === "menu") return;
+    drawHud();
+    if (message) {
+      ctx.globalAlpha = Math.min(1, (2.2 - message.t) * 2);
+      ctx.fillStyle = "rgba(0,0,0,0.55)"; ctx.fillRect(0, 150, W, 56);
+      ctx.textAlign = "center"; ctx.font = "italic 900 24px system-ui"; ctx.fillStyle = "#7ae4ff";
+      ctx.lineWidth = 5; ctx.strokeStyle = "#0a0618"; ctx.strokeText(message.text, W / 2, 177); ctx.fillText(message.text, W / 2, 177);
+      if (message.sub) { ctx.font = "800 12px system-ui"; ctx.fillStyle = "#f4f0ff"; ctx.fillText(message.sub, W / 2, 196); }
+      ctx.globalAlpha = 1;
+    }
+    if (state === "dead") {
+      ctx.textAlign = "center"; ctx.font = "900 18px system-ui"; ctx.fillStyle = "#ff5a5a"; ctx.lineWidth = 4; ctx.strokeStyle = "#0a0618";
+      const t = KINDS[lastBy].name;
+      ctx.strokeText(t, W / 2, 345); ctx.fillText(t, W / 2, 345);
+    }
+  }
+
+  // ---------- Loop ----------
+  const STEP = 1 / 120;
+  let last = performance.now(), acc = 0;
+  function frame(now) {
+    const dt = Math.min(0.1, (now - last) / 1000);
+    last = now;
+    if (isPlaying()) {
+      acc += dt;
+      while (acc >= STEP && isPlaying()) { update(STEP); acc -= STEP; }
+    } else { acc = 0; update(dt); }
+    draw();
+    requestAnimationFrame(frame);
+  }
+  syncControls();
+  showTitle();
+  requestAnimationFrame(frame);
+})();
+</script>
+<script src="../../shared/iniziali.js" data-record="cristallo-best-" data-kind="score"></script>
+</body>
+</html>
