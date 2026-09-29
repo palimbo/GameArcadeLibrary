@@ -1,0 +1,612 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no, viewport-fit=cover">
+<title>Idraulico Lampo</title>
+<style>
+  :root {
+    --bg: #14202a;
+    --fg: #f0f6f8;
+    --muted: #a0b4c0;
+    --water: #3ac8ff;
+    --brass: #e8b04a;
+    --red: #ff5a4a;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  html, body {
+    height: 100%;
+    background: var(--bg);
+    color: var(--fg);
+    font-family: system-ui, -apple-system, "Segoe UI", sans-serif;
+    overflow: hidden;
+    user-select: none;
+    -webkit-user-select: none;
+    touch-action: none;
+  }
+  #wrap { position: fixed; inset: 0; display: flex; align-items: center; justify-content: center; }
+  canvas { display: block; touch-action: none; border-radius: 6px; box-shadow: 0 0 0 2px #2a3a48, 0 10px 40px rgba(0,0,0,0.6); }
+  #pauseBtn {
+    position: fixed; z-index: 3; display: none; right: 10px; top: calc(10px + env(safe-area-inset-top, 0px));
+    font: 700 13px system-ui, sans-serif; color: var(--fg);
+    background: rgba(0, 0, 0, 0.6); border: 1px solid rgba(240, 246, 248, 0.35);
+    border-radius: 8px; padding: 6px 10px; cursor: pointer;
+  }
+  #overlay {
+    position: fixed; inset: 0; z-index: 5;
+    display: flex; flex-direction: column; align-items: center; justify-content: flex-start;
+    gap: 14px; padding: 16px; text-align: center; overflow-y: auto;
+    background: rgba(20, 32, 42, 0.93);
+  }
+  #overlay > :first-child { margin-top: auto; }
+  #overlay > :last-child { margin-bottom: auto; }
+  #overlay.hidden { display: none; }
+  #homeLink {
+    position: fixed; top: calc(10px + env(safe-area-inset-top, 0px)); left: 10px; z-index: 6;
+    font: 600 13px/1 system-ui, sans-serif; color: #fff; text-decoration: none;
+    padding: 8px 12px; border-radius: 999px; background: rgba(0,0,0,.55);
+    border: 1px solid rgba(255,255,255,.25);
+  }
+  #homeLink:hover { background: rgba(0,0,0,.8); }
+  #overlay.hidden ~ #homeLink { display: none; }
+  @media (max-width: 700px) { #overlay { padding-top: calc(52px + env(safe-area-inset-top, 0px)); } }
+  #overlay h1 { font-size: clamp(34px, 10vw, 60px); font-weight: 900; letter-spacing: 1px; color: var(--water);
+    text-shadow: 3px 3px 0 #1a5a7a, 0 0 22px rgba(58,200,255,0.35); }
+  #overlay h2 { font-size: clamp(26px, 7vw, 42px); font-weight: 900; letter-spacing: 2px; color: var(--water); }
+  #overlay h2.lose { color: var(--red); }
+  #overlay p { max-width: 540px; font-size: clamp(13px, 3.4vw, 16px); line-height: 1.55; }
+  #overlay p.muted { color: var(--muted); }
+  #overlay .pts { display: grid; grid-template-columns: repeat(2, auto); gap: 4px 18px; font-size: 13px; color: var(--muted); text-align: left; max-width: 560px; }
+  #overlay .pts b { color: var(--fg); }
+  #overlay .diff { display: flex; gap: 10px; flex-wrap: wrap; justify-content: center; }
+  #overlay button {
+    font: 800 15px system-ui, sans-serif; letter-spacing: 1.5px; color: var(--fg);
+    background: transparent; cursor: pointer;
+    border: 2px solid rgba(240,246,248,0.3); border-radius: 10px; padding: 9px 16px;
+  }
+  #overlay .diff button.on { border-color: var(--c); color: var(--c); box-shadow: 0 0 12px var(--c); }
+  #overlay button.start { border-color: var(--water); color: #0a2a3a; background: var(--water); padding: 11px 30px; box-shadow: 0 4px 0 #1a6a8a; }
+  @media (max-height: 560px) {
+    #overlay { gap: 8px; }
+    #overlay h1 { font-size: 30px; }
+    #overlay p { font-size: 13px; line-height: 1.4; }
+    #overlay .help, #overlay .pts { display: none; }
+  }
+</style>
+</head>
+<body>
+<div id="wrap"><canvas id="game"></canvas></div>
+<button id="pauseBtn" type="button" aria-label="Pausa">❚❚</button>
+<div id="overlay"></div>
+<a id="homeLink" href="../../index.html">← Sala Giochi</a>
+
+<script>
+(() => {
+  "use strict";
+
+  const W = 360, H = 600, COLS = 7, ROWS = 9, CS = 44, GX = 26, GY = 128, TAU = Math.PI * 2;
+  const QX = 26, QY = 66, QN = 5;
+  const FAST_BOX = { x: 196, y: 540, w: 138, h: 44 };
+  // sides: 0 north, 1 east, 2 south, 3 west
+  const DC = [0, 1, 0, -1], DR = [-1, 0, 1, 0], OPP = [2, 3, 0, 1];
+  const PIECES = {
+    H: { sides: [1, 3], w: 2 }, V: { sides: [0, 2], w: 2 },
+    NE: { sides: [0, 1], w: 1.5 }, NW: { sides: [0, 3], w: 1.5 }, SE: { sides: [2, 1], w: 1.5 }, SW: { sides: [2, 3], w: 1.5 },
+    X: { sides: [0, 1, 2, 3], w: 1 },
+  };
+  const KINDS = Object.keys(PIECES);
+  // where the water leaves a piece it entered from side `inSide`
+  function exitOf(kind, inSide) {
+    if (kind === "X") return OPP[inSide];
+    const s = PIECES[kind].sides;
+    if (!s.includes(inSide)) return -1;
+    return s[0] === inSide ? s[1] : s[0];
+  }
+
+  const DIFFICULTIES = {
+    facile:    { label: "FACILE",    color: "#7ed87a", desc: "3 tentativi · acqua lenta, più tempo prima che parta", tries: 3, flow: 1.3, wait: 1.3 },
+    normale:   { label: "NORMALE",   color: "#3ac8ff", desc: "2 tentativi", tries: 2, flow: 1, wait: 1 },
+    difficile: { label: "DIFFICILE", color: "#ff5a4a", desc: "1 tentativo · acqua veloce e poco tempo per prepararsi", tries: 1, flow: 0.82, wait: 0.8 },
+  };
+  const DIFF_IDS = Object.keys(DIFFICULTIES);
+  const DIFF_KEY = "idraulico-difficulty";
+  const bestKey = (id) => `idraulico-best-${id}`;
+  function store(k, v) { try { localStorage.setItem(k, v); } catch { /* ignore */ } }
+  function load(k) { try { return localStorage.getItem(k); } catch { return null; } }
+  const rnd = (a, b) => a + Math.random() * (b - a);
+
+  // ---------- Canvas ----------
+  const canvas = document.getElementById("game");
+  const ctx = canvas.getContext("2d");
+  const overlay = document.getElementById("overlay");
+  const pauseBtn = document.getElementById("pauseBtn");
+  let pxRatio = 1, touchMode = !!(window.matchMedia && matchMedia("(pointer: coarse)").matches);
+  function resize() {
+    const availW = window.innerWidth - 8, availH = window.innerHeight - 8;
+    const s = Math.max(0.2, Math.min(availW / W, availH / H));
+    pxRatio = Math.min(3, s * (window.devicePixelRatio || 1));
+    canvas.style.width = W * s + "px";
+    canvas.style.height = H * s + "px";
+    canvas.width = Math.round(W * pxRatio);
+    canvas.height = Math.round(H * pxRatio);
+  }
+  window.addEventListener("resize", () => syncControls());
+
+  // ---------- Audio ----------
+  let audioCtx = null;
+  function beep(freq, dur, type = "square", vol = 0.04, slide = 0, delay = 0) {
+    if (!audioCtx) return;
+    const t = audioCtx.currentTime + delay;
+    const osc = audioCtx.createOscillator(), gain = audioCtx.createGain();
+    osc.type = type;
+    osc.frequency.setValueAtTime(freq, t);
+    if (slide) osc.frequency.exponentialRampToValueAtTime(Math.max(20, freq + slide), t + dur);
+    gain.gain.setValueAtTime(vol, t);
+    gain.gain.exponentialRampToValueAtTime(0.0001, t + dur);
+    osc.connect(gain).connect(audioCtx.destination);
+    osc.start(t); osc.stop(t + dur + 0.02);
+  }
+  function noise(dur, vol, freq) {
+    if (!audioCtx) return;
+    const len = Math.floor(audioCtx.sampleRate * dur), buf = audioCtx.createBuffer(1, len, audioCtx.sampleRate), d = buf.getChannelData(0);
+    for (let i = 0; i < len; i++) d[i] = (Math.random() * 2 - 1) * (1 - i / len);
+    const src = audioCtx.createBufferSource(), f = audioCtx.createBiquadFilter(), g = audioCtx.createGain();
+    src.buffer = buf; f.type = "bandpass"; f.frequency.value = freq; g.gain.value = vol;
+    src.connect(f).connect(g).connect(audioCtx.destination); src.start();
+  }
+  const arp = (notes, gap, d, type = "square", vol = 0.04) => notes.forEach((f, i) => beep(f, d, type, vol, 0, i * gap));
+  let sfxN = 0;
+  const lim = (fn) => (...a) => { if (sfxN++ < 5) fn(...a); };
+  const sfx = {
+    place: lim(() => { beep(300, 0.04, "square", 0.04); beep(520, 0.05, "triangle", 0.03, 0, 0.03); }),
+    swap: lim(() => { noise(0.2, 0.12, 500); beep(160, 0.15, "sawtooth", 0.04, -80); }),
+    no: lim(() => beep(150, 0.08, "square", 0.03)),
+    fill: lim((k) => beep(420 + Math.min(k, 30) * 25, 0.06, "sine", 0.04)),
+    cross: () => arp([784, 988, 1175], 0.05, 0.1),
+    start: () => { noise(0.5, 0.08, 800); beep(200, 0.3, "sine", 0.05, 200); },
+    tick: lim(() => beep(1400, 0.03, "square", 0.02)),
+    leak: () => { noise(0.8, 0.14, 1200); arp([392, 330, 262], 0.12, 0.18, "triangle", 0.05); },
+    pass: () => arp([523, 659, 784, 1047, 784, 1047, 1319], 0.1, 0.18),
+    fast: () => beep(300, 0.3, "sawtooth", 0.04, 600),
+    over: () => arp([523, 466, 415, 392, 330, 262], 0.15, 0.24, "triangle", 0.05),
+  };
+
+  // ---------- State ----------
+  let difficulty = DIFFICULTIES[load(DIFF_KEY)] ? load(DIFF_KEY) : "normale";
+  let diff = DIFFICULTIES[difficulty];
+  let state = "menu", menu = null, pausedFrom = null, stateT = 0, clock = 0;
+  let score = 0, level = 1, tries = 3, bestCache = 0, grid = [], queue = [], start = null;
+  let countdown = 0, pieceTime = 2, flow = null, filled = 0, goal = 10, fast = false, cooldown = 0, result = null;
+  let parts = [], popups = [], booms = [], message = null;
+  const cur = { c: 3, r: 4, seen: false };
+
+  // ---------- Setup ----------
+  function randomKind() {
+    const tot = KINDS.reduce((a, k) => a + PIECES[k].w, 0);
+    let u = Math.random() * tot;
+    for (const k of KINDS) { u -= PIECES[k].w; if (u <= 0) return k; }
+    return "H";
+  }
+  const inGrid = (c, r) => c >= 0 && r >= 0 && c < COLS && r < ROWS;
+  function buildLevel() {
+    grid = Array.from({ length: ROWS }, () => Array.from({ length: COLS }, () => null));
+    // the tap: never against a wall, with room in front of it
+    let sc, sr, sd;
+    do { sc = Math.floor(rnd(1, COLS - 1)); sr = Math.floor(rnd(1, ROWS - 1)); sd = Math.floor(rnd(0, 4)); }
+    while (!inGrid(sc + DC[sd] * 2, sr + DR[sd] * 2));
+    start = { c: sc, r: sr, dir: sd };
+    grid[sr][sc] = { kind: "S", out: sd, fill: 0 };
+    // from level 3 on, some cells are rocks, never right in front of the tap
+    const rocks = Math.min(7, Math.max(0, level - 2));
+    for (let k = 0, tries = 0; k < rocks && tries < 200; tries++) {
+      const c = Math.floor(rnd(0, COLS)), r = Math.floor(rnd(0, ROWS));
+      if (grid[r][c] || Math.abs(c - sc) + Math.abs(r - sr) <= 2) continue;
+      grid[r][c] = { kind: "R" }; k++;
+    }
+    queue = Array.from({ length: QN }, randomKind);
+    goal = Math.min(30, 8 + level * 2);
+    pieceTime = Math.max(0.75, 2.1 * Math.pow(0.93, level - 1)) * diff.flow;
+    countdown = Math.max(8, 22 - level * 1.5) * diff.wait;
+    flow = null; filled = 0; fast = false; cooldown = 0; booms = [];
+  }
+  const isPlaying = () => ["intro", "play", "result"].includes(state);
+  function startGame() {
+    if (!audioCtx) { try { audioCtx = new (window.AudioContext || window.webkitAudioContext)(); } catch { audioCtx = null; } }
+    if (audioCtx && audioCtx.state === "suspended") audioCtx.resume();
+    score = 0; level = 1; tries = diff.tries;
+    bestCache = parseInt(load(bestKey(difficulty)), 10) || 0;
+    beginLevel();
+    menu = null;
+    overlay.classList.add("hidden");
+    syncControls();
+    last = performance.now();
+  }
+  function beginLevel() {
+    buildLevel();
+    message = { text: `LIVELLO ${level}`, sub: `porta l'acqua per almeno ${goal} tubi`, t: 0 };
+    state = "intro"; stateT = 1.6;
+  }
+  function addScore(n, x, y, color = "#f0f6f8") {
+    score = Math.max(0, score + n);
+    if (x !== undefined) popups.push({ x, y, text: (n > 0 ? "+" : "") + n, color, t: 0 });
+  }
+
+  // ---------- Placing ----------
+  function place(c, r) {
+    if (state !== "play" || !inGrid(c, r)) return false;
+    const x = grid[r][c];
+    if (cooldown > 0) { sfx.no(); return false; }
+    if (x && (x.kind === "S" || x.kind === "R" || x.fill > 0 || x.fillB > 0 || (flow && flow.c === c && flow.r === r))) { sfx.no(); return false; }
+    const kind = queue.shift();
+    queue.push(randomKind());
+    if (x) {
+      // blowing up an unused pipe to put another one there costs points and a moment
+      addScore(-50, GX + c * CS + CS / 2, GY + r * CS + 10, "#ff8a7a");
+      booms.push({ c, r, t: 0 });
+      cooldown = 0.45; sfx.swap();
+    } else sfx.place();
+    grid[r][c] = { kind, fill: 0, fillB: 0, placedT: 0 };
+    return true;
+  }
+  function startFlow() {
+    flow = { c: start.c, r: start.r, in: -1, out: start.dir, p: 0.5, cross: false };
+    sfx.start();
+  }
+  // the water moves on to the next cell, or finds a hole
+  function advance() {
+    const x = grid[flow.r][flow.c];
+    if (x.kind !== "S") {
+      filled++;
+      const pts = (fast ? 100 : 50);
+      addScore(pts, GX + flow.c * CS + CS / 2, GY + flow.r * CS + 8, filled >= goal ? "#7ed87a" : "#bfe8ff");
+      sfx.fill(filled);
+      if (x.kind === "X" && x.fill >= 1 && x.fillB >= 1 && !x.bonus) { x.bonus = true; addScore(500, GX + flow.c * CS + CS / 2, GY + flow.r * CS + 26, "#e8b04a"); sfx.cross(); }
+    }
+    const nc = flow.c + DC[flow.out], nr = flow.r + DR[flow.out], inSide = OPP[flow.out];
+    const n = inGrid(nc, nr) && grid[nr][nc];
+    const ex = n && n.kind !== "S" && n.kind !== "R" ? exitOf(n.kind, inSide) : -1;
+    const busy = n && (n.kind === "X" ? (inSide % 2 === 0 ? n.fill > 0 : n.fillB > 0) : n.fill > 0);
+    if (ex < 0 || busy) { leak(nc, nr); return; }
+    flow = { c: nc, r: nr, in: inSide, out: ex, p: 0 };
+  }
+  function leak(nc, nr) {
+    const x = GX + (flow.c + DC[flow.out] * 0.5) * CS + CS / 2, y = GY + (flow.r + DR[flow.out] * 0.5) * CS + CS / 2;
+    for (let k = 0; k < 30; k++) { const a = rnd(0, TAU), s = rnd(40, 160); parts.push({ x, y, vx: Math.cos(a) * s, vy: Math.sin(a) * s - 60, t: 0, life: rnd(0.5, 1.1), c: "#3ac8ff" }); }
+    sfx.leak();
+    endLevel();
+  }
+  function endLevel() {
+    flow = null;
+    // pipes laid but never reached
+    let unused = 0;
+    for (const row of grid) for (const x of row) if (x && PIECES[x.kind] && !x.fill && !x.fillB) unused++;
+    const pass = filled >= goal;
+    const penalty = unused * 20;
+    let bonus = 0;
+    if (pass) { bonus = 1000 + (filled - goal) * 100; addScore(bonus); sfx.pass(); }
+    if (penalty) addScore(-penalty);
+    if (!pass) tries--;
+    result = { pass, filled, goal, unused, penalty, bonus, triesLeft: tries };
+    state = "result"; stateT = 3;
+  }
+  function afterResult() {
+    if (result.pass) { level++; beginLevel(); return; }
+    if (tries <= 0) { gameOver(); return; }
+    beginLevel();
+  }
+  function gameOver() {
+    state = "over";
+    const prev = parseInt(load(bestKey(difficulty)), 10) || 0;
+    const record = score > prev;
+    if (record) store(bestKey(difficulty), String(score));
+    sfx.over();
+    menu = () => showOverlay(
+      `<h2 class="lose">${result && !result.pass ? "IL TUBO PERDE!" : "PARTITA FINITA"}</h2>
+       <p>Punteggio: <b>${score.toLocaleString("it-IT")}</b> · livello ${level} · ${diff.label}</p>
+       ${record ? "<p style='color:var(--brass)'>★ NUOVO RECORD! ★</p>" : ""}
+       ${difficultyHTML()}
+       <button class="start" data-start>GIOCA ANCORA</button>`
+    );
+    menu();
+    syncControls();
+  }
+  function togglePause() {
+    if (isPlaying()) {
+      pausedFrom = state; state = "paused";
+      showOverlay(`<h2>PAUSA</h2><button class="start" data-resume>CONTINUA</button><p class="muted">Premi P per continuare</p>`);
+    } else if (state === "paused") {
+      state = pausedFrom; overlay.classList.add("hidden"); last = performance.now();
+    }
+    syncControls();
+  }
+  // the pause menu can end the game (shared/iniziali.js): it ends here the usual way, saving the record
+  window.addEventListener("sala:termina", () => { if (state !== "paused") return; state = pausedFrom; overlay.classList.add("hidden"); result = null; gameOver(); syncControls(); });
+  function syncControls() {
+    pauseBtn.style.display = isPlaying() && touchMode ? "block" : "none";
+    resize();
+  }
+  pauseBtn.addEventListener("click", () => togglePause());
+  function showOverlay(html) { overlay.innerHTML = html; overlay.classList.remove("hidden"); }
+  function difficultyHTML() {
+    const buttons = DIFF_IDS.map((id) => {
+      const d = DIFFICULTIES[id];
+      return `<button type="button" data-diff="${id}" class="${id === difficulty ? "on" : ""}" style="--c:${d.color}">${d.label}</button>`;
+    }).join("");
+    const best = parseInt(load(bestKey(difficulty)), 10);
+    return `<div class="diff">${buttons}</div><p class="muted">${diff.desc}${best ? ` · Record: ${best.toLocaleString("it-IT")}` : ""}</p>`;
+  }
+  function setDifficulty(id) { if (!DIFFICULTIES[id]) return; difficulty = id; diff = DIFFICULTIES[id]; store(DIFF_KEY, id); if (menu) menu(); }
+  function showTitle() {
+    menu = showTitle;
+    showOverlay(
+      `<h1>IDRAULICO LAMPO</h1>
+       <p>Tra poco il rubinetto si apre! Posa i pezzi di tubo che arrivano in fila, uno alla volta, e costruisci davanti all'acqua un percorso lungo abbastanza: se trova un buco, un tubo sbagliato o il bordo, allaga tutto.</p>
+       <div class="pts">
+         <span><b>Livello superato</b></span><span>se l'acqua attraversa almeno il numero di tubi richiesto</span>
+         <span><b>Punti</b></span><span>50 per ogni tubo pieno (100 con ACCELERA) · incrocio attraversato due volte +500 · livello 1.000 + 100 per ogni tubo in più</span>
+         <span><b>Cambiare un tubo</b></span><span>tocca un tubo ancora vuoto per sostituirlo col pezzo nuovo: costa 50 punti e un attimo di attesa</span>
+         <span><b>Tubi inutili</b></span><span>a fine livello ogni tubo rimasto asciutto toglie 20 punti</span>
+         <span><b>Rocce</b></span><span>dal livello 3 alcune caselle sono occupate da massi</span>
+       </div>
+       ${touchMode
+         ? `<p class="muted help">Tocca una casella per posare il primo pezzo della fila · ACCELERA fa correre l'acqua quando il percorso è pronto</p>`
+         : `<p class="muted help">Clicca una casella per posare il pezzo (o frecce + SPAZIO) · F accelera · P pausa</p>`}
+       ${difficultyHTML()}
+       <button class="start" data-start>APRI IL CANTIERE!</button>`
+    );
+  }
+  overlay.addEventListener("click", (e) => {
+    const d = e.target.closest("[data-diff]");
+    if (d) { setDifficulty(d.dataset.diff); return; }
+    if (e.target.closest("[data-start]")) startGame();
+    if (e.target.closest("[data-resume]")) togglePause();
+  });
+
+  // ---------- Input ----------
+  function goFast() {
+    if (state !== "play" || fast) return;
+    if (!flow) countdown = 0;
+    fast = true; sfx.fast();
+  }
+  window.addEventListener("keydown", (e) => {
+    const k = e.key.toLowerCase();
+    if ([" ", "arrowup", "arrowdown", "arrowleft", "arrowright"].includes(k)) e.preventDefault();
+    if (state === "menu" || state === "over") {
+      if (e.key === "Enter") startGame();
+      else if (["1", "2", "3"].includes(k)) setDifficulty(DIFF_IDS[+k - 1]);
+      return;
+    }
+    if (k === "p" || k === "escape") { if (!e.repeat) togglePause(); return; }
+    if (state === "paused") { if (e.key === "Enter") togglePause(); return; }
+    const mv = { arrowleft: [-1, 0], a: [-1, 0], arrowright: [1, 0], d: [1, 0], arrowup: [0, -1], w: [0, -1], arrowdown: [0, 1], s: [0, 1] }[k];
+    if (mv) { cur.c = Math.max(0, Math.min(COLS - 1, cur.c + mv[0])); cur.r = Math.max(0, Math.min(ROWS - 1, cur.r + mv[1])); cur.seen = true; }
+    if ((k === " " || k === "j" || k === "enter") && !e.repeat) { cur.seen = true; place(cur.c, cur.r); }
+    if (k === "f" && !e.repeat) goFast();
+  });
+  window.addEventListener("blur", () => { if (isPlaying()) togglePause(); });
+  const toWorld = (e) => { const rc = canvas.getBoundingClientRect(); return { x: (e.clientX - rc.left) / rc.width * W, y: (e.clientY - rc.top) / rc.height * H }; };
+  canvas.addEventListener("pointermove", (e) => {
+    if (e.pointerType === "touch") return;
+    const p = toWorld(e), c = Math.floor((p.x - GX) / CS), r = Math.floor((p.y - GY) / CS);
+    if (inGrid(c, r)) { cur.c = c; cur.r = r; cur.seen = true; } else cur.seen = false;
+  });
+  canvas.addEventListener("pointerdown", (e) => {
+    e.preventDefault();
+    const p = toWorld(e);
+    const b = FAST_BOX;
+    if (p.x >= b.x && p.x <= b.x + b.w && p.y >= b.y && p.y <= b.y + b.h) { goFast(); return; }
+    const c = Math.floor((p.x - GX) / CS), r = Math.floor((p.y - GY) / CS);
+    if (inGrid(c, r)) { cur.c = c; cur.r = r; cur.seen = e.pointerType !== "touch"; place(c, r); }
+  });
+  window.addEventListener("pointerdown", (e) => { if (e.pointerType === "touch" && !touchMode) { touchMode = true; syncControls(); if (menu) menu(); } }, true);
+
+  // ---------- Update ----------
+  function update(dt) {
+    clock += dt; sfxN = 0;
+    if (message) { message.t += dt; if (message.t > 2) message = null; }
+    for (const p of parts) { p.t += dt; p.x += p.vx * dt; p.y += p.vy * dt; p.vy += 260 * dt; }
+    parts = parts.filter((p) => p.t < p.life);
+    for (const p of popups) { p.t += dt; p.y -= 22 * dt; }
+    popups = popups.filter((p) => p.t < 1.1);
+    for (const b of booms) b.t += dt;
+    booms = booms.filter((b) => b.t < 0.4);
+    if (!isPlaying()) return;
+    if (state === "intro") { stateT -= dt; if (stateT <= 0) state = "play"; return; }
+    if (state === "result") { stateT -= dt; if (stateT <= 0) afterResult(); return; }
+    if (window.__bot) window.__bot(dt);
+    cooldown = Math.max(0, cooldown - dt);
+    for (const row of grid) for (const x of row) if (x && x.placedT !== undefined) x.placedT += dt;
+    if (!flow) {
+      const before = Math.ceil(countdown);
+      countdown -= dt;
+      if (Math.ceil(countdown) !== before && countdown < 5 && countdown > 0) sfx.tick();
+      if (countdown <= 0) { countdown = 0; startFlow(); }
+      return;
+    }
+    // the water runs along the current piece
+    const x = grid[flow.r][flow.c];
+    flow.p += dt / (fast ? 0.12 : pieceTime);
+    if (x.kind === "X") { if (flow.in % 2 === 0) { x.fill = Math.min(1, flow.p); x.inV = flow.in; } else { x.fillB = Math.min(1, flow.p); x.inH = flow.in; } }
+    else if (x.kind !== "S") { x.fill = Math.min(1, flow.p); x.fillIn = flow.in; }
+    else x.fill = Math.min(1, flow.p);
+    if (flow.p >= 1) advance();
+  }
+
+  // ---------- Drawing ----------
+  // the centre line of a pipe from side a to side b, in cell coordinates (0..1)
+  function sidePt(s) { return [0.5 + DC[s] * 0.5, 0.5 + DR[s] * 0.5]; }
+  function pipePath(x, y, size, a, b) {
+    const [ax, ay] = sidePt(a), [bx, by] = sidePt(b);
+    ctx.beginPath(); ctx.moveTo(x + ax * size, y + ay * size);
+    if (a === OPP[b]) ctx.lineTo(x + bx * size, y + by * size);
+    else ctx.quadraticCurveTo(x + size / 2, y + size / 2, x + bx * size, y + by * size);
+  }
+  function drawPiece(x, y, size, kind, cell) {
+    const tube = size * 0.36;
+    const pairs = kind === "X" ? [[0, 2], [1, 3]] : [PIECES[kind].sides];
+    for (const [a, b] of pairs) {
+      ctx.lineCap = "butt";
+      pipePath(x, y, size, a, b); ctx.strokeStyle = "#5a6a78"; ctx.lineWidth = tube + 4; ctx.stroke();
+      pipePath(x, y, size, a, b); ctx.strokeStyle = "#b8c8d4"; ctx.lineWidth = tube; ctx.stroke();
+      pipePath(x, y, size, a, b); ctx.strokeStyle = "#e0eaf0"; ctx.lineWidth = tube * 0.3; ctx.stroke();
+    }
+    // the water inside, poured in from the side it came from
+    if (cell) {
+      const fills = kind === "X" ? [[cell.fill, cell.inV ?? 0], [cell.fillB, cell.inH ?? 3]] : [[cell.fill, cell.fillIn ?? PIECES[kind].sides[0]]];
+      for (const [f, a] of fills) {
+        if (!f) continue;
+        const b = exitOf(kind, a);
+        const len = a === OPP[b] ? size : size * 0.82;
+        pipePath(x, y, size, a, b);
+        ctx.setLineDash([len * f, 999]); ctx.strokeStyle = "#3ac8ff"; ctx.lineWidth = tube * 0.72; ctx.stroke();
+        ctx.setLineDash([]);
+      }
+    }
+  }
+  function drawStart(x, y, cell) {
+    const s = CS, d = start.dir;
+    const [ex, ey] = sidePt(d);
+    ctx.lineCap = "butt";
+    ctx.beginPath(); ctx.moveTo(x + s / 2, y + s / 2); ctx.lineTo(x + ex * s, y + ey * s);
+    ctx.strokeStyle = "#5a6a78"; ctx.lineWidth = s * 0.36 + 4; ctx.stroke(); ctx.strokeStyle = "#e8b04a"; ctx.lineWidth = s * 0.36; ctx.stroke();
+    if (cell.fill) { ctx.beginPath(); ctx.moveTo(x + s / 2, y + s / 2); ctx.lineTo(x + s / 2 + (ex * s - s / 2) * Math.max(0, (cell.fill - 0.5) * 2), y + s / 2 + (ey * s - s / 2) * Math.max(0, (cell.fill - 0.5) * 2)); ctx.strokeStyle = "#3ac8ff"; ctx.lineWidth = s * 0.26; ctx.stroke(); }
+    // the tap
+    ctx.fillStyle = "#e8b04a"; ctx.beginPath(); ctx.arc(x + s / 2, y + s / 2, s * 0.3, 0, TAU); ctx.fill();
+    ctx.strokeStyle = "#8a5a1a"; ctx.lineWidth = 2; ctx.stroke();
+    ctx.fillStyle = "#ff5a4a"; ctx.save(); ctx.translate(x + s / 2, y + s / 2); ctx.rotate(flow ? clock * 4 : 0);
+    for (let k = 0; k < 4; k++) { ctx.rotate(Math.PI / 2); ctx.fillRect(-2, -s * 0.26, 4, s * 0.2); }
+    ctx.restore();
+    ctx.fillStyle = "#ff5a4a"; ctx.beginPath(); ctx.arc(x + s / 2, y + s / 2, 4, 0, TAU); ctx.fill();
+  }
+  function drawRock(x, y) {
+    ctx.fillStyle = "#4a3a30"; ctx.beginPath(); ctx.ellipse(x + CS / 2, y + CS / 2 + 3, CS * 0.4, CS * 0.32, 0, 0, TAU); ctx.fill();
+    ctx.fillStyle = "#7a6a5a"; ctx.beginPath(); ctx.ellipse(x + CS / 2 - 2, y + CS / 2, CS * 0.36, CS * 0.28, 0, 0, TAU); ctx.fill();
+    ctx.fillStyle = "#9a8a7a"; ctx.beginPath(); ctx.ellipse(x + CS / 2 - 6, y + CS / 2 - 5, 6, 4, -0.3, 0, TAU); ctx.fill();
+  }
+  function drawHud() {
+    ctx.fillStyle = "#0e1820"; ctx.fillRect(0, 0, W, 56);
+    ctx.textBaseline = "middle"; ctx.textAlign = "left";
+    ctx.fillStyle = "#f0f6f8"; ctx.font = "900 17px system-ui"; ctx.fillText(score.toLocaleString("it-IT"), 12, 16);
+    ctx.fillStyle = "#a0b4c0"; ctx.font = "700 9px system-ui"; ctx.fillText(`REC ${Math.max(bestCache, score).toLocaleString("it-IT")}`, 12, 33);
+    ctx.fillStyle = "#3ac8ff"; ctx.font = "900 12px system-ui"; ctx.fillText(`LIVELLO ${level}`, 12, 48);
+    ctx.fillStyle = "#a0b4c0"; ctx.font = "800 10px system-ui"; ctx.fillText("TENTATIVI", 120, 16);
+    for (let i = 0; i < diff.tries; i++) { ctx.fillStyle = i < tries ? "#e8b04a" : "#2a3a48"; ctx.beginPath(); ctx.arc(126 + i * 16, 34, 6, 0, TAU); ctx.fill(); }
+    // goal meter
+    const gx = touchMode ? 196 : 210, gw = touchMode ? 94 : 136;
+    ctx.fillStyle = "#a0b4c0"; ctx.font = "800 10px system-ui"; ctx.fillText("TUBI PIENI", gx, 16);
+    ctx.fillStyle = "rgba(255,255,255,0.12)"; ctx.fillRect(gx, 26, gw, 10);
+    ctx.fillStyle = filled >= goal ? "#7ed87a" : "#3ac8ff"; ctx.fillRect(gx, 26, gw * Math.min(1, filled / goal), 10);
+    ctx.fillStyle = "#f0f6f8"; ctx.font = "900 11px system-ui"; ctx.fillText(`${filled} / ${goal}${filled >= goal ? " ✓" : ""}`, gx, 48);
+    ctx.textBaseline = "alphabetic";
+  }
+  function drawQueue() {
+    ctx.fillStyle = "#a0b4c0"; ctx.font = "800 10px system-ui"; ctx.textAlign = "left"; ctx.fillText("PROSSIMI PEZZI", QX, QY - 2);
+    for (let i = 0; i < QN; i++) {
+      const s = i === 0 ? 48 : 36, x = i === 0 ? QX : QX + 58 + (i - 1) * 44, y = QY + (i === 0 ? 4 : 10);
+      ctx.fillStyle = i === 0 ? "#22384a" : "#1a2a36"; ctx.fillRect(x, y, s, s);
+      ctx.strokeStyle = i === 0 ? "#3ac8ff" : "#2a3a48"; ctx.lineWidth = 2; ctx.strokeRect(x + 1, y + 1, s - 2, s - 2);
+      if (queue[i]) drawPiece(x, y, s, queue[i], null);
+    }
+    // the timer before the water starts
+    ctx.textAlign = "right";
+    if (!flow && state === "play") {
+      ctx.fillStyle = countdown < 5 && Math.floor(clock * 4) % 2 ? "#ff5a4a" : "#f0f6f8"; ctx.font = "900 20px system-ui";
+      ctx.fillText(`💧 ${Math.ceil(countdown)}`, W - 14, QY + 34);
+      ctx.fillStyle = "#a0b4c0"; ctx.font = "700 9px system-ui"; ctx.fillText("l'acqua parte tra", W - 14, QY + 12);
+    } else if (flow) { ctx.fillStyle = "#3ac8ff"; ctx.font = "900 13px system-ui"; ctx.fillText(fast ? "A TUTTA ACQUA!" : "SCORRE…", W - 14, QY + 34); }
+  }
+  function drawBottom() {
+    const b = FAST_BOX, on = state === "play" && !fast;
+    ctx.fillStyle = on ? "#1a5a7a" : "#1a2a36"; ctx.fillRect(b.x, b.y, b.w, b.h);
+    ctx.strokeStyle = on ? "#3ac8ff" : "#2a3a48"; ctx.lineWidth = 2; ctx.strokeRect(b.x + 1, b.y + 1, b.w - 2, b.h - 2);
+    ctx.fillStyle = on ? "#f0f6f8" : "#6a7a88"; ctx.font = "900 13px system-ui"; ctx.textAlign = "center"; ctx.textBaseline = "middle";
+    ctx.fillText("ACCELERA ▶▶", b.x + b.w / 2, b.y + b.h / 2);
+    ctx.textAlign = "left"; ctx.fillStyle = "#a0b4c0"; ctx.font = "700 10px system-ui";
+    ctx.fillText(cooldown > 0 ? "cambio tubo…" : "tocca una casella", 26, 552);
+    ctx.fillText("per posare il pezzo", 26, 568);
+    ctx.textBaseline = "alphabetic";
+  }
+  function draw() {
+    ctx.setTransform(pxRatio, 0, 0, pxRatio, 0, 0);
+    ctx.fillStyle = "#14202a"; ctx.fillRect(0, 0, W, H);
+    if (state === "menu" && !grid.length) { level = 4; buildLevel(); level = 1; for (const [c, r, k] of [[start.c + DC[start.dir], start.r + DR[start.dir], start.dir % 2 ? "H" : "V"]]) if (inGrid(c, r) && !grid[r][c]) grid[r][c] = { kind: k, fill: 0, fillB: 0 }; }
+    // the ground: a tiled floor
+    for (let r = 0; r < ROWS; r++) for (let c = 0; c < COLS; c++) {
+      const x = GX + c * CS, y = GY + r * CS;
+      ctx.fillStyle = (r + c) % 2 ? "#3a5260" : "#344a58"; ctx.fillRect(x, y, CS, CS);
+      ctx.strokeStyle = "#2a3a48"; ctx.lineWidth = 1; ctx.strokeRect(x + 0.5, y + 0.5, CS - 1, CS - 1);
+    }
+    ctx.strokeStyle = "#5a7080"; ctx.lineWidth = 3; ctx.strokeRect(GX - 2, GY - 2, COLS * CS + 4, ROWS * CS + 4);
+    for (let r = 0; r < ROWS; r++) for (let c = 0; c < COLS; c++) {
+      const x = grid[r] && grid[r][c]; if (!x) continue;
+      const px = GX + c * CS, py = GY + r * CS;
+      if (x.kind === "S") drawStart(px, py, x);
+      else if (x.kind === "R") drawRock(px, py);
+      else {
+        const pop = x.placedT !== undefined && x.placedT < 0.15 ? 0.8 + x.placedT / 0.15 * 0.2 : 1;
+        ctx.save(); ctx.translate(px + CS / 2, py + CS / 2); ctx.scale(pop, pop); ctx.translate(-CS / 2, -CS / 2);
+        drawPiece(0, 0, CS, x.kind, x); ctx.restore();
+      }
+    }
+    for (const b of booms) {
+      const k = b.t / 0.4, x = GX + b.c * CS + CS / 2, y = GY + b.r * CS + CS / 2;
+      ctx.globalAlpha = 1 - k; ctx.fillStyle = "#ff8a3a"; ctx.beginPath(); ctx.arc(x, y, 8 + k * 22, 0, TAU); ctx.fill(); ctx.globalAlpha = 1;
+    }
+    // the cursor (mouse or keyboard), with a faint preview of the next piece
+    if (cur.seen && state === "play" && !touchMode) {
+      const x = GX + cur.c * CS, y = GY + cur.r * CS, cell = grid[cur.r][cur.c];
+      const ok = !cell || (PIECES[cell.kind] && !cell.fill && !cell.fillB);
+      if (!cell && queue[0]) { ctx.globalAlpha = 0.35; drawPiece(x, y, CS, queue[0], null); ctx.globalAlpha = 1; }
+      ctx.strokeStyle = ok ? "#f0f6f8" : "#ff5a4a"; ctx.lineWidth = 2.5; ctx.strokeRect(x + 2, y + 2, CS - 4, CS - 4);
+    }
+    for (const p of parts) { ctx.globalAlpha = Math.max(0, 1 - p.t / p.life); ctx.fillStyle = p.c; ctx.beginPath(); ctx.arc(p.x, p.y, 2.5, 0, TAU); ctx.fill(); }
+    ctx.globalAlpha = 1;
+    for (const p of popups) {
+      ctx.globalAlpha = Math.max(0, 1 - p.t / 1.1);
+      ctx.textAlign = "center"; ctx.font = "900 11px system-ui";
+      ctx.lineWidth = 3; ctx.strokeStyle = "#0e1820"; ctx.strokeText(p.text, p.x, p.y); ctx.fillStyle = p.color; ctx.fillText(p.text, p.x, p.y);
+    }
+    ctx.globalAlpha = 1;
+    if (state === "menu") return;
+    drawHud(); drawQueue(); drawBottom();
+    if (state === "result" && result) {
+      ctx.fillStyle = "rgba(0,0,0,0.7)"; ctx.fillRect(GX, 250, COLS * CS, 124);
+      ctx.strokeStyle = result.pass ? "#7ed87a" : "#ff5a4a"; ctx.lineWidth = 2; ctx.strokeRect(GX, 250, COLS * CS, 124);
+      ctx.textAlign = "center"; ctx.font = "900 22px system-ui"; ctx.fillStyle = result.pass ? "#7ed87a" : "#ff5a4a";
+      ctx.fillText(result.pass ? "LIVELLO SUPERATO!" : "ALLAGAMENTO!", W / 2, 282);
+      ctx.font = "800 12px system-ui"; ctx.fillStyle = "#f0f6f8";
+      ctx.fillText(`Tubi pieni: ${result.filled} su ${result.goal}`, W / 2, 308);
+      ctx.fillText(result.pass ? `Bonus ${result.bonus.toLocaleString("it-IT")}${result.penalty ? ` · tubi asciutti −${result.penalty}` : ""}` : result.triesLeft > 0 ? `Riprova: ${result.triesLeft} ${result.triesLeft === 1 ? "tentativo rimasto" : "tentativi rimasti"}` : "Nessun tentativo rimasto", W / 2, 330);
+      ctx.fillStyle = "#e8b04a"; ctx.fillText(`Punteggio ${score.toLocaleString("it-IT")}`, W / 2, 354);
+    }
+    if (message) {
+      ctx.globalAlpha = Math.min(1, (2 - message.t) * 2);
+      ctx.fillStyle = "rgba(0,0,0,0.6)"; ctx.fillRect(GX, 270, COLS * CS, 62);
+      ctx.textAlign = "center"; ctx.font = "900 24px system-ui"; ctx.fillStyle = "#3ac8ff";
+      ctx.lineWidth = 5; ctx.strokeStyle = "#0e1820"; ctx.strokeText(message.text, W / 2, 298); ctx.fillText(message.text, W / 2, 298);
+      if (message.sub) { ctx.font = "800 12px system-ui"; ctx.fillStyle = "#f0f6f8"; ctx.fillText(message.sub, W / 2, 320); }
+      ctx.globalAlpha = 1;
+    }
+  }
+
+  // ---------- Loop ----------
+  const STEP = 1 / 120;
+  let last = performance.now(), acc = 0;
+  function frame(now) {
+    const dt = Math.min(0.1, (now - last) / 1000);
+    last = now;
+    if (isPlaying()) {
+      acc += dt;
+      while (acc >= STEP && isPlaying()) { update(STEP); acc -= STEP; }
+    } else { acc = 0; update(dt); }
+    draw();
+    requestAnimationFrame(frame);
+  }
+  syncControls();
+  showTitle();
+  requestAnimationFrame(frame);
+})();
+</script>
+<script src="../../shared/iniziali.js" data-record="idraulico-best-" data-kind="score"></script>
+</body>
+</html>

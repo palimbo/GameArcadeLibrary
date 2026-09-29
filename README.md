@@ -4,7 +4,7 @@ Raccolta di giochi arcade per il browser. Ogni gioco è un singolo file HTML sen
 
 ## 🕹️ Sala Giochi — `index.html`
 
-Apri `index.html` nella cartella principale per la pagina di raccolta: mostra tutti i 83 giochi con copertina, genere, comandi e i tuoi record per ogni difficoltà (Facile, Normale, Difficile). Tocca «Gioca» per avviare un gioco; in ogni gioco il pulsante «← Sala Giochi» in alto a sinistra (visibile nei menu) riporta alla raccolta.
+Apri `index.html` nella cartella principale per la pagina di raccolta: mostra tutti i 84 giochi con copertina, genere, comandi e i tuoi record per ogni difficoltà (Facile, Normale, Difficile). Tocca «Gioca» per avviare un gioco; in ogni gioco il pulsante «← Sala Giochi» in alto a sinistra (visibile nei menu) riporta alla raccolta.
 
 **Iniziali del record:** quando batti un record compare la schermata da sala giochi per inserire le tue tre iniziali (frecce ↑ ↓ per cambiare lettera, ← → per spostarti, oppure scrivile direttamente; su telefono i tasti ▲ ▼ e OK). Le iniziali vengono salvate insieme al record e compaiono nei menu del gioco e nella Sala Giochi. Il codice è condiviso da tutti i giochi in `shared/iniziali.js`.
 
@@ -1310,3 +1310,18 @@ Rompicapo in stile *Dr. Mario*. Una bottiglia di 8×16 caselle è piena di virus
 - **Touch:** levetta (destra/sinistra per spostare, giù per scendere) e pulsanti RUOTA e GIÙ
 
 Per giocare apri `games/pillole-pazze/index.html` nel browser.
+
+### 🚰 Idraulico Lampo — `games/idraulico-lampo/index.html`
+
+Rompicapo a tempo in stile *Pipe Dream*. Su un pavimento di 7×9 caselle c'è un rubinetto; in alto arriva una fila di pezzi di tubo (dritti, curve e incroci) e tu li posi uno alla volta toccando le caselle. Allo scadere del conto alla rovescia l'acqua esce e scorre nei tubi: se trova una casella vuota, un tubo che non combacia o il bordo, allaga tutto.
+
+- **Livello superato:** se l'acqua riempie almeno il numero di tubi richiesto (10 al primo livello, due in più a ogni livello). Nei livelli successivi l'acqua scorre più in fretta e c'è meno tempo per prepararsi; dal livello 3 compaiono massi che occupano alcune caselle
+- **Cambiare un tubo:** tocca un tubo ancora vuoto per sostituirlo con il pezzo nuovo (−50 punti e un attimo di attesa); i tubi già pieni non si toccano
+- **Punti:** 50 per ogni tubo pieno (100 dopo aver premuto ACCELERA) · incrocio attraversato in tutte e due le direzioni +500 · livello superato 1.000 + 100 per ogni tubo oltre il minimo · a fine livello −20 per ogni tubo rimasto asciutto
+- **ACCELERA:** quando il percorso è pronto, fa partire subito l'acqua e la fa correre (punti doppi)
+- **Tentativi:** se l'acqua si ferma prima del minimo perdi un tentativo e rifai il livello con una nuova disposizione
+- **Difficoltà:** Facile (3 tentativi, acqua lenta, più tempo prima che parta), Normale (2 tentativi), Difficile (1 tentativo, acqua veloce); record separati per ogni difficoltà
+- **Comandi:** clic su una casella per posare il pezzo · in alternativa frecce per spostare il cursore e `Spazio` per posare · `F` accelera · `P` pausa
+- **Touch:** tocca una casella per posare il pezzo, tocca ACCELERA per far correre l'acqua
+
+Per giocare apri `games/idraulico-lampo/index.html` nel browser.
