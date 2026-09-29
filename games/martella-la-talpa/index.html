@@ -1,0 +1,549 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no, viewport-fit=cover">
+<title>Martella la Talpa</title>
+<style>
+  :root {
+    --bg: #162012;
+    --fg: #fbf6e8;
+    --muted: #c0c8a8;
+    --brown: #8a5a2a;
+    --yellow: #ffd23a;
+    --red: #ff4a3a;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  html, body {
+    height: 100%;
+    background: var(--bg);
+    color: var(--fg);
+    font-family: system-ui, -apple-system, "Segoe UI", sans-serif;
+    overflow: hidden;
+    user-select: none;
+    -webkit-user-select: none;
+    touch-action: none;
+  }
+  #wrap { position: fixed; inset: 0; display: flex; align-items: center; justify-content: center; }
+  canvas { display: block; touch-action: none; border-radius: 6px; box-shadow: 0 0 0 2px #2a3a22, 0 10px 40px rgba(0,0,0,0.6); cursor: none; }
+  #pauseBtn {
+    position: fixed; z-index: 3; display: none; right: 10px; top: calc(10px + env(safe-area-inset-top, 0px));
+    font: 700 13px system-ui, sans-serif; color: var(--fg);
+    background: rgba(0, 0, 0, 0.6); border: 1px solid rgba(251, 246, 232, 0.35);
+    border-radius: 8px; padding: 6px 10px; cursor: pointer;
+  }
+  #overlay {
+    position: fixed; inset: 0; z-index: 5;
+    display: flex; flex-direction: column; align-items: center; justify-content: flex-start;
+    gap: 14px; padding: 16px; text-align: center; overflow-y: auto;
+    background: rgba(22, 32, 18, 0.93);
+  }
+  #overlay > :first-child { margin-top: auto; }
+  #overlay > :last-child { margin-bottom: auto; }
+  #overlay.hidden { display: none; }
+  #homeLink {
+    position: fixed; top: calc(10px + env(safe-area-inset-top, 0px)); left: 10px; z-index: 6;
+    font: 600 13px/1 system-ui, sans-serif; color: #fff; text-decoration: none;
+    padding: 8px 12px; border-radius: 999px; background: rgba(0,0,0,.55);
+    border: 1px solid rgba(255,255,255,.25);
+  }
+  #homeLink:hover { background: rgba(0,0,0,.8); }
+  #overlay.hidden ~ #homeLink { display: none; }
+  @media (max-width: 700px) { #overlay { padding-top: calc(52px + env(safe-area-inset-top, 0px)); } }
+  #overlay h1 { font-size: clamp(32px, 10vw, 58px); font-weight: 900; letter-spacing: 1px; color: var(--yellow);
+    text-shadow: 3px 3px 0 #5a3a1a, 0 0 22px rgba(255,210,58,0.35); }
+  #overlay h2 { font-size: clamp(26px, 7vw, 42px); font-weight: 900; letter-spacing: 2px; color: var(--yellow); }
+  #overlay h2.lose { color: var(--red); }
+  #overlay p { max-width: 540px; font-size: clamp(13px, 3.4vw, 16px); line-height: 1.55; }
+  #overlay p.muted { color: var(--muted); }
+  #overlay .pts { display: grid; grid-template-columns: repeat(2, auto); gap: 4px 18px; font-size: 13px; color: var(--muted); text-align: left; max-width: 560px; }
+  #overlay .pts b { color: var(--fg); }
+  #overlay .diff { display: flex; gap: 10px; flex-wrap: wrap; justify-content: center; }
+  #overlay button {
+    font: 800 15px system-ui, sans-serif; letter-spacing: 1.5px; color: var(--fg);
+    background: transparent; cursor: pointer;
+    border: 2px solid rgba(251,246,232,0.3); border-radius: 10px; padding: 9px 16px;
+  }
+  #overlay .diff button.on { border-color: var(--c); color: var(--c); box-shadow: 0 0 12px var(--c); }
+  #overlay button.start { border-color: var(--yellow); color: #2a1a0a; background: var(--yellow); padding: 11px 30px; box-shadow: 0 4px 0 #a8841a; }
+  @media (max-height: 560px) {
+    #overlay { gap: 8px; }
+    #overlay h1 { font-size: 30px; }
+    #overlay p { font-size: 13px; line-height: 1.4; }
+    #overlay .help, #overlay .pts { display: none; }
+  }
+</style>
+</head>
+<body>
+<div id="wrap"><canvas id="game"></canvas></div>
+<button id="pauseBtn" type="button" aria-label="Pausa">❚❚</button>
+<div id="overlay"></div>
+<a id="homeLink" href="../../index.html">← Sala Giochi</a>
+
+<script>
+(() => {
+  "use strict";
+
+  const W = 360, H = 600, TAU = Math.PI * 2;
+  const COLS = [70, 180, 290], ROWS = [212, 340, 468];
+  const HOLES = ROWS.flatMap((y) => COLS.map((x) => ({ x, y })));
+  const HIT_R = 46, PER_LEVEL = 15, MAX_HEARTS = 5;
+  // keyboard: numpad layout, or the QWE / ASD / ZXC block
+  const KEYHOLE = { "7": 0, "8": 1, "9": 2, "4": 3, "5": 4, "6": 5, "1": 6, "2": 7, "3": 8, q: 0, w: 1, e: 2, a: 3, s: 4, d: 5, z: 6, x: 7, c: 8 };
+  const KINDS = {
+    talpa: { pts: 100, hp: 1 },
+    elmetto: { pts: 250, hp: 2 },
+    dorata: { pts: 500, hp: 1 },
+    coniglio: { pts: -300, hp: 1 },
+  };
+
+  const DIFFICULTIES = {
+    facile:    { label: "FACILE",    color: "#7ed87a", desc: "7 cuori · le talpe restano fuori più a lungo", hearts: 7, up: 1.3, bunny: 0.7 },
+    normale:   { label: "NORMALE",   color: "#ffd23a", desc: "5 cuori", hearts: 5, up: 1, bunny: 1 },
+    difficile: { label: "DIFFICILE", color: "#ff4a3a", desc: "5 cuori · talpe velocissime · più coniglietti", hearts: 5, up: 0.8, bunny: 1.4 },
+  };
+  const DIFF_IDS = Object.keys(DIFFICULTIES);
+  const DIFF_KEY = "talpa-difficulty";
+  const bestKey = (id) => `talpa-best-${id}`;
+  function store(k, v) { try { localStorage.setItem(k, v); } catch { /* ignore */ } }
+  function load(k) { try { return localStorage.getItem(k); } catch { return null; } }
+  const rnd = (a, b) => a + Math.random() * (b - a);
+  const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
+
+  // ---------- Canvas ----------
+  const canvas = document.getElementById("game");
+  const ctx = canvas.getContext("2d");
+  const overlay = document.getElementById("overlay");
+  const pauseBtn = document.getElementById("pauseBtn");
+  let pxRatio = 1, touchMode = !!(window.matchMedia && matchMedia("(pointer: coarse)").matches);
+  function resize() {
+    const availW = window.innerWidth - 8, availH = window.innerHeight - 8;
+    const s = Math.max(0.2, Math.min(availW / W, availH / H));
+    pxRatio = Math.min(3, s * (window.devicePixelRatio || 1));
+    canvas.style.width = W * s + "px";
+    canvas.style.height = H * s + "px";
+    canvas.width = Math.round(W * pxRatio);
+    canvas.height = Math.round(H * pxRatio);
+  }
+  window.addEventListener("resize", () => syncControls());
+
+  // ---------- Audio ----------
+  let audioCtx = null;
+  function beep(freq, dur, type = "square", vol = 0.04, slide = 0, delay = 0) {
+    if (!audioCtx) return;
+    const t = audioCtx.currentTime + delay;
+    const osc = audioCtx.createOscillator(), gain = audioCtx.createGain();
+    osc.type = type;
+    osc.frequency.setValueAtTime(freq, t);
+    if (slide) osc.frequency.exponentialRampToValueAtTime(Math.max(20, freq + slide), t + dur);
+    gain.gain.setValueAtTime(vol, t);
+    gain.gain.exponentialRampToValueAtTime(0.0001, t + dur);
+    osc.connect(gain).connect(audioCtx.destination);
+    osc.start(t); osc.stop(t + dur + 0.02);
+  }
+  function noise(dur, vol, freq) {
+    if (!audioCtx) return;
+    const len = Math.floor(audioCtx.sampleRate * dur), buf = audioCtx.createBuffer(1, len, audioCtx.sampleRate), d = buf.getChannelData(0);
+    for (let i = 0; i < len; i++) d[i] = (Math.random() * 2 - 1) * (1 - i / len);
+    const src = audioCtx.createBufferSource(), f = audioCtx.createBiquadFilter(), g = audioCtx.createGain();
+    src.buffer = buf; f.type = "bandpass"; f.frequency.value = freq; g.gain.value = vol;
+    src.connect(f).connect(g).connect(audioCtx.destination); src.start();
+  }
+  const arp = (notes, gap, d, type = "square", vol = 0.04) => notes.forEach((f, i) => beep(f, d, type, vol, 0, i * gap));
+  let sfxN = 0;
+  const lim = (fn) => (...a) => { if (sfxN++ < 6) fn(...a); };
+  const sfx = {
+    bonk: lim((m) => { noise(0.07, 0.15, 900); beep(260 + m * 60, 0.08, "square", 0.05, -120); }),
+    clank: lim(() => { beep(1400, 0.08, "square", 0.04); beep(2100, 0.06, "triangle", 0.03, 0, 0.02); }),
+    whiff: lim(() => noise(0.06, 0.05, 2500)),
+    pop: lim(() => beep(500, 0.05, "sine", 0.02, 200)),
+    gold: () => arp([1047, 1319, 1568, 2093], 0.05, 0.1),
+    bunny: () => arp([392, 311, 262], 0.08, 0.14, "sawtooth", 0.04),
+    escape: lim(() => beep(220, 0.18, "triangle", 0.05, -100)),
+    level: () => arp([523, 659, 784, 1047, 1319], 0.08, 0.14),
+    over: () => arp([523, 466, 415, 392, 330, 262], 0.15, 0.24, "triangle", 0.05),
+  };
+
+  // ---------- State ----------
+  let difficulty = DIFFICULTIES[load(DIFF_KEY)] ? load(DIFF_KEY) : "normale";
+  let diff = DIFFICULTIES[difficulty];
+  let state = "menu", menu = null, pausedFrom = null, stateT = 0, clock = 0;
+  let score = 0, level = 0, hearts = 5, bestCache = 0, whacked = 0, streak = 0, spawnT = 0, swings = 0, hits = 0;
+  let moles = [], parts = [], popups = [], message = null, hammer = { x: W / 2, y: 340, swing: 0, seen: false }, marks = [];
+
+  const upTime = () => Math.max(0.34, 1.05 - 0.1 * level) * diff.up;
+  const spawnEvery = () => Math.max(0.2, 0.9 - 0.06 * level);
+  const maxUp = () => Math.min(5, 1 + Math.floor(level / 2));
+  const mult = () => Math.min(4, 1 + Math.floor(streak / 6));
+
+  // ---------- Flow ----------
+  const isPlaying = () => ["intro", "play", "levelup"].includes(state);
+  function startGame() {
+    if (!audioCtx) { try { audioCtx = new (window.AudioContext || window.webkitAudioContext)(); } catch { audioCtx = null; } }
+    if (audioCtx && audioCtx.state === "suspended") audioCtx.resume();
+    score = 0; level = 0; hearts = diff.hearts; whacked = 0; streak = 0; swings = 0; hits = 0;
+    bestCache = parseInt(load(bestKey(difficulty)), 10) || 0;
+    moles = []; parts = []; popups = [];
+    beginLevel();
+    menu = null;
+    overlay.classList.add("hidden");
+    syncControls();
+    last = performance.now();
+  }
+  function beginLevel() {
+    whacked = 0; spawnT = 0.6;
+    message = { text: `LIVELLO ${level + 1}`, sub: `colpisci ${PER_LEVEL} talpe · fino a ${maxUp()} fuori insieme`, t: 0 };
+    state = "intro"; stateT = 1.4;
+  }
+  function spawnMole() {
+    const busy = new Set(moles.map((m) => m.h));
+    const free = HOLES.map((_, i) => i).filter((i) => !busy.has(i));
+    if (!free.length) return;
+    const h = free[Math.floor(Math.random() * free.length)];
+    const u = Math.random();
+    const pBunny = Math.min(0.22, 0.04 + 0.016 * level) * diff.bunny;
+    const pHelmet = level >= 1 ? 0.13 : 0, pGold = level >= 2 ? 0.05 : 0;
+    const kind = u < pBunny ? "coniglio" : u < pBunny + pHelmet ? "elmetto" : u < pBunny + pHelmet + pGold ? "dorata" : "talpa";
+    const up = upTime() * (kind === "dorata" ? 0.6 : kind === "elmetto" ? 1.35 : 1) * rnd(0.85, 1.15);
+    moles.push({ h, kind, hp: KINDS[kind].hp, t: 0, up, rise: 0, phase: "rise", hitT: 0, dent: 0 });
+    sfx.pop();
+  }
+  function addScore(n, x, y, color = "#fbf6e8") {
+    score = Math.max(0, score + n);
+    popups.push({ x, y, text: (n > 0 ? "+" : "") + n, color, t: 0 });
+  }
+  // a swing of the hammer at a hole
+  function whack(i) {
+    if (state !== "play") return;
+    swings++;
+    const H0 = HOLES[i];
+    hammer.swing = 1; if (!touchMode) { hammer.x = H0.x; hammer.y = H0.y - 20; }
+    marks.push({ x: H0.x, y: H0.y, t: 0 });
+    const m = moles.find((q) => q.h === i && q.phase !== "hit" && q.phase !== "gone" && q.rise > 0.35);
+    if (!m) { sfx.whiff(); return; }
+    hits++;
+    const k = KINDS[m.kind];
+    if (m.kind === "coniglio") {
+      // never the bunny!
+      m.phase = "hit"; m.hitT = 0;
+      streak = 0; hearts--;
+      addScore(k.pts, H0.x, H0.y - 80, "#ff4a3a");
+      popups.push({ x: H0.x, y: H0.y - 100, text: "NO, IL CONIGLIO!", color: "#ff8a8a", t: 0 });
+      sfx.bunny();
+      if (hearts <= 0) gameOver();
+      return;
+    }
+    m.hp--;
+    if (m.hp > 0) { m.dent = 1; m.t = Math.min(m.t, m.up * 0.5); sfx.clank(); burst(H0.x, H0.y - 50, "#dce4ec", 6, 90, 0.3); return; }
+    m.phase = "hit"; m.hitT = 0;
+    streak++; whacked++;
+    const pts = k.pts * mult();
+    addScore(pts, H0.x, H0.y - 80, m.kind === "dorata" ? "#ffd23a" : mult() > 1 ? "#ffe07a" : "#fbf6e8");
+    burst(H0.x, H0.y - 40, m.kind === "dorata" ? "#ffd23a" : "#fff4c8", m.kind === "dorata" ? 22 : 8, 120, 0.5);
+    if (m.kind === "dorata") sfx.gold(); else sfx.bonk(mult());
+    if (whacked >= PER_LEVEL) {
+      if (level % 2 === 1) hearts = Math.min(Math.max(MAX_HEARTS, diff.hearts), hearts + 1);
+      addScore(500 * (level + 1), W / 2, 300, "#7ed87a");
+      sfx.level();
+      message = { text: "LIVELLO SUPERATO!", sub: level % 2 === 1 ? "+1 cuore · si va più veloci" : "si va più veloci", t: 0 };
+      state = "levelup"; stateT = 1.6;
+    }
+  }
+  function burst(x, y, c, n = 10, sp = 100, life = 0.5) {
+    for (let k = 0; k < n; k++) { const a = Math.random() * TAU, s = sp * rnd(0.3, 1); parts.push({ x, y, vx: Math.cos(a) * s, vy: Math.sin(a) * s - 40, t: 0, life: life * rnd(0.6, 1.2), c }); }
+  }
+  function gameOver() {
+    state = "over";
+    const prev = parseInt(load(bestKey(difficulty)), 10) || 0;
+    const record = score > prev;
+    if (record) store(bestKey(difficulty), String(score));
+    sfx.over();
+    const acc = swings ? Math.round(hits / swings * 100) : 0;
+    menu = () => showOverlay(
+      `<h2 class="lose">${hearts <= 0 ? "LE TALPE HANNO VINTO!" : "PARTITA FINITA"}</h2>
+       <p>Punteggio: <b>${score.toLocaleString("it-IT")}</b> · livello ${level + 1} · mira ${acc}% · ${diff.label}</p>
+       ${record ? "<p style='color:var(--yellow)'>★ NUOVO RECORD! ★</p>" : ""}
+       ${difficultyHTML()}
+       <button class="start" data-start>GIOCA ANCORA</button>`
+    );
+    menu();
+    syncControls();
+  }
+  function togglePause() {
+    if (isPlaying()) {
+      pausedFrom = state; state = "paused";
+      showOverlay(`<h2>PAUSA</h2><button class="start" data-resume>CONTINUA</button><p class="muted">Premi P per continuare</p>`);
+    } else if (state === "paused") {
+      state = pausedFrom; overlay.classList.add("hidden"); last = performance.now();
+    }
+    syncControls();
+  }
+  // the pause menu can end the game (shared/iniziali.js): it ends here the usual way, saving the record
+  window.addEventListener("sala:termina", () => { if (state !== "paused") return; state = pausedFrom; overlay.classList.add("hidden"); gameOver(); syncControls(); });
+  function syncControls() {
+    pauseBtn.style.display = isPlaying() && touchMode ? "block" : "none";
+    resize();
+  }
+  pauseBtn.addEventListener("click", () => togglePause());
+  function showOverlay(html) { overlay.innerHTML = html; overlay.classList.remove("hidden"); }
+  function difficultyHTML() {
+    const buttons = DIFF_IDS.map((id) => {
+      const d = DIFFICULTIES[id];
+      return `<button type="button" data-diff="${id}" class="${id === difficulty ? "on" : ""}" style="--c:${d.color}">${d.label}</button>`;
+    }).join("");
+    const best = parseInt(load(bestKey(difficulty)), 10);
+    return `<div class="diff">${buttons}</div><p class="muted">${diff.desc}${best ? ` · Record: ${best.toLocaleString("it-IT")}` : ""}</p>`;
+  }
+  function setDifficulty(id) { if (!DIFFICULTIES[id]) return; difficulty = id; diff = DIFFICULTIES[id]; store(DIFF_KEY, id); if (menu) menu(); }
+  function showTitle() {
+    menu = showTitle;
+    showOverlay(
+      `<h1>MARTELLA LA TALPA</h1>
+       <p>Le talpe spuntano dalle buche del prato: colpiscile col martello prima che si rinfilino sotto terra! Ogni talpa che scappa ti costa un cuore. Ma il coniglietto non si tocca…</p>
+       <div class="pts">
+         <span><b>Talpa</b></span><span>100 · con l'elmetto ci vogliono due colpi: 250 · la talpa d'oro è velocissima: 500</span>
+         <span><b>Combo</b></span><span>ogni 6 talpe di fila il moltiplicatore sale, fino a ×4 (un coniglio lo azzera)</span>
+         <span><b>Coniglietto</b></span><span>non colpirlo: −300 punti e un cuore in meno. Lui scappa senza danni</span>
+         <span><b>Livelli</b></span><span>ogni ${PER_LEVEL} talpe si sale di livello; ogni due livelli si riprende un cuore</span>
+       </div>
+       ${touchMode
+         ? `<p class="muted help">Tocca la talpa per colpirla</p>`
+         : `<p class="muted help">Clicca sulle talpe · oppure tastierino numerico 7-8-9 / 4-5-6 / 1-2-3 (o Q W E / A S D / Z X C) · P pausa</p>`}
+       ${difficultyHTML()}
+       <button class="start" data-start>MARTELLO IN MANO!</button>`
+    );
+  }
+  overlay.addEventListener("click", (e) => {
+    const d = e.target.closest("[data-diff]");
+    if (d) { setDifficulty(d.dataset.diff); return; }
+    if (e.target.closest("[data-start]")) startGame();
+    if (e.target.closest("[data-resume]")) togglePause();
+  });
+
+  // ---------- Input ----------
+  window.addEventListener("keydown", (e) => {
+    const k = e.key.toLowerCase();
+    if ([" ", "arrowup", "arrowdown", "arrowleft", "arrowright"].includes(k)) e.preventDefault();
+    if (state === "menu" || state === "over") {
+      if (e.key === "Enter") startGame();
+      else if (["1", "2", "3"].includes(k) && state !== "play") setDifficulty(DIFF_IDS[+k - 1]);
+      return;
+    }
+    if (k === "p" || k === "escape") { if (!e.repeat) togglePause(); return; }
+    if (state === "paused") { if (e.key === "Enter") togglePause(); return; }
+    if (k in KEYHOLE && !e.repeat) { hammer.seen = true; whack(KEYHOLE[k]); }
+  });
+  window.addEventListener("blur", () => { if (isPlaying()) togglePause(); });
+  const toWorld = (e) => { const rc = canvas.getBoundingClientRect(); return { x: (e.clientX - rc.left) / rc.width * W, y: (e.clientY - rc.top) / rc.height * H }; };
+  function holeAt(x, y) {
+    // the mole sticks up above its hole, so the hit area reaches upward
+    let best = -1, bd = 1e9;
+    HOLES.forEach((h, i) => { const d = Math.hypot(x - h.x, (y - (h.y - 30)) * 0.8); if (d < bd) { bd = d; best = i; } });
+    return bd < HIT_R + 16 ? best : -1;
+  }
+  canvas.addEventListener("pointermove", (e) => { if (e.pointerType === "touch") return; const p = toWorld(e); hammer.x = p.x; hammer.y = p.y; hammer.seen = true; });
+  canvas.addEventListener("pointerdown", (e) => {
+    e.preventDefault();
+    const p = toWorld(e);
+    hammer.x = p.x; hammer.y = p.y; hammer.seen = true;
+    const i = holeAt(p.x, p.y);
+    if (i >= 0) whack(i); else if (state === "play") { hammer.swing = 1; swings++; sfx.whiff(); }
+  });
+  window.addEventListener("pointerdown", (e) => { if (e.pointerType === "touch" && !touchMode) { touchMode = true; syncControls(); if (menu) menu(); } }, true);
+
+  // ---------- Update ----------
+  function update(dt) {
+    clock += dt; sfxN = 0;
+    if (message) { message.t += dt; if (message.t > 2) message = null; }
+    for (const p of parts) { p.t += dt; p.x += p.vx * dt; p.y += p.vy * dt; p.vy += 300 * dt; }
+    parts = parts.filter((p) => p.t < p.life);
+    for (const p of popups) { p.t += dt; p.y -= 26 * dt; }
+    popups = popups.filter((p) => p.t < 1);
+    for (const m of marks) m.t += dt;
+    marks = marks.filter((m) => m.t < 0.25);
+    hammer.swing = Math.max(0, hammer.swing - dt * 6);
+    if (state === "menu") { for (const m of moles) m.t += dt; return; }
+    if (!isPlaying()) return;
+    if (state === "intro") { stateT -= dt; if (stateT <= 0) state = "play"; return; }
+    if (state === "levelup") {
+      stateT -= dt; updateMoles(dt, false);
+      if (stateT <= 0) { level++; moles = moles.filter((m) => m.phase === "hit"); beginLevel(); }
+      return;
+    }
+    if (window.__bot) window.__bot(dt);
+    updateMoles(dt, true);
+    spawnT -= dt;
+    if (spawnT <= 0) {
+      const up = moles.filter((m) => m.phase !== "hit" && m.phase !== "gone").length;
+      if (up < maxUp()) spawnMole();
+      spawnT = spawnEvery() * rnd(0.7, 1.3);
+    }
+  }
+  function updateMoles(dt, live) {
+    for (const m of moles) {
+      m.dent = Math.max(0, m.dent - dt * 4);
+      if (m.phase === "rise") { m.rise = Math.min(1, m.rise + dt / 0.14); if (m.rise >= 1) m.phase = "up"; }
+      else if (m.phase === "up") {
+        m.t += dt;
+        if (m.t >= m.up) m.phase = "sink";
+      } else if (m.phase === "sink") {
+        m.rise = Math.max(0, m.rise - dt / 0.14);
+        if (m.rise <= 0) {
+          m.phase = "gone";
+          // a mole got away (the bunny may leave freely)
+          if (live && m.kind !== "coniglio") {
+            hearts--; streak = 0; sfx.escape();
+            popups.push({ x: HOLES[m.h].x, y: HOLES[m.h].y - 40, text: "scappata!", color: "#ff8a6a", t: 0 });
+            if (hearts <= 0) { gameOver(); return; }
+          }
+        }
+      } else if (m.phase === "hit") {
+        m.hitT += dt; m.rise = Math.max(0, 1 - m.hitT / 0.35);
+        if (m.hitT > 0.4) m.phase = "gone";
+      }
+    }
+    moles = moles.filter((m) => m.phase !== "gone");
+  }
+
+  // ---------- Drawing ----------
+  function drawField() {
+    const g = ctx.createLinearGradient(0, 0, 0, H); g.addColorStop(0, "#7ac8f0"); g.addColorStop(0.18, "#bfe4f4"); g.addColorStop(0.19, "#5aa83a"); g.addColorStop(1, "#3a7a2a");
+    ctx.fillStyle = g; ctx.fillRect(0, 0, W, H);
+    // hills, a fence and a few flowers
+    ctx.fillStyle = "#4a983a"; ctx.beginPath(); ctx.ellipse(80, 118, 140, 40, 0, Math.PI, TAU); ctx.fill(); ctx.beginPath(); ctx.ellipse(300, 122, 150, 36, 0, Math.PI, TAU); ctx.fill();
+    ctx.fillStyle = "#e8d8b8"; for (let x = 6; x < W; x += 26) ctx.fillRect(x, 96, 5, 26); ctx.fillRect(0, 102, W, 4); ctx.fillRect(0, 112, W, 4);
+    for (let i = 0; i < 40; i++) { const x = (i * 73) % W, y = 140 + (i * 131) % (H - 150); ctx.fillStyle = ["#ffd23a", "#ff8ad0", "#fbf6e8"][i % 3]; ctx.fillRect(x, y, 3, 3); ctx.fillStyle = "#2a6a1a"; ctx.fillRect(x + 1, y + 3, 1, 4); }
+  }
+  function drawMole(m) {
+    const H0 = HOLES[m.h], rise = m.rise, hy = H0.y;
+    ctx.save();
+    // clip at the hole's rim so the mole comes out of the ground
+    ctx.beginPath(); ctx.rect(H0.x - 60, hy - 130, 120, 130); ctx.clip();
+    const y = hy + 40 - rise * 72 + (m.phase === "hit" ? Math.sin(m.hitT * 40) * 2 : 0);
+    const x = H0.x + m.dent * Math.sin(clock * 60) * 3;
+    if (m.kind === "coniglio") {
+      ctx.fillStyle = "#f4f0ea";
+      ctx.beginPath(); ctx.ellipse(x - 10, y - 46, 7, 22, -0.15, 0, TAU); ctx.fill(); ctx.beginPath(); ctx.ellipse(x + 10, y - 46, 7, 22, 0.15, 0, TAU); ctx.fill();
+      ctx.fillStyle = "#ffb8c8"; ctx.beginPath(); ctx.ellipse(x - 10, y - 46, 3, 15, -0.15, 0, TAU); ctx.fill(); ctx.beginPath(); ctx.ellipse(x + 10, y - 46, 3, 15, 0.15, 0, TAU); ctx.fill();
+      ctx.fillStyle = "#f4f0ea"; ctx.beginPath(); ctx.ellipse(x, y, 30, 36, 0, 0, TAU); ctx.fill();
+      ctx.fillStyle = "#1a1a1a"; ctx.beginPath(); ctx.arc(x - 10, y - 8, 4, 0, TAU); ctx.arc(x + 10, y - 8, 4, 0, TAU); ctx.fill();
+      ctx.fillStyle = "#fff"; ctx.beginPath(); ctx.arc(x - 9, y - 9, 1.5, 0, TAU); ctx.arc(x + 11, y - 9, 1.5, 0, TAU); ctx.fill();
+      ctx.fillStyle = "#ff8aa8"; ctx.beginPath(); ctx.moveTo(x - 4, y + 2); ctx.lineTo(x + 4, y + 2); ctx.lineTo(x, y + 6); ctx.fill();
+      ctx.fillStyle = "rgba(255,138,168,0.5)"; ctx.beginPath(); ctx.arc(x - 18, y + 4, 5, 0, TAU); ctx.arc(x + 18, y + 4, 5, 0, TAU); ctx.fill();
+      ctx.fillStyle = "#fff"; ctx.fillRect(x - 3, y + 7, 6, 5);
+    } else {
+      const body = m.kind === "dorata" ? "#ffcc3a" : "#8a5a3a", belly = m.kind === "dorata" ? "#fff0a0" : "#c89a6a";
+      ctx.fillStyle = body; ctx.beginPath(); ctx.ellipse(x, y, 32, 38, 0, 0, TAU); ctx.fill();
+      ctx.fillStyle = belly; ctx.beginPath(); ctx.ellipse(x, y + 14, 20, 20, 0, 0, TAU); ctx.fill();
+      // eyes: squeezed shut when bonked
+      ctx.strokeStyle = "#1a1a1a"; ctx.fillStyle = "#1a1a1a"; ctx.lineWidth = 2.5;
+      if (m.phase === "hit") { for (const s of [-1, 1]) { ctx.beginPath(); ctx.moveTo(x + s * 13 - 4, y - 14); ctx.lineTo(x + s * 13 + 4, y - 8); ctx.moveTo(x + s * 13 + 4, y - 14); ctx.lineTo(x + s * 13 - 4, y - 8); ctx.stroke(); } }
+      else { ctx.beginPath(); ctx.arc(x - 12, y - 11, 4, 0, TAU); ctx.arc(x + 12, y - 11, 4, 0, TAU); ctx.fill(); ctx.fillStyle = "#fff"; ctx.beginPath(); ctx.arc(x - 11, y - 12, 1.5, 0, TAU); ctx.arc(x + 13, y - 12, 1.5, 0, TAU); ctx.fill(); }
+      ctx.fillStyle = "#ff8a8a"; ctx.beginPath(); ctx.ellipse(x, y - 1, 7, 5, 0, 0, TAU); ctx.fill();
+      ctx.fillStyle = "#fff"; ctx.fillRect(x - 4, y + 5, 3, 5); ctx.fillRect(x + 1, y + 5, 3, 5);
+      ctx.strokeStyle = "rgba(0,0,0,0.4)"; ctx.lineWidth = 1; for (const s of [-1, 1]) { ctx.beginPath(); ctx.moveTo(x + s * 8, y); ctx.lineTo(x + s * 22, y - 3); ctx.moveTo(x + s * 8, y + 2); ctx.lineTo(x + s * 22, y + 4); ctx.stroke(); }
+      if (m.kind === "elmetto" && m.hp > 1) {
+        ctx.fillStyle = "#8a96a4"; ctx.beginPath(); ctx.arc(x, y - 18, 28, Math.PI, TAU); ctx.fill();
+        ctx.fillStyle = "#b8c4d0"; ctx.fillRect(x - 32, y - 20, 64, 6);
+        ctx.fillStyle = "#dce4ec"; ctx.beginPath(); ctx.arc(x - 8, y - 32, 5, 0, TAU); ctx.fill();
+      } else if (m.kind === "elmetto") { ctx.fillStyle = "#8a96a4"; ctx.fillRect(x - 14, y - 40, 10, 4); ctx.fillRect(x + 6, y - 36, 8, 4); }
+      if (m.kind === "dorata") { ctx.fillStyle = `rgba(255,255,255,${0.5 + 0.5 * Math.sin(clock * 12)})`; ctx.beginPath(); ctx.arc(x + 16, y - 26, 3, 0, TAU); ctx.fill(); }
+      if (m.phase === "hit") { ctx.fillStyle = "#ffd23a"; for (let k = 0; k < 3; k++) { const a = clock * 8 + k * 2.1; ctx.beginPath(); ctx.arc(x + Math.cos(a) * 22, y - 40 + Math.sin(a) * 6, 3, 0, TAU); ctx.fill(); } }
+    }
+    ctx.restore();
+  }
+  function drawHole(i, front) {
+    const h = HOLES[i];
+    if (!front) {
+      ctx.fillStyle = "#3a2a1a"; ctx.beginPath(); ctx.ellipse(h.x, h.y, 46, 16, 0, 0, TAU); ctx.fill();
+      ctx.fillStyle = "#1a120a"; ctx.beginPath(); ctx.ellipse(h.x, h.y + 2, 38, 11, 0, 0, TAU); ctx.fill();
+    } else {
+      // the front lip of dirt covers the bottom of the mole
+      ctx.fillStyle = "#6a4a2a"; ctx.beginPath(); ctx.ellipse(h.x, h.y + 6, 50, 14, 0, 0, Math.PI); ctx.fill();
+      ctx.fillStyle = "#8a6a3a"; ctx.beginPath(); ctx.ellipse(h.x, h.y + 4, 46, 9, 0, 0, Math.PI); ctx.fill();
+      if (!touchMode && hammer.seen) { ctx.fillStyle = "rgba(255,255,255,0.35)"; ctx.font = "800 10px system-ui"; ctx.textAlign = "center"; ctx.fillText("789456123"[i], h.x, h.y + 28); }
+    }
+  }
+  function drawHammer() {
+    if (touchMode || !hammer.seen) return;
+    const a = -0.6 + hammer.swing * 1.1;
+    ctx.save(); ctx.translate(hammer.x + 18, hammer.y + 26); ctx.rotate(a);
+    ctx.fillStyle = "#a8743a"; ctx.fillRect(-4, -4, 8, 54);
+    ctx.fillStyle = "#c83a2a"; ctx.beginPath(); ctx.roundRect(-26, -24, 52, 26, 6); ctx.fill();
+    ctx.fillStyle = "#e85a4a"; ctx.fillRect(-24, -22, 48, 6);
+    ctx.fillStyle = "#8a2a1a"; ctx.fillRect(-26, -6, 52, 4);
+    ctx.restore();
+  }
+  function drawHud() {
+    ctx.fillStyle = "rgba(20,30,16,0.88)"; ctx.fillRect(0, 0, W, 46);
+    ctx.textBaseline = "middle"; ctx.textAlign = "left";
+    ctx.fillStyle = "#fbf6e8"; ctx.font = "900 18px system-ui"; ctx.fillText(score.toLocaleString("it-IT"), 12, 15);
+    ctx.fillStyle = "#c0c8a8"; ctx.font = "700 9px system-ui"; ctx.fillText(`REC ${Math.max(bestCache, score).toLocaleString("it-IT")}`, 12, 34);
+    ctx.textAlign = "center"; ctx.fillStyle = "#ffd23a"; ctx.font = "900 12px system-ui"; ctx.fillText(`LIVELLO ${level + 1}`, W / 2, 13);
+    ctx.fillStyle = mult() > 1 ? "#ffe07a" : "#c0c8a8"; ctx.font = mult() > 1 ? "900 11px system-ui" : "700 9px system-ui";
+    ctx.fillText(mult() > 1 ? `COMBO ×${mult()}` : `talpe ${whacked}/${PER_LEVEL}`, W / 2, 32);
+    // hearts
+    ctx.textAlign = "right";
+    const hx = touchMode ? W - 62 : W - 12, n = Math.max(MAX_HEARTS, diff.hearts);
+    for (let i = 0; i < n; i++) {
+      const x = hx - i * 15, y = 22;
+      ctx.fillStyle = i < hearts ? "#ff4a5a" : "rgba(255,255,255,0.18)";
+      ctx.beginPath(); ctx.moveTo(x, y + 6); ctx.bezierCurveTo(x - 9, y - 1, x - 5, y - 8, x, y - 3); ctx.bezierCurveTo(x + 5, y - 8, x + 9, y - 1, x, y + 6); ctx.fill();
+    }
+    // progress to the next level
+    ctx.fillStyle = "rgba(255,255,255,0.15)"; ctx.fillRect(0, 46, W, 4);
+    ctx.fillStyle = "#ffd23a"; ctx.fillRect(0, 46, W * Math.min(1, whacked / PER_LEVEL), 4);
+    ctx.textBaseline = "alphabetic";
+  }
+  function draw() {
+    ctx.setTransform(pxRatio, 0, 0, pxRatio, 0, 0);
+    drawField();
+    if (state === "menu" && !moles.length) moles = [{ h: 1, kind: "talpa", hp: 1, t: 0, up: 99, rise: 1, phase: "up", dent: 0 }, { h: 3, kind: "elmetto", hp: 2, t: 0, up: 99, rise: 0.8, phase: "up", dent: 0 }, { h: 8, kind: "coniglio", hp: 1, t: 0, up: 99, rise: 1, phase: "up", dent: 0 }, { h: 6, kind: "dorata", hp: 1, t: 0, up: 99, rise: 0.6, phase: "up", dent: 0 }];
+    for (let i = 0; i < HOLES.length; i++) {
+      drawHole(i, false);
+      for (const m of moles) if (m.h === i) drawMole(m);
+      drawHole(i, true);
+    }
+    for (const m of marks) { ctx.strokeStyle = `rgba(255,255,255,${1 - m.t / 0.25})`; ctx.lineWidth = 3; ctx.beginPath(); ctx.ellipse(m.x, m.y - 30, 20 + m.t * 120, 8 + m.t * 40, 0, 0, TAU); ctx.stroke(); }
+    for (const p of parts) { ctx.globalAlpha = Math.max(0, 1 - p.t / p.life); ctx.fillStyle = p.c; ctx.fillRect(p.x - 2, p.y - 2, 4, 4); }
+    ctx.globalAlpha = 1;
+    for (const p of popups) {
+      ctx.globalAlpha = Math.max(0, 1 - p.t);
+      ctx.textAlign = "center"; ctx.font = "900 14px system-ui";
+      ctx.lineWidth = 3; ctx.strokeStyle = "#162012"; ctx.strokeText(p.text, p.x, p.y); ctx.fillStyle = p.color; ctx.fillText(p.text, p.x, p.y);
+    }
+    ctx.globalAlpha = 1;
+    drawHammer();
+    if (state === "menu") return;
+    drawHud();
+    if (message) {
+      ctx.globalAlpha = Math.min(1, (2 - message.t) * 2);
+      ctx.fillStyle = "rgba(0,0,0,0.55)"; ctx.fillRect(0, 260, W, 62);
+      ctx.textAlign = "center"; ctx.font = "900 26px system-ui"; ctx.fillStyle = "#ffd23a";
+      ctx.lineWidth = 5; ctx.strokeStyle = "#162012"; ctx.strokeText(message.text, W / 2, 290); ctx.fillText(message.text, W / 2, 290);
+      if (message.sub) { ctx.font = "800 12px system-ui"; ctx.fillStyle = "#fbf6e8"; ctx.fillText(message.sub, W / 2, 311); }
+      ctx.globalAlpha = 1;
+    }
+  }
+
+  // ---------- Loop ----------
+  const STEP = 1 / 120;
+  let last = performance.now(), acc = 0;
+  function frame(now) {
+    const dt = Math.min(0.1, (now - last) / 1000);
+    last = now;
+    if (isPlaying()) {
+      acc += dt;
+      while (acc >= STEP && isPlaying()) { update(STEP); acc -= STEP; }
+    } else { acc = 0; update(dt); }
+    draw();
+    requestAnimationFrame(frame);
+  }
+  syncControls();
+  showTitle();
+  requestAnimationFrame(frame);
+})();
+</script>
+<script src="../../shared/iniziali.js" data-record="talpa-best-" data-kind="score"></script>
+</body>
+</html>

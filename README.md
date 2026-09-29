@@ -4,7 +4,7 @@ Raccolta di giochi arcade per il browser. Ogni gioco è un singolo file HTML sen
 
 ## 🕹️ Sala Giochi — `index.html`
 
-Apri `index.html` nella cartella principale per la pagina di raccolta: mostra tutti i 88 giochi con copertina, genere, comandi e i tuoi record per ogni difficoltà (Facile, Normale, Difficile). Tocca «Gioca» per avviare un gioco; in ogni gioco il pulsante «← Sala Giochi» in alto a sinistra (visibile nei menu) riporta alla raccolta.
+Apri `index.html` nella cartella principale per la pagina di raccolta: mostra tutti i 89 giochi con copertina, genere, comandi e i tuoi record per ogni difficoltà (Facile, Normale, Difficile). Tocca «Gioca» per avviare un gioco; in ogni gioco il pulsante «← Sala Giochi» in alto a sinistra (visibile nei menu) riporta alla raccolta.
 
 **Iniziali del record:** quando batti un record compare la schermata da sala giochi per inserire le tue tre iniziali (frecce ↑ ↓ per cambiare lettera, ← → per spostarti, oppure scrivile direttamente; su telefono i tasti ▲ ▼ e OK). Le iniziali vengono salvate insieme al record e compaiono nei menu del gioco e nella Sala Giochi. Il codice è condiviso da tutti i giochi in `shared/iniziali.js`.
 
@@ -1384,3 +1384,18 @@ Corsa vista dall'alto in stile *Bump 'n' Jump*. La tua auto rosa corre da sola a
 - **Touch:** levetta (destra/sinistra sterza, su accelera, giù frena) e pulsante SALTO
 
 Per giocare apri `games/salta-e-sperona/index.html` nel browser.
+
+### 🔨 Martella la Talpa — `games/martella-la-talpa/index.html`
+
+Il classico *Whac-A-Mole* delle sale giochi. Nove buche in un prato: le talpe spuntano per un attimo e vanno colpite col martello prima che tornino sotto terra.
+
+- **Talpe:** marrone 100 · con l'elmetto ci vogliono due colpi (al primo l'elmetto vola via e la talpa resta fuori un po' di più) 250 · la talpa d'oro, velocissima, 500
+- **Coniglietto:** non va colpito! −300 punti e un cuore in meno; se lo lasci stare se ne va senza danni
+- **Cuori:** ogni talpa che scappa ne costa uno; senza cuori la partita finisce
+- **Combo:** ogni 6 talpe colpite di fila il moltiplicatore sale, fino a ×4; una talpa scappata o un coniglio colpito lo azzerano
+- **Livelli:** ogni 15 talpe si sale di livello (bonus 500 × livello): le talpe restano fuori meno tempo e ne spuntano di più insieme. Ogni due livelli si riprende un cuore
+- **Difficoltà:** Facile (7 cuori, talpe più lente a rientrare), Normale (5 cuori), Difficile (5 cuori, talpe velocissime, più coniglietti); record separati per ogni difficoltà
+- **Comandi:** clic sulle talpe · oppure tastierino numerico `7` `8` `9` / `4` `5` `6` / `1` `2` `3` (o `Q` `W` `E` / `A` `S` `D` / `Z` `X` `C`), disposti come le buche · `P` pausa
+- **Touch:** tocca la talpa
+
+Per giocare apri `games/martella-la-talpa/index.html` nel browser.
