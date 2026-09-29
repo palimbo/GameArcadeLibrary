@@ -4,7 +4,7 @@ Raccolta di giochi arcade per il browser. Ogni gioco è un singolo file HTML sen
 
 ## 🕹️ Sala Giochi — `index.html`
 
-Apri `index.html` nella cartella principale per la pagina di raccolta: mostra tutti i 80 giochi con copertina, genere, comandi e i tuoi record per ogni difficoltà (Facile, Normale, Difficile). Tocca «Gioca» per avviare un gioco; in ogni gioco il pulsante «← Sala Giochi» in alto a sinistra (visibile nei menu) riporta alla raccolta.
+Apri `index.html` nella cartella principale per la pagina di raccolta: mostra tutti i 81 giochi con copertina, genere, comandi e i tuoi record per ogni difficoltà (Facile, Normale, Difficile). Tocca «Gioca» per avviare un gioco; in ogni gioco il pulsante «← Sala Giochi» in alto a sinistra (visibile nei menu) riporta alla raccolta.
 
 **Iniziali del record:** quando batti un record compare la schermata da sala giochi per inserire le tue tre iniziali (frecce ↑ ↓ per cambiare lettera, ← → per spostarti, oppure scrivile direttamente; su telefono i tasti ▲ ▼ e OK). Le iniziali vengono salvate insieme al record e compaiono nei menu del gioco e nella Sala Giochi. Il codice è condiviso da tutti i giochi in `shared/iniziali.js`.
 
@@ -1266,3 +1266,18 @@ Tennis arcade visto da dietro le spalle del tuo giocatore. Si gioca un torneo a 
 - **Touch:** levetta per correre e mirare, pulsanti TIRA e PALLONETTO
 
 Per giocare apri `games/set-e-match/index.html` nel browser.
+
+### 🛡️ Carri di Latta — `games/carri-di-latta/index.html`
+
+Carri armati in un labirinto visto dall'alto, in stile *Battle City*. In fondo al campo c'è la tua base, un'aquila protetta da un muretto di mattoni: venti carri nemici per stage entrano dalle tre porte in alto e cercano di colpirla. Distruggili tutti per passare allo stage successivo.
+
+- **Terreno:** i mattoni si sbriciolano un pezzo alla volta sotto i colpi (anche i tuoi!) · l'acciaio ferma i colpi · l'acqua blocca i carri ma non i proiettili · sotto gli alberi i carri si nascondono
+- **Nemici:** base 100 · veloce 200 · cannone (colpi rapidi) 300 · corazzato, cambia colore a ogni colpo e ne servono 4, 400. Al massimo 4 nemici in campo alla volta
+- **Bonus:** i carri che lampeggiano di rosso, se colpiti, fanno comparire un bonus (500): stella (colpi più veloci, poi due colpi, poi colpi che rompono l'acciaio) · elmetto (scudo) · granata (distrugge tutti i nemici in campo) · orologio (nemici fermi) · pala (muro della base d'acciaio per qualche secondo) · carro (vita extra)
+- **Fine partita:** se colpiscono la base o perdi tutti i carri. Stage completato +1.000, carro extra ogni 20.000 punti
+- **Stage:** sei campi diversi, poi si ricomincia allo specchio con più nemici veloci e corazzati
+- **Difficoltà:** Facile (5 carri, nemici lenti a sparare), Normale (3 carri), Difficile (3 carri, nemici che sparano spesso e arrivano in fretta); record separati per ogni difficoltà
+- **Comandi:** frecce o `W` `A` `S` `D` per guidare · `Spazio`, `J` o `Z` fuoco (tieni premuto) · `P` pausa
+- **Touch:** levetta per guidare (quattro direzioni) e pulsante FUOCO
+
+Per giocare apri `games/carri-di-latta/index.html` nel browser.
