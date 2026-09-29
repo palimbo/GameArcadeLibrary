@@ -4,7 +4,7 @@ Raccolta di giochi arcade per il browser. Ogni gioco è un singolo file HTML sen
 
 ## 🕹️ Sala Giochi — `index.html`
 
-Apri `index.html` nella cartella principale per la pagina di raccolta: mostra tutti i 90 giochi con copertina, genere, comandi e i tuoi record per ogni difficoltà (Facile, Normale, Difficile). Tocca «Gioca» per avviare un gioco; in ogni gioco il pulsante «← Sala Giochi» in alto a sinistra (visibile nei menu) riporta alla raccolta.
+Apri `index.html` nella cartella principale per la pagina di raccolta: mostra tutti i 91 giochi con copertina, genere, comandi e i tuoi record per ogni difficoltà (Facile, Normale, Difficile). Tocca «Gioca» per avviare un gioco; in ogni gioco il pulsante «← Sala Giochi» in alto a sinistra (visibile nei menu) riporta alla raccolta.
 
 **Iniziali del record:** quando batti un record compare la schermata da sala giochi per inserire le tue tre iniziali (frecce ↑ ↓ per cambiare lettera, ← → per spostarti, oppure scrivile direttamente; su telefono i tasti ▲ ▼ e OK). Le iniziali vengono salvate insieme al record e compaiono nei menu del gioco e nella Sala Giochi. Il codice è condiviso da tutti i giochi in `shared/iniziali.js`.
 
@@ -1414,3 +1414,18 @@ Piattaforme su schermo singolo in stile *Mario Bros* (quello da sala giochi). Un
 - **Touch:** levetta per correre e pulsante SALTA
 
 Per giocare apri `games/colpo-da-sotto/index.html` nel browser.
+
+### ✈️ Raid sul Fiume — `games/raid-sul-fiume/index.html`
+
+Sparatutto a scorrimento verticale in stile *River Raid*. Un caccia giallo vola a pelo d'acqua risalendo un fiume nemico che si allarga, si stringe in gole strette e si divide attorno alle isole. Il fiume non finisce mai: ogni tratto tra due ponti è diverso.
+
+- **Volo:** il fiume scorre da solo; levetta o frecce per virare, su per accelerare, giù per rallentare. Toccare le rive (o le isole) fa precipitare l'aereo
+- **Nemici:** nave (30) · elicottero (60) · jet (100, dal terzo tratto attraversa lo schermo da un lato all'altro). Navi ed elicotteri a volte restano fermi, a volte si mettono in moto quando ti avvicini e fanno avanti e indietro tra le rive; urtarli è fatale
+- **Carburante:** la lancetta E–½–F scende di continuo; sorvola i depositi a strisce (BENZ) per fare il pieno, meglio se rallentando. Colpirli vale 80 punti, ma è benzina persa. Sotto un quarto suona l'allarme
+- **Ponti:** alla fine di ogni tratto un ponte sbarra il fiume: abbattilo (500) o ci sbatti contro. Ogni ponte abbattuto è il punto di ripartenza dopo una caduta, con il pieno fatto e lo stesso tratto di fiume
+- **Progressione:** tratto dopo tratto il fiume si fa più stretto e i nemici più numerosi e svelti. Aereo extra ogni 10.000 punti
+- **Difficoltà:** Facile (5 aerei, fiume largo, nemici lenti, 3 depositi per tratto, benzina che dura di più), Normale (4 aerei), Difficile (3 aerei, fiume stretto, nemici svelti, benzina che finisce presto); record separati per ogni difficoltà
+- **Comandi:** `←` `→` vira · `↑` accelera · `↓` rallenta · `Spazio`, `J` o `Z` spara (tieni premuto) · `P` pausa
+- **Touch:** levetta per virare e cambiare velocità, pulsante FUOCO da tenere premuto
+
+Per giocare apri `games/raid-sul-fiume/index.html` nel browser.
