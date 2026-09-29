@@ -4,7 +4,7 @@ Raccolta di giochi arcade per il browser. Ogni gioco è un singolo file HTML sen
 
 ## 🕹️ Sala Giochi — `index.html`
 
-Apri `index.html` nella cartella principale per la pagina di raccolta: mostra tutti i 91 giochi con copertina, genere, comandi e i tuoi record per ogni difficoltà (Facile, Normale, Difficile). Tocca «Gioca» per avviare un gioco; in ogni gioco il pulsante «← Sala Giochi» in alto a sinistra (visibile nei menu) riporta alla raccolta.
+Apri `index.html` nella cartella principale per la pagina di raccolta: mostra tutti i 92 giochi con copertina, genere, comandi e i tuoi record per ogni difficoltà (Facile, Normale, Difficile). Tocca «Gioca» per avviare un gioco; in ogni gioco il pulsante «← Sala Giochi» in alto a sinistra (visibile nei menu) riporta alla raccolta.
 
 **Iniziali del record:** quando batti un record compare la schermata da sala giochi per inserire le tue tre iniziali (frecce ↑ ↓ per cambiare lettera, ← → per spostarti, oppure scrivile direttamente; su telefono i tasti ▲ ▼ e OK). Le iniziali vengono salvate insieme al record e compaiono nei menu del gioco e nella Sala Giochi. Il codice è condiviso da tutti i giochi in `shared/iniziali.js`.
 
@@ -1429,3 +1429,16 @@ Sparatutto a scorrimento verticale in stile *River Raid*. Un caccia giallo vola 
 - **Touch:** levetta per virare e cambiare velocità, pulsante FUOCO da tenere premuto
 
 Per giocare apri `games/raid-sul-fiume/index.html` nel browser.
+
+### 🎨 Rampa dei Colori — `games/rampa-dei-colori/index.html`
+
+Puzzle d'azione in stile *Klax*. Le tessere colorate rotolano una capriola dopo l'altra giù da un nastro a cinque corsie; in fondo la tua paletta le prende al volo e le lancia nei cinque cassoni sottostanti (5 caselle ciascuno). Ogni colore ha anche un simbolo (cerchio, triangolo, quadrato, rombo, stella, croce).
+
+- **KLAX:** tre o più tessere dello stesso colore in fila nei cassoni spariscono e quelle sopra cadono giù. Verticale 100, orizzontale 500, diagonale 2.000, moltiplicati per le tessere oltre le due. Un KLAX provocato dalla caduta di un altro vale il doppio, poi il triplo…
+- **La paletta:** regge fino a 5 tessere impilate; si lancia sempre quella in cima. Puoi anche rilanciarla sul nastro per prendere tempo. Se una tessera arriva in fondo e la paletta non c'è (o è piena), è persa
+- **Ondate:** ognuna ha un obiettivo (fai N KLAX, prendi N tessere, fai N KLAX orizzontali o in diagonale). Completata l'ondata, 500 × ondata + 100 per ogni casella vuota, poi si riparte con i cassoni vuoti, il nastro più veloce e più colori. Si perde lasciando cadere troppe tessere in una sola ondata
+- **Difficoltà:** Facile (5 tessere perse concesse per ondata, nastro lento, un colore in meno), Normale (3), Difficile (2, nastro veloce, un colore in più); record separati per ogni difficoltà
+- **Comandi:** `←` `→` sposta la paletta · `Spazio` o `↓` lancia nel cassone · `↑` rilancia sul nastro · `P` pausa · col mouse: clic sul nastro per spostarti, clic su un cassone per lanciarci la tessera
+- **Touch:** levetta (su per rilanciare) e pulsante LANCIA, oppure tocca direttamente il nastro o un cassone
+
+Per giocare apri `games/rampa-dei-colori/index.html` nel browser.

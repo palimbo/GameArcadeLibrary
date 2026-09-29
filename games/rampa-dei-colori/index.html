@@ -1,0 +1,629 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no, viewport-fit=cover">
+<title>Rampa dei Colori</title>
+<style>
+  :root {
+    --bg: #140c24;
+    --fg: #f4f6ee;
+    --muted: #a8b4a8;
+    --pink: #3ae0c8;
+    --yellow: #ffd23a;
+    --red: #ff4a3a;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  html, body {
+    height: 100%;
+    background: var(--bg);
+    color: var(--fg);
+    font-family: system-ui, -apple-system, "Segoe UI", sans-serif;
+    overflow: hidden;
+    user-select: none;
+    -webkit-user-select: none;
+    touch-action: none;
+  }
+  #wrap { position: fixed; inset: 0; display: flex; align-items: center; justify-content: center; }
+  canvas { display: block; touch-action: none; border-radius: 6px; box-shadow: 0 0 0 2px #3a2a5a, 0 10px 40px rgba(0,0,0,0.6); }
+  #pauseBtn {
+    position: fixed; z-index: 3; display: none; right: 10px; top: calc(10px + env(safe-area-inset-top, 0px));
+    font: 700 13px system-ui, sans-serif; color: var(--fg);
+    background: rgba(0, 0, 0, 0.6); border: 1px solid rgba(244, 246, 238, 0.35);
+    border-radius: 8px; padding: 6px 10px; cursor: pointer;
+  }
+  #touch {
+    position: fixed; z-index: 2; display: none; left: 12px; right: 12px;
+    bottom: calc(14px + env(safe-area-inset-bottom, 0px));
+    justify-content: space-between; align-items: flex-end; pointer-events: none;
+  }
+  /* thumb stick: left/right moves the paddle, up throws the top tile back; LANCIA drops a tile into the bin */
+  #touch .stick { position: relative; width: 136px; height: 136px; border-radius: 50%; pointer-events: auto; touch-action: none;
+    border: 2px solid rgba(58, 224, 200, 0.6); background: radial-gradient(circle, rgba(58,224,200,0.14), rgba(58,224,200,0.04)); }
+  #touch .stick .knob { position: absolute; left: 50%; top: 50%; width: 58px; height: 58px; margin: -29px 0 0 -29px; border-radius: 50%;
+    background: rgba(58, 224, 200, 0.45); border: 2px solid rgba(255,255,255,0.7); box-shadow: 0 4px 10px rgba(0,0,0,0.4); pointer-events: none; }
+  #touch .stick .ring { position: absolute; inset: 10px; border-radius: 50%; border: 1px dashed rgba(244,246,238,0.25); pointer-events: none; }
+  #touch .jump { width: 96px; height: 96px; border-radius: 50%; pointer-events: auto; touch-action: none; color: var(--fg);
+    font: 800 13px system-ui, sans-serif; letter-spacing: 1px; border: 2px solid rgba(255, 106, 200, 0.9); background: rgba(255, 106, 200, 0.22); }
+  #touch .jump.on { background: rgba(255, 106, 200, 0.55); }
+  #touch.small .stick { width: 112px; height: 112px; }
+  #touch.small .stick .knob { width: 48px; height: 48px; margin: -24px 0 0 -24px; }
+  #touch.small .jump { width: 80px; height: 80px; font-size: 11px; }
+  #overlay {
+    position: fixed; inset: 0; z-index: 5;
+    display: flex; flex-direction: column; align-items: center; justify-content: flex-start;
+    gap: 14px; padding: 16px; text-align: center; overflow-y: auto;
+    background: rgba(20, 12, 36, 0.93);
+  }
+  #overlay > :first-child { margin-top: auto; }
+  #overlay > :last-child { margin-bottom: auto; }
+  #overlay.hidden { display: none; }
+  #homeLink {
+    position: fixed; top: calc(10px + env(safe-area-inset-top, 0px)); left: 10px; z-index: 6;
+    font: 600 13px/1 system-ui, sans-serif; color: #fff; text-decoration: none;
+    padding: 8px 12px; border-radius: 999px; background: rgba(0,0,0,.55);
+    border: 1px solid rgba(255,255,255,.25);
+  }
+  #homeLink:hover { background: rgba(0,0,0,.8); }
+  #overlay.hidden ~ #homeLink { display: none; }
+  @media (max-width: 700px) { #overlay { padding-top: calc(52px + env(safe-area-inset-top, 0px)); } }
+  #overlay h1 { font-size: clamp(32px, 10vw, 58px); font-weight: 900; font-style: italic; letter-spacing: 1px; color: var(--pink);
+    text-shadow: 3px 3px 0 #0a3a3a, 0 0 22px rgba(58,224,200,0.35); }
+  #overlay h2 { font-size: clamp(26px, 7vw, 42px); font-weight: 900; letter-spacing: 2px; color: var(--pink); }
+  #overlay h2.lose { color: var(--red); }
+  #overlay p { max-width: 540px; font-size: clamp(13px, 3.4vw, 16px); line-height: 1.55; }
+  #overlay p.muted { color: var(--muted); }
+  #overlay .pts { display: grid; grid-template-columns: repeat(2, auto); gap: 4px 18px; font-size: 13px; color: var(--muted); text-align: left; max-width: 560px; }
+  #overlay .pts b { color: var(--fg); }
+  #overlay .diff { display: flex; gap: 10px; flex-wrap: wrap; justify-content: center; }
+  #overlay button {
+    font: 800 15px system-ui, sans-serif; letter-spacing: 1.5px; color: var(--fg);
+    background: transparent; cursor: pointer;
+    border: 2px solid rgba(244,246,238,0.3); border-radius: 10px; padding: 9px 16px;
+  }
+  #overlay .diff button.on { border-color: var(--c); color: var(--c); box-shadow: 0 0 12px var(--c); }
+  #overlay button.start { border-color: var(--pink); color: #0a2a2a; background: var(--pink); padding: 11px 30px; box-shadow: 0 4px 0 #1a8a7a; }
+  @media (max-height: 560px) {
+    #overlay { gap: 8px; }
+    #overlay h1 { font-size: 30px; }
+    #overlay p { font-size: 13px; line-height: 1.4; }
+    #overlay .help, #overlay .pts { display: none; }
+  }
+</style>
+</head>
+<body>
+<div id="wrap"><canvas id="game"></canvas></div>
+<div id="touch">
+  <div class="stick" aria-label="Levetta"><div class="ring"></div><div class="knob"></div></div>
+  <button type="button" class="jump" aria-label="Lancia">LANCIA</button>
+</div>
+<button id="pauseBtn" type="button" aria-label="Pausa">❚❚</button>
+<div id="overlay"></div>
+<a id="homeLink" href="../../index.html">← Sala Giochi</a>
+
+<script>
+(() => {
+  "use strict";
+
+  const W = 360, H = 600, TAU = Math.PI * 2;
+  const LANES = 5, ROWS = 5, STACK = 5;
+  const RAMP_TOP = 66, RAMP_BOT = 350, PAD_Y = 366;
+  const BIN_X = 30, CELL_W = 60, CELL_H = 34, BIN_BOT = 580;
+  const COLORS = [
+    { c: "#ff4a5a", d: "#a81a2a", sym: "circle" },
+    { c: "#ffd23a", d: "#a8801a", sym: "triangle" },
+    { c: "#4ad86a", d: "#1a8a3a", sym: "square" },
+    { c: "#4a9aff", d: "#1a4aa8", sym: "diamond" },
+    { c: "#c86aff", d: "#6a2aa8", sym: "star" },
+    { c: "#f4f0ff", d: "#8a80a8", sym: "cross" },
+  ];
+  const PTS = { v: 100, h: 500, d: 2000 };
+
+  const DIFFICULTIES = {
+    facile:    { label: "FACILE",    color: "#7ed87a", desc: "5 tessere perse per ondata · nastro lento · meno colori", drops: 5, time: 1.3, col: -1 },
+    normale:   { label: "NORMALE",   color: "#3ae0c8", desc: "3 tessere perse per ondata", drops: 3, time: 0.88, col: 0 },
+    difficile: { label: "DIFFICILE", color: "#ff6ac8", desc: "2 tessere perse per ondata · nastro veloce · più colori", drops: 2, time: 0.8, col: 1 },
+  };
+  const DIFF_IDS = Object.keys(DIFFICULTIES);
+  const DIFF_KEY = "rampa-difficulty";
+  const bestKey = (id) => `rampa-best-${id}`;
+  function store(k, v) { try { localStorage.setItem(k, v); } catch { /* ignore */ } }
+  function load(k) { try { return localStorage.getItem(k); } catch { return null; } }
+  const rnd = (a, b) => a + Math.random() * (b - a);
+  const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
+  const sign = (v) => (v < 0 ? -1 : 1);
+  const lerp = (a, b, t) => a + (b - a) * t;
+
+  // ---------- Canvas ----------
+  const canvas = document.getElementById("game");
+  const ctx = canvas.getContext("2d");
+  const wrapEl = document.getElementById("wrap");
+  const overlay = document.getElementById("overlay");
+  const touchEl = document.getElementById("touch");
+  const pauseBtn = document.getElementById("pauseBtn");
+  let pxRatio = 1, touchMode = !!(window.matchMedia && matchMedia("(pointer: coarse)").matches);
+  function resize() {
+    const portrait = window.innerHeight > window.innerWidth;
+    const showTouch = touchMode && isPlaying();
+    touchEl.style.display = showTouch ? "flex" : "none";
+    touchEl.classList.toggle("small", !portrait && window.innerHeight < 480);
+    wrapEl.style.paddingBottom = showTouch && portrait ? "calc(170px + env(safe-area-inset-bottom, 0px))" : "0";
+    let availW = window.innerWidth - 8, availH = window.innerHeight - 8;
+    if (showTouch && portrait) availH -= 170;
+    if (showTouch && !portrait) {
+      const side = Math.max(...[...touchEl.children].map((el) => el.offsetWidth)) + 20;
+      if (window.innerWidth - 2 * side > 200) availW = window.innerWidth - 2 * side;
+    }
+    const s = Math.max(0.2, Math.min(availW / W, availH / H));
+    pxRatio = Math.min(3, s * (window.devicePixelRatio || 1));
+    canvas.style.width = W * s + "px";
+    canvas.style.height = H * s + "px";
+    canvas.width = Math.round(W * pxRatio);
+    canvas.height = Math.round(H * pxRatio);
+  }
+  window.addEventListener("resize", () => syncControls());
+
+  // ---------- Audio ----------
+  let audioCtx = null;
+  function beep(freq, dur, type = "square", vol = 0.04, slide = 0, delay = 0) {
+    if (!audioCtx) return;
+    const t = audioCtx.currentTime + delay;
+    const osc = audioCtx.createOscillator(), gain = audioCtx.createGain();
+    osc.type = type;
+    osc.frequency.setValueAtTime(freq, t);
+    if (slide) osc.frequency.exponentialRampToValueAtTime(Math.max(20, freq + slide), t + dur);
+    gain.gain.setValueAtTime(vol, t);
+    gain.gain.exponentialRampToValueAtTime(0.0001, t + dur);
+    osc.connect(gain).connect(audioCtx.destination);
+    osc.start(t); osc.stop(t + dur + 0.02);
+  }
+  function noise(dur, vol, freq) {
+    if (!audioCtx) return;
+    const len = Math.floor(audioCtx.sampleRate * dur), buf = audioCtx.createBuffer(1, len, audioCtx.sampleRate), d = buf.getChannelData(0);
+    for (let i = 0; i < len; i++) d[i] = (Math.random() * 2 - 1) * (1 - i / len);
+    const src = audioCtx.createBufferSource(), f = audioCtx.createBiquadFilter(), g = audioCtx.createGain();
+    src.buffer = buf; f.type = "bandpass"; f.frequency.value = freq; g.gain.value = vol;
+    src.connect(f).connect(g).connect(audioCtx.destination); src.start();
+  }
+  const arp = (notes, gap, d, type = "square", vol = 0.04) => notes.forEach((f, i) => beep(f, d, type, vol, 0, i * gap));
+  let sfxN = 0;
+  const lim = (fn) => (...a) => { if (sfxN++ < 6) fn(...a); };
+  const sfx = {
+    flip: lim(() => beep(180 + Math.random() * 40, 0.03, "triangle", 0.02)),
+    move: lim(() => beep(420, 0.03, "square", 0.02)),
+    catch: lim(() => beep(660, 0.06, "square", 0.03, 200)),
+    drop: lim(() => beep(500, 0.1, "triangle", 0.04, -250)),
+    back: lim(() => beep(300, 0.12, "triangle", 0.035, 400)),
+    full: lim(() => beep(110, 0.15, "square", 0.04)),
+    klax: lim((n) => arp([523, 659, 784, 1047, 1319].slice(0, 2 + n), 0.06, 0.1, "square", 0.045)),
+    miss: lim(() => { noise(0.3, 0.12, 700); beep(300, 0.35, "sawtooth", 0.04, -220); }),
+    wave: () => arp([523, 659, 784, 1047, 784, 1047, 1319], 0.09, 0.16),
+    over: () => arp([523, 466, 415, 392, 330, 262], 0.15, 0.24, "triangle", 0.05),
+  };
+
+  // ---------- State ----------
+  let difficulty = DIFFICULTIES[load(DIFF_KEY)] ? load(DIFF_KEY) : "normale";
+  let diff = DIFFICULTIES[difficulty];
+  let state = "menu", menu = null, pausedFrom = null, stateT = 0, clock = 0;
+  let score = 0, wave = 1, bestCache = 0, drops = 0, caught = 0, goal = null, spawnT = 0, bag = [];
+  let lane = 2, padX = 180, stack = [], tiles = [], bins = [], parts = [], popups = [], flashes = [], message = null, falling = [];
+  let dropPressed = false, backPressed = false;
+  const keys = { left: false, right: false };
+  const stick = { x: 0, y: 0 };
+  let moveDir = 0, moveT = 0, stickUp = false;
+
+  // ---------- The rules of a wave ----------
+  const rampTime = () => Math.max(2.4, 6.4 - (wave - 1) * 0.28) * diff.time;
+  const spawnGap = () => Math.max(0.85, 2.3 - (wave - 1) * 0.11) * diff.time;
+  const nColors = () => clamp(3 + Math.floor(wave / 2) + diff.col, 3, 6);
+  function makeGoal(w) {
+    const type = ["klax", "tiles", "klax", "h", "tiles", "d"][(w - 1) % 6], r = Math.floor((w - 1) / 6);
+    const n = type === "klax" ? 3 + Math.floor(w / 3) : type === "tiles" ? 22 + w * 2 : type === "h" ? 2 + r : 1 + r;
+    return { type, n, have: 0 };
+  }
+  const goalText = (g) => g.type === "klax" ? `Fai ${g.n} KLAX` : g.type === "tiles" ? `Prendi ${g.n} tessere` : g.type === "h" ? `Fai ${g.n} KLAX orizzontali` : `Fai ${g.n} KLAX in diagonale`;
+  const goalShort = (g) => g.type === "klax" ? "KLAX" : g.type === "tiles" ? "TESSERE" : g.type === "h" ? "ORIZZ." : "DIAG.";
+
+  // ---------- Flow ----------
+  const isPlaying = () => ["intro", "play", "clear", "lost"].includes(state);
+  function startGame() {
+    if (!audioCtx) { try { audioCtx = new (window.AudioContext || window.webkitAudioContext)(); } catch { audioCtx = null; } }
+    if (audioCtx && audioCtx.state === "suspended") audioCtx.resume();
+    score = 0; wave = 1;
+    bestCache = parseInt(load(bestKey(difficulty)), 10) || 0;
+    beginWave();
+    menu = null;
+    overlay.classList.add("hidden");
+    syncControls();
+    last = performance.now();
+  }
+  function beginWave() {
+    bins = Array.from({ length: LANES }, () => []);
+    tiles = []; stack = []; falling = []; drops = 0; caught = 0; bag = [];
+    lane = 2; padX = laneX(2, 1);
+    goal = makeGoal(wave);
+    spawnT = 0.6;
+    message = { text: `ONDATA ${wave}`, sub: goalText(goal), t: 0, life: 2.4 };
+    state = "intro"; stateT = 2;
+  }
+  function addScore(n, x, y, color = "#f4f0ff", text) {
+    score += n;
+    if (x !== undefined) popups.push({ x, y, text: text || String(n), color, t: 0 });
+  }
+  function burst(x, y, c, n = 12, sp = 110, life = 0.6) {
+    for (let k = 0; k < n; k++) { const a = Math.random() * TAU, s = sp * rnd(0.3, 1); parts.push({ x, y, vx: Math.cos(a) * s, vy: Math.sin(a) * s, t: 0, life: life * rnd(0.6, 1.2), c }); }
+  }
+  function gameOver() {
+    state = "over";
+    const prev = parseInt(load(bestKey(difficulty)), 10) || 0;
+    const record = score > prev;
+    if (record) store(bestKey(difficulty), String(score));
+    sfx.over();
+    menu = () => showOverlay(
+      `<h2 class="lose">${drops > diff.drops ? "TROPPE TESSERE PERSE!" : "PARTITA FINITA"}</h2>
+       <p>Punteggio: <b>${score.toLocaleString("it-IT")}</b> · ondata ${wave} · ${diff.label}</p>
+       ${record ? "<p style='color:var(--yellow)'>★ NUOVO RECORD! ★</p>" : ""}
+       ${difficultyHTML()}
+       <button class="start" data-start>GIOCA ANCORA</button>`
+    );
+    menu();
+    syncControls();
+  }
+  function togglePause() {
+    if (isPlaying()) {
+      pausedFrom = state; state = "paused";
+      showOverlay(`<h2>PAUSA</h2><button class="start" data-resume>CONTINUA</button><p class="muted">Premi P per continuare</p>`);
+    } else if (state === "paused") {
+      state = pausedFrom; overlay.classList.add("hidden"); last = performance.now();
+    }
+    syncControls();
+  }
+  // the pause menu can end the game (shared/iniziali.js): it ends here the usual way, saving the record
+  window.addEventListener("sala:termina", () => { if (state !== "paused") return; state = pausedFrom; overlay.classList.add("hidden"); gameOver(); syncControls(); });
+  function syncControls() {
+    pauseBtn.style.display = isPlaying() && touchMode ? "block" : "none";
+    resize();
+  }
+  pauseBtn.addEventListener("click", () => togglePause());
+  function showOverlay(html) { overlay.innerHTML = html; overlay.classList.remove("hidden"); }
+  function difficultyHTML() {
+    const buttons = DIFF_IDS.map((id) => {
+      const d = DIFFICULTIES[id];
+      return `<button type="button" data-diff="${id}" class="${id === difficulty ? "on" : ""}" style="--c:${d.color}">${d.label}</button>`;
+    }).join("");
+    const best = parseInt(load(bestKey(difficulty)), 10);
+    return `<div class="diff">${buttons}</div><p class="muted">${diff.desc}${best ? ` · Record: ${best.toLocaleString("it-IT")}` : ""}</p>`;
+  }
+  function setDifficulty(id) { if (!DIFFICULTIES[id]) return; difficulty = id; diff = DIFFICULTIES[id]; store(DIFF_KEY, id); if (menu) menu(); }
+  function showTitle() {
+    menu = showTitle;
+    showOverlay(
+      `<h1>RAMPA DEI COLORI</h1>
+       <p>Le tessere colorate rotolano giù dal nastro: prendile al volo con la paletta (ne regge 5) e lanciale nei cassoni. Tre o più dello stesso colore in fila fanno <b>KLAX</b> e spariscono! Completa l'obiettivo di ogni ondata, ma non lasciar cadere troppe tessere.</p>
+       <div class="pts">
+         <span><b>KLAX verticale</b></span><span>${PTS.v} × tessere oltre le due</span>
+         <span><b>KLAX orizzontale</b></span><span>${PTS.h} × tessere oltre le due</span>
+         <span><b>KLAX diagonale</b></span><span>${PTS.d.toLocaleString("it-IT")} × tessere oltre le due</span>
+         <span><b>A catena</b></span><span>ogni KLAX provocato da un altro vale il doppio, il triplo…</span>
+         <span><b>Fine ondata</b></span><span>500 × ondata + 100 per ogni casella vuota</span>
+       </div>
+       ${touchMode
+         ? `<p class="muted help">Levetta: destra e sinistra per spostare la paletta, su per rilanciare una tessera sul nastro · LANCIA per buttarla nel cassone · puoi anche toccare direttamente il nastro o un cassone</p>`
+         : `<p class="muted help">← → sposta la paletta · SPAZIO o ↓ lancia nel cassone · ↑ rilancia sul nastro · P pausa · col mouse: clic sul nastro o su un cassone</p>`}
+       ${difficultyHTML()}
+       <button class="start" data-start>SI COMINCIA!</button>`
+    );
+  }
+  overlay.addEventListener("click", (e) => {
+    const d = e.target.closest("[data-diff]");
+    if (d) { setDifficulty(d.dataset.diff); return; }
+    if (e.target.closest("[data-start]")) startGame();
+    if (e.target.closest("[data-resume]")) togglePause();
+  });
+
+  // ---------- Input ----------
+  const KEYMAP = { arrowleft: "left", a: "left", arrowright: "right", d: "right" };
+  window.addEventListener("keydown", (e) => {
+    const k = e.key.toLowerCase();
+    if ([" ", "arrowup", "arrowdown", "arrowleft", "arrowright"].includes(k)) e.preventDefault();
+    if (state === "menu" || state === "over") {
+      if (e.key === "Enter") startGame();
+      else if (["1", "2", "3"].includes(k)) setDifficulty(DIFF_IDS[+k - 1]);
+      return;
+    }
+    if (k === "p" || k === "escape") { if (!e.repeat) togglePause(); return; }
+    if (state === "paused") { if (e.key === "Enter") togglePause(); return; }
+    if (e.repeat) return;
+    if (k === " " || k === "arrowdown" || k === "s" || k === "j" || k === "z") dropPressed = true;
+    if (k === "arrowup" || k === "w") backPressed = true;
+    if (KEYMAP[k]) { keys[KEYMAP[k]] = true; step(KEYMAP[k] === "left" ? -1 : 1); moveDir = KEYMAP[k] === "left" ? -1 : 1; moveT = 0.22; }
+  });
+  window.addEventListener("keyup", (e) => { const m = KEYMAP[e.key.toLowerCase()]; if (m) keys[m] = false; });
+  window.addEventListener("blur", () => { for (const k in keys) keys[k] = false; stick.x = stick.y = 0; if (isPlaying()) togglePause(); });
+  const dropBtn = touchEl.querySelector(".jump");
+  dropBtn.addEventListener("pointerdown", (e) => { e.preventDefault(); dropPressed = true; dropBtn.classList.add("on"); });
+  for (const ev of ["pointerup", "pointercancel", "pointerleave"]) dropBtn.addEventListener(ev, () => dropBtn.classList.remove("on"));
+  const stickEl = touchEl.querySelector(".stick"), knob = stickEl.querySelector(".knob");
+  let stickId = null;
+  function stickAt(e) {
+    const r = stickEl.getBoundingClientRect(), max = r.width / 2 - 14;
+    let dx = e.clientX - (r.left + r.width / 2), dy = e.clientY - (r.top + r.height / 2);
+    const len = Math.hypot(dx, dy);
+    if (len > max) { dx *= max / len; dy *= max / len; }
+    knob.style.transform = `translate(${dx}px, ${dy}px)`;
+    const f = (v) => { const a = Math.abs(v) / max; return a < 0.15 ? 0 : sign(v) * Math.min(1, (a - 0.15) / 0.7); };
+    stick.x = f(dx); stick.y = f(dy);
+  }
+  const stickEnd = (e) => { if (e.pointerId !== stickId) return; stickId = null; knob.style.transform = ""; stick.x = stick.y = 0; };
+  stickEl.addEventListener("pointerdown", (e) => { e.preventDefault(); stickId = e.pointerId; try { stickEl.setPointerCapture(e.pointerId); } catch { /* ignore */ } stickAt(e); });
+  stickEl.addEventListener("pointermove", (e) => { if (e.pointerId === stickId) stickAt(e); });
+  for (const ev of ["pointerup", "pointercancel", "lostpointercapture"]) stickEl.addEventListener(ev, stickEnd);
+  window.addEventListener("pointerdown", (e) => { if (e.pointerType === "touch" && !touchMode) { touchMode = true; syncControls(); if (menu) menu(); } }, true);
+  // touching the ramp moves the paddle to that lane; touching a bin moves there and drops the tile in
+  canvas.addEventListener("pointerdown", (e) => {
+    if (state !== "play" && state !== "intro") return;
+    const r = canvas.getBoundingClientRect(), x = (e.clientX - r.left) / r.width * W, y = (e.clientY - r.top) / r.height * H;
+    if (y < RAMP_TOP) return;
+    e.preventDefault();
+    if (y > BIN_BOT - ROWS * CELL_H - 8) {
+      const c = Math.floor((x - BIN_X) / CELL_W);
+      if (c >= 0 && c < LANES) { if (c !== lane) { lane = c; sfx.move(); } dropPressed = true; }
+      return;
+    }
+    const p = clamp((y - RAMP_TOP) / (RAMP_BOT - RAMP_TOP), 0, 1), half = lerp(95, 150, p);
+    const c = clamp(Math.floor((x - (180 - half)) / (2 * half / LANES)), 0, LANES - 1);
+    if (c !== lane) { lane = c; sfx.move(); }
+  });
+
+  // ---------- Update ----------
+  function laneX(l, p) { const half = lerp(95, 150, p); return 180 - half + (l + 0.5) * (2 * half / LANES); }
+  function step(dir) {
+    if (state !== "play" && state !== "intro") return;
+    const n = clamp(lane + dir, 0, LANES - 1);
+    if (n !== lane) { lane = n; sfx.move(); }
+  }
+  function nextColor() {
+    // a shuffled bag, so no colour is starved for long
+    if (!bag.length) { const n = nColors(); for (let r = 0; r < 2; r++) for (let i = 0; i < n; i++) bag.push(i); for (let i = bag.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); [bag[i], bag[j]] = [bag[j], bag[i]]; } }
+    return bag.pop();
+  }
+  function spawn(dt) {
+    spawnT -= dt;
+    if (spawnT > 0) return;
+    spawnT = spawnGap() * rnd(0.8, 1.2);
+    // never two tiles side by side at the top of the same lane
+    const free = [...Array(LANES).keys()].filter((l) => !tiles.some((t) => t.lane === l && t.p < 0.25));
+    if (!free.length) return;
+    tiles.push({ lane: free[Math.floor(Math.random() * free.length)], p: 0, color: nextColor(), flips: 0 });
+  }
+  function dropTile() {
+    if (!stack.length) return;
+    const col = bins[lane];
+    if (col.length >= ROWS) { sfx.full(); flashes.push({ c: lane, t: 0 }); return; }
+    col.push(stack.pop());
+    sfx.drop();
+    resolve();
+  }
+  function throwBack() {
+    if (!stack.length) return;
+    tiles.push({ lane, p: 0.55, color: stack.pop(), flips: 0, back: 0.35 });
+    sfx.back();
+  }
+  function cellXY(c, r) { return [BIN_X + c * CELL_W + CELL_W / 2, BIN_BOT - r * CELL_H - CELL_H / 2]; }
+  function resolve() {
+    for (let chain = 1; ; chain++) {
+      const at = (c, r) => (c >= 0 && c < LANES && r >= 0 ? bins[c][r] : undefined);
+      const hit = new Set(), runs = [];
+      for (let c = 0; c < LANES; c++) for (let r = 0; r < bins[c].length; r++) {
+        const col = bins[c][r];
+        for (const [dc, dr, kind] of [[0, 1, "v"], [1, 0, "h"], [1, 1, "d"], [1, -1, "d"]]) {
+          if (at(c - dc, r - dr) === col) continue;
+          let n = 1; while (at(c + dc * n, r + dr * n) === col) n++;
+          if (n < 3) continue;
+          runs.push({ kind, n, c, r, dc, dr, col });
+          for (let i = 0; i < n; i++) hit.add((c + dc * i) * 10 + r + dr * i);
+        }
+      }
+      if (!runs.length) return;
+      for (const run of runs) {
+        const pts = PTS[run.kind] * (run.n - 2) * chain;
+        const [x0, y0] = cellXY(run.c, run.r), [x1, y1] = cellXY(run.c + run.dc * (run.n - 1), run.r + run.dr * (run.n - 1));
+        addScore(pts, (x0 + x1) / 2, (y0 + y1) / 2 - 8, COLORS[run.col].c, chain > 1 ? `${pts} ×${chain}` : String(pts));
+        if (goal.type === "klax" || goal.type === run.kind) goal.have++;
+      }
+      popups.push({ x: W / 2, y: BIN_BOT - ROWS * CELL_H - 18, text: runs.length > 1 ? `${runs.length} × KLAX!` : "KLAX!", color: "#3ae0c8", t: 0, big: true });
+      sfx.klax(Math.min(3, runs.length + chain - 1));
+      for (const key of hit) { const c = Math.floor(key / 10), r = key % 10, [x, y] = cellXY(c, r); burst(x, y, COLORS[bins[c][r]].c, 8, 120, 0.6); }
+      for (let c = 0; c < LANES; c++) bins[c] = bins[c].filter((_, r) => !hit.has(c * 10 + r));
+    }
+  }
+  function input(dt) {
+    const ax = clamp(stick.x + (keys.right ? 1 : 0) - (keys.left ? 1 : 0), -1, 1);
+    const dir = ax > 0.45 ? 1 : ax < -0.45 ? -1 : 0;
+    if (dir && dir !== moveDir) { step(dir); moveDir = dir; moveT = 0.22; }
+    else if (dir) { moveT -= dt; if (moveT <= 0) { step(dir); moveT = 0.13; } }
+    else moveDir = 0;
+    const up = stick.y < -0.6;
+    if (up && !stickUp) backPressed = true;
+    stickUp = up;
+    if (dropPressed) { dropPressed = false; dropTile(); }
+    if (backPressed) { backPressed = false; throwBack(); }
+  }
+  function updateTiles(dt) {
+    const T = rampTime();
+    for (const t of tiles) {
+      if (t.back > 0) { t.back -= dt; t.p = Math.max(0.2, t.p - dt / T * 1.2); continue; }
+      t.p += dt / T;
+      // tiles tumble end over end, one flip at a time
+      const f = Math.floor(t.p * 9);
+      if (f > t.flips) { t.flips = f; if (t.p > 0.05) sfx.flip(); }
+      if (t.p < 1) continue;
+      t.done = true;
+      if (t.lane === lane && stack.length < STACK) { stack.push(t.color); caught++; addScore(10); if (goal.type === "tiles") goal.have++; sfx.catch(); }
+      else {
+        drops++; sfx.miss();
+        falling.push({ x: laneX(t.lane, 1), y: RAMP_BOT, vy: 60, color: t.color, t: 0 });
+        popups.push({ x: laneX(t.lane, 1), y: RAMP_BOT + 30, text: "PERSA!", color: "#ff6a6a", t: 0 });
+        if (drops > diff.drops) { state = "lost"; stateT = 1.2; }
+      }
+    }
+    tiles = tiles.filter((t) => !t.done);
+  }
+  function update(dt) {
+    clock += dt; sfxN = 0;
+    if (message) { message.t += dt; if (message.t > message.life) message = null; }
+    for (const p of parts) { p.t += dt; p.x += p.vx * dt; p.y += p.vy * dt; p.vx *= 0.95; p.vy *= 0.95; }
+    parts = parts.filter((p) => p.t < p.life);
+    for (const p of popups) { p.t += dt; p.y -= 22 * dt; }
+    popups = popups.filter((p) => p.t < 1.2);
+    for (const f of falling) { f.t += dt; f.vy += 600 * dt; f.y += f.vy * dt; }
+    falling = falling.filter((f) => f.y < H + 30);
+    for (const f of flashes) f.t += dt;
+    flashes = flashes.filter((f) => f.t < 0.4);
+    padX += clamp(laneX(lane, 1) - padX, -900 * dt, 900 * dt);
+    if (state === "menu") { if (!goal) return; updateTiles(dt); spawn(dt); drops = 0; if (tiles.some((t) => t.p > 0.8)) lane = tiles.filter((t) => t.p > 0.5).sort((a, b) => b.p - a.p)[0].lane; if (stack.length > 2) { const c = Math.floor(Math.random() * LANES); if (bins[c].length < 3) bins[c].push(stack.pop()); else stack.pop(); resolve(); } return; }
+    if (state === "lost") { stateT -= dt; if (stateT <= 0) gameOver(); return; }
+    if (!isPlaying()) return;
+    if (state === "intro") { input(dt); stateT -= dt; if (stateT <= 0) state = "play"; return; }
+    if (state === "clear") { stateT -= dt; if (stateT <= 0) { wave++; beginWave(); } return; }
+    if (window.__bot) window.__bot(dt);
+    input(dt);
+    spawn(dt);
+    updateTiles(dt);
+    if (state !== "play") return;
+    if (goal.have >= goal.n) {
+      let empty = 0; for (const col of bins) empty += ROWS - col.length;
+      const bonus = 500 * wave + 100 * empty;
+      addScore(bonus);
+      message = { text: "ONDATA COMPLETATA!", sub: `bonus ${bonus.toLocaleString("it-IT")} · ${empty} caselle vuote`, t: 0, life: 2.4 };
+      tiles = [];
+      sfx.wave();
+      state = "clear"; stateT = 2.6;
+    }
+  }
+
+  // ---------- Drawing ----------
+  function drawSym(sym, x, y, s, color) {
+    ctx.fillStyle = color; ctx.beginPath();
+    if (sym === "circle") ctx.arc(x, y, s, 0, TAU);
+    else if (sym === "triangle") { ctx.moveTo(x, y - s * 1.1); ctx.lineTo(x + s * 1.1, y + s * 0.8); ctx.lineTo(x - s * 1.1, y + s * 0.8); }
+    else if (sym === "square") ctx.rect(x - s * 0.85, y - s * 0.85, s * 1.7, s * 1.7);
+    else if (sym === "diamond") { ctx.moveTo(x, y - s * 1.2); ctx.lineTo(x + s, y); ctx.lineTo(x, y + s * 1.2); ctx.lineTo(x - s, y); }
+    else if (sym === "star") { for (let i = 0; i < 10; i++) { const a = -Math.PI / 2 + i * Math.PI / 5, rr = i % 2 ? s * 0.5 : s * 1.2; ctx.lineTo(x + Math.cos(a) * rr, y + Math.sin(a) * rr); } }
+    else { ctx.rect(x - s * 0.35, y - s, s * 0.7, s * 2); ctx.rect(x - s, y - s * 0.35, s * 2, s * 0.7); }
+    ctx.closePath(); ctx.fill();
+  }
+  function drawTile(x, y, w, h, color, face = 1) {
+    const C = COLORS[color];
+    ctx.fillStyle = C.d; ctx.beginPath(); ctx.roundRect(x - w / 2, y - h / 2 + 2, w, h, 4); ctx.fill();
+    ctx.fillStyle = face > 0 ? C.c : C.d; ctx.beginPath(); ctx.roundRect(x - w / 2, y - h / 2, w, h - 2, 4); ctx.fill();
+    if (h > 10) { ctx.fillStyle = "rgba(255,255,255,0.25)"; ctx.fillRect(x - w / 2 + 3, y - h / 2 + 2, w - 6, 2); drawSym(C.sym, x, y - 1, Math.min(w, h) * 0.22, "rgba(20,12,36,0.55)"); }
+  }
+  function drawRamp() {
+    // the conveyor, drawn in perspective
+    ctx.fillStyle = "#2a1a4a";
+    ctx.beginPath(); ctx.moveTo(180 - 95, RAMP_TOP); ctx.lineTo(180 + 95, RAMP_TOP); ctx.lineTo(180 + 150, RAMP_BOT); ctx.lineTo(180 - 150, RAMP_BOT); ctx.closePath(); ctx.fill();
+    for (let i = 0; i < 12; i++) {
+      const p = ((i + clock * 0.6) % 12) / 12, y = lerp(RAMP_TOP, RAMP_BOT, p), half = lerp(95, 150, p);
+      ctx.fillStyle = "rgba(255,255,255,0.05)"; ctx.fillRect(180 - half, y, half * 2, 3);
+    }
+    ctx.strokeStyle = "rgba(58,224,200,0.25)"; ctx.lineWidth = 1;
+    for (let l = 0; l <= LANES; l++) { ctx.beginPath(); ctx.moveTo(180 - 95 + l * 38, RAMP_TOP); ctx.lineTo(180 - 150 + l * 60, RAMP_BOT); ctx.stroke(); }
+    // the lane the paddle is in
+    ctx.fillStyle = "rgba(58,224,200,0.08)";
+    ctx.beginPath(); ctx.moveTo(180 - 95 + lane * 38, RAMP_TOP); ctx.lineTo(180 - 95 + (lane + 1) * 38, RAMP_TOP); ctx.lineTo(180 - 150 + (lane + 1) * 60, RAMP_BOT); ctx.lineTo(180 - 150 + lane * 60, RAMP_BOT); ctx.closePath(); ctx.fill();
+    ctx.strokeStyle = "#3ae0c8"; ctx.lineWidth = 3;
+    ctx.beginPath(); ctx.moveTo(180 - 95, RAMP_TOP); ctx.lineTo(180 - 150, RAMP_BOT); ctx.moveTo(180 + 95, RAMP_TOP); ctx.lineTo(180 + 150, RAMP_BOT); ctx.stroke();
+    ctx.fillStyle = "#4a3a7a"; ctx.fillRect(180 - 100, RAMP_TOP - 10, 200, 10);
+  }
+  function drawTiles() {
+    for (const t of [...tiles].sort((a, b) => a.p - b.p)) {
+      const p = clamp(t.p, 0, 1), x = laneX(t.lane, p), y = lerp(RAMP_TOP, RAMP_BOT, p);
+      const w = lerp(30, 48, p), full = lerp(15, 24, p), ph = (t.p * 9) % 1;
+      const h = Math.max(3, full * Math.abs(Math.cos(ph * Math.PI)));
+      drawTile(x, y - Math.sin(ph * Math.PI) * full * 0.5, w, h, t.color, Math.cos(ph * Math.PI) > 0 ? 1 : -1);
+    }
+  }
+  function drawPaddle() {
+    ctx.fillStyle = "#3ae0c8"; ctx.beginPath(); ctx.roundRect(padX - 28, PAD_Y, 56, 10, 4); ctx.fill();
+    ctx.fillStyle = "#1a8a7a"; ctx.fillRect(padX - 26, PAD_Y + 7, 52, 3);
+    for (let i = 0; i < stack.length; i++) drawTile(padX, PAD_Y - 6 - i * 10, 46, 11, stack[i]);
+    if (stack.length >= STACK) { ctx.fillStyle = "#ff6a6a"; ctx.font = "900 9px system-ui"; ctx.textAlign = "center"; ctx.fillText("PIENA", padX, PAD_Y + 22); }
+  }
+  function drawBins() {
+    const top = BIN_BOT - ROWS * CELL_H;
+    ctx.fillStyle = "#1e1236"; ctx.fillRect(BIN_X - 6, top - 6, LANES * CELL_W + 12, ROWS * CELL_H + 12);
+    for (let c = 0; c < LANES; c++) {
+      const fl = flashes.find((f) => f.c === c);
+      ctx.fillStyle = fl ? "rgba(255,90,90,0.35)" : c === lane ? "rgba(58,224,200,0.12)" : "rgba(255,255,255,0.03)";
+      ctx.fillRect(BIN_X + c * CELL_W + 2, top, CELL_W - 4, ROWS * CELL_H);
+      for (let r = 0; r < bins[c].length; r++) { const [x, y] = cellXY(c, r); drawTile(x, y, CELL_W - 8, CELL_H - 5, bins[c][r]); }
+    }
+    ctx.strokeStyle = "#4a3a7a"; ctx.lineWidth = 2;
+    for (let c = 0; c <= LANES; c++) { ctx.beginPath(); ctx.moveTo(BIN_X + c * CELL_W, top); ctx.lineTo(BIN_X + c * CELL_W, BIN_BOT); ctx.stroke(); }
+    ctx.beginPath(); ctx.moveTo(BIN_X - 2, BIN_BOT + 1); ctx.lineTo(BIN_X + LANES * CELL_W + 2, BIN_BOT + 1); ctx.stroke();
+  }
+  function drawHud() {
+    ctx.fillStyle = "rgba(20,12,36,0.94)"; ctx.fillRect(0, 0, W, 44);
+    ctx.textBaseline = "middle"; ctx.textAlign = "left";
+    ctx.fillStyle = "#f4f0ff"; ctx.font = "900 16px system-ui"; ctx.fillText(score.toLocaleString("it-IT"), 10, 14);
+    ctx.fillStyle = "#a89ac8"; ctx.font = "700 9px system-ui"; ctx.fillText(`REC ${Math.max(bestCache, score).toLocaleString("it-IT")}`, 10, 32);
+    ctx.fillStyle = "#3ae0c8"; ctx.font = "900 11px system-ui"; ctx.fillText(`ONDATA ${wave}`, 104, 14);
+    ctx.fillStyle = "#ffd23a"; ctx.font = "800 10px system-ui"; ctx.fillText(`${goalShort(goal)} ${Math.min(goal.have, goal.n)}/${goal.n}`, 104, 32);
+    // the drop meter: one light per tile that may still be lost
+    const x0 = touchMode ? 200 : 230;
+    ctx.fillStyle = "#a89ac8"; ctx.font = "700 8px system-ui"; ctx.fillText("PERSE", x0, 32);
+    for (let i = 0; i < diff.drops; i++) { ctx.fillStyle = i < drops ? "#ff4a5a" : "#3a2a5a"; ctx.beginPath(); ctx.arc(x0 + 5 + i * 13, 14, 5, 0, TAU); ctx.fill(); }
+    ctx.textBaseline = "alphabetic";
+  }
+  function draw() {
+    ctx.setTransform(pxRatio, 0, 0, pxRatio, 0, 0);
+    const g = ctx.createLinearGradient(0, 0, 0, H); g.addColorStop(0, "#1a0e30"); g.addColorStop(1, "#0e0820");
+    ctx.fillStyle = g; ctx.fillRect(0, 0, W, H);
+    if (!goal) { goal = makeGoal(1); bins = [[0, 1], [2], [1, 1], [], [3, 0, 2]]; }
+    drawRamp();
+    drawTiles();
+    drawBins();
+    drawPaddle();
+    for (const f of falling) drawTile(f.x, f.y, 44, 20, f.color);
+    for (const p of parts) { ctx.globalAlpha = Math.max(0, 1 - p.t / p.life); ctx.fillStyle = p.c; ctx.fillRect(p.x - 2, p.y - 2, 4, 4); }
+    ctx.globalAlpha = 1;
+    for (const p of popups) {
+      ctx.globalAlpha = Math.max(0, 1 - p.t / 1.2);
+      ctx.textAlign = "center"; ctx.font = p.big ? "italic 900 26px system-ui" : "900 13px system-ui";
+      ctx.lineWidth = p.big ? 6 : 3; ctx.strokeStyle = "#140c24"; ctx.strokeText(p.text, p.x, p.y); ctx.fillStyle = p.color; ctx.fillText(p.text, p.x, p.y);
+    }
+    ctx.globalAlpha = 1;
+    if (state === "menu") return;
+    drawHud();
+    if (message) {
+      ctx.globalAlpha = Math.min(1, (message.life - message.t) * 2);
+      ctx.fillStyle = "rgba(0,0,0,0.6)"; ctx.fillRect(0, 170, W, 64);
+      ctx.textAlign = "center"; ctx.font = "italic 900 26px system-ui"; ctx.fillStyle = "#3ae0c8";
+      ctx.lineWidth = 5; ctx.strokeStyle = "#140c24"; ctx.strokeText(message.text, W / 2, 200); ctx.fillText(message.text, W / 2, 200);
+      if (message.sub) { ctx.font = "800 13px system-ui"; ctx.fillStyle = "#ffd23a"; ctx.fillText(message.sub, W / 2, 222); }
+      ctx.globalAlpha = 1;
+    }
+  }
+
+  // ---------- Loop ----------
+  const STEP = 1 / 120;
+  let last = performance.now(), acc = 0;
+  function frame(now) {
+    const dt = Math.min(0.1, (now - last) / 1000);
+    last = now;
+    if (isPlaying()) {
+      acc += dt;
+      while (acc >= STEP && isPlaying()) { update(STEP); acc -= STEP; }
+    } else { acc = 0; update(dt); }
+    draw();
+    requestAnimationFrame(frame);
+  }
+  syncControls();
+  showTitle();
+  requestAnimationFrame(frame);
+})();
+</script>
+<script src="../../shared/iniziali.js" data-record="rampa-best-" data-kind="score"></script>
+</body>
+</html>
