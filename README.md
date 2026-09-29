@@ -4,7 +4,7 @@ Raccolta di giochi arcade per il browser. Ogni gioco è un singolo file HTML sen
 
 ## 🕹️ Sala Giochi — `index.html`
 
-Apri `index.html` nella cartella principale per la pagina di raccolta: mostra tutti i 87 giochi con copertina, genere, comandi e i tuoi record per ogni difficoltà (Facile, Normale, Difficile). Tocca «Gioca» per avviare un gioco; in ogni gioco il pulsante «← Sala Giochi» in alto a sinistra (visibile nei menu) riporta alla raccolta.
+Apri `index.html` nella cartella principale per la pagina di raccolta: mostra tutti i 88 giochi con copertina, genere, comandi e i tuoi record per ogni difficoltà (Facile, Normale, Difficile). Tocca «Gioca» per avviare un gioco; in ogni gioco il pulsante «← Sala Giochi» in alto a sinistra (visibile nei menu) riporta alla raccolta.
 
 **Iniziali del record:** quando batti un record compare la schermata da sala giochi per inserire le tue tre iniziali (frecce ↑ ↓ per cambiare lettera, ← → per spostarti, oppure scrivile direttamente; su telefono i tasti ▲ ▼ e OK). Le iniziali vengono salvate insieme al record e compaiono nei menu del gioco e nella Sala Giochi. Il codice è condiviso da tutti i giochi in `shared/iniziali.js`.
 
@@ -1369,3 +1369,18 @@ Sfida di tiri a canestro a tempo, come le macchine *Pop-A-Shot* delle sale gioch
 - **Touch:** trascina all'indietro in qualsiasi punto dello schermo e lascia: più tiri lontano, più il tiro è forte
 
 Per giocare apri `games/canestro-pazzo/index.html` nel browser.
+
+### 🚗 Salta e Sperona — `games/salta-e-sperona/index.html`
+
+Corsa vista dall'alto in stile *Bump 'n' Jump*. La tua auto rosa corre da sola a velocità di crociera (puoi accelerare o frenare) e sa **saltare**: ogni tappa è una strada di campagna piena di altre auto, con qualche ponte crollato da scavalcare, fino al traguardo.
+
+- **Salto:** possibile oltre 110 km/h; più vai veloce, più salti lontano (i salti lenti galleggiano un po' di più, così un ponte crollato si supera sempre). Un cartello giallo avvisa del ponte crollato
+- **Schiacciata:** atterra su un'auto per distruggerla · blu 200 · rossa 300 · camion 500
+- **Speronata:** spingila di lato fuori strada · blu 300 · rossa 400 · camion 800 (pesa il doppio: ci vogliono più colpi)
+- **Pericoli:** finire fuori strada o in acqua, oppure tamponare forte un'auto più lenta. Le auto rosse ti cercano per speronarti, a volte arrivando da dietro
+- **Tappe:** primavera, estate, autunno e inverno a ripetizione, con strade sempre più strette, più traffico e ponti crollati più frequenti. Al traguardo 1.000 punti più 100 per ogni auto distrutta; auto extra ogni 20.000 punti
+- **Difficoltà:** Facile (5 auto, strada larga, pochi speronatori), Normale (3 auto), Difficile (3 auto, strada stretta, speronatori aggressivi); record separati per ogni difficoltà
+- **Comandi:** `←` `→` sterza · `↑` accelera · `↓` frena · `Spazio`, `J` o `Z` salta · `P` pausa
+- **Touch:** levetta (destra/sinistra sterza, su accelera, giù frena) e pulsante SALTO
+
+Per giocare apri `games/salta-e-sperona/index.html` nel browser.

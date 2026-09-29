@@ -1,0 +1,691 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no, viewport-fit=cover">
+<title>Salta e Sperona</title>
+<style>
+  :root {
+    --bg: #10181a;
+    --fg: #f4f6ee;
+    --muted: #a8b4a8;
+    --pink: #ff5aa8;
+    --yellow: #ffd23a;
+    --red: #ff4a3a;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  html, body {
+    height: 100%;
+    background: var(--bg);
+    color: var(--fg);
+    font-family: system-ui, -apple-system, "Segoe UI", sans-serif;
+    overflow: hidden;
+    user-select: none;
+    -webkit-user-select: none;
+    touch-action: none;
+  }
+  #wrap { position: fixed; inset: 0; display: flex; align-items: center; justify-content: center; }
+  canvas { display: block; touch-action: none; border-radius: 6px; box-shadow: 0 0 0 2px #243234, 0 10px 40px rgba(0,0,0,0.6); }
+  #pauseBtn {
+    position: fixed; z-index: 3; display: none; right: 10px; top: calc(10px + env(safe-area-inset-top, 0px));
+    font: 700 13px system-ui, sans-serif; color: var(--fg);
+    background: rgba(0, 0, 0, 0.6); border: 1px solid rgba(244, 246, 238, 0.35);
+    border-radius: 8px; padding: 6px 10px; cursor: pointer;
+  }
+  #touch {
+    position: fixed; z-index: 2; display: none; left: 12px; right: 12px;
+    bottom: calc(14px + env(safe-area-inset-bottom, 0px));
+    justify-content: space-between; align-items: flex-end; pointer-events: none;
+  }
+  /* thumb stick: left/right to steer, up to speed up, down to brake; SALTO jumps */
+  #touch .stick { position: relative; width: 136px; height: 136px; border-radius: 50%; pointer-events: auto; touch-action: none;
+    border: 2px solid rgba(255, 90, 168, 0.6); background: radial-gradient(circle, rgba(255,90,168,0.14), rgba(255,90,168,0.04)); }
+  #touch .stick .knob { position: absolute; left: 50%; top: 50%; width: 58px; height: 58px; margin: -29px 0 0 -29px; border-radius: 50%;
+    background: rgba(255, 90, 168, 0.45); border: 2px solid rgba(255,255,255,0.7); box-shadow: 0 4px 10px rgba(0,0,0,0.4); pointer-events: none; }
+  #touch .stick .ring { position: absolute; inset: 10px; border-radius: 50%; border: 1px dashed rgba(244,246,238,0.25); pointer-events: none; }
+  #touch .jump { width: 96px; height: 96px; border-radius: 50%; pointer-events: auto; touch-action: none; color: var(--fg);
+    font: 800 13px system-ui, sans-serif; letter-spacing: 1px; border: 2px solid rgba(255, 210, 58, 0.9); background: rgba(255, 210, 58, 0.22); }
+  #touch .jump.on { background: rgba(255, 210, 58, 0.55); }
+  #touch.small .stick { width: 112px; height: 112px; }
+  #touch.small .stick .knob { width: 48px; height: 48px; margin: -24px 0 0 -24px; }
+  #touch.small .jump { width: 80px; height: 80px; font-size: 11px; }
+  #overlay {
+    position: fixed; inset: 0; z-index: 5;
+    display: flex; flex-direction: column; align-items: center; justify-content: flex-start;
+    gap: 14px; padding: 16px; text-align: center; overflow-y: auto;
+    background: rgba(16, 24, 26, 0.93);
+  }
+  #overlay > :first-child { margin-top: auto; }
+  #overlay > :last-child { margin-bottom: auto; }
+  #overlay.hidden { display: none; }
+  #homeLink {
+    position: fixed; top: calc(10px + env(safe-area-inset-top, 0px)); left: 10px; z-index: 6;
+    font: 600 13px/1 system-ui, sans-serif; color: #fff; text-decoration: none;
+    padding: 8px 12px; border-radius: 999px; background: rgba(0,0,0,.55);
+    border: 1px solid rgba(255,255,255,.25);
+  }
+  #homeLink:hover { background: rgba(0,0,0,.8); }
+  #overlay.hidden ~ #homeLink { display: none; }
+  @media (max-width: 700px) { #overlay { padding-top: calc(52px + env(safe-area-inset-top, 0px)); } }
+  #overlay h1 { font-size: clamp(32px, 10vw, 58px); font-weight: 900; font-style: italic; letter-spacing: 1px; color: var(--pink);
+    text-shadow: 3px 3px 0 #3a0a2a, 0 0 22px rgba(255,90,168,0.35); }
+  #overlay h2 { font-size: clamp(26px, 7vw, 42px); font-weight: 900; letter-spacing: 2px; color: var(--pink); }
+  #overlay h2.lose { color: var(--red); }
+  #overlay p { max-width: 540px; font-size: clamp(13px, 3.4vw, 16px); line-height: 1.55; }
+  #overlay p.muted { color: var(--muted); }
+  #overlay .pts { display: grid; grid-template-columns: repeat(2, auto); gap: 4px 18px; font-size: 13px; color: var(--muted); text-align: left; max-width: 560px; }
+  #overlay .pts b { color: var(--fg); }
+  #overlay .diff { display: flex; gap: 10px; flex-wrap: wrap; justify-content: center; }
+  #overlay button {
+    font: 800 15px system-ui, sans-serif; letter-spacing: 1.5px; color: var(--fg);
+    background: transparent; cursor: pointer;
+    border: 2px solid rgba(244,246,238,0.3); border-radius: 10px; padding: 9px 16px;
+  }
+  #overlay .diff button.on { border-color: var(--c); color: var(--c); box-shadow: 0 0 12px var(--c); }
+  #overlay button.start { border-color: var(--pink); color: #2a0a1a; background: var(--pink); padding: 11px 30px; box-shadow: 0 4px 0 #a82a6a; }
+  @media (max-height: 560px) {
+    #overlay { gap: 8px; }
+    #overlay h1 { font-size: 30px; }
+    #overlay p { font-size: 13px; line-height: 1.4; }
+    #overlay .help, #overlay .pts { display: none; }
+  }
+</style>
+</head>
+<body>
+<div id="wrap"><canvas id="game"></canvas></div>
+<div id="touch">
+  <div class="stick" aria-label="Levetta"><div class="ring"></div><div class="knob"></div></div>
+  <button type="button" class="jump" aria-label="Salto">SALTO</button>
+</div>
+<button id="pauseBtn" type="button" aria-label="Pausa">❚❚</button>
+<div id="overlay"></div>
+<a id="homeLink" href="../../index.html">← Sala Giochi</a>
+
+<script>
+(() => {
+  "use strict";
+
+  const W = 360, H = 600, TAU = Math.PI * 2;
+  const PY = 470, CAR_W = 20, CAR_L = 34, SEG = 10;
+  const CRUISE = 200, MAX_V = 300, MIN_JUMP = 110, AIR = 1.0, STAGE_LEN = 7600;
+  const SEASONS = [
+    { name: "Primavera", grass: "#4aa83a", grass2: "#3a9030", bush: "#2a6a1a", flower: "#ffd23a" },
+    { name: "Estate", grass: "#8ac83a", grass2: "#7ab82a", bush: "#4a8a1a", flower: "#ff6a8a" },
+    { name: "Autunno", grass: "#c8903a", grass2: "#b8802a", bush: "#a8481a", flower: "#ffb03a" },
+    { name: "Inverno", grass: "#e8f0f4", grass2: "#d8e4ea", bush: "#8aa0aa", flower: "#ffffff" },
+  ];
+  const KINDS = {
+    auto: { color: "#3a8aff", roof: "#2a5aa8", mass: 1, pts: 200, bump: 300 },
+    speronatrice: { color: "#ff4a3a", roof: "#a81a1a", mass: 1.1, pts: 300, bump: 400 },
+    camion: { color: "#e8b83a", roof: "#8a6a1a", mass: 2, pts: 500, bump: 800, long: true },
+  };
+
+  const DIFFICULTIES = {
+    facile:    { label: "FACILE",    color: "#7ed87a", desc: "5 auto · strada larga · pochi speronatori", lives: 5, width: 1.12, red: 0.5, dense: 0.8 },
+    normale:   { label: "NORMALE",   color: "#ff5aa8", desc: "3 auto", lives: 3, width: 1, red: 1, dense: 1 },
+    difficile: { label: "DIFFICILE", color: "#ff4a3a", desc: "3 auto · strada stretta · speronatori aggressivi", lives: 3, width: 0.86, red: 1.8, dense: 1.35 },
+  };
+  const DIFF_IDS = Object.keys(DIFFICULTIES);
+  const DIFF_KEY = "salta-difficulty";
+  const bestKey = (id) => `salta-best-${id}`;
+  function store(k, v) { try { localStorage.setItem(k, v); } catch { /* ignore */ } }
+  function load(k) { try { return localStorage.getItem(k); } catch { return null; } }
+  const rnd = (a, b) => a + Math.random() * (b - a);
+  const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
+  const sign = (v) => (v < 0 ? -1 : 1);
+
+  // ---------- Canvas ----------
+  const canvas = document.getElementById("game");
+  const ctx = canvas.getContext("2d");
+  const wrapEl = document.getElementById("wrap");
+  const overlay = document.getElementById("overlay");
+  const touchEl = document.getElementById("touch");
+  const pauseBtn = document.getElementById("pauseBtn");
+  let pxRatio = 1, touchMode = !!(window.matchMedia && matchMedia("(pointer: coarse)").matches);
+  function resize() {
+    const portrait = window.innerHeight > window.innerWidth;
+    const showTouch = touchMode && isPlaying();
+    touchEl.style.display = showTouch ? "flex" : "none";
+    touchEl.classList.toggle("small", !portrait && window.innerHeight < 480);
+    wrapEl.style.paddingBottom = showTouch && portrait ? "calc(170px + env(safe-area-inset-bottom, 0px))" : "0";
+    let availW = window.innerWidth - 8, availH = window.innerHeight - 8;
+    if (showTouch && portrait) availH -= 170;
+    if (showTouch && !portrait) {
+      const side = Math.max(...[...touchEl.children].map((el) => el.offsetWidth)) + 20;
+      if (window.innerWidth - 2 * side > 200) availW = window.innerWidth - 2 * side;
+    }
+    const s = Math.max(0.2, Math.min(availW / W, availH / H));
+    pxRatio = Math.min(3, s * (window.devicePixelRatio || 1));
+    canvas.style.width = W * s + "px";
+    canvas.style.height = H * s + "px";
+    canvas.width = Math.round(W * pxRatio);
+    canvas.height = Math.round(H * pxRatio);
+  }
+  window.addEventListener("resize", () => syncControls());
+
+  // ---------- Audio ----------
+  let audioCtx = null, engine = null;
+  function beep(freq, dur, type = "square", vol = 0.04, slide = 0, delay = 0) {
+    if (!audioCtx) return;
+    const t = audioCtx.currentTime + delay;
+    const osc = audioCtx.createOscillator(), gain = audioCtx.createGain();
+    osc.type = type;
+    osc.frequency.setValueAtTime(freq, t);
+    if (slide) osc.frequency.exponentialRampToValueAtTime(Math.max(20, freq + slide), t + dur);
+    gain.gain.setValueAtTime(vol, t);
+    gain.gain.exponentialRampToValueAtTime(0.0001, t + dur);
+    osc.connect(gain).connect(audioCtx.destination);
+    osc.start(t); osc.stop(t + dur + 0.02);
+  }
+  function noise(dur, vol, freq) {
+    if (!audioCtx) return;
+    const len = Math.floor(audioCtx.sampleRate * dur), buf = audioCtx.createBuffer(1, len, audioCtx.sampleRate), d = buf.getChannelData(0);
+    for (let i = 0; i < len; i++) d[i] = (Math.random() * 2 - 1) * (1 - i / len);
+    const src = audioCtx.createBufferSource(), f = audioCtx.createBiquadFilter(), g = audioCtx.createGain();
+    src.buffer = buf; f.type = "bandpass"; f.frequency.value = freq; g.gain.value = vol;
+    src.connect(f).connect(g).connect(audioCtx.destination); src.start();
+  }
+  const arp = (notes, gap, d, type = "square", vol = 0.04) => notes.forEach((f, i) => beep(f, d, type, vol, 0, i * gap));
+  let sfxN = 0;
+  const lim = (fn) => (...a) => { if (sfxN++ < 6) fn(...a); };
+  const sfx = {
+    jump: lim(() => beep(300, 0.3, "square", 0.04, 500)),
+    land: lim(() => noise(0.08, 0.08, 400)),
+    crush: lim(() => { noise(0.25, 0.16, 300); arp([784, 1047, 1319], 0.05, 0.08, "square", 0.04); }),
+    bump: lim(() => { noise(0.08, 0.12, 900); beep(180, 0.06, "square", 0.04); }),
+    offroad: lim(() => { noise(0.35, 0.14, 250); beep(400, 0.3, "sawtooth", 0.04, -300); }),
+    splash: lim(() => noise(0.5, 0.14, 1600)),
+    crash: () => { noise(0.7, 0.22, 200); beep(120, 0.5, "sawtooth", 0.06, -60); },
+    stage: () => arp([523, 659, 784, 1047, 784, 1047, 1319], 0.1, 0.18),
+    life: () => arp([523, 659, 784, 1047, 1319], 0.07, 0.12),
+    over: () => arp([523, 466, 415, 392, 330, 262], 0.15, 0.24, "triangle", 0.05),
+  };
+  function engineSound(v) {
+    if (!audioCtx) return;
+    if (!engine) {
+      const o = audioCtx.createOscillator(), g = audioCtx.createGain();
+      o.type = "sawtooth"; g.gain.value = 0; o.connect(g).connect(audioCtx.destination); o.start();
+      engine = { o, g };
+    }
+    engine.o.frequency.setTargetAtTime(50 + v * 0.35, audioCtx.currentTime, 0.05);
+    engine.g.gain.setTargetAtTime(state === "play" ? 0.012 : 0, audioCtx.currentTime, 0.05);
+  }
+
+  // ---------- State ----------
+  let difficulty = DIFFICULTIES[load(DIFF_KEY)] ? load(DIFF_KEY) : "normale";
+  let diff = DIFFICULTIES[difficulty];
+  let state = "menu", menu = null, pausedFrom = null, stateT = 0, clock = 0;
+  let score = 0, lives = 3, stage = 0, bestCache = 0, nextLife = 20000, destroyed = 0;
+  let road = [], P = null, cars = [], parts = [], popups = [], message = null, spawnT = 0, respawnT = 0;
+  let jumpPressed = false;
+  const keys = { left: false, right: false, up: false, down: false };
+  const stick = { x: 0, y: 0 };
+
+  // ---------- The road ----------
+  function buildRoad() {
+    road = [];
+    const n = Math.ceil((STAGE_LEN + 800) / SEG);
+    let cx = 180, w = 210, tcx = 180, tw = 210, nextGap = 60 + Math.floor(rnd(0, 20)), gapLeft = 0, calm = 0;
+    const baseW = 205 * diff.width - Math.min(stage, 6) * 5;
+    for (let i = 0; i < n; i++) {
+      if (i % 40 === 0 && calm <= 0) { tcx = rnd(120, 240); tw = clamp(baseW + rnd(-40, 30), 130, 250); }
+      // before and after a stretch of water, the road runs straight
+      const stiff = calm > 0 ? 0 : 0.03;
+      cx += (tcx - cx) * stiff; w += (tw - w) * 0.03;
+      cx = clamp(cx, w / 2 + 16, W - w / 2 - 16);
+      let water = false;
+      if (gapLeft > 0) { water = true; gapLeft--; }
+      else if (i >= nextGap && i < n - 70 - 20) {
+        // a broken bridge: never longer than a jump at the lowest jumping speed can clear
+        gapLeft = Math.floor(rnd(7, 9 + Math.min(stage, 2))); water = true; gapLeft--;
+        calm = gapLeft + 22; nextGap = i + Math.floor(rnd(55, 85) / (1 + Math.min(stage, 5) * 0.08));
+      }
+      if (calm > 0) calm--;
+      road.push({ cx, w, water, warn: false });
+    }
+    // warning signs ahead of each gap
+    for (let i = 0; i < road.length; i++) if (road[i].water && (i === 0 || !road[i - 1].water)) for (let k = 18; k <= 22; k++) if (i - k >= 0) road[i - k].warn = true;
+    for (let i = 0; i < 30; i++) road[i].water = false;
+  }
+  function roadAt(d) {
+    const i = Math.floor(d / SEG);
+    if (i < 0) return road[0];
+    if (i >= road.length) return road[road.length - 1];
+    return road[i];
+  }
+  const onRoad = (x, d, slack = 0) => { const r = roadAt(d); return Math.abs(x - r.cx) <= r.w / 2 + slack && !r.water; };
+
+  // ---------- Flow ----------
+  const isPlaying = () => ["intro", "play", "crash", "finish"].includes(state);
+  function startGame() {
+    if (!audioCtx) { try { audioCtx = new (window.AudioContext || window.webkitAudioContext)(); } catch { audioCtx = null; } }
+    if (audioCtx && audioCtx.state === "suspended") audioCtx.resume();
+    score = 0; lives = diff.lives; stage = 0; nextLife = 20000;
+    bestCache = parseInt(load(bestKey(difficulty)), 10) || 0;
+    beginStage();
+    menu = null;
+    overlay.classList.add("hidden");
+    syncControls();
+    last = performance.now();
+  }
+  function beginStage() {
+    buildRoad();
+    cars = []; parts = []; popups = []; destroyed = 0;
+    P = { x: road[0].cx, d: 60, v: 0, vx: 0, z: 0, air: 0, alive: true, safe: 2 };
+    spawnT = 1.5;
+    message = { text: `TAPPA ${stage + 1}`, sub: `${SEASONS[stage % 4].name} · ${Math.round(STAGE_LEN / 10) * 10} metri`, t: 0 };
+    state = "intro"; stateT = 1.8;
+  }
+  function respawn() {
+    // back on the road, a little behind, on a dry straight bit
+    // with at least 380 m of dry road in front, so there is time to get up to jumping speed
+    let d = Math.max(60, P.d - 120);
+    const wet = (x) => { for (let k = -40; k <= 380; k += SEG) if (roadAt(x + k).water) return true; return false; };
+    while (d > 60 && wet(d)) d -= SEG;
+    if (wet(d)) { d = P.d; while (wet(d)) d += SEG; }
+    P = { x: roadAt(d).cx, d, v: 80, vx: 0, z: 0, air: 0, alive: true, safe: 2.5 };
+    cars = cars.filter((c) => Math.abs(c.d - d) > 160);
+  }
+  function addScore(n, x, y, color = "#f4f6ee") {
+    score += n;
+    if (score >= nextLife) { lives++; nextLife += 20000; sfx.life(); popups.push({ x: W / 2, y: 120, text: "AUTO EXTRA!", color: "#ffd23a", t: 0 }); }
+    if (x !== undefined) popups.push({ x, y, text: String(n), color, t: 0 });
+  }
+  const sy = (d) => PY - (d - P.d);
+  function burst(x, y, c, n = 14, sp = 120, life = 0.7) {
+    for (let k = 0; k < n; k++) { const a = Math.random() * TAU, s = sp * rnd(0.3, 1); parts.push({ x, y, vx: Math.cos(a) * s, vy: Math.sin(a) * s, t: 0, life: life * rnd(0.6, 1.2), c }); }
+  }
+  function wreck(c, how) {
+    c.dead = true; destroyed++;
+    const k = KINDS[c.kind];
+    const pts = how === "crush" ? k.pts : k.bump;
+    addScore(pts, c.x, sy(c.d) - 20, how === "crush" ? "#ffd23a" : "#ff8ad0");
+    burst(c.x, sy(c.d), k.color, 18, 140, 0.8); burst(c.x, sy(c.d), "#3a3a3a", 10, 80, 0.9);
+    (how === "crush" ? sfx.crush : sfx.offroad)();
+  }
+  function crash(why) {
+    if (!P.alive) return;
+    P.alive = false; P.why = why;
+    if (why === "water") { burst(P.x, PY, "#7ad0ff", 24, 120, 0.8); sfx.splash(); }
+    else { burst(P.x, PY, "#ff5aa8", 24, 160, 0.9); burst(P.x, PY, "#ffd23a", 12, 100, 0.6); sfx.crash(); }
+    lives--;
+    state = "crash"; stateT = 1.8;
+  }
+  function gameOver() {
+    state = "over";
+    if (engine) engine.g.gain.setTargetAtTime(0, audioCtx.currentTime, 0.05);
+    const prev = parseInt(load(bestKey(difficulty)), 10) || 0;
+    const record = score > prev;
+    if (record) store(bestKey(difficulty), String(score));
+    sfx.over();
+    menu = () => showOverlay(
+      `<h2 class="lose">${lives <= 0 ? "AUTO FINITE!" : "PARTITA FINITA"}</h2>
+       <p>Punteggio: <b>${score.toLocaleString("it-IT")}</b> · tappa ${stage + 1} · ${diff.label}</p>
+       ${record ? "<p style='color:var(--yellow)'>★ NUOVO RECORD! ★</p>" : ""}
+       ${difficultyHTML()}
+       <button class="start" data-start>GIOCA ANCORA</button>`
+    );
+    menu();
+    syncControls();
+  }
+  function togglePause() {
+    if (isPlaying()) {
+      pausedFrom = state; state = "paused";
+      if (engine) engine.g.gain.setTargetAtTime(0, audioCtx.currentTime, 0.02);
+      showOverlay(`<h2>PAUSA</h2><button class="start" data-resume>CONTINUA</button><p class="muted">Premi P per continuare</p>`);
+    } else if (state === "paused") {
+      state = pausedFrom; overlay.classList.add("hidden"); last = performance.now();
+    }
+    syncControls();
+  }
+  // the pause menu can end the game (shared/iniziali.js): it ends here the usual way, saving the record
+  window.addEventListener("sala:termina", () => { if (state !== "paused") return; state = pausedFrom; overlay.classList.add("hidden"); gameOver(); syncControls(); });
+  function syncControls() {
+    pauseBtn.style.display = isPlaying() && touchMode ? "block" : "none";
+    resize();
+  }
+  pauseBtn.addEventListener("click", () => togglePause());
+  function showOverlay(html) { overlay.innerHTML = html; overlay.classList.remove("hidden"); }
+  function difficultyHTML() {
+    const buttons = DIFF_IDS.map((id) => {
+      const d = DIFFICULTIES[id];
+      return `<button type="button" data-diff="${id}" class="${id === difficulty ? "on" : ""}" style="--c:${d.color}">${d.label}</button>`;
+    }).join("");
+    const best = parseInt(load(bestKey(difficulty)), 10);
+    return `<div class="diff">${buttons}</div><p class="muted">${diff.desc}${best ? ` · Record: ${best.toLocaleString("it-IT")}` : ""}</p>`;
+  }
+  function setDifficulty(id) { if (!DIFFICULTIES[id]) return; difficulty = id; diff = DIFFICULTIES[id]; store(DIFF_KEY, id); if (menu) menu(); }
+  function showTitle() {
+    menu = showTitle;
+    showOverlay(
+      `<h1>SALTA E SPERONA</h1>
+       <p>La tua auto rosa sa saltare! Corri fino al traguardo di ogni tappa: salta i ponti crollati, atterra sulle altre auto per schiacciarle oppure speronale di lato per buttarle fuori strada. Ma attento: fuori strada, in acqua o tamponando forte, sei tu a finire in pezzi.</p>
+       <div class="pts">
+         <span><b>Schiacciata</b></span><span>atterra su un'auto: blu 200 · rossa 300 · camion 500</span>
+         <span><b>Speronata</b></span><span>buttala fuori strada: blu 300 · rossa 400 · camion 800 (pesa tanto!)</span>
+         <span><b>Salto</b></span><span>solo oltre ${MIN_JUMP} km/h · il cartello giallo avvisa del ponte crollato</span>
+         <span><b>Traguardo</b></span><span>1.000 + 100 per ogni auto distrutta · auto extra ogni 20.000 punti</span>
+       </div>
+       ${touchMode
+         ? `<p class="muted help">Levetta: destra e sinistra per sterzare, su per accelerare, giù per frenare · SALTO per saltare</p>`
+         : `<p class="muted help">← → sterza · ↑ accelera · ↓ frena · SPAZIO o J salta · P pausa</p>`}
+       ${difficultyHTML()}
+       <button class="start" data-start>SI PARTE!</button>`
+    );
+  }
+  overlay.addEventListener("click", (e) => {
+    const d = e.target.closest("[data-diff]");
+    if (d) { setDifficulty(d.dataset.diff); return; }
+    if (e.target.closest("[data-start]")) startGame();
+    if (e.target.closest("[data-resume]")) togglePause();
+  });
+
+  // ---------- Input ----------
+  const KEYMAP = { arrowleft: "left", a: "left", arrowright: "right", d: "right", arrowup: "up", w: "up", arrowdown: "down", s: "down" };
+  window.addEventListener("keydown", (e) => {
+    const k = e.key.toLowerCase();
+    if ([" ", "arrowup", "arrowdown", "arrowleft", "arrowright"].includes(k)) e.preventDefault();
+    if (state === "menu" || state === "over") {
+      if (e.key === "Enter") startGame();
+      else if (["1", "2", "3"].includes(k)) setDifficulty(DIFF_IDS[+k - 1]);
+      return;
+    }
+    if (k === "p" || k === "escape") { if (!e.repeat) togglePause(); return; }
+    if (state === "paused") { if (e.key === "Enter") togglePause(); return; }
+    if ((k === " " || k === "j" || k === "z") && !e.repeat) jumpPressed = true;
+    if (KEYMAP[k]) keys[KEYMAP[k]] = true;
+  });
+  window.addEventListener("keyup", (e) => { const m = KEYMAP[e.key.toLowerCase()]; if (m) keys[m] = false; });
+  window.addEventListener("blur", () => { for (const k in keys) keys[k] = false; stick.x = stick.y = 0; if (isPlaying()) togglePause(); });
+  const jumpBtn = touchEl.querySelector(".jump");
+  jumpBtn.addEventListener("pointerdown", (e) => { e.preventDefault(); jumpPressed = true; jumpBtn.classList.add("on"); });
+  for (const ev of ["pointerup", "pointercancel", "pointerleave"]) jumpBtn.addEventListener(ev, () => jumpBtn.classList.remove("on"));
+  const stickEl = touchEl.querySelector(".stick"), knob = stickEl.querySelector(".knob");
+  let stickId = null;
+  function stickAt(e) {
+    const r = stickEl.getBoundingClientRect(), max = r.width / 2 - 14;
+    let dx = e.clientX - (r.left + r.width / 2), dy = e.clientY - (r.top + r.height / 2);
+    const len = Math.hypot(dx, dy);
+    if (len > max) { dx *= max / len; dy *= max / len; }
+    knob.style.transform = `translate(${dx}px, ${dy}px)`;
+    const f = (v) => { const a = Math.abs(v) / max; return a < 0.15 ? 0 : sign(v) * Math.min(1, (a - 0.15) / 0.7); };
+    stick.x = f(dx); stick.y = f(dy);
+  }
+  const stickEnd = (e) => { if (e.pointerId !== stickId) return; stickId = null; knob.style.transform = ""; stick.x = stick.y = 0; };
+  stickEl.addEventListener("pointerdown", (e) => { e.preventDefault(); stickId = e.pointerId; try { stickEl.setPointerCapture(e.pointerId); } catch { /* ignore */ } stickAt(e); });
+  stickEl.addEventListener("pointermove", (e) => { if (e.pointerId === stickId) stickAt(e); });
+  for (const ev of ["pointerup", "pointercancel", "lostpointercapture"]) stickEl.addEventListener(ev, stickEnd);
+  window.addEventListener("pointerdown", (e) => { if (e.pointerType === "touch" && !touchMode) { touchMode = true; syncControls(); if (menu) menu(); } }, true);
+
+  // ---------- Update ----------
+  function spawnCars(dt) {
+    spawnT -= dt;
+    const onScreen = cars.filter((c) => !c.dead).length;
+    if (spawnT > 0 || onScreen >= 4 + Math.min(stage, 3) || P.d > STAGE_LEN - 300) return;
+    spawnT = rnd(0.7, 1.4) / (diff.dense * (1 + Math.min(stage, 6) * 0.08));
+    const u = Math.random();
+    const kind = u < 0.12 + Math.min(stage, 5) * 0.02 ? "camion" : u < 0.12 + (0.2 + Math.min(stage, 5) * 0.04) * diff.red ? "speronatrice" : "auto";
+    // most cars are slower and appear ahead; bumpers sometimes come up from behind
+    const behind = kind === "speronatrice" && Math.random() < 0.4;
+    const d = behind ? P.d - 200 : P.d + 520;
+    const r = roadAt(d);
+    if (r.water || roadAt(d + 40).water || roadAt(d - 40).water) return;
+    const x = r.cx + rnd(-r.w / 2 + 18, r.w / 2 - 18);
+    if (cars.some((c) => !c.dead && Math.abs(c.d - d) < 60)) return;
+    const v = kind === "camion" ? rnd(95, 115) : behind ? P.v + 70 : rnd(110, 165);
+    cars.push({ kind, x, d, v, vx: 0, lane: (x - r.cx) / r.w, dead: false, t: 0 });
+  }
+  function updateCars(dt) {
+    for (const c of cars) {
+      if (c.dead) continue;
+      c.t += dt;
+      const r = roadAt(c.d);
+      // keep to their bit of the road; the red ones go for you
+      let tx = r.cx + c.lane * r.w;
+      if (c.kind === "speronatrice" && P.alive && P.air <= 0 && Math.abs(c.d - P.d) < 90) tx = P.x + sign(c.x - P.x) * 6;
+      const steer = c.kind === "speronatrice" ? 90 * diff.red : 50;
+      c.x += clamp(tx - c.x, -steer * dt, steer * dt) + c.vx * dt;
+      c.vx *= Math.pow(0.02, dt);
+      c.d += c.v * dt;
+      if (c.kind === "speronatrice" && c.d > P.d + 40 && c.v > P.v) c.v = Math.max(P.v - 10, c.v - 60 * dt);
+      // off the road or into the water: gone
+      if (Math.abs(c.x - r.cx) > r.w / 2 + 4) { if (Math.abs(c.vx) > 20 || c.pushed > 0) wreck(c, "bump"); else c.x = clamp(c.x, r.cx - r.w / 2 + 12, r.cx + r.w / 2 - 12); }
+      // the other cars hop over the broken bridges too
+      c.z = r.water ? 12 : Math.max(0, (c.z || 0) - 60 * dt);
+      c.pushed = Math.max(0, (c.pushed || 0) - dt);
+      if (c.d < P.d - 260 || c.d > P.d + 700) c.gone = true;
+    }
+    cars = cars.filter((c) => !c.gone && !(c.dead && c.deadT > 1));
+    for (const c of cars) if (c.dead) c.deadT = (c.deadT || 0) + dt;
+    // cars do not drive through each other
+    for (let i = 0; i < cars.length; i++) for (let j = i + 1; j < cars.length; j++) {
+      const a = cars[i], b = cars[j]; if (a.dead || b.dead) continue;
+      const la = KINDS[a.kind].long ? 50 : CAR_L, lb = KINDS[b.kind].long ? 50 : CAR_L;
+      if (Math.abs(a.x - b.x) < CAR_W && Math.abs(a.d - b.d) < (la + lb) / 2) { const back = a.d < b.d ? a : b, front = back === a ? b : a; back.v = Math.min(back.v, front.v); back.d = front.d - (la + lb) / 2; }
+    }
+  }
+  function updatePlayer(dt) {
+    P.safe = Math.max(0, P.safe - dt);
+    const ax = clamp(stick.x + (keys.right ? 1 : 0) - (keys.left ? 1 : 0), -1, 1);
+    const ay = clamp(-stick.y + (keys.up ? 1 : 0) - (keys.down ? 1 : 0), -1, 1);
+    // the car cruises on its own: push to go faster, pull back to brake
+    const target = ay > 0.2 ? CRUISE + (MAX_V - CRUISE) * ay : ay < -0.2 ? CRUISE * (1 + ay) : CRUISE;
+    const acc = target > P.v ? 150 : ay < -0.2 ? 320 : 90;
+    if (P.air <= 0) P.v += clamp(target - P.v, -acc * dt, acc * dt);
+    P.x += (ax * (P.air > 0 ? 110 : 165) + P.vx) * dt;
+    P.vx *= Math.pow(0.03, dt);
+    P.d += P.v * dt;
+    if (jumpPressed) {
+      jumpPressed = false;
+      if (P.air <= 0 && P.v >= MIN_JUMP) { P.airMax = Math.max(AIR, 125 / P.v); P.air = P.airMax; sfx.jump(); }
+    }
+    if (P.air > 0) {
+      P.air -= dt;
+      // slower jumps float a little longer: a jump always clears a broken bridge
+      P.z = Math.sin(Math.max(0, P.air) / P.airMax * Math.PI) * 26;
+      if (P.air <= 0) { P.air = 0; P.z = 0; land(); }
+      return;
+    }
+    // on the ground: the road edge, the water and the other cars
+    const r = roadAt(P.d);
+    if (r.water) { crash("water"); return; }
+    if (Math.abs(P.x - r.cx) > r.w / 2 + 2) { crash("road"); return; }
+    for (const c of cars) {
+      if (c.dead) continue;
+      const len = KINDS[c.kind].long ? 50 : CAR_L;
+      const dd = P.d - c.d, dx = P.x - c.x;
+      if (Math.abs(dx) >= CAR_W || Math.abs(dd) >= (len + CAR_L) / 2) continue;
+      const m = KINDS[c.kind].mass;
+      if (Math.abs(dd) > (len + CAR_L) / 2 - 9) {
+        // nose to tail
+        const rel = dd < 0 ? P.v - c.v : c.v - P.v;
+        if (rel > 110 && P.safe <= 0) { crash("hit"); return; }
+        if (dd < 0) { P.d = c.d - (len + CAR_L) / 2; P.v = Math.min(P.v, c.v - 15); }
+        else { c.d = P.d - (len + CAR_L) / 2; c.v = Math.min(c.v, P.v - 10); P.v += 20; }
+        sfx.bump();
+      } else {
+        // side by side: the lighter one gets shoved
+        const s = sign(dx || 1);
+        c.vx -= s * 260 / m; P.vx += s * 220 * Math.min(1, m * 0.5);
+        c.pushed = 0.8;
+        c.x -= s * 2; P.x += s * 2;
+        sfx.bump();
+      }
+    }
+  }
+  function land() {
+    sfx.land();
+    // landing on a car flattens it
+    for (const c of cars) {
+      if (c.dead) continue;
+      const len = KINDS[c.kind].long ? 50 : CAR_L;
+      if (Math.abs(P.x - c.x) < CAR_W + 2 && Math.abs(P.d - c.d) < (len + CAR_L) / 2 + 4) { wreck(c, "crush"); P.v = Math.max(P.v, c.v + 20); return; }
+    }
+    const r = roadAt(P.d);
+    if (r.water) { crash("water"); return; }
+    if (Math.abs(P.x - r.cx) > r.w / 2 + 2) crash("road");
+  }
+  function update(dt) {
+    clock += dt; sfxN = 0;
+    if (message) { message.t += dt; if (message.t > 2) message = null; }
+    for (const p of parts) { p.t += dt; p.x += p.vx * dt; p.y += p.vy * dt; p.vx *= 0.95; p.vy *= 0.95; }
+    parts = parts.filter((p) => p.t < p.life);
+    for (const p of popups) { p.t += dt; p.y -= 20 * dt; }
+    popups = popups.filter((p) => p.t < 1.1);
+    if (!isPlaying()) { if (state === "menu" && P) P.d += 120 * dt; return; }
+    engineSound(P.v);
+    if (state === "intro") { stateT -= dt; if (stateT <= 0) state = "play"; return; }
+    if (state === "crash") {
+      stateT -= dt; updateCars(dt);
+      if (stateT <= 0) { if (lives <= 0) gameOver(); else { respawn(); state = "play"; } }
+      return;
+    }
+    if (state === "finish") {
+      stateT -= dt; P.d += P.v * dt;
+      if (stateT <= 0) { stage++; beginStage(); }
+      return;
+    }
+    if (window.__bot) window.__bot(dt);
+    updatePlayer(dt);
+    if (state !== "play") return;
+    spawnCars(dt);
+    updateCars(dt);
+    if (P.d >= STAGE_LEN && P.air <= 0) {
+      const bonus = 1000 + destroyed * 100;
+      addScore(bonus);
+      message = { text: "TRAGUARDO!", sub: `${destroyed} auto distrutte · bonus ${bonus.toLocaleString("it-IT")}`, t: 0 };
+      sfx.stage();
+      state = "finish"; stateT = 2.6;
+    }
+  }
+
+  // ---------- Drawing ----------
+  function drawRoad() {
+    const S = SEASONS[stage % 4];
+    ctx.fillStyle = S.grass; ctx.fillRect(0, 0, W, H);
+    for (let y = 40; y < H; y += 5) {
+      const d = P.d + (PY - y), r = roadAt(d), i = Math.floor(d / SEG);
+      if ((Math.floor(d / 30) & 1) === 0) { ctx.fillStyle = S.grass2; ctx.fillRect(0, y, W, 5); }
+      if (r.water) {
+        ctx.fillStyle = "#2a6ab8"; ctx.fillRect(0, y, W, 5);
+        ctx.fillStyle = "rgba(255,255,255,0.35)"; if (((i * 7 + Math.floor(clock * 4)) % 5) === 0) ctx.fillRect((i * 53) % W, y, 18, 2);
+        continue;
+      }
+      const x0 = r.cx - r.w / 2;
+      ctx.fillStyle = "#5a5a64"; ctx.fillRect(x0, y, r.w, 5);
+      ctx.fillStyle = "#f4f6ee"; ctx.fillRect(x0, y, 3, 5); ctx.fillRect(x0 + r.w - 3, y, 3, 5);
+      if ((Math.floor(d / 20) & 1) === 0) { ctx.fillStyle = "#ffd23a"; ctx.fillRect(r.cx - 1.5, y, 3, 5); }
+      // bushes and flowers along the verge
+      if (i % 6 === 0 && (Math.floor(d) % SEG) < 5) {
+        ctx.fillStyle = S.bush; ctx.beginPath(); ctx.arc(x0 - 22, y, 9, 0, TAU); ctx.arc(x0 + r.w + 22, y + 2, 9, 0, TAU); ctx.fill();
+        ctx.fillStyle = S.flower; ctx.fillRect(x0 - 40, y + 4, 3, 3); ctx.fillRect(x0 + r.w + 44, y - 3, 3, 3);
+      }
+    }
+    // the ends of the broken bridges
+    for (let y = 40; y < H; y += 5) {
+      const d = P.d + (PY - y), r = roadAt(d), rn = roadAt(d + SEG), rp = roadAt(d - SEG);
+      if (!r.water && (rn.water || rp.water) && (Math.floor(d) % SEG) < 5) { ctx.fillStyle = "#8a6a4a"; ctx.fillRect(r.cx - r.w / 2, y - 2, r.w, 6); ctx.fillStyle = "#ff4a3a"; for (let x = r.cx - r.w / 2; x < r.cx + r.w / 2; x += 20) ctx.fillRect(x, y - 2, 10, 3); }
+      if (r.warn && (Math.floor(d) % (SEG * 5)) < 5) {
+        const x = r.cx + r.w / 2 + 14;
+        ctx.fillStyle = "#6a5a4a"; ctx.fillRect(x - 1, y, 3, 16);
+        ctx.fillStyle = "#ffd23a"; ctx.beginPath(); ctx.moveTo(x, y - 14); ctx.lineTo(x + 12, y); ctx.lineTo(x - 12, y); ctx.closePath(); ctx.fill();
+        ctx.fillStyle = "#1a1a1a"; ctx.font = "900 10px system-ui"; ctx.textAlign = "center"; ctx.fillText("!", x, y - 2);
+      }
+    }
+    // the finish line
+    const fy = sy(STAGE_LEN);
+    if (fy > 30 && fy < H) {
+      const r = roadAt(STAGE_LEN);
+      for (let x = r.cx - r.w / 2, k = 0; x < r.cx + r.w / 2; x += 10, k++) for (let row = 0; row < 2; row++) { ctx.fillStyle = (k + row) % 2 ? "#1a1a1a" : "#f4f6ee"; ctx.fillRect(x, fy + row * 8, 10, 8); }
+    }
+  }
+  function drawCar(x, y, color, roof, z = 0, long = false, flash = false) {
+    const len = long ? 50 : CAR_L, w = CAR_W + (long ? 4 : 0);
+    if (z > 0) { ctx.fillStyle = "rgba(0,0,0,0.3)"; ctx.fillRect(x - w / 2 + 3, y - len / 2 + 5, w, len); }
+    const yy = y - z, sc = 1 + z / 90;
+    ctx.save(); ctx.translate(x, yy); ctx.scale(sc, sc);
+    ctx.fillStyle = "#1a1a1a"; ctx.fillRect(-w / 2 - 2, -len / 2 + 5, 4, 9); ctx.fillRect(w / 2 - 2, -len / 2 + 5, 4, 9); ctx.fillRect(-w / 2 - 2, len / 2 - 14, 4, 9); ctx.fillRect(w / 2 - 2, len / 2 - 14, 4, 9);
+    ctx.fillStyle = flash ? "#ffffff" : color; ctx.beginPath(); ctx.roundRect(-w / 2, -len / 2, w, len, 5); ctx.fill();
+    ctx.fillStyle = roof;
+    if (long) { ctx.fillRect(-w / 2 + 2, -len / 2 + 2, w - 4, 12); ctx.fillStyle = "rgba(255,255,255,0.15)"; ctx.fillRect(-w / 2 + 3, -len / 2 + 17, w - 6, len - 20); }
+    else { ctx.beginPath(); ctx.roundRect(-w / 2 + 3, -len / 2 + 9, w - 6, 15, 3); ctx.fill(); ctx.fillStyle = "rgba(180,220,255,0.7)"; ctx.fillRect(-w / 2 + 4, -len / 2 + 9, w - 8, 4); }
+    ctx.fillStyle = "#ffe07a"; ctx.fillRect(-w / 2 + 2, -len / 2, 4, 2); ctx.fillRect(w / 2 - 6, -len / 2, 4, 2);
+    ctx.restore();
+  }
+  function drawHud() {
+    ctx.fillStyle = "rgba(16,24,26,0.9)"; ctx.fillRect(0, 0, W, 40);
+    ctx.textBaseline = "middle"; ctx.textAlign = "left";
+    ctx.fillStyle = "#f4f6ee"; ctx.font = "900 16px system-ui"; ctx.fillText(score.toLocaleString("it-IT"), 10, 13);
+    ctx.fillStyle = "#a8b4a8"; ctx.font = "700 9px system-ui"; ctx.fillText(`REC ${Math.max(bestCache, score).toLocaleString("it-IT")}`, 10, 29);
+    ctx.fillStyle = "#ff5aa8"; ctx.font = "900 11px system-ui"; ctx.fillText(`TAPPA ${stage + 1}`, 104, 13);
+    // speedometer
+    const kmh = Math.round(P.v);
+    ctx.fillStyle = kmh >= MIN_JUMP ? "#7ed87a" : "#ffd23a"; ctx.font = "900 12px system-ui"; ctx.fillText(`${kmh} km/h`, 104, 29);
+    // progress to the finish
+    const bx = 176, bw = touchMode ? 92 : 118;
+    ctx.fillStyle = "rgba(255,255,255,0.15)"; ctx.fillRect(bx, 11, bw, 6);
+    ctx.fillStyle = "#ff5aa8"; ctx.fillRect(bx, 11, bw * clamp(P.d / STAGE_LEN, 0, 1), 6);
+    ctx.fillStyle = "#a8b4a8"; ctx.font = "700 9px system-ui"; ctx.fillText(`${Math.max(0, Math.round((STAGE_LEN - P.d) / 10))} m al traguardo`, bx, 29);
+    ctx.textAlign = "right";
+    const lx = touchMode ? W - 62 : W - 10;
+    for (let i = 0; i < Math.min(lives, 6); i++) { ctx.fillStyle = "#ff5aa8"; ctx.beginPath(); ctx.roundRect(lx - i * 13 - 8, 12, 8, 14, 2); ctx.fill(); }
+    ctx.textBaseline = "alphabetic";
+  }
+  function draw() {
+    ctx.setTransform(pxRatio, 0, 0, pxRatio, 0, 0);
+    if (!P) { stage = 0; buildRoad(); P = { x: 180, d: 60, v: 180, vx: 0, z: 0, air: 0, alive: true, safe: 0 }; cars = [{ kind: "auto", x: 150, d: 360, v: 150, vx: 0, lane: -0.15 }, { kind: "speronatrice", x: 220, d: 250, v: 150, vx: 0, lane: 0.2 }]; }
+    if (state === "menu") { P.x = roadAt(P.d).cx; for (const c of cars) { c.d = P.d + (c.kind === "auto" ? 300 : 190); c.x = roadAt(c.d).cx + c.lane * roadAt(c.d).w; } }
+    drawRoad();
+    for (const c of cars) {
+      const y = sy(c.d); if (y < 20 || y > H + 40) continue;
+      const k = KINDS[c.kind];
+      if (c.dead) { ctx.globalAlpha = Math.max(0, 1 - (c.deadT || 0)); drawCar(c.x, y, "#3a3a3a", "#1a1a1a", 0, k.long); ctx.globalAlpha = 1; continue; }
+      drawCar(c.x, y, k.color, k.roof, c.z || 0, k.long);
+    }
+    if (P.alive && !(P.safe > 0 && Math.floor(clock * 10) % 2)) drawCar(P.x, PY, "#ff5aa8", "#a82a6a", P.z, false, false);
+    for (const p of parts) { ctx.globalAlpha = Math.max(0, 1 - p.t / p.life); ctx.fillStyle = p.c; ctx.fillRect(p.x - 2, p.y - 2, 4, 4); }
+    ctx.globalAlpha = 1;
+    for (const p of popups) {
+      ctx.globalAlpha = Math.max(0, 1 - p.t / 1.1);
+      ctx.textAlign = "center"; ctx.font = "900 13px system-ui";
+      ctx.lineWidth = 3; ctx.strokeStyle = "#10181a"; ctx.strokeText(p.text, p.x, p.y); ctx.fillStyle = p.color; ctx.fillText(p.text, p.x, p.y);
+    }
+    ctx.globalAlpha = 1;
+    if (state === "menu") return;
+    drawHud();
+    if (message) {
+      ctx.globalAlpha = Math.min(1, (2 - message.t) * 2);
+      ctx.fillStyle = "rgba(0,0,0,0.55)"; ctx.fillRect(0, 200, W, 60);
+      ctx.textAlign = "center"; ctx.font = "italic 900 26px system-ui"; ctx.fillStyle = "#ff5aa8";
+      ctx.lineWidth = 5; ctx.strokeStyle = "#10181a"; ctx.strokeText(message.text, W / 2, 230); ctx.fillText(message.text, W / 2, 230);
+      if (message.sub) { ctx.font = "800 12px system-ui"; ctx.fillStyle = "#f4f6ee"; ctx.fillText(message.sub, W / 2, 250); }
+      ctx.globalAlpha = 1;
+    }
+    if (state === "crash") {
+      ctx.textAlign = "center"; ctx.font = "900 18px system-ui"; ctx.fillStyle = "#ff4a3a"; ctx.lineWidth = 4; ctx.strokeStyle = "#10181a";
+      const t = P.why === "water" ? "SPLASH! IN ACQUA" : P.why === "road" ? "FUORI STRADA!" : "TAMPONAMENTO!";
+      ctx.strokeText(t, W / 2, 320); ctx.fillText(t, W / 2, 320);
+    }
+  }
+
+  // ---------- Loop ----------
+  const STEP = 1 / 120;
+  let last = performance.now(), acc = 0;
+  function frame(now) {
+    const dt = Math.min(0.1, (now - last) / 1000);
+    last = now;
+    if (isPlaying()) {
+      acc += dt;
+      while (acc >= STEP && isPlaying()) { update(STEP); acc -= STEP; }
+    } else { acc = 0; update(dt); }
+    draw();
+    requestAnimationFrame(frame);
+  }
+  syncControls();
+  showTitle();
+  requestAnimationFrame(frame);
+})();
+</script>
+<script src="../../shared/iniziali.js" data-record="salta-best-" data-kind="score"></script>
+</body>
+</html>
