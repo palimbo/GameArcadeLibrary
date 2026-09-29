@@ -1,0 +1,538 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no, viewport-fit=cover">
+<title>Acchiappabombe</title>
+<style>
+  :root {
+    --bg: #1a1420;
+    --fg: #fff4e8;
+    --muted: #c8b8a8;
+    --orange: #ff8a2a;
+    --blue: #3a9aff;
+    --red: #ff4a3a;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  html, body {
+    height: 100%;
+    background: var(--bg);
+    color: var(--fg);
+    font-family: system-ui, -apple-system, "Segoe UI", sans-serif;
+    overflow: hidden;
+    user-select: none;
+    -webkit-user-select: none;
+    touch-action: none;
+  }
+  #wrap { position: fixed; inset: 0; display: flex; align-items: center; justify-content: center; }
+  canvas { display: block; touch-action: none; border-radius: 6px; box-shadow: 0 0 0 2px #3a2a3a, 0 10px 40px rgba(0,0,0,0.6); }
+  #pauseBtn {
+    position: fixed; z-index: 3; display: none; right: 10px; top: calc(10px + env(safe-area-inset-top, 0px));
+    font: 700 13px system-ui, sans-serif; color: var(--fg);
+    background: rgba(0, 0, 0, 0.6); border: 1px solid rgba(255, 244, 232, 0.35);
+    border-radius: 8px; padding: 6px 10px; cursor: pointer;
+  }
+  #overlay {
+    position: fixed; inset: 0; z-index: 5;
+    display: flex; flex-direction: column; align-items: center; justify-content: flex-start;
+    gap: 14px; padding: 16px; text-align: center; overflow-y: auto;
+    background: rgba(26, 20, 32, 0.93);
+  }
+  #overlay > :first-child { margin-top: auto; }
+  #overlay > :last-child { margin-bottom: auto; }
+  #overlay.hidden { display: none; }
+  #homeLink {
+    position: fixed; top: calc(10px + env(safe-area-inset-top, 0px)); left: 10px; z-index: 6;
+    font: 600 13px/1 system-ui, sans-serif; color: #fff; text-decoration: none;
+    padding: 8px 12px; border-radius: 999px; background: rgba(0,0,0,.55);
+    border: 1px solid rgba(255,255,255,.25);
+  }
+  #homeLink:hover { background: rgba(0,0,0,.8); }
+  #overlay.hidden ~ #homeLink { display: none; }
+  @media (max-width: 700px) { #overlay { padding-top: calc(52px + env(safe-area-inset-top, 0px)); } }
+  #overlay h1 { font-size: clamp(32px, 10vw, 58px); font-weight: 900; letter-spacing: 1px; color: var(--orange);
+    text-shadow: 3px 3px 0 #2a1a0a, 0 0 22px rgba(255,138,42,0.4); }
+  #overlay h2 { font-size: clamp(26px, 7vw, 42px); font-weight: 900; letter-spacing: 2px; color: var(--orange); }
+  #overlay h2.lose { color: var(--red); }
+  #overlay p { max-width: 540px; font-size: clamp(13px, 3.4vw, 16px); line-height: 1.55; }
+  #overlay p.muted { color: var(--muted); }
+  #overlay .pts { display: grid; grid-template-columns: repeat(2, auto); gap: 4px 18px; font-size: 13px; color: var(--muted); text-align: left; max-width: 560px; }
+  #overlay .pts b { color: var(--fg); }
+  #overlay .diff { display: flex; gap: 10px; flex-wrap: wrap; justify-content: center; }
+  #overlay button {
+    font: 800 15px system-ui, sans-serif; letter-spacing: 1.5px; color: var(--fg);
+    background: transparent; cursor: pointer;
+    border: 2px solid rgba(255,244,232,0.3); border-radius: 10px; padding: 9px 16px;
+  }
+  #overlay .diff button.on { border-color: var(--c); color: var(--c); box-shadow: 0 0 12px var(--c); }
+  #overlay button.start { border-color: var(--orange); color: #2a1a0a; background: var(--orange); padding: 11px 30px; box-shadow: 0 4px 0 #a8541a; }
+  @media (max-height: 560px) {
+    #overlay { gap: 8px; }
+    #overlay h1 { font-size: 30px; }
+    #overlay p { font-size: 13px; line-height: 1.4; }
+    #overlay .help, #overlay .pts { display: none; }
+  }
+</style>
+</head>
+<body>
+<div id="wrap"><canvas id="game"></canvas></div>
+<button id="pauseBtn" type="button" aria-label="Pausa">❚❚</button>
+<div id="overlay"></div>
+<a id="homeLink" href="../../index.html">← Sala Giochi</a>
+
+<script>
+(() => {
+  "use strict";
+
+  const W = 360, H = 600, TAU = Math.PI * 2;
+  const LEDGE = 112, GROUND = 574, BUCKET_Y = [470, 500, 530], BUCKET_H = 22, BOMB_R = 8;
+  const MAX_BUCKETS = 3;
+
+  const DIFFICULTIES = {
+    facile:    { label: "FACILE",    color: "#7ed87a", desc: "secchi larghi · bombe più lente", width: 66, fall: 0.85, drop: 1.2 },
+    normale:   { label: "NORMALE",   color: "#ff8a2a", desc: "secchi normali", width: 56, fall: 1, drop: 1 },
+    difficile: { label: "DIFFICILE", color: "#ff4a3a", desc: "secchi stretti · bombe veloci", width: 48, fall: 1.15, drop: 0.9 },
+  };
+  const DIFF_IDS = Object.keys(DIFFICULTIES);
+  const DIFF_KEY = "acchiappa-difficulty";
+  const bestKey = (id) => `acchiappa-best-${id}`;
+  function store(k, v) { try { localStorage.setItem(k, v); } catch { /* ignore */ } }
+  function load(k) { try { return localStorage.getItem(k); } catch { return null; } }
+  const rnd = (a, b) => a + Math.random() * (b - a);
+  const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
+
+  // ---------- Canvas ----------
+  const canvas = document.getElementById("game");
+  const ctx = canvas.getContext("2d");
+  const overlay = document.getElementById("overlay");
+  const pauseBtn = document.getElementById("pauseBtn");
+  let pxRatio = 1, touchMode = !!(window.matchMedia && matchMedia("(pointer: coarse)").matches);
+  function resize() {
+    const availW = window.innerWidth - 8, availH = window.innerHeight - 8;
+    const s = Math.max(0.2, Math.min(availW / W, availH / H));
+    pxRatio = Math.min(3, s * (window.devicePixelRatio || 1));
+    canvas.style.width = W * s + "px";
+    canvas.style.height = H * s + "px";
+    canvas.width = Math.round(W * pxRatio);
+    canvas.height = Math.round(H * pxRatio);
+  }
+  window.addEventListener("resize", () => syncControls());
+
+  // ---------- Audio ----------
+  let audioCtx = null;
+  function beep(freq, dur, type = "square", vol = 0.04, slide = 0, delay = 0) {
+    if (!audioCtx) return;
+    const t = audioCtx.currentTime + delay;
+    const osc = audioCtx.createOscillator(), gain = audioCtx.createGain();
+    osc.type = type;
+    osc.frequency.setValueAtTime(freq, t);
+    if (slide) osc.frequency.exponentialRampToValueAtTime(Math.max(20, freq + slide), t + dur);
+    gain.gain.setValueAtTime(vol, t);
+    gain.gain.exponentialRampToValueAtTime(0.0001, t + dur);
+    osc.connect(gain).connect(audioCtx.destination);
+    osc.start(t); osc.stop(t + dur + 0.02);
+  }
+  function noise(dur, vol, freq) {
+    if (!audioCtx) return;
+    const len = Math.floor(audioCtx.sampleRate * dur), buf = audioCtx.createBuffer(1, len, audioCtx.sampleRate), d = buf.getChannelData(0);
+    for (let i = 0; i < len; i++) d[i] = (Math.random() * 2 - 1) * (1 - i / len);
+    const src = audioCtx.createBufferSource(), f = audioCtx.createBiquadFilter(), g = audioCtx.createGain();
+    src.buffer = buf; f.type = "bandpass"; f.frequency.value = freq; g.gain.value = vol;
+    src.connect(f).connect(g).connect(audioCtx.destination); src.start();
+  }
+  const arp = (notes, gap, d, type = "square", vol = 0.04) => notes.forEach((f, i) => beep(f, d, type, vol, 0, i * gap));
+  let sfxN = 0;
+  const lim = (fn) => (...a) => { if (sfxN++ < 5) fn(...a); };
+  const sfx = {
+    // each catch plays the next note of a little scale that climbs with the wave
+    catch: lim((i) => { const scale = [523, 587, 659, 698, 784, 880, 988, 1047]; beep(scale[i % 8] * (1 + Math.floor(i / 8) * 0.5), 0.07, "triangle", 0.05); noise(0.06, 0.05, 3000); }),
+    drop: lim(() => beep(900, 0.02, "square", 0.012, -300)),
+    boom: lim(() => { noise(0.35, 0.18, 220); beep(90, 0.25, "sawtooth", 0.05, -40); }),
+    wave: () => arp([523, 659, 784, 1047, 1319], 0.08, 0.14),
+    bucket: () => arp([784, 988, 1175, 1568], 0.07, 0.12),
+    laugh: () => arp([392, 349, 392, 349, 330], 0.08, 0.08, "square", 0.03),
+    over: () => arp([523, 466, 415, 392, 330, 262], 0.15, 0.24, "triangle", 0.05),
+  };
+
+  // ---------- State ----------
+  let difficulty = DIFFICULTIES[load(DIFF_KEY)] ? load(DIFF_KEY) : "normale";
+  let diff = DIFFICULTIES[difficulty];
+  let state = "menu", menu = null, pausedFrom = null, stateT = 0, clock = 0;
+  let score = 0, wave = 0, buckets = 3, bestCache = 0, nextBucket = 1000, bucketStep = 1000;
+  let bomber = null, bombs = [], toDrop = 0, dropT = 0, caughtInWave = 0, exploding = [], explodeT = 0;
+  let parts = [], popups = [], message = null, splash = [];
+  const player = { x: W / 2, target: W / 2 };
+  const keys = { left: false, right: false };
+
+  const bombsInWave = (w) => Math.min(150, 10 * (w + 1));
+  const fallSpeed = (w) => (165 + 26 * Math.min(w, 12)) * diff.fall;
+  const dropEvery = (w) => Math.max(0.13, 0.56 - 0.065 * Math.min(w, 9)) * diff.drop;
+  const bomberSpeed = (w) => 80 + 26 * Math.min(w, 10);
+  const pointsPerBomb = (w) => Math.min(w + 1, 8) * 10;
+
+  // ---------- Flow ----------
+  const isPlaying = () => ["intro", "play", "boom", "clear"].includes(state);
+  function startGame() {
+    if (!audioCtx) { try { audioCtx = new (window.AudioContext || window.webkitAudioContext)(); } catch { audioCtx = null; } }
+    if (audioCtx && audioCtx.state === "suspended") audioCtx.resume();
+    score = 0; wave = 0; buckets = MAX_BUCKETS; nextBucket = 1000; bucketStep = 1000;
+    bestCache = parseInt(load(bestKey(difficulty)), 10) || 0;
+    player.x = player.target = W / 2;
+    beginWave();
+    menu = null;
+    overlay.classList.add("hidden");
+    syncControls();
+    last = performance.now();
+  }
+  function beginWave() {
+    bomber = { x: W / 2, dir: Math.random() < 0.5 ? -1 : 1, turnT: rnd(0.4, 1.2), mood: 0 };
+    bombs = []; exploding = [];
+    toDrop = bombsInWave(wave); dropT = 1.0; caughtInWave = 0;
+    message = { text: `ONDATA ${wave + 1}`, sub: `${toDrop} bombe · ${pointsPerBomb(wave)} punti l'una`, t: 0 };
+    state = "intro"; stateT = 1.4;
+  }
+  function addScore(n, x, y, color = "#fff4e8") {
+    score += n;
+    // a bucket comes back at 1,000 points, then 3,000, 6,000, 10,000… (each gap 1,000 wider)
+    if (score >= nextBucket) {
+      bucketStep += 1000; nextBucket += bucketStep;
+      if (buckets < MAX_BUCKETS) { buckets++; sfx.bucket(); popups.push({ x: player.x, y: BUCKET_Y[0] - 30, text: "SECCHIO EXTRA!", color: "#7ad0ff", t: 0 }); }
+    }
+    if (x !== undefined) popups.push({ x, y, text: String(n), color, t: 0 });
+  }
+  function missed(b) {
+    // one bomb reaches the ground: every bomb on screen goes off, and a bucket is lost
+    exploding = [b, ...bombs.filter((o) => o !== b).sort((p, q) => q.y - p.y)];
+    bombs = [];
+    explodeT = 0;
+    bomber.mood = 1; sfx.laugh();
+    state = "boom";
+  }
+  function afterBoom() {
+    buckets--;
+    if (buckets <= 0) { gameOver(); return; }
+    wave = Math.max(0, wave - 1);
+    beginWave();
+  }
+  function gameOver() {
+    state = "over";
+    const prev = parseInt(load(bestKey(difficulty)), 10) || 0;
+    const record = score > prev;
+    if (record) store(bestKey(difficulty), String(score));
+    sfx.over();
+    menu = () => showOverlay(
+      `<h2 class="lose">${buckets <= 0 ? "SECCHI FINITI!" : "PARTITA FINITA"}</h2>
+       <p>Punteggio: <b>${score.toLocaleString("it-IT")}</b> · ondata ${wave + 1} · ${diff.label}</p>
+       ${record ? "<p style='color:var(--orange)'>★ NUOVO RECORD! ★</p>" : ""}
+       ${difficultyHTML()}
+       <button class="start" data-start>GIOCA ANCORA</button>`
+    );
+    menu();
+    syncControls();
+  }
+  function togglePause() {
+    if (isPlaying()) {
+      pausedFrom = state; state = "paused";
+      showOverlay(`<h2>PAUSA</h2><button class="start" data-resume>CONTINUA</button><p class="muted">Premi P per continuare</p>`);
+    } else if (state === "paused") {
+      state = pausedFrom; overlay.classList.add("hidden"); last = performance.now();
+    }
+    syncControls();
+  }
+  // the pause menu can end the game (shared/iniziali.js): it ends here the usual way, saving the record
+  window.addEventListener("sala:termina", () => { if (state !== "paused") return; state = pausedFrom; overlay.classList.add("hidden"); gameOver(); syncControls(); });
+  function syncControls() {
+    pauseBtn.style.display = isPlaying() && touchMode ? "block" : "none";
+    resize();
+  }
+  pauseBtn.addEventListener("click", () => togglePause());
+  function showOverlay(html) { overlay.innerHTML = html; overlay.classList.remove("hidden"); }
+  function difficultyHTML() {
+    const buttons = DIFF_IDS.map((id) => {
+      const d = DIFFICULTIES[id];
+      return `<button type="button" data-diff="${id}" class="${id === difficulty ? "on" : ""}" style="--c:${d.color}">${d.label}</button>`;
+    }).join("");
+    const best = parseInt(load(bestKey(difficulty)), 10);
+    return `<div class="diff">${buttons}</div><p class="muted">${diff.desc}${best ? ` · Record: ${best.toLocaleString("it-IT")}` : ""}</p>`;
+  }
+  function setDifficulty(id) { if (!DIFFICULTIES[id]) return; difficulty = id; diff = DIFFICULTIES[id]; store(DIFF_KEY, id); if (menu) menu(); }
+  function showTitle() {
+    menu = showTitle;
+    showOverlay(
+      `<h1>ACCHIAPPABOMBE</h1>
+       <p>Il bombarolo matto corre sul muro e lancia bombe con la miccia accesa! Prendile tutte al volo con i tuoi tre secchi d'acqua. Se una tocca terra scoppiano tutte quelle in aria e perdi un secchio.</p>
+       <div class="pts">
+         <span><b>Punti</b></span><span>10 a bomba nella prima ondata, 20 nella seconda… fino a 80</span>
+         <span><b>Ondate</b></span><span>ogni ondata ha 10 bombe in più, cadono più veloci e il bombarolo corre di più</span>
+         <span><b>Bomba mancata</b></span><span>perdi un secchio e torni all'ondata precedente</span>
+         <span><b>Secchio extra</b></span><span>ne ritorna uno a 1.000 punti, poi a 3.000, 6.000, 10.000… (massimo 3)</span>
+       </div>
+       ${touchMode
+         ? `<p class="muted help">Trascina il dito a destra e a sinistra, in qualsiasi punto dello schermo: i secchi lo seguono</p>`
+         : `<p class="muted help">Muovi il mouse (i secchi seguono) oppure ← → · P pausa</p>`}
+       ${difficultyHTML()}
+       <button class="start" data-start>PRONTI COI SECCHI!</button>`
+    );
+  }
+  overlay.addEventListener("click", (e) => {
+    const d = e.target.closest("[data-diff]");
+    if (d) { setDifficulty(d.dataset.diff); return; }
+    if (e.target.closest("[data-start]")) startGame();
+    if (e.target.closest("[data-resume]")) togglePause();
+  });
+
+  // ---------- Input ----------
+  window.addEventListener("keydown", (e) => {
+    const k = e.key.toLowerCase();
+    if ([" ", "arrowup", "arrowdown", "arrowleft", "arrowright"].includes(k)) e.preventDefault();
+    if (state === "menu" || state === "over") {
+      if (e.key === "Enter") startGame();
+      else if (["1", "2", "3"].includes(k)) setDifficulty(DIFF_IDS[+k - 1]);
+      return;
+    }
+    if (k === "p" || k === "escape") { if (!e.repeat) togglePause(); return; }
+    if (state === "paused") { if (e.key === "Enter") togglePause(); return; }
+    if (k === "arrowleft" || k === "a") keys.left = true;
+    if (k === "arrowright" || k === "d") keys.right = true;
+  });
+  window.addEventListener("keyup", (e) => {
+    const k = e.key.toLowerCase();
+    if (k === "arrowleft" || k === "a") keys.left = false;
+    if (k === "arrowright" || k === "d") keys.right = false;
+  });
+  window.addEventListener("blur", () => { keys.left = keys.right = false; if (isPlaying()) togglePause(); });
+  const toWorldX = (e) => { const rc = canvas.getBoundingClientRect(); return (e.clientX - rc.left) / rc.width * W; };
+  // touch: the buckets follow the finger's movement, wherever it is on the screen
+  let drag = null;
+  canvas.addEventListener("pointerdown", (e) => {
+    e.preventDefault();
+    if (e.pointerType === "touch") { drag = { id: e.pointerId, x: toWorldX(e), start: player.target }; try { canvas.setPointerCapture(e.pointerId); } catch { /* ignore */ } }
+    else player.target = clamp(toWorldX(e), 0, W);
+  });
+  canvas.addEventListener("pointermove", (e) => {
+    if (e.pointerType === "touch") {
+      if (!drag || e.pointerId !== drag.id) return;
+      player.target = clamp(drag.start + (toWorldX(e) - drag.x) * 1.25, 0, W);
+    } else player.target = clamp(toWorldX(e), 0, W);
+  });
+  for (const ev of ["pointerup", "pointercancel"]) canvas.addEventListener(ev, (e) => { if (drag && e.pointerId === drag.id) drag = null; });
+  window.addEventListener("pointerdown", (e) => { if (e.pointerType === "touch" && !touchMode) { touchMode = true; syncControls(); if (menu) menu(); } }, true);
+  // on phones the finger can also drag on the empty space around the canvas
+  document.addEventListener("pointerdown", (e) => { if (e.target === document.body || e.target.id === "wrap") { if (e.pointerType === "touch") drag = { id: e.pointerId, x: toWorldX(e), start: player.target }; } });
+  document.addEventListener("pointermove", (e) => { if (drag && e.pointerId === drag.id && e.target !== canvas) player.target = clamp(drag.start + (toWorldX(e) - drag.x) * 1.25, 0, W); });
+  document.addEventListener("pointerup", (e) => { if (drag && e.pointerId === drag.id) drag = null; });
+
+  // ---------- Update ----------
+  const halfW = () => diff.width / 2;
+  function updatePlayer(dt) {
+    const kx = (keys.right ? 1 : 0) - (keys.left ? 1 : 0);
+    if (kx) player.target = clamp(player.target + kx * 560 * dt, 0, W);
+    // the buckets are quick, but not instant
+    const d = player.target - player.x, mx = 1100 * dt;
+    player.x += clamp(d, -mx, mx);
+    player.x = clamp(player.x, halfW(), W - halfW());
+  }
+  function updateBomber(dt) {
+    const sp = bomberSpeed(wave);
+    bomber.x += bomber.dir * sp * dt;
+    bomber.turnT -= dt;
+    if (bomber.x < 24) { bomber.x = 24; bomber.dir = 1; }
+    if (bomber.x > W - 24) { bomber.x = W - 24; bomber.dir = -1; }
+    if (bomber.turnT <= 0) { if (Math.random() < 0.7) bomber.dir *= -1; bomber.turnT = rnd(0.25, 1.1) / (1 + wave * 0.05); }
+    bomber.mood = Math.max(0, bomber.mood - dt * 0.5);
+    if (toDrop > 0) {
+      dropT -= dt;
+      if (dropT <= 0) {
+        bombs.push({ x: bomber.x, y: LEDGE + 6, ph: rnd(0, TAU) });
+        toDrop--; dropT = dropEvery(wave); sfx.drop();
+      }
+    }
+  }
+  function updateBombs(dt) {
+    const v = fallSpeed(wave), hw = halfW();
+    for (const b of bombs) {
+      const py = b.y;
+      b.y += v * dt; b.ph += dt * 20;
+      // caught when it drops into one of the buckets
+      for (let i = 0; i < buckets; i++) {
+        const top = BUCKET_Y[i];
+        if (py <= top && b.y > top && Math.abs(b.x - player.x) < hw + 3) {
+          b.caught = true;
+          caughtInWave++;
+          addScore(pointsPerBomb(wave), player.x, top - 14);
+          sfx.catch(caughtInWave);
+          splash.push({ x: b.x, y: top, t: 0 });
+          break;
+        }
+      }
+      if (!b.caught && b.y > GROUND) { missed(b); return; }
+    }
+    bombs = bombs.filter((b) => !b.caught);
+  }
+  function update(dt) {
+    clock += dt; sfxN = 0;
+    if (message) { message.t += dt; if (message.t > 2) message = null; }
+    for (const p of parts) { p.t += dt; p.x += p.vx * dt; p.y += p.vy * dt; p.vy += 300 * dt; }
+    parts = parts.filter((p) => p.t < p.life);
+    for (const p of popups) { p.t += dt; p.y -= 22 * dt; }
+    popups = popups.filter((p) => p.t < 0.9);
+    for (const s of splash) s.t += dt;
+    splash = splash.filter((s) => s.t < 0.35);
+    if (!isPlaying()) return;
+    if (window.__bot) window.__bot(dt);
+    updatePlayer(dt);
+    if (state === "intro") { stateT -= dt; if (stateT <= 0) state = "play"; return; }
+    if (state === "clear") { stateT -= dt; if (stateT <= 0) { wave++; beginWave(); } return; }
+    if (state === "boom") {
+      // the bombs go off one after another
+      explodeT -= dt;
+      if (explodeT <= 0 && exploding.length) {
+        const b = exploding.shift();
+        for (let k = 0; k < 18; k++) { const a = rnd(0, TAU), s = rnd(40, 180); parts.push({ x: b.x, y: b.y, vx: Math.cos(a) * s, vy: Math.sin(a) * s - 60, t: 0, life: rnd(0.4, 0.8), c: ["#ff8a2a", "#ffd23a", "#ff4a3a", "#fff4e8"][k % 4] }); }
+        sfx.boom();
+        explodeT = 0.09;
+        if (!exploding.length) stateT = 1.2;
+      } else if (!exploding.length) { stateT -= dt; if (stateT <= 0) afterBoom(); }
+      return;
+    }
+    updateBomber(dt);
+    updateBombs(dt);
+    if (state === "play" && toDrop <= 0 && !bombs.length) {
+      sfx.wave();
+      message = { text: "ONDATA SUPERATA!", sub: `${caughtInWave} bombe acchiappate`, t: 0 };
+      state = "clear"; stateT = 1.6;
+    }
+  }
+
+  // ---------- Drawing ----------
+  function drawScene() {
+    // night sky, a city skyline and the brick wall the bomber runs on
+    const g = ctx.createLinearGradient(0, 0, 0, H); g.addColorStop(0, "#2a1e3a"); g.addColorStop(1, "#4a2a3a");
+    ctx.fillStyle = g; ctx.fillRect(0, 0, W, H);
+    ctx.fillStyle = "#fff4c8"; ctx.beginPath(); ctx.arc(300, 60, 18, 0, TAU); ctx.fill();
+    ctx.fillStyle = "#2a1e3a"; ctx.beginPath(); ctx.arc(292, 55, 16, 0, TAU); ctx.fill();
+    const sky = [[0, 70, 40], [44, 50, 34], [82, 80, 30], [116, 40, 44], [164, 66, 28], [196, 58, 40], [240, 84, 30], [274, 46, 38], [316, 72, 44]];
+    for (const [x, h, w] of sky) {
+      ctx.fillStyle = "#1a1228"; ctx.fillRect(x, LEDGE - h, w, h);
+      ctx.fillStyle = "#ffd87a"; for (let yy = LEDGE - h + 6; yy < LEDGE - 6; yy += 10) for (let xx = x + 5; xx < x + w - 5; xx += 9) if ((xx * 7 + yy * 3) % 5 < 2) ctx.fillRect(xx, yy, 3, 4);
+    }
+    // the wall
+    ctx.fillStyle = "#8a3a2a"; ctx.fillRect(0, LEDGE, W, 16);
+    ctx.fillStyle = "#a84a32"; for (let x = 0; x < W; x += 24) { ctx.fillRect(x + 1, LEDGE + 1, 22, 6); ctx.fillRect(x + 13, LEDGE + 9, 22, 6); }
+    ctx.fillStyle = "#5a2a1a"; ctx.fillRect(0, LEDGE + 16, W, 3);
+    // the ground
+    ctx.fillStyle = "#3a2a2a"; ctx.fillRect(0, GROUND, W, H - GROUND);
+    ctx.fillStyle = "#5a4a3a"; ctx.fillRect(0, GROUND, W, 3);
+  }
+  function drawBomber() {
+    if (!bomber) return;
+    const x = bomber.x, y = LEDGE, step = Math.sin(clock * 16) * (state === "play" ? 3 : 0);
+    // legs
+    ctx.strokeStyle = "#2a2a3a"; ctx.lineWidth = 4;
+    ctx.beginPath(); ctx.moveTo(x - 5, y - 18); ctx.lineTo(x - 7 + step, y); ctx.moveTo(x + 5, y - 18); ctx.lineTo(x + 7 - step, y); ctx.stroke();
+    // striped shirt
+    ctx.fillStyle = "#fff4e8"; ctx.fillRect(x - 11, y - 40, 22, 24);
+    ctx.fillStyle = "#2a2a3a"; for (let k = 0; k < 4; k++) ctx.fillRect(x - 11, y - 38 + k * 6, 22, 3);
+    // arms up, holding a bomb
+    ctx.strokeStyle = "#e8b89a"; ctx.lineWidth = 4;
+    ctx.beginPath(); ctx.moveTo(x - 10, y - 36); ctx.lineTo(x - 16, y - 50); ctx.moveTo(x + 10, y - 36); ctx.lineTo(x + 16, y - 50); ctx.stroke();
+    // head with a robber's mask
+    ctx.fillStyle = "#e8b89a"; ctx.beginPath(); ctx.arc(x, y - 50, 10, 0, TAU); ctx.fill();
+    ctx.fillStyle = "#1a1a24"; ctx.fillRect(x - 10, y - 55, 20, 6);
+    ctx.fillStyle = "#fff"; ctx.fillRect(x - 6, y - 54, 4, 3); ctx.fillRect(x + 2, y - 54, 4, 3);
+    ctx.strokeStyle = "#5a1a1a"; ctx.lineWidth = 1.6; ctx.beginPath();
+    if (bomber.mood > 0.2) ctx.arc(x, y - 46, 5, 0.1, Math.PI - 0.1); else ctx.arc(x, y - 42, 4, Math.PI + 0.4, TAU - 0.4);
+    ctx.stroke();
+    ctx.fillStyle = "#1a1a24"; ctx.fillRect(x - 11, y - 63, 22, 5); ctx.fillRect(x - 7, y - 70, 14, 8);
+    if (toDrop > 0 && state === "play") drawBomb(x, y - 58, clock * 20, 0.8);
+  }
+  function drawBomb(x, y, ph, s = 1) {
+    ctx.fillStyle = "#1a1a24"; ctx.beginPath(); ctx.arc(x, y, BOMB_R * s, 0, TAU); ctx.fill();
+    ctx.fillStyle = "rgba(255,255,255,0.35)"; ctx.beginPath(); ctx.arc(x - 3 * s, y - 3 * s, 2.5 * s, 0, TAU); ctx.fill();
+    ctx.fillStyle = "#4a4a5a"; ctx.fillRect(x - 2 * s, y - BOMB_R * s - 3 * s, 4 * s, 3 * s);
+    ctx.strokeStyle = "#c8a878"; ctx.lineWidth = 1.5; ctx.beginPath(); ctx.moveTo(x, y - BOMB_R * s - 3 * s); ctx.quadraticCurveTo(x + 5 * s, y - BOMB_R * s - 7 * s, x + 3 * s, y - BOMB_R * s - 10 * s); ctx.stroke();
+    // the fuse sparkles
+    const fx = x + 3 * s, fy = y - BOMB_R * s - 10 * s;
+    ctx.fillStyle = Math.sin(ph) > 0 ? "#ffd23a" : "#ff8a2a";
+    for (let k = 0; k < 4; k++) { const a = ph + k * Math.PI / 2; ctx.fillRect(fx + Math.cos(a) * 3 - 1, fy + Math.sin(a) * 3 - 1, 2, 2); }
+  }
+  function drawBuckets() {
+    const hw = halfW();
+    for (let i = 0; i < buckets; i++) {
+      const y = BUCKET_Y[i], x = player.x;
+      ctx.fillStyle = "#1a5aa8"; ctx.beginPath(); ctx.moveTo(x - hw, y); ctx.lineTo(x + hw, y); ctx.lineTo(x + hw - 5, y + BUCKET_H); ctx.lineTo(x - hw + 5, y + BUCKET_H); ctx.closePath(); ctx.fill();
+      ctx.fillStyle = "#3a9aff"; ctx.fillRect(x - hw, y, hw * 2, 5);
+      ctx.fillStyle = "#7ad0ff"; ctx.fillRect(x - hw + 3, y + 1, hw * 2 - 6, 2);
+      ctx.fillStyle = "rgba(255,255,255,0.25)"; ctx.fillRect(x - hw + 6, y + 7, 4, BUCKET_H - 10);
+      ctx.strokeStyle = "#0a2a5a"; ctx.lineWidth = 1.5; ctx.beginPath(); ctx.moveTo(x - hw, y); ctx.lineTo(x - hw + 5, y + BUCKET_H); ctx.lineTo(x + hw - 5, y + BUCKET_H); ctx.lineTo(x + hw, y); ctx.stroke();
+    }
+    for (const s of splash) {
+      ctx.fillStyle = `rgba(122,208,255,${1 - s.t / 0.35})`;
+      for (let k = -2; k <= 2; k++) ctx.fillRect(s.x + k * 6, s.y - 4 - s.t * 60 * (1 - Math.abs(k) * 0.25), 3, 4);
+    }
+  }
+  function drawHud() {
+    ctx.fillStyle = "rgba(20,14,26,0.9)"; ctx.fillRect(0, 0, W, 40);
+    ctx.textBaseline = "middle"; ctx.textAlign = "left";
+    ctx.fillStyle = "#fff4e8"; ctx.font = "900 18px system-ui"; ctx.fillText(score.toLocaleString("it-IT"), 12, 14);
+    ctx.fillStyle = "#c8b8a8"; ctx.font = "700 9px system-ui"; ctx.fillText(`REC ${Math.max(bestCache, score).toLocaleString("it-IT")}`, 12, 31);
+    ctx.textAlign = "center"; ctx.fillStyle = "#ff8a2a"; ctx.font = "900 12px system-ui"; ctx.fillText(`ONDATA ${wave + 1}`, W / 2, 14);
+    ctx.fillStyle = "#c8b8a8"; ctx.font = "700 9px system-ui"; ctx.fillText(`${toDrop + bombs.length} bombe ancora`, W / 2, 31);
+    ctx.textAlign = "right";
+    const bx = touchMode ? W - 64 : W - 12;
+    for (let i = 0; i < MAX_BUCKETS; i++) {
+      const x = bx - i * 18;
+      ctx.fillStyle = i < buckets ? "#3a9aff" : "#3a2e44";
+      ctx.beginPath(); ctx.moveTo(x - 7, 14); ctx.lineTo(x + 7, 14); ctx.lineTo(x + 5, 26); ctx.lineTo(x - 5, 26); ctx.closePath(); ctx.fill();
+    }
+    ctx.textBaseline = "alphabetic";
+  }
+  function draw() {
+    ctx.setTransform(pxRatio, 0, 0, pxRatio, 0, 0);
+    drawScene();
+    if (state === "menu" && !bomber) { bomber = { x: W / 2, dir: 1, turnT: 1, mood: 0 }; toDrop = 5; bombs = [{ x: 120, y: 240, ph: 0 }, { x: 200, y: 330, ph: 2 }, { x: 250, y: 180, ph: 4 }]; }
+    drawBomber();
+    for (const b of bombs) drawBomb(b.x, b.y, b.ph);
+    for (const b of exploding) drawBomb(b.x, b.y, clock * 40);
+    drawBuckets();
+    for (const p of parts) { ctx.globalAlpha = Math.max(0, 1 - p.t / p.life); ctx.fillStyle = p.c; ctx.fillRect(p.x - 2, p.y - 2, 4, 4); }
+    ctx.globalAlpha = 1;
+    for (const p of popups) {
+      ctx.globalAlpha = Math.max(0, 1 - p.t / 0.9);
+      ctx.textAlign = "center"; ctx.font = "900 12px system-ui";
+      ctx.lineWidth = 3; ctx.strokeStyle = "#1a1420"; ctx.strokeText(p.text, p.x, p.y); ctx.fillStyle = p.color; ctx.fillText(p.text, p.x, p.y);
+    }
+    ctx.globalAlpha = 1;
+    if (state === "menu") return;
+    drawHud();
+    if (message) {
+      ctx.globalAlpha = Math.min(1, (2 - message.t) * 2);
+      ctx.fillStyle = "rgba(0,0,0,0.55)"; ctx.fillRect(0, 270, W, 60);
+      ctx.textAlign = "center"; ctx.font = "900 26px system-ui"; ctx.fillStyle = "#ff8a2a";
+      ctx.lineWidth = 5; ctx.strokeStyle = "#1a1420"; ctx.strokeText(message.text, W / 2, 300); ctx.fillText(message.text, W / 2, 300);
+      if (message.sub) { ctx.font = "800 12px system-ui"; ctx.fillStyle = "#fff4e8"; ctx.fillText(message.sub, W / 2, 320); }
+      ctx.globalAlpha = 1;
+    }
+  }
+
+  // ---------- Loop ----------
+  const STEP = 1 / 120;
+  let last = performance.now(), acc = 0;
+  function frame(now) {
+    const dt = Math.min(0.1, (now - last) / 1000);
+    last = now;
+    if (isPlaying()) {
+      acc += dt;
+      while (acc >= STEP && isPlaying()) { update(STEP); acc -= STEP; }
+    } else { acc = 0; update(dt); }
+    draw();
+    requestAnimationFrame(frame);
+  }
+  syncControls();
+  showTitle();
+  requestAnimationFrame(frame);
+})();
+</script>
+<script src="../../shared/iniziali.js" data-record="acchiappa-best-" data-kind="score"></script>
+</body>
+</html>

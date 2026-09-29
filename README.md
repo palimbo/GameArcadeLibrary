@@ -4,7 +4,7 @@ Raccolta di giochi arcade per il browser. Ogni gioco è un singolo file HTML sen
 
 ## 🕹️ Sala Giochi — `index.html`
 
-Apri `index.html` nella cartella principale per la pagina di raccolta: mostra tutti i 85 giochi con copertina, genere, comandi e i tuoi record per ogni difficoltà (Facile, Normale, Difficile). Tocca «Gioca» per avviare un gioco; in ogni gioco il pulsante «← Sala Giochi» in alto a sinistra (visibile nei menu) riporta alla raccolta.
+Apri `index.html` nella cartella principale per la pagina di raccolta: mostra tutti i 86 giochi con copertina, genere, comandi e i tuoi record per ogni difficoltà (Facile, Normale, Difficile). Tocca «Gioca» per avviare un gioco; in ogni gioco il pulsante «← Sala Giochi» in alto a sinistra (visibile nei menu) riporta alla raccolta.
 
 **Iniziali del record:** quando batti un record compare la schermata da sala giochi per inserire le tue tre iniziali (frecce ↑ ↓ per cambiare lettera, ← → per spostarti, oppure scrivile direttamente; su telefono i tasti ▲ ▼ e OK). Le iniziali vengono salvate insieme al record e compaiono nei menu del gioco e nella Sala Giochi. Il codice è condiviso da tutti i giochi in `shared/iniziali.js`.
 
@@ -1340,3 +1340,17 @@ Sparatutto vettoriale in stile *Star Castle*. Al centro dello schermo c'è un ca
 - **Touch:** levetta (l'astronave si gira da quella parte e accelera) e pulsante FUOCO
 
 Per giocare apri `games/cittadella-stellare/index.html` nel browser.
+
+### 💣 Acchiappabombe — `games/acchiappabombe/index.html`
+
+Gioco di riflessi in stile *Kaboom!*. In cima a un muro di mattoni un bombarolo mascherato corre avanti e indietro e lascia cadere bombe con la miccia accesa; in basso tu muovi tre secchi d'acqua impilati e devi prenderle tutte al volo.
+
+- **Ondate:** la prima ha 10 bombe, ogni ondata successiva 10 in più; le bombe cadono più veloci, più fitte, e il bombarolo corre e cambia direzione più spesso
+- **Punti:** ogni bomba presa vale 10 nella prima ondata, 20 nella seconda… fino a 80
+- **Bomba mancata:** quando una bomba tocca terra scoppiano tutte quelle ancora in aria, perdi il secchio più in basso e torni all'ondata precedente; senza secchi la partita finisce. Con meno secchi la «rete» è più corta: è più difficile recuperare una bomba presa in ritardo
+- **Secchio extra:** ne ritorna uno a 1.000 punti, poi a 3.000, 6.000, 10.000… (massimo 3)
+- **Difficoltà:** Facile (secchi larghi, bombe più lente e meno fitte), Normale, Difficile (secchi stretti, bombe veloci); record separati per ogni difficoltà
+- **Comandi:** muovi il mouse (i secchi lo seguono) oppure `←` `→` · `P` pausa
+- **Touch:** trascina il dito a destra e a sinistra in qualsiasi punto dello schermo, anche fuori dal campo: i secchi seguono il movimento
+
+Per giocare apri `games/acchiappabombe/index.html` nel browser.
