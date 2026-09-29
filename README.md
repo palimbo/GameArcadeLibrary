@@ -4,7 +4,7 @@ Raccolta di giochi arcade per il browser. Ogni gioco è un singolo file HTML sen
 
 ## 🕹️ Sala Giochi — `index.html`
 
-Apri `index.html` nella cartella principale per la pagina di raccolta: mostra tutti i 94 giochi con copertina, genere, comandi e i tuoi record per ogni difficoltà (Facile, Normale, Difficile). Tocca «Gioca» per avviare un gioco; in ogni gioco il pulsante «← Sala Giochi» in alto a sinistra (visibile nei menu) riporta alla raccolta.
+Apri `index.html` nella cartella principale per la pagina di raccolta: mostra tutti i 95 giochi con copertina, genere, comandi e i tuoi record per ogni difficoltà (Facile, Normale, Difficile). Tocca «Gioca» per avviare un gioco; in ogni gioco il pulsante «← Sala Giochi» in alto a sinistra (visibile nei menu) riporta alla raccolta.
 
 **Iniziali del record:** quando batti un record compare la schermata da sala giochi per inserire le tue tre iniziali (frecce ↑ ↓ per cambiare lettera, ← → per spostarti, oppure scrivile direttamente; su telefono i tasti ▲ ▼ e OK). Le iniziali vengono salvate insieme al record e compaiono nei menu del gioco e nella Sala Giochi. Il codice è condiviso da tutti i giochi in `shared/iniziali.js`.
 
@@ -1471,3 +1471,17 @@ Azione in stile *Zoo Keeper*. Gli animali chiusi nel recinto prendono a testate 
 - **Touch:** levetta per correre e pulsante SALTA
 
 Per giocare apri `games/guardiano-dello-zoo/index.html` nel browser.
+
+### 🦅 Fenice Spaziale — `games/fenice-spaziale/index.html`
+
+Sparatutto a schermo fisso in stile *Phoenix*. Guidi un caccia in fondo allo schermo contro cinque ondate diverse, che poi ricominciano più veloci.
+
+- **Lo stormo (ondate 1 e 2):** uccellini alieni in formazione che, a turno, si lanciano in picchiata ondeggiando e sparando. 20 punti in formazione, 80 in picchiata. Il secondo stormo è rosso e più svelto
+- **Le fenici (ondate 3 e 4):** grandi uccelli che planano e ogni tanto scendono in picchiata. Solo un colpo al corpo le abbatte: le ali perdono pezzi ma ricrescono dopo un paio di secondi. Valgono da 100 a 800 punti, di più quanto più sono vicine
+- **L'astronave madre (ondata 5):** scende lentamente sparando, scortata da qualche uccellino. Per colpire il pilota alieno devi scavare un buco nello scafo e nel nastro viola che gli gira sotto (10 punti a pezzo); colpirlo vale da 2.000 a 8.000 punti
+- **Scudo:** per poco più di un secondo ti protegge da colpi e uccelli (quelli che ci sbattono contro esplodono), ma intanto non puoi muoverti né sparare; poi deve ricaricarsi
+- **Difficoltà:** Facile (5 navi, nemici lenti che sparano poco, scudo che si ricarica in fretta), Normale (3 navi), Difficile (3 navi, nemici più svelti e aggressivi, scudo lento); record separati per ogni difficoltà. Nave extra ogni 10.000 punti
+- **Comandi:** `←` `→` muoviti · `↓` scudo · `Spazio`, `J` o `Z` spara (tieni premuto) · `P` pausa
+- **Touch:** levetta per muoverti (giù per lo scudo) e pulsante FUOCO da tenere premuto
+
+Per giocare apri `games/fenice-spaziale/index.html` nel browser.
