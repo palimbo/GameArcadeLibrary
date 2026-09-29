@@ -4,7 +4,7 @@ Raccolta di giochi arcade per il browser. Ogni gioco è un singolo file HTML sen
 
 ## 🕹️ Sala Giochi — `index.html`
 
-Apri `index.html` nella cartella principale per la pagina di raccolta: mostra tutti i 101 giochi con copertina, genere, comandi e i tuoi record per ogni difficoltà (Facile, Normale, Difficile). Tocca «Gioca» per avviare un gioco; in ogni gioco il pulsante «← Sala Giochi» in alto a sinistra (visibile nei menu) riporta alla raccolta.
+Apri `index.html` nella cartella principale per la pagina di raccolta: mostra tutti i 102 giochi con copertina, genere, comandi e i tuoi record per ogni difficoltà (Facile, Normale, Difficile). Tocca «Gioca» per avviare un gioco; in ogni gioco il pulsante «← Sala Giochi» in alto a sinistra (visibile nei menu) riporta alla raccolta.
 
 **Iniziali del record:** quando batti un record compare la schermata da sala giochi per inserire le tue tre iniziali (frecce ↑ ↓ per cambiare lettera, ← → per spostarti, oppure scrivile direttamente; su telefono i tasti ▲ ▼ e OK). Le iniziali vengono salvate insieme al record e compaiono nei menu del gioco e nella Sala Giochi. Il codice è condiviso da tutti i giochi in `shared/iniziali.js`.
 
@@ -1572,3 +1572,18 @@ Sparatutto a scorrimento verticale in stile *Xevious*. La nave sorvola una pianu
 - **Touch:** levetta per volare e pulsante BOMBA
 
 Per giocare apri `games/mirino-stellare/index.html` nel browser.
+
+### 💀 Stella Maligna — `games/stella-maligna/index.html`
+
+Caccia nello spazio in stile *Sinistar*. La nave vola in un settore di spazio che si ripete ai bordi, pieno di planetoidi. Gli operai alieni ne estraggono cristalli e li portano in un cantiere dove costruiscono pezzo dopo pezzo la Stella Maligna, un teschio gigante: quando è completa si sveglia, ti insulta e ti dà la caccia.
+
+- **Cristalli e bombe:** il cannone spara da solo; colpendo un planetoide ogni tanto se ne stacca un cristallo (200). Ogni cristallo raccolto diventa una bomba stellare (massimo 20)
+- **Bombe stellari:** inseguono la Stella da sole e ne staccano un pezzo a colpo (500), anche mentre è ancora in costruzione. Operai e guerrieri che si mettono in mezzo le intercettano. I colpi normali rimbalzano sulla Stella
+- **La Stella:** si completa con i cristalli portati dagli operai, e comunque da sola un pezzo ogni 12 secondi; gli operai la riparano anche quando è sveglia. Se ti tocca ti divora. Distrutta vale 15.000 × zona e si passa alla zona successiva, con una Stella più grande e veloce e più nemici
+- **Nemici:** operai (150) che raccolgono e trasportano cristalli, guerrieri (500) che ti girano intorno e sparano; tornano dopo qualche secondo
+- **Radar:** in alto a destra mostra planetoidi, cristalli, nemici e la Stella; una freccia sul bordo dello schermo indica dov'è la Stella
+- **Difficoltà:** Facile (5 vite, Stella più lenta, nemici che sparano poco), Normale (3 vite), Difficile (3 vite, Stella veloce, più nemici e più colpi); record separati per ogni difficoltà. Vita extra ogni 20.000 punti
+- **Comandi:** frecce o `WASD` per volare (la nave si gira nella direzione indicata e il cannone spara da solo) · `Spazio`, `X`, `J` o `Z` bomba stellare · `P` pausa
+- **Touch:** levetta per volare e pulsante BOMBA
+
+Per giocare apri `games/stella-maligna/index.html` nel browser.
