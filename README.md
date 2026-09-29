@@ -4,7 +4,7 @@ Raccolta di giochi arcade per il browser. Ogni gioco è un singolo file HTML sen
 
 ## 🕹️ Sala Giochi — `index.html`
 
-Apri `index.html` nella cartella principale per la pagina di raccolta: mostra tutti i 82 giochi con copertina, genere, comandi e i tuoi record per ogni difficoltà (Facile, Normale, Difficile). Tocca «Gioca» per avviare un gioco; in ogni gioco il pulsante «← Sala Giochi» in alto a sinistra (visibile nei menu) riporta alla raccolta.
+Apri `index.html` nella cartella principale per la pagina di raccolta: mostra tutti i 83 giochi con copertina, genere, comandi e i tuoi record per ogni difficoltà (Facile, Normale, Difficile). Tocca «Gioca» per avviare un gioco; in ogni gioco il pulsante «← Sala Giochi» in alto a sinistra (visibile nei menu) riporta alla raccolta.
 
 **Iniziali del record:** quando batti un record compare la schermata da sala giochi per inserire le tue tre iniziali (frecce ↑ ↓ per cambiare lettera, ← → per spostarti, oppure scrivile direttamente; su telefono i tasti ▲ ▼ e OK). Le iniziali vengono salvate insieme al record e compaiono nei menu del gioco e nella Sala Giochi. Il codice è condiviso da tutti i giochi in `shared/iniziali.js`.
 
@@ -1296,3 +1296,17 @@ Il baraccone del tiro a segno del luna park, in stile *Duck Hunt*: si spara tocc
 - **Touch:** tocca un bersaglio per sparargli, tocca RICARICA per ricaricare
 
 Per giocare apri `games/tiro-a-segno/index.html` nel browser.
+
+### 💊 Pillole Pazze — `games/pillole-pazze/index.html`
+
+Rompicapo in stile *Dr. Mario*. Una bottiglia di 8×16 caselle è piena di virus rossi, gialli e blu; dall'alto scendono pillole fatte di due metà colorate. Metti in fila almeno quattro pezzi dello stesso colore, in orizzontale o in verticale e virus compresi: spariscono, e le metà di pillola rimaste sospese ricadono, anche a catena.
+
+- **Obiettivo:** eliminare tutti i virus della bottiglia; ogni livello ne ha quattro in più (e più in alto)
+- **Punti:** il primo virus eliminato con una pillola vale 100, il secondo 200, poi 400, 800… anche se arrivano a catena; ×2 a Normale e ×3 a Difficile. Bottiglia pulita: bonus di 1.000 × livello
+- **Aiuti:** l'ombra mostra dove cadrà la pillola; a destra c'è la pillola successiva
+- **Fine partita:** ogni 10 pillole si cade un po' più in fretta; se la bocca della bottiglia si chiude e la nuova pillola non entra, è finita
+- **Difficoltà:** Facile (caduta lenta, virus solo in basso), Normale (caduta media), Difficile (caduta veloce, virus fin quasi in cima); record separati per ogni difficoltà
+- **Comandi:** `←` `→` sposta · `↓` scendi più veloce · `↑`, `X` o `Z` ruota · `Spazio` caduta immediata · `P` pausa
+- **Touch:** levetta (destra/sinistra per spostare, giù per scendere) e pulsanti RUOTA e GIÙ
+
+Per giocare apri `games/pillole-pazze/index.html` nel browser.

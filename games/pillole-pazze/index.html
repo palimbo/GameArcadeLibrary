@@ -1,0 +1,664 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no, viewport-fit=cover">
+<title>Pillole Pazze</title>
+<style>
+  :root {
+    --bg: #101a2a;
+    --fg: #f4f8ff;
+    --muted: #a8b8d0;
+    --red: #ff4a5a;
+    --yellow: #ffd23a;
+    --blue: #3aa8ff;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  html, body {
+    height: 100%;
+    background: var(--bg);
+    color: var(--fg);
+    font-family: system-ui, -apple-system, "Segoe UI", sans-serif;
+    overflow: hidden;
+    user-select: none;
+    -webkit-user-select: none;
+    touch-action: none;
+  }
+  #wrap { position: fixed; inset: 0; display: flex; align-items: center; justify-content: center; }
+  canvas { display: block; touch-action: none; border-radius: 6px; box-shadow: 0 0 0 2px #22344e, 0 10px 40px rgba(0,0,0,0.6); }
+  #pauseBtn {
+    position: fixed; z-index: 3; display: none; right: 10px; top: calc(10px + env(safe-area-inset-top, 0px));
+    font: 700 13px system-ui, sans-serif; color: var(--fg);
+    background: rgba(0, 0, 0, 0.6); border: 1px solid rgba(244, 248, 255, 0.35);
+    border-radius: 8px; padding: 6px 10px; cursor: pointer;
+  }
+  #touch {
+    position: fixed; z-index: 2; display: none; left: 12px; right: 12px;
+    bottom: calc(14px + env(safe-area-inset-bottom, 0px));
+    justify-content: space-between; align-items: flex-end; pointer-events: none;
+  }
+  /* thumb stick: left/right to move, down to drop faster; RUOTA turns the pill, GIÙ drops it at once */
+  #touch .stick { position: relative; width: 136px; height: 136px; border-radius: 50%; pointer-events: auto; touch-action: none;
+    border: 2px solid rgba(58, 168, 255, 0.6); background: radial-gradient(circle, rgba(58,168,255,0.14), rgba(58,168,255,0.04)); }
+  #touch .stick .knob { position: absolute; left: 50%; top: 50%; width: 58px; height: 58px; margin: -29px 0 0 -29px; border-radius: 50%;
+    background: rgba(58, 168, 255, 0.45); border: 2px solid rgba(255,255,255,0.7); box-shadow: 0 4px 10px rgba(0,0,0,0.4); pointer-events: none; }
+  #touch .stick .ring { position: absolute; inset: 10px; border-radius: 50%; border: 1px dashed rgba(244,248,255,0.25); pointer-events: none; }
+  #touch .btns { display: flex; gap: 10px; align-items: flex-end; }
+  #touch .btn { border-radius: 50%; pointer-events: auto; touch-action: none; color: var(--fg); font: 800 12px system-ui, sans-serif; letter-spacing: 1px; }
+  #touch .rot { width: 92px; height: 92px; border: 2px solid rgba(255, 210, 58, 0.9); background: rgba(255, 210, 58, 0.2); }
+  #touch .drop { width: 68px; height: 68px; margin-bottom: 60px; border: 2px solid rgba(255, 74, 90, 0.9); background: rgba(255, 74, 90, 0.2); }
+  #touch .btn.on { filter: brightness(1.8); }
+  #touch.small .stick { width: 112px; height: 112px; }
+  #touch.small .stick .knob { width: 48px; height: 48px; margin: -24px 0 0 -24px; }
+  #touch.small .rot { width: 78px; height: 78px; }
+  #touch.small .drop { width: 58px; height: 58px; margin-bottom: 50px; }
+  #overlay {
+    position: fixed; inset: 0; z-index: 5;
+    display: flex; flex-direction: column; align-items: center; justify-content: flex-start;
+    gap: 14px; padding: 16px; text-align: center; overflow-y: auto;
+    background: rgba(16, 26, 42, 0.93);
+  }
+  #overlay > :first-child { margin-top: auto; }
+  #overlay > :last-child { margin-bottom: auto; }
+  #overlay.hidden { display: none; }
+  #homeLink {
+    position: fixed; top: calc(10px + env(safe-area-inset-top, 0px)); left: 10px; z-index: 6;
+    font: 600 13px/1 system-ui, sans-serif; color: #fff; text-decoration: none;
+    padding: 8px 12px; border-radius: 999px; background: rgba(0,0,0,.55);
+    border: 1px solid rgba(255,255,255,.25);
+  }
+  #homeLink:hover { background: rgba(0,0,0,.8); }
+  #overlay.hidden ~ #homeLink { display: none; }
+  @media (max-width: 700px) { #overlay { padding-top: calc(52px + env(safe-area-inset-top, 0px)); } }
+  #overlay h1 { font-size: clamp(34px, 10vw, 60px); font-weight: 900; letter-spacing: 1px; color: var(--yellow);
+    text-shadow: 3px 3px 0 #c83a4a, 6px 6px 0 #2a6aa8; }
+  #overlay h2 { font-size: clamp(26px, 7vw, 42px); font-weight: 900; letter-spacing: 2px; color: var(--yellow); }
+  #overlay h2.lose { color: var(--red); }
+  #overlay p { max-width: 540px; font-size: clamp(13px, 3.4vw, 16px); line-height: 1.55; }
+  #overlay p.muted { color: var(--muted); }
+  #overlay .pts { display: grid; grid-template-columns: repeat(2, auto); gap: 4px 18px; font-size: 13px; color: var(--muted); text-align: left; max-width: 560px; }
+  #overlay .pts b { color: var(--fg); }
+  #overlay .diff { display: flex; gap: 10px; flex-wrap: wrap; justify-content: center; }
+  #overlay button {
+    font: 800 15px system-ui, sans-serif; letter-spacing: 1.5px; color: var(--fg);
+    background: transparent; cursor: pointer;
+    border: 2px solid rgba(244,248,255,0.3); border-radius: 10px; padding: 9px 16px;
+  }
+  #overlay .diff button.on { border-color: var(--c); color: var(--c); box-shadow: 0 0 12px var(--c); }
+  #overlay button.start { border-color: var(--yellow); color: #2a1a0a; background: var(--yellow); padding: 11px 30px; box-shadow: 0 4px 0 #a8841a; }
+  @media (max-height: 560px) {
+    #overlay { gap: 8px; }
+    #overlay h1 { font-size: 30px; }
+    #overlay p { font-size: 13px; line-height: 1.4; }
+    #overlay .help, #overlay .pts { display: none; }
+  }
+</style>
+</head>
+<body>
+<div id="wrap"><canvas id="game"></canvas></div>
+<div id="touch">
+  <div class="stick" aria-label="Levetta"><div class="ring"></div><div class="knob"></div></div>
+  <div class="btns">
+    <button type="button" class="btn drop" aria-label="Giù">GIÙ</button>
+    <button type="button" class="btn rot" aria-label="Ruota">RUOTA</button>
+  </div>
+</div>
+<button id="pauseBtn" type="button" aria-label="Pausa">❚❚</button>
+<div id="overlay"></div>
+<a id="homeLink" href="../../index.html">← Sala Giochi</a>
+
+<script>
+(() => {
+  "use strict";
+
+  const W = 360, H = 560, COLS = 8, ROWS = 16, CS = 24, GX = 22, GY = 118, TAU = Math.PI * 2;
+  const COLORS = [
+    { name: "rosso", main: "#ff4a5a", dark: "#a81a2a", light: "#ffa0a8" },
+    { name: "giallo", main: "#ffd23a", dark: "#a8841a", light: "#fff0a0" },
+    { name: "blu", main: "#3aa8ff", dark: "#1a5aa8", light: "#a0d8ff" },
+  ];
+  const SPAWN_C = 3;
+  // orientation: 0 = a|b · 1 = a below, b above · 2 = b|a · 3 = b below, a above
+  const HALVES = (p) => {
+    const [a, b] = p.cols;
+    if (p.rot === 0) return [[p.r, p.c, a, "r"], [p.r, p.c + 1, b, "l"]];
+    if (p.rot === 1) return [[p.r, p.c, a, "u"], [p.r - 1, p.c, b, "d"]];
+    if (p.rot === 2) return [[p.r, p.c, b, "r"], [p.r, p.c + 1, a, "l"]];
+    return [[p.r, p.c, b, "u"], [p.r - 1, p.c, a, "d"]];
+  };
+
+  const DIFFICULTIES = {
+    facile:    { label: "FACILE",    color: "#7ed87a", desc: "caduta lenta · virus solo in basso", fall: 0.85, rows: 7, mult: 1 },
+    normale:   { label: "NORMALE",   color: "#ffd23a", desc: "caduta media", fall: 0.6, rows: 9, mult: 2 },
+    difficile: { label: "DIFFICILE", color: "#ff4a5a", desc: "caduta veloce · virus fin quasi in cima", fall: 0.4, rows: 10, mult: 3 },
+  };
+  const DIFF_IDS = Object.keys(DIFFICULTIES);
+  const DIFF_KEY = "pillole-difficulty";
+  const bestKey = (id) => `pillole-best-${id}`;
+  function store(k, v) { try { localStorage.setItem(k, v); } catch { /* ignore */ } }
+  function load(k) { try { return localStorage.getItem(k); } catch { return null; } }
+  const rnd = (a, b) => a + Math.random() * (b - a);
+  const sign = (v) => (v < 0 ? -1 : 1);
+
+  // ---------- Canvas ----------
+  const canvas = document.getElementById("game");
+  const ctx = canvas.getContext("2d");
+  const wrapEl = document.getElementById("wrap");
+  const overlay = document.getElementById("overlay");
+  const touchEl = document.getElementById("touch");
+  const pauseBtn = document.getElementById("pauseBtn");
+  let pxRatio = 1, touchMode = !!(window.matchMedia && matchMedia("(pointer: coarse)").matches);
+  function resize() {
+    const portrait = window.innerHeight > window.innerWidth;
+    const showTouch = touchMode && isPlaying();
+    touchEl.style.display = showTouch ? "flex" : "none";
+    touchEl.classList.toggle("small", !portrait && window.innerHeight < 480);
+    wrapEl.style.paddingBottom = showTouch && portrait ? "calc(170px + env(safe-area-inset-bottom, 0px))" : "0";
+    let availW = window.innerWidth - 8, availH = window.innerHeight - 8;
+    if (showTouch && portrait) availH -= 170;
+    if (showTouch && !portrait) {
+      const side = Math.max(...[...touchEl.children].map((el) => el.offsetWidth)) + 20;
+      if (window.innerWidth - 2 * side > 200) availW = window.innerWidth - 2 * side;
+    }
+    const s = Math.max(0.2, Math.min(availW / W, availH / H));
+    pxRatio = Math.min(3, s * (window.devicePixelRatio || 1));
+    canvas.style.width = W * s + "px";
+    canvas.style.height = H * s + "px";
+    canvas.width = Math.round(W * pxRatio);
+    canvas.height = Math.round(H * pxRatio);
+  }
+  window.addEventListener("resize", () => syncControls());
+
+  // ---------- Audio ----------
+  let audioCtx = null;
+  function beep(freq, dur, type = "square", vol = 0.04, slide = 0, delay = 0) {
+    if (!audioCtx) return;
+    const t = audioCtx.currentTime + delay;
+    const osc = audioCtx.createOscillator(), gain = audioCtx.createGain();
+    osc.type = type;
+    osc.frequency.setValueAtTime(freq, t);
+    if (slide) osc.frequency.exponentialRampToValueAtTime(Math.max(20, freq + slide), t + dur);
+    gain.gain.setValueAtTime(vol, t);
+    gain.gain.exponentialRampToValueAtTime(0.0001, t + dur);
+    osc.connect(gain).connect(audioCtx.destination);
+    osc.start(t); osc.stop(t + dur + 0.02);
+  }
+  const arp = (notes, gap, d, type = "square", vol = 0.04) => notes.forEach((f, i) => beep(f, d, type, vol, 0, i * gap));
+  let sfxN = 0;
+  const lim = (fn) => (...a) => { if (sfxN++ < 5) fn(...a); };
+  const sfx = {
+    move: lim(() => beep(420, 0.025, "square", 0.02)),
+    rotate: lim(() => beep(640, 0.03, "triangle", 0.035, 200)),
+    land: lim(() => beep(180, 0.05, "square", 0.035)),
+    clear: lim((n) => arp([523, 659, 784, 1047].map((f) => f * (1 + n * 0.06)), 0.04, 0.08, "square", 0.035)),
+    virus: lim((k) => arp([880 * (1 + k * 0.12), 1320 * (1 + k * 0.12)], 0.05, 0.1, "triangle", 0.05)),
+    level: () => arp([523, 659, 784, 1047, 784, 1047, 1319, 1568], 0.09, 0.16),
+    over: () => arp([523, 466, 415, 392, 330, 262], 0.15, 0.24, "triangle", 0.05),
+  };
+
+  // ---------- State ----------
+  let difficulty = DIFFICULTIES[load(DIFF_KEY)] ? load(DIFF_KEY) : "normale";
+  let diff = DIFFICULTIES[difficulty];
+  let state = "menu", menu = null, pausedFrom = null, stateT = 0, clock = 0;
+  let score = 0, level = 1, bestCache = 0, grid = [], pill = null, next = null, fallT = 0, fallEvery = 0.6, pills = 0;
+  let phase = "fall", phaseT = 0, chainViruses = 0, chainStep = 0, popping = [], parts = [], popups = [], message = null;
+  let lockT = 0;
+  const keys = { left: false, right: false, down: false };
+  const stick = { x: 0, y: 0 };
+  let repeat = { dir: 0, t: 0 }, bag = [];
+
+  const cell = (r, c) => (r < 0 ? null : r >= ROWS || c < 0 || c >= COLS ? { wall: true } : grid[r][c]);
+  const free = (r, c) => c >= 0 && c < COLS && r < ROWS && (r < 0 || !grid[r][c]);
+  const virusCount = () => { let n = 0; for (const row of grid) for (const x of row) if (x && x.v) n++; return n; };
+
+  // ---------- Setup ----------
+  function randomPillColors() { return [Math.floor(Math.random() * 3), Math.floor(Math.random() * 3)]; }
+  function placeViruses(n) {
+    grid = Array.from({ length: ROWS }, () => Array(COLS).fill(null));
+    const top = ROWS - Math.min(11, diff.rows + Math.floor((level - 1) / 3));
+    let placed = 0, tries = 0;
+    while (placed < n && tries < 20000) {
+      tries++;
+      const r = Math.floor(rnd(top, ROWS)), c = Math.floor(rnd(0, COLS));
+      if (grid[r][c]) continue;
+      const col = placed % 3;
+      // never three of a colour in a line: each virus has to be cleared by the player's pills
+      const same = (rr, cc) => rr >= 0 && rr < ROWS && cc >= 0 && cc < COLS && grid[rr][cc] && grid[rr][cc].col === col;
+      if ((same(r, c - 1) && same(r, c - 2)) || (same(r, c + 1) && same(r, c + 2)) || (same(r, c - 1) && same(r, c + 1)) ||
+          (same(r - 1, c) && same(r - 2, c)) || (same(r + 1, c) && same(r + 2, c)) || (same(r - 1, c) && same(r + 1, c))) continue;
+      grid[r][c] = { col, v: true, ph: rnd(0, TAU) };
+      placed++;
+    }
+  }
+  const isPlaying = () => ["intro", "play", "clear"].includes(state);
+  function startGame() {
+    if (!audioCtx) { try { audioCtx = new (window.AudioContext || window.webkitAudioContext)(); } catch { audioCtx = null; } }
+    if (audioCtx && audioCtx.state === "suspended") audioCtx.resume();
+    score = 0; level = 1;
+    bestCache = parseInt(load(bestKey(difficulty)), 10) || 0;
+    beginLevel();
+    menu = null;
+    overlay.classList.add("hidden");
+    syncControls();
+    last = performance.now();
+  }
+  function beginLevel() {
+    placeViruses(Math.min(80, 4 + level * 4));
+    fallEvery = diff.fall * Math.pow(0.96, level - 1);
+    pills = 0; popping = []; parts = [];
+    next = randomPillColors();
+    spawnPill();
+    message = { text: `LIVELLO ${level}`, sub: `${virusCount()} virus da eliminare`, t: 0 };
+    state = "intro"; stateT = 1.6;
+  }
+  function spawnPill() {
+    pill = { r: 0, c: SPAWN_C, rot: 0, cols: next };
+    next = randomPillColors();
+    fallT = 0; lockT = 0; phase = "fall"; chainViruses = 0; chainStep = 0;
+    if (!fits(pill)) { pill = null; gameOver(); return false; }
+    pills++;
+    if (pills % 10 === 0) fallEvery = Math.max(0.12, fallEvery * 0.93);
+    return true;
+  }
+  const fits = (p) => HALVES(p).every(([r, c]) => free(r, c));
+
+  // ---------- Moves ----------
+  function move(dc) {
+    if (!pill || phase !== "fall") return false;
+    const p = { ...pill, c: pill.c + dc };
+    if (!fits(p)) return false;
+    pill = p; sfx.move(); return true;
+  }
+  function rotate(dir = 1) {
+    if (!pill || phase !== "fall") return false;
+    const p = { ...pill, rot: (pill.rot + dir + 4) % 4 };
+    if (fits(p)) { pill = p; sfx.rotate(); return true; }
+    // turning back to horizontal against a wall: slide one step left
+    if (p.rot % 2 === 0) { const q = { ...p, c: p.c - 1 }; if (fits(q)) { pill = q; sfx.rotate(); return true; } }
+    return false;
+  }
+  function stepDown() {
+    const p = { ...pill, r: pill.r + 1 };
+    if (fits(p)) { pill = p; return true; }
+    return false;
+  }
+  function hardDrop() {
+    if (!pill || phase !== "fall" || state !== "play") return;
+    let n = 0;
+    while (stepDown()) n++;
+    lockPill();
+  }
+  function lockPill() {
+    for (const [r, c, col, link] of HALVES(pill)) if (r >= 0) grid[r][c] = { col, link };
+    // a half left above the bottle is lost: its partner stays on its own
+    for (const [r, c] of HALVES(pill)) if (r >= 0 && grid[r][c]) { const [dr, dc] = linkDelta(grid[r][c].link); if (r + dr < 0) grid[r][c].link = null; }
+    pill = null; sfx.land();
+    resolve();
+  }
+  const linkDelta = (l) => (l === "r" ? [0, 1] : l === "l" ? [0, -1] : l === "u" ? [-1, 0] : l === "d" ? [1, 0] : [0, 0]);
+  function unlinkPartner(r, c) {
+    const x = grid[r][c]; if (!x || !x.link) return;
+    const [dr, dc] = linkDelta(x.link), y = grid[r + dr] && grid[r + dr][c + dc];
+    if (y) y.link = null;
+  }
+  // four or more of a colour in a line vanish
+  function findMatches() {
+    const hit = new Set();
+    for (let r = 0; r < ROWS; r++) for (let c = 0; c < COLS; c++) {
+      const x = grid[r][c]; if (!x) continue;
+      for (const [dr, dc] of [[0, 1], [1, 0]]) {
+        let n = 1;
+        while (true) { const rr = r + dr * n, cc = c + dc * n; if (rr >= ROWS || cc >= COLS || !grid[rr][cc] || grid[rr][cc].col !== x.col) break; n++; }
+        if (n >= 4) for (let k = 0; k < n; k++) hit.add((r + dr * k) * COLS + c + dc * k);
+      }
+    }
+    return [...hit];
+  }
+  function resolve() {
+    const m = findMatches();
+    if (!m.length) {
+      if (!virusCount()) { levelClear(); return; }
+      spawnPill();
+      return;
+    }
+    let v = 0;
+    popping = [];
+    for (const k of m) {
+      const r = Math.floor(k / COLS), c = k % COLS, x = grid[r][c];
+      if (x.v) {
+        v++; chainViruses++;
+        const pts = 100 * Math.pow(2, Math.min(5, chainViruses - 1)) * diff.mult;
+        score += pts;
+        popups.push({ x: GX + c * CS + CS / 2, y: GY + r * CS, text: String(pts), color: COLORS[x.col].light, t: 0 });
+      }
+      unlinkPartner(r, c);
+      popping.push({ r, c, col: x.col, v: x.v });
+      grid[r][c] = null;
+    }
+    chainStep++;
+    if (v) sfx.virus(chainStep); else sfx.clear(chainStep);
+    phase = "pop"; phaseT = 0.25;
+  }
+  // loose halves and unsupported pills fall one row at a time
+  function gravityStep() {
+    let moved = false;
+    for (let r = ROWS - 2; r >= 0; r--) for (let c = 0; c < COLS; c++) {
+      const x = grid[r][c]; if (!x || x.v) continue;
+      if (x.link === "r") {
+        const y = grid[r][c + 1];
+        if (!grid[r + 1][c] && !grid[r + 1][c + 1]) { grid[r + 1][c] = x; grid[r + 1][c + 1] = y; grid[r][c] = null; grid[r][c + 1] = null; moved = true; }
+        continue;
+      }
+      if (x.link === "l") continue;
+      if (x.link === "d") continue; // moved with its lower half
+      if (x.link === "u") {
+        if (!grid[r + 1][c]) { const top = grid[r - 1] && grid[r - 1][c]; grid[r + 1][c] = x; grid[r][c] = top || null; if (r - 1 >= 0) grid[r - 1][c] = null; moved = true; }
+        continue;
+      }
+      if (!grid[r + 1][c]) { grid[r + 1][c] = x; grid[r][c] = null; moved = true; }
+    }
+    return moved;
+  }
+  function levelClear() {
+    const bonus = 1000 * level * diff.mult;
+    score += bonus;
+    message = { text: "BOTTIGLIA PULITA!", sub: `bonus ${bonus.toLocaleString("it-IT")}`, t: 0 };
+    sfx.level();
+    state = "clear"; stateT = 2.4;
+  }
+  function gameOver() {
+    state = "over";
+    const prev = parseInt(load(bestKey(difficulty)), 10) || 0;
+    const record = score > prev;
+    if (record) store(bestKey(difficulty), String(score));
+    sfx.over();
+    const blocked = !pill && virusCount() > 0;
+    menu = () => showOverlay(
+      `<h2 class="lose">${blocked ? "BOTTIGLIA PIENA" : "PARTITA FINITA"}</h2>
+       <p>Punteggio: <b>${score.toLocaleString("it-IT")}</b> · livello ${level} · ${diff.label}</p>
+       ${record ? "<p style='color:var(--yellow)'>★ NUOVO RECORD! ★</p>" : ""}
+       ${difficultyHTML()}
+       <button class="start" data-start>GIOCA ANCORA</button>`
+    );
+    menu();
+    syncControls();
+  }
+  function togglePause() {
+    if (isPlaying()) {
+      pausedFrom = state; state = "paused";
+      showOverlay(`<h2>PAUSA</h2><button class="start" data-resume>CONTINUA</button><p class="muted">Premi P per continuare</p>`);
+    } else if (state === "paused") {
+      state = pausedFrom; overlay.classList.add("hidden"); last = performance.now();
+    }
+    syncControls();
+  }
+  // the pause menu can end the game (shared/iniziali.js): it ends here the usual way, saving the record
+  window.addEventListener("sala:termina", () => { if (state !== "paused") return; state = pausedFrom; overlay.classList.add("hidden"); pill = null; grid = grid.map((row) => row.map(() => null)); gameOver(); syncControls(); });
+  function syncControls() {
+    pauseBtn.style.display = isPlaying() && touchMode ? "block" : "none";
+    resize();
+  }
+  pauseBtn.addEventListener("click", () => togglePause());
+  function showOverlay(html) { overlay.innerHTML = html; overlay.classList.remove("hidden"); }
+  function difficultyHTML() {
+    const buttons = DIFF_IDS.map((id) => {
+      const d = DIFFICULTIES[id];
+      return `<button type="button" data-diff="${id}" class="${id === difficulty ? "on" : ""}" style="--c:${d.color}">${d.label}</button>`;
+    }).join("");
+    const best = parseInt(load(bestKey(difficulty)), 10);
+    return `<div class="diff">${buttons}</div><p class="muted">${diff.desc}${best ? ` · Record: ${best.toLocaleString("it-IT")}` : ""}</p>`;
+  }
+  function setDifficulty(id) { if (!DIFFICULTIES[id]) return; difficulty = id; diff = DIFFICULTIES[id]; store(DIFF_KEY, id); if (menu) menu(); }
+  function showTitle() {
+    menu = showTitle;
+    showOverlay(
+      `<h1>PILLOLE PAZZE</h1>
+       <p>La bottiglia è piena di virus rossi, gialli e blu. Fai cadere le pillole a due colori e metti in fila almeno 4 pezzi dello stesso colore, in orizzontale o in verticale, virus compresi: spariscono, e quello che resta sospeso ricade. Elimina tutti i virus per passare al livello successivo.</p>
+       <div class="pts">
+         <span><b>Virus</b></span><span>100 il primo, poi 200, 400, 800… se ne elimini più d'uno con la stessa pillola (anche a catena)</span>
+         <span><b>Bottiglia pulita</b></span><span>bonus di 1.000 × livello</span>
+         <span><b>Attenzione</b></span><span>ogni 10 pillole si cade un po' più in fretta; se la bocca della bottiglia si chiude, è finita</span>
+       </div>
+       ${touchMode
+         ? `<p class="muted help">Levetta: destra e sinistra per spostare, giù per scendere più veloce · RUOTA gira la pillola · GIÙ la fa cadere di colpo</p>`
+         : `<p class="muted help">← → sposta · ↓ scendi · ↑, X o Z ruota · SPAZIO caduta · P pausa</p>`}
+       ${difficultyHTML()}
+       <button class="start" data-start>CURA LA BOTTIGLIA!</button>`
+    );
+  }
+  overlay.addEventListener("click", (e) => {
+    const d = e.target.closest("[data-diff]");
+    if (d) { setDifficulty(d.dataset.diff); return; }
+    if (e.target.closest("[data-start]")) startGame();
+    if (e.target.closest("[data-resume]")) togglePause();
+  });
+
+  // ---------- Input ----------
+  window.addEventListener("keydown", (e) => {
+    const k = e.key.toLowerCase();
+    if ([" ", "arrowup", "arrowdown", "arrowleft", "arrowright"].includes(k)) e.preventDefault();
+    if (state === "menu" || state === "over") {
+      if (e.key === "Enter") startGame();
+      else if (["1", "2", "3"].includes(k)) setDifficulty(DIFF_IDS[+k - 1]);
+      return;
+    }
+    if (k === "p" || k === "escape") { if (!e.repeat) togglePause(); return; }
+    if (state === "paused") { if (e.key === "Enter") togglePause(); return; }
+    if (state !== "play") return;
+    if (e.repeat) return;
+    if (k === "arrowleft" || k === "a") { keys.left = true; move(-1); repeat = { dir: -1, t: 0.17 }; }
+    else if (k === "arrowright" || k === "d") { keys.right = true; move(1); repeat = { dir: 1, t: 0.17 }; }
+    else if (k === "arrowdown" || k === "s") keys.down = true;
+    else if (k === "arrowup" || k === "w" || k === "x") rotate(1);
+    else if (k === "z") rotate(-1);
+    else if (k === " ") hardDrop();
+  });
+  window.addEventListener("keyup", (e) => {
+    const k = e.key.toLowerCase();
+    if (k === "arrowleft" || k === "a") keys.left = false;
+    if (k === "arrowright" || k === "d") keys.right = false;
+    if (k === "arrowdown" || k === "s") keys.down = false;
+  });
+  window.addEventListener("blur", () => { for (const k in keys) keys[k] = false; stick.x = stick.y = 0; if (isPlaying()) togglePause(); });
+  for (const [sel, fn] of [[".rot", () => rotate(1)], [".drop", () => hardDrop()]]) {
+    const el = touchEl.querySelector(sel);
+    el.addEventListener("pointerdown", (e) => { e.preventDefault(); el.classList.add("on"); if (state === "play") fn(); });
+    for (const ev of ["pointerup", "pointercancel", "pointerleave"]) el.addEventListener(ev, () => el.classList.remove("on"));
+  }
+  const stickEl = touchEl.querySelector(".stick"), knob = stickEl.querySelector(".knob");
+  let stickId = null;
+  function stickAt(e) {
+    const r = stickEl.getBoundingClientRect(), max = r.width / 2 - 14;
+    let dx = e.clientX - (r.left + r.width / 2), dy = e.clientY - (r.top + r.height / 2);
+    const len = Math.hypot(dx, dy);
+    if (len > max) { dx *= max / len; dy *= max / len; }
+    knob.style.transform = `translate(${dx}px, ${dy}px)`;
+    const f = (v) => { const a = Math.abs(v) / max; return a < 0.15 ? 0 : sign(v) * Math.min(1, (a - 0.15) / 0.7); };
+    stick.x = f(dx); stick.y = f(dy);
+  }
+  const stickEnd = (e) => { if (e.pointerId !== stickId) return; stickId = null; knob.style.transform = ""; stick.x = stick.y = 0; };
+  stickEl.addEventListener("pointerdown", (e) => { e.preventDefault(); stickId = e.pointerId; try { stickEl.setPointerCapture(e.pointerId); } catch { /* ignore */ } stickAt(e); });
+  stickEl.addEventListener("pointermove", (e) => { if (e.pointerId === stickId) stickAt(e); });
+  for (const ev of ["pointerup", "pointercancel", "lostpointercapture"]) stickEl.addEventListener(ev, stickEnd);
+  window.addEventListener("pointerdown", (e) => { if (e.pointerType === "touch" && !touchMode) { touchMode = true; syncControls(); if (menu) menu(); } }, true);
+  let stickDir = 0;
+
+  // ---------- Update ----------
+  function update(dt) {
+    clock += dt; sfxN = 0;
+    if (message) { message.t += dt; if (message.t > 2) message = null; }
+    for (const p of parts) { p.t += dt; p.x += p.vx * dt; p.y += p.vy * dt; p.vy += 200 * dt; }
+    parts = parts.filter((p) => p.t < p.life);
+    for (const p of popups) { p.t += dt; p.y -= 22 * dt; }
+    popups = popups.filter((p) => p.t < 1.1);
+    if (!isPlaying()) return;
+    if (state === "intro") { stateT -= dt; if (stateT <= 0) state = "play"; return; }
+    if (state === "clear") { stateT -= dt; if (stateT <= 0) { level++; beginLevel(); } return; }
+    if (window.__bot) window.__bot(dt);
+    if (phase === "pop") {
+      phaseT -= dt;
+      if (phaseT <= 0) {
+        for (const p of popping) for (let k = 0; k < 6; k++) { const a = rnd(0, TAU), s = rnd(30, 90); parts.push({ x: GX + p.c * CS + CS / 2, y: GY + p.r * CS + CS / 2, vx: Math.cos(a) * s, vy: Math.sin(a) * s - 40, t: 0, life: rnd(0.3, 0.6), c: COLORS[p.col].main }); }
+        popping = []; phase = "drop"; phaseT = 0.07;
+      }
+      return;
+    }
+    if (phase === "drop") {
+      phaseT -= dt;
+      if (phaseT <= 0) { if (gravityStep()) phaseT = 0.07; else resolve(); }
+      return;
+    }
+    if (!pill) return;
+    // held left/right (keys or stick) keeps sliding
+    const sdir = Math.abs(stick.x) > 0.45 ? sign(stick.x) : 0;
+    if (sdir !== stickDir) { stickDir = sdir; if (sdir) { move(sdir); repeat = { dir: sdir, t: 0.17 }; } }
+    const hold = (keys.left ? -1 : 0) + (keys.right ? 1 : 0) || stickDir;
+    if (hold && hold === repeat.dir) { repeat.t -= dt; if (repeat.t <= 0) { move(hold); repeat.t = 0.06; } }
+    const fast = keys.down || stick.y > 0.5;
+    fallT += dt;
+    const every = fast ? Math.min(fallEvery, 0.04) : fallEvery;
+    while (fallT >= every && pill) {
+      fallT -= every;
+      if (!stepDown()) { lockPill(); break; }
+      if (fast) score += 1;
+    }
+  }
+
+  // ---------- Drawing ----------
+  function drawHalf(x, y, col, link, alpha = 1) {
+    const C = COLORS[col];
+    ctx.globalAlpha = alpha;
+    const r = 9, cx = x + CS / 2, cy = y + CS / 2;
+    // a rounded end away from the partner, a flat end toward it
+    ctx.fillStyle = C.main; ctx.strokeStyle = C.dark; ctx.lineWidth = 2;
+    ctx.beginPath();
+    if (!link) ctx.arc(cx, cy, r, 0, TAU);
+    else {
+      const a = { r: 0, l: Math.PI, d: Math.PI / 2, u: -Math.PI / 2 }[link];
+      ctx.arc(cx, cy, r, a + Math.PI / 2, a - Math.PI / 2);
+      ctx.lineTo(cx + Math.cos(a) * (CS / 2) + Math.cos(a - Math.PI / 2) * r, cy + Math.sin(a) * (CS / 2) + Math.sin(a - Math.PI / 2) * r);
+      ctx.lineTo(cx + Math.cos(a) * (CS / 2) + Math.cos(a + Math.PI / 2) * r, cy + Math.sin(a) * (CS / 2) + Math.sin(a + Math.PI / 2) * r);
+      ctx.closePath();
+    }
+    ctx.fill(); ctx.stroke();
+    ctx.fillStyle = C.light; ctx.beginPath(); ctx.ellipse(cx - 3, cy - 4, 3.5, 2.2, -0.4, 0, TAU); ctx.fill();
+    ctx.globalAlpha = 1;
+  }
+  function drawVirus(x, y, col, ph, big = 1) {
+    const C = COLORS[col], cx = x + CS / 2, cy = y + CS / 2, wob = Math.sin(clock * 5 + ph);
+    ctx.save(); ctx.translate(cx, cy); ctx.scale(big, big);
+    // wiggly legs
+    ctx.strokeStyle = C.dark; ctx.lineWidth = 2;
+    for (let k = 0; k < 6; k++) { const a = k * Math.PI / 3 + wob * 0.2; ctx.beginPath(); ctx.moveTo(Math.cos(a) * 6, Math.sin(a) * 6); ctx.lineTo(Math.cos(a) * 11, Math.sin(a) * 11); ctx.stroke(); }
+    ctx.fillStyle = C.main; ctx.beginPath(); ctx.ellipse(0, 0, 8.5 + wob * 0.6, 8.5 - wob * 0.6, 0, 0, TAU); ctx.fill();
+    ctx.strokeStyle = C.dark; ctx.lineWidth = 1.5; ctx.stroke();
+    // angry face
+    ctx.fillStyle = "#fff"; ctx.beginPath(); ctx.arc(-3, -2, 2.6, 0, TAU); ctx.arc(3, -2, 2.6, 0, TAU); ctx.fill();
+    ctx.fillStyle = "#101a2a"; ctx.beginPath(); ctx.arc(-3 + wob * 0.6, -2, 1.2, 0, TAU); ctx.arc(3 + wob * 0.6, -2, 1.2, 0, TAU); ctx.fill();
+    ctx.strokeStyle = "#101a2a"; ctx.lineWidth = 1.2; ctx.beginPath(); ctx.moveTo(-5, -5.5); ctx.lineTo(-1.5, -4); ctx.moveTo(5, -5.5); ctx.lineTo(1.5, -4); ctx.stroke();
+    ctx.beginPath(); ctx.arc(0, 4.5, 2.4, Math.PI * 1.1, Math.PI * 1.9); ctx.stroke();
+    ctx.restore();
+  }
+  function drawBottle() {
+    const x0 = GX - 6, y0 = GY - 6, w = COLS * CS + 12, h = ROWS * CS + 12;
+    // the neck, where new pills come in
+    const nx = GX + 3 * CS - 6, nw = 2 * CS + 12;
+    ctx.fillStyle = "rgba(160,210,255,0.12)"; ctx.strokeStyle = "#a8d8ff"; ctx.lineWidth = 3;
+    ctx.beginPath(); ctx.roundRect(nx, y0 - 34, nw, 40, 6); ctx.fill(); ctx.stroke();
+    ctx.fillStyle = "#e8e0d0"; ctx.fillRect(nx - 4, y0 - 44, nw + 8, 12);
+    ctx.fillStyle = "#0a1220"; ctx.beginPath(); ctx.roundRect(x0, y0, w, h, 14); ctx.fill();
+    ctx.lineWidth = 4; ctx.strokeStyle = "#a8d8ff"; ctx.stroke();
+    ctx.fillStyle = "rgba(160,210,255,0.08)"; ctx.fillRect(x0 + 6, y0 + 10, 8, h - 20);
+    // faint grid
+    ctx.strokeStyle = "rgba(160,210,255,0.06)"; ctx.lineWidth = 1;
+    for (let c = 1; c < COLS; c++) { ctx.beginPath(); ctx.moveTo(GX + c * CS, GY); ctx.lineTo(GX + c * CS, GY + ROWS * CS); ctx.stroke(); }
+    for (let r = 1; r < ROWS; r++) { ctx.beginPath(); ctx.moveTo(GX, GY + r * CS); ctx.lineTo(GX + COLS * CS, GY + r * CS); ctx.stroke(); }
+  }
+  function drawPanel() {
+    const px = 238;
+    ctx.textBaseline = "middle"; ctx.textAlign = "left";
+    const lbl = (t, y) => { ctx.fillStyle = "#a8b8d0"; ctx.font = "800 10px system-ui"; ctx.fillText(t, px, y); };
+    const val = (t, y, c = "#f4f8ff", s = 18) => { ctx.fillStyle = c; ctx.font = `900 ${s}px system-ui`; ctx.fillText(t, px, y); };
+    lbl("PUNTI", 124); val(score.toLocaleString("it-IT"), 142);
+    lbl("RECORD", 170); val(Math.max(bestCache, score).toLocaleString("it-IT"), 186, "#a8b8d0", 13);
+    lbl("LIVELLO", 214); val(String(level), 232, "#ffd23a");
+    lbl("VIRUS", 260); val(String(virusCount()), 278, "#ff8a9a");
+    lbl("PROSSIMA", 312);
+    ctx.fillStyle = "#0a1220"; ctx.beginPath(); ctx.roundRect(px, 322, 70, 40, 8); ctx.fill(); ctx.strokeStyle = "#22344e"; ctx.lineWidth = 2; ctx.stroke();
+    if (next) { drawHalf(px + 11, 330, next[0], "r"); drawHalf(px + 35, 330, next[1], "l"); }
+    // the three dancing viruses under the magnifying glass
+    const gx = px + 52, gy = 440;
+    ctx.fillStyle = "#0a1220"; ctx.beginPath(); ctx.arc(gx, gy, 46, 0, TAU); ctx.fill();
+    ctx.strokeStyle = "#e8e0d0"; ctx.lineWidth = 5; ctx.stroke();
+    ctx.lineWidth = 9; ctx.strokeStyle = "#8a5a2a"; ctx.beginPath(); ctx.moveTo(gx + 33, gy + 33); ctx.lineTo(gx + 52, gy + 56); ctx.stroke();
+    const counts = [0, 0, 0]; for (const row of grid) for (const x of row) if (x && x.v) counts[x.col]++;
+    for (let k = 0; k < 3; k++) {
+      const a = clock * 0.8 + k * TAU / 3, x = gx + Math.cos(a) * 24 - 12, y = gy + Math.sin(a) * 20 - 12;
+      if (counts[k] || state === "menu") drawVirus(x, y, k, k * 2, 1.25);
+      else { ctx.fillStyle = COLORS[k].main; ctx.font = "900 11px system-ui"; ctx.textAlign = "center"; ctx.fillText("✓", x + 12, y + 12); ctx.textAlign = "left"; }
+    }
+    ctx.textBaseline = "alphabetic";
+  }
+  function draw() {
+    ctx.setTransform(pxRatio, 0, 0, pxRatio, 0, 0);
+    const g = ctx.createLinearGradient(0, 0, 0, H); g.addColorStop(0, "#16243a"); g.addColorStop(1, "#0c1422");
+    ctx.fillStyle = g; ctx.fillRect(0, 0, W, H);
+    // title strip
+    ctx.textAlign = "center"; ctx.font = "900 26px system-ui"; ctx.fillStyle = "#ffd23a"; ctx.lineWidth = 5; ctx.strokeStyle = "#c83a4a";
+    ctx.strokeText("PILLOLE PAZZE", W / 2, 38); ctx.fillText("PILLOLE PAZZE", W / 2, 38);
+    if (state === "menu" && !grid.length) { placeViruses(20); next = [0, 2]; }
+    drawBottle();
+    for (let r = 0; r < ROWS; r++) for (let c = 0; c < COLS; c++) {
+      const x = grid[r] && grid[r][c]; if (!x) continue;
+      if (x.v) drawVirus(GX + c * CS, GY + r * CS, x.col, x.ph); else drawHalf(GX + c * CS, GY + r * CS, x.col, x.link);
+    }
+    for (const p of popping) {
+      const k = 1 - Math.max(0, phaseT) / 0.25;
+      ctx.globalAlpha = 1 - k; ctx.fillStyle = "#fff"; ctx.beginPath(); ctx.arc(GX + p.c * CS + CS / 2, GY + p.r * CS + CS / 2, 8 + k * 6, 0, TAU); ctx.fill(); ctx.globalAlpha = 1;
+    }
+    if (pill && state === "play") {
+      // ghost: where it would land
+      const gp = { ...pill }; while (fits({ ...gp, r: gp.r + 1 })) gp.r++;
+      for (const [r, c, col, link] of HALVES(gp)) if (r >= 0) drawHalf(GX + c * CS, GY + r * CS, col, link, 0.22);
+      for (const [r, c, col, link] of HALVES(pill)) drawHalf(GX + c * CS, GY + r * CS, col, link);
+    } else if (pill) for (const [r, c, col, link] of HALVES(pill)) drawHalf(GX + c * CS, GY + r * CS, col, link);
+    for (const p of parts) { ctx.globalAlpha = Math.max(0, 1 - p.t / p.life); ctx.fillStyle = p.c; ctx.fillRect(p.x - 2, p.y - 2, 4, 4); }
+    ctx.globalAlpha = 1;
+    for (const p of popups) {
+      ctx.globalAlpha = Math.max(0, 1 - p.t / 1.1);
+      ctx.textAlign = "center"; ctx.font = "900 12px system-ui";
+      ctx.lineWidth = 3; ctx.strokeStyle = "#0a1220"; ctx.strokeText(p.text, p.x, p.y); ctx.fillStyle = p.color; ctx.fillText(p.text, p.x, p.y);
+    }
+    ctx.globalAlpha = 1;
+    drawPanel();
+    if (message && state !== "menu") {
+      ctx.globalAlpha = Math.min(1, (2 - message.t) * 2);
+      ctx.fillStyle = "rgba(0,0,0,0.6)"; ctx.fillRect(GX - 6, 260, COLS * CS + 12, 60);
+      ctx.textAlign = "center"; ctx.font = "900 20px system-ui"; ctx.fillStyle = "#ffd23a";
+      ctx.lineWidth = 4; ctx.strokeStyle = "#0a1220"; ctx.strokeText(message.text, GX + COLS * CS / 2, 287); ctx.fillText(message.text, GX + COLS * CS / 2, 287);
+      if (message.sub) { ctx.font = "800 11px system-ui"; ctx.fillStyle = "#f4f8ff"; ctx.fillText(message.sub, GX + COLS * CS / 2, 307); }
+      ctx.globalAlpha = 1;
+    }
+  }
+
+  // ---------- Loop ----------
+  const STEP = 1 / 120;
+  let last = performance.now(), acc = 0;
+  function frame(now) {
+    const dt = Math.min(0.1, (now - last) / 1000);
+    last = now;
+    if (isPlaying()) {
+      acc += dt;
+      while (acc >= STEP && isPlaying()) { update(STEP); acc -= STEP; }
+    } else { acc = 0; update(dt); }
+    draw();
+    requestAnimationFrame(frame);
+  }
+  syncControls();
+  showTitle();
+  requestAnimationFrame(frame);
+})();
+</script>
+<script src="../../shared/iniziali.js" data-record="pillole-best-" data-kind="score"></script>
+</body>
+</html>
