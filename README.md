@@ -4,7 +4,7 @@ Raccolta di giochi arcade per il browser. Ogni gioco è un singolo file HTML sen
 
 ## 🕹️ Sala Giochi — `index.html`
 
-Apri `index.html` nella cartella principale per la pagina di raccolta: mostra tutti i 95 giochi con copertina, genere, comandi e i tuoi record per ogni difficoltà (Facile, Normale, Difficile). Tocca «Gioca» per avviare un gioco; in ogni gioco il pulsante «← Sala Giochi» in alto a sinistra (visibile nei menu) riporta alla raccolta.
+Apri `index.html` nella cartella principale per la pagina di raccolta: mostra tutti i 96 giochi con copertina, genere, comandi e i tuoi record per ogni difficoltà (Facile, Normale, Difficile). Tocca «Gioca» per avviare un gioco; in ogni gioco il pulsante «← Sala Giochi» in alto a sinistra (visibile nei menu) riporta alla raccolta.
 
 **Iniziali del record:** quando batti un record compare la schermata da sala giochi per inserire le tue tre iniziali (frecce ↑ ↓ per cambiare lettera, ← → per spostarti, oppure scrivile direttamente; su telefono i tasti ▲ ▼ e OK). Le iniziali vengono salvate insieme al record e compaiono nei menu del gioco e nella Sala Giochi. Il codice è condiviso da tutti i giochi in `shared/iniziali.js`.
 
@@ -1485,3 +1485,17 @@ Sparatutto a schermo fisso in stile *Phoenix*. Guidi un caccia in fondo allo sch
 - **Touch:** levetta per muoverti (giù per lo scudo) e pulsante FUOCO da tenere premuto
 
 Per giocare apri `games/fenice-spaziale/index.html` nel browser.
+
+### 🎱 Colpo di Stecca — `games/colpo-di-stecca/index.html`
+
+Biliardo a buche da sala giochi, in stile *Side Pocket*. Sul tavolo ci sono nove bilie numerate disposte a rombo; lo scopo è mandarle tutte in buca, un tavolo dopo l'altro, prima di finire i colpi.
+
+- **Colpi:** si parte con un certo numero di colpi. Una steccata che non manda niente in buca, o la bianca in buca (che poi torna sul tavolo), costa un colpo. La prima steccata di ogni tavolo, quella che spacca il rombo, è gratis
+- **Punti:** ogni bilia vale 50 × il suo numero. Se imbuchi la bilia col numero più basso rimasta, i punti del colpo raddoppiano; più bilie nello stesso colpo valgono 500 in più ciascuna, e ogni colpo buono di una serie aggiunge 100
+- **Colpi extra:** uno ogni 2 colpi buoni di fila (3 a Difficile), e tre a ogni tavolo pulito, che vale anche 1.000 × tavolo + 300 per ogni colpo rimasto
+- **Mira:** la traiettoria tratteggiata mostra dove va la bianca. A Facile si vedono anche la bilia fantasma nel punto d'impatto, dove andrà la bilia colpita e dove scivolerà la bianca; a Normale la traiettoria arriva fino all'impatto; a Difficile se ne vede solo un pezzetto
+- **Difficoltà:** Facile (10 colpi), Normale (7), Difficile (6); record separati per ogni difficoltà
+- **Comandi:** `←` `→` gira la stecca · `↑` `↓` mira fine · clic sul tavolo per mirare lì · tieni premuto `Spazio` (la potenza va su e giù) e lascialo per tirare · `P` pausa
+- **Touch:** levetta per girare la stecca (una spinta leggera per la mira fine), oppure tocca il tavolo per mirare lì; tieni premuto TIRA e lascialo per tirare
+
+Per giocare apri `games/colpo-di-stecca/index.html` nel browser.
