@@ -4,7 +4,7 @@ Raccolta di giochi arcade per il browser. Ogni gioco è un singolo file HTML sen
 
 ## 🕹️ Sala Giochi — `index.html`
 
-Apri `index.html` nella cartella principale per la pagina di raccolta: mostra tutti i 97 giochi con copertina, genere, comandi e i tuoi record per ogni difficoltà (Facile, Normale, Difficile). Tocca «Gioca» per avviare un gioco; in ogni gioco il pulsante «← Sala Giochi» in alto a sinistra (visibile nei menu) riporta alla raccolta.
+Apri `index.html` nella cartella principale per la pagina di raccolta: mostra tutti i 98 giochi con copertina, genere, comandi e i tuoi record per ogni difficoltà (Facile, Normale, Difficile). Tocca «Gioca» per avviare un gioco; in ogni gioco il pulsante «← Sala Giochi» in alto a sinistra (visibile nei menu) riporta alla raccolta.
 
 **Iniziali del record:** quando batti un record compare la schermata da sala giochi per inserire le tue tre iniziali (frecce ↑ ↓ per cambiare lettera, ← → per spostarti, oppure scrivile direttamente; su telefono i tasti ▲ ▼ e OK). Le iniziali vengono salvate insieme al record e compaiono nei menu del gioco e nella Sala Giochi. Il codice è condiviso da tutti i giochi in `shared/iniziali.js`.
 
@@ -1514,3 +1514,17 @@ Rompicapo d'azione in stile *Boulder Dash*. Un minatore col caschetto scava nell
 - **Touch:** levetta nelle quattro direzioni; tieni PRENDI e muovi la levetta per afferrare senza spostarti
 
 Per giocare apri `games/rocce-e-diamanti/index.html` nel browser.
+
+### 🍮 Sfida delle Gelatine — `games/sfida-delle-gelatine/index.html`
+
+Puzzle a sfida in stile *Puyo Puyo*: due campi affiancati, il tuo a sinistra e quello del computer a destra. Nei campi cadono coppie di gelatine colorate, le stesse per entrambi.
+
+- **Scoppi:** quattro o più gelatine dello stesso colore che si toccano (in orizzontale o in verticale) scoppiano, e quelle sopra cadono. Se cadendo formano un altro gruppo parte una **catena**: ogni anello vale molto più del precedente
+- **Gelatine grigie:** ogni scoppio manda gelatine grigie nel campo del rivale, che piovono giù quando ha finito di posare la sua coppia (le icone sopra il campo avvisano di quante ne arrivano). Le tue catene annullano per prime quelle dirette a te. Una gelatina grigia sparisce solo se accanto scoppia un gruppo
+- **Sconfitta:** perde chi riempie la casella di partenza (quella segnata con la X in cima al campo)
+- **Rivali:** otto avversari sempre più svelti e capaci di preparare catene lunghe (Gelatino, Budino, Marmellata, Caramella, Meringa, Torrone, Panna Cotta e Re Tiramisù), poi si ricomincia. Ogni vittoria vale 2.000 × il numero della sfida; se perdi, consumi un cuore e rigiochi la sfida
+- **Difficoltà:** Facile (3 cuori, rivali lenti e distratti), Normale (2 cuori), Difficile (1 cuore, rivali svelti che preparano catene lunghe); record separati per ogni difficoltà
+- **Comandi:** `←` `→` sposta la coppia · `↓` falla scendere · `↑`, `X` o `Spazio` ruota · `Z` ruota all'indietro · `P` pausa
+- **Touch:** levetta (giù per scendere, su per ruotare) e pulsante RUOTA
+
+Per giocare apri `games/sfida-delle-gelatine/index.html` nel browser.
