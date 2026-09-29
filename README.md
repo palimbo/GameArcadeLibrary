@@ -4,7 +4,7 @@ Raccolta di giochi arcade per il browser. Ogni gioco è un singolo file HTML sen
 
 ## 🕹️ Sala Giochi — `index.html`
 
-Apri `index.html` nella cartella principale per la pagina di raccolta: mostra tutti i 100 giochi con copertina, genere, comandi e i tuoi record per ogni difficoltà (Facile, Normale, Difficile). Tocca «Gioca» per avviare un gioco; in ogni gioco il pulsante «← Sala Giochi» in alto a sinistra (visibile nei menu) riporta alla raccolta.
+Apri `index.html` nella cartella principale per la pagina di raccolta: mostra tutti i 101 giochi con copertina, genere, comandi e i tuoi record per ogni difficoltà (Facile, Normale, Difficile). Tocca «Gioca» per avviare un gioco; in ogni gioco il pulsante «← Sala Giochi» in alto a sinistra (visibile nei menu) riporta alla raccolta.
 
 **Iniziali del record:** quando batti un record compare la schermata da sala giochi per inserire le tue tre iniziali (frecce ↑ ↓ per cambiare lettera, ← → per spostarti, oppure scrivile direttamente; su telefono i tasti ▲ ▼ e OK). Le iniziali vengono salvate insieme al record e compaiono nei menu del gioco e nella Sala Giochi. Il codice è condiviso da tutti i giochi in `shared/iniziali.js`.
 
@@ -1557,3 +1557,18 @@ Raccogli-gemme isometrico in stile *Crystal Castles*. Un orsetto gira per castel
 - **Touch:** levetta per muoverti e pulsante SALTA
 
 Per giocare apri `games/castelli-di-cristallo/index.html` nel browser.
+
+### 🛩️ Mirino Stellare — `games/mirino-stellare/index.html`
+
+Sparatutto a scorrimento verticale in stile *Xevious*. La nave sorvola una pianura aliena di boschi, fiumi e strade con due armi: il cannone spara da solo verso l'alto contro i velivoli, le bombe cadono sul punto indicato dal mirino davanti alla nave e colpiscono solo ciò che sta a terra.
+
+- **Il mirino:** diventa rosso quando sotto c'è qualcosa da bombardare, anche dove non si vede nulla: in ogni area c'è una torre nascosta che compare solo quando la colpisci (2.000). Si sgancia una bomba alla volta
+- **Velivoli:** anelli che scendono e scappano di lato (30), caccia che si fermano a sparare (50), falchi che piombano dai lati (100, dall'area 2) e inseguitori che ti puntano (70, dall'area 3)
+- **A terra:** piramidi (100), radar (200), torrette che sparano (300), blindati che pattugliano le strade (800, dall'area 2), carri che scappano quando il mirino si avvicina (1.500, dall'area 2) e fortini che sparano a ventaglio (1.000, dall'area 3)
+- **Nave madre:** verso la fine di ogni area passa lentamente sopra la pianura con quattro cannoni (300 l'uno): bombardane il nucleo al centro per distruggerla tutta (4.000). Se la lasci passare, l'area continua
+- **Aree:** i colpi nemici diventano più veloci e più frequenti a ogni area. Vita extra ogni 20.000 punti
+- **Difficoltà:** Facile (5 vite, colpi nemici lenti e rari), Normale (3 vite), Difficile (3 vite, colpi veloci e più nemici); record separati per ogni difficoltà
+- **Comandi:** frecce o `WASD` per volare (il cannone spara da solo) · `Spazio`, `X`, `J` o `Z` bomba · `P` pausa
+- **Touch:** levetta per volare e pulsante BOMBA
+
+Per giocare apri `games/mirino-stellare/index.html` nel browser.

@@ -1,0 +1,848 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no, viewport-fit=cover">
+<title>Mirino Stellare</title>
+<style>
+  :root {
+    --bg: #0a0e18;
+    --fg: #f4f6ee;
+    --muted: #a8b4a8;
+    --pink: #ffb03a;
+    --yellow: #7ad0ff;
+    --red: #ff4a3a;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  html, body {
+    height: 100%;
+    background: var(--bg);
+    color: var(--fg);
+    font-family: system-ui, -apple-system, "Segoe UI", sans-serif;
+    overflow: hidden;
+    user-select: none;
+    -webkit-user-select: none;
+    touch-action: none;
+  }
+  #wrap { position: fixed; inset: 0; display: flex; align-items: center; justify-content: center; }
+  canvas { display: block; touch-action: none; border-radius: 6px; box-shadow: 0 0 0 2px #22324a, 0 10px 40px rgba(0,0,0,0.6); }
+  #pauseBtn {
+    position: fixed; z-index: 3; display: none; right: 10px; top: calc(10px + env(safe-area-inset-top, 0px));
+    font: 700 13px system-ui, sans-serif; color: var(--fg);
+    background: rgba(0, 0, 0, 0.6); border: 1px solid rgba(244, 246, 238, 0.35);
+    border-radius: 8px; padding: 6px 10px; cursor: pointer;
+  }
+  #touch {
+    position: fixed; z-index: 2; display: none; left: 12px; right: 12px;
+    bottom: calc(14px + env(safe-area-inset-bottom, 0px));
+    justify-content: space-between; align-items: flex-end; pointer-events: none;
+  }
+  /* thumb stick: fly the ship (the cannon fires by itself); BOMBA drops a bomb on the sight */
+  #touch .stick { position: relative; width: 136px; height: 136px; border-radius: 50%; pointer-events: auto; touch-action: none;
+    border: 2px solid rgba(255, 176, 58, 0.6); background: radial-gradient(circle, rgba(255,176,58,0.14), rgba(255,176,58,0.04)); }
+  #touch .stick .knob { position: absolute; left: 50%; top: 50%; width: 58px; height: 58px; margin: -29px 0 0 -29px; border-radius: 50%;
+    background: rgba(255, 176, 58, 0.45); border: 2px solid rgba(255,255,255,0.7); box-shadow: 0 4px 10px rgba(0,0,0,0.4); pointer-events: none; }
+  #touch .stick .ring { position: absolute; inset: 10px; border-radius: 50%; border: 1px dashed rgba(244,246,238,0.25); pointer-events: none; }
+  #touch .jump { width: 96px; height: 96px; border-radius: 50%; pointer-events: auto; touch-action: none; color: var(--fg);
+    font: 800 13px system-ui, sans-serif; letter-spacing: 1px; border: 2px solid rgba(255, 90, 74, 0.9); background: rgba(255, 90, 74, 0.22); }
+  #touch .jump.on { background: rgba(255, 90, 74, 0.55); }
+  #touch.small .stick { width: 112px; height: 112px; }
+  #touch.small .stick .knob { width: 48px; height: 48px; margin: -24px 0 0 -24px; }
+  #touch.small .jump { width: 80px; height: 80px; font-size: 11px; }
+  #overlay {
+    position: fixed; inset: 0; z-index: 5;
+    display: flex; flex-direction: column; align-items: center; justify-content: flex-start;
+    gap: 14px; padding: 16px; text-align: center; overflow-y: auto;
+    background: rgba(10, 14, 24, 0.93);
+  }
+  #overlay > :first-child { margin-top: auto; }
+  #overlay > :last-child { margin-bottom: auto; }
+  #overlay.hidden { display: none; }
+  #homeLink {
+    position: fixed; top: calc(10px + env(safe-area-inset-top, 0px)); left: 10px; z-index: 6;
+    font: 600 13px/1 system-ui, sans-serif; color: #fff; text-decoration: none;
+    padding: 8px 12px; border-radius: 999px; background: rgba(0,0,0,.55);
+    border: 1px solid rgba(255,255,255,.25);
+  }
+  #homeLink:hover { background: rgba(0,0,0,.8); }
+  #overlay.hidden ~ #homeLink { display: none; }
+  @media (max-width: 700px) { #overlay { padding-top: calc(52px + env(safe-area-inset-top, 0px)); } }
+  #overlay h1 { font-size: clamp(32px, 10vw, 58px); font-weight: 900; font-style: italic; letter-spacing: 1px; color: var(--pink);
+    text-shadow: 3px 3px 0 #5a3a0a, 0 0 22px rgba(255,176,58,0.35); }
+  #overlay h2 { font-size: clamp(26px, 7vw, 42px); font-weight: 900; letter-spacing: 2px; color: var(--pink); }
+  #overlay h2.lose { color: var(--red); }
+  #overlay p { max-width: 540px; font-size: clamp(13px, 3.4vw, 16px); line-height: 1.55; }
+  #overlay p.muted { color: var(--muted); }
+  #overlay .pts { display: grid; grid-template-columns: repeat(2, auto); gap: 4px 18px; font-size: 13px; color: var(--muted); text-align: left; max-width: 560px; }
+  #overlay .pts b { color: var(--fg); }
+  #overlay .diff { display: flex; gap: 10px; flex-wrap: wrap; justify-content: center; }
+  #overlay button {
+    font: 800 15px system-ui, sans-serif; letter-spacing: 1.5px; color: var(--fg);
+    background: transparent; cursor: pointer;
+    border: 2px solid rgba(244,246,238,0.3); border-radius: 10px; padding: 9px 16px;
+  }
+  #overlay .diff button.on { border-color: var(--c); color: var(--c); box-shadow: 0 0 12px var(--c); }
+  #overlay button.start { border-color: var(--pink); color: #2a1404; background: var(--pink); padding: 11px 30px; box-shadow: 0 4px 0 #a8681a; }
+  @media (max-height: 560px) {
+    #overlay { gap: 8px; }
+    #overlay h1 { font-size: 30px; }
+    #overlay p { font-size: 13px; line-height: 1.4; }
+    #overlay .help, #overlay .pts { display: none; }
+  }
+</style>
+</head>
+<body>
+<div id="wrap"><canvas id="game"></canvas></div>
+<div id="touch">
+  <div class="stick" aria-label="Levetta"><div class="ring"></div><div class="knob"></div></div>
+  <button type="button" class="jump" aria-label="Bomba">BOMBA</button>
+</div>
+<button id="pauseBtn" type="button" aria-label="Pausa">❚❚</button>
+<div id="overlay"></div>
+<a id="homeLink" href="../../index.html">← Sala Giochi</a>
+
+
+<script>
+(() => {
+  "use strict";
+
+  const W = 360, H = 600, TAU = Math.PI * 2;
+  const SCROLL = 42, PSPEED = 175, SIGHT = 120, SHOT_V = 560, SHOT_EVERY = 0.13, BOMB_T = 0.5, BOMB_R = 20;
+  const AREA_LEN = 3000, BOSS_AT = 2250, CELL = 30, TOP = 40;
+  const AIR = {
+    toroid: { r: 9, pts: 30 },
+    torkan: { r: 10, pts: 50 },
+    kapi: { r: 10, pts: 100 },
+    zoshi: { r: 9, pts: 70 },
+  };
+  const GROUND = {
+    barra: { r: 10, pts: 100, name: "piramide" },
+    zolbak: { r: 10, pts: 200, name: "radar" },
+    logram: { r: 11, pts: 300, name: "torretta" },
+    domogram: { r: 11, pts: 800, name: "blindato" },
+    grobda: { r: 10, pts: 1500, name: "carro" },
+    derota: { r: 14, pts: 1000, name: "fortino" },
+    sol: { r: 11, pts: 2000, name: "torre nascosta" },
+    turret: { r: 10, pts: 300, name: "cannone" },
+    core: { r: 13, pts: 4000, name: "nucleo" },
+  };
+
+  const DIFFICULTIES = {
+    facile:    { label: "FACILE",    color: "#7ed87a", desc: "5 vite · colpi nemici lenti e rari", lives: 5, bullet: 0.75, fire: 0.65, dens: 0.8 },
+    normale:   { label: "NORMALE",   color: "#ffb03a", desc: "3 vite", lives: 3, bullet: 1, fire: 1, dens: 1 },
+    difficile: { label: "DIFFICILE", color: "#ff5a5a", desc: "3 vite · colpi veloci · più nemici", lives: 3, bullet: 1.2, fire: 1.35, dens: 1.2 },
+  };
+  const DIFF_IDS = Object.keys(DIFFICULTIES);
+  const DIFF_KEY = "mirino-difficulty";
+  const bestKey = (id) => `mirino-best-${id}`;
+  function store(k, v) { try { localStorage.setItem(k, v); } catch { /* ignore */ } }
+  function load(k) { try { return localStorage.getItem(k); } catch { return null; } }
+  const rnd = (a, b) => a + Math.random() * (b - a);
+  const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
+  const pick = (arr) => arr[Math.floor(Math.random() * arr.length)];
+
+  // ---------- Canvas ----------
+  const canvas = document.getElementById("game");
+  const ctx = canvas.getContext("2d");
+  const wrapEl = document.getElementById("wrap");
+  const overlay = document.getElementById("overlay");
+  const touchEl = document.getElementById("touch");
+  const pauseBtn = document.getElementById("pauseBtn");
+  let pxRatio = 1, touchMode = !!(window.matchMedia && matchMedia("(pointer: coarse)").matches);
+  function resize() {
+    const portrait = window.innerHeight > window.innerWidth;
+    const showTouch = touchMode && isPlaying();
+    touchEl.style.display = showTouch ? "flex" : "none";
+    touchEl.classList.toggle("small", !portrait && window.innerHeight < 480);
+    wrapEl.style.paddingBottom = showTouch && portrait ? "calc(170px + env(safe-area-inset-bottom, 0px))" : "0";
+    let availW = window.innerWidth - 8, availH = window.innerHeight - 8;
+    if (showTouch && portrait) availH -= 170;
+    if (showTouch && !portrait) {
+      const side = Math.max(...[...touchEl.children].map((el) => el.offsetWidth)) + 20;
+      if (window.innerWidth - 2 * side > 200) availW = window.innerWidth - 2 * side;
+    }
+    const s = Math.max(0.2, Math.min(availW / W, availH / H));
+    pxRatio = Math.min(3, s * (window.devicePixelRatio || 1));
+    canvas.style.width = W * s + "px";
+    canvas.style.height = H * s + "px";
+    canvas.width = Math.round(W * pxRatio);
+    canvas.height = Math.round(H * pxRatio);
+  }
+  window.addEventListener("resize", () => syncControls());
+
+  // ---------- Audio ----------
+  let audioCtx = null;
+  function beep(freq, dur, type = "square", vol = 0.04, slide = 0, delay = 0) {
+    if (!audioCtx) return;
+    const t = audioCtx.currentTime + delay;
+    const osc = audioCtx.createOscillator(), gain = audioCtx.createGain();
+    osc.type = type;
+    osc.frequency.setValueAtTime(freq, t);
+    if (slide) osc.frequency.exponentialRampToValueAtTime(Math.max(20, freq + slide), t + dur);
+    gain.gain.setValueAtTime(vol, t);
+    gain.gain.exponentialRampToValueAtTime(0.0001, t + dur);
+    osc.connect(gain).connect(audioCtx.destination);
+    osc.start(t); osc.stop(t + dur + 0.02);
+  }
+  function noise(dur, vol, freq) {
+    if (!audioCtx) return;
+    const len = Math.floor(audioCtx.sampleRate * dur), buf = audioCtx.createBuffer(1, len, audioCtx.sampleRate), d = buf.getChannelData(0);
+    for (let i = 0; i < len; i++) d[i] = (Math.random() * 2 - 1) * (1 - i / len);
+    const src = audioCtx.createBufferSource(), f = audioCtx.createBiquadFilter(), g = audioCtx.createGain();
+    src.buffer = buf; f.type = "bandpass"; f.frequency.value = freq; g.gain.value = vol;
+    src.connect(f).connect(g).connect(audioCtx.destination); src.start();
+  }
+  const arp = (notes, gap, d, type = "square", vol = 0.04) => notes.forEach((f, i) => beep(f, d, type, vol, 0, i * gap));
+  let sfxN = 0;
+  const lim = (fn) => (...a) => { if (sfxN++ < 6) fn(...a); };
+  const sfx = {
+    zap: lim(() => beep(1800, 0.03, "square", 0.008, -600)),
+    bomb: lim(() => beep(600, 0.45, "triangle", 0.03, -450)),
+    boom: lim(() => { noise(0.35, 0.16, 300); beep(90, 0.3, "sawtooth", 0.04, -40); }),
+    pop: lim(() => { noise(0.12, 0.08, 1800); beep(900, 0.08, "square", 0.02, -500); }),
+    shot: lim(() => beep(500, 0.06, "square", 0.012, 300)),
+    lock: lim(() => beep(1400, 0.03, "square", 0.012)),
+    sol: () => arp([784, 988, 1175, 1568, 1976], 0.06, 0.12, "triangle", 0.05),
+    boss: () => { for (let i = 0; i < 3; i++) beep(110, 0.5, "sawtooth", 0.035, 20, i * 0.5); },
+    bossDown: () => { noise(1.2, 0.2, 200); arp([523, 659, 784, 1047, 1319, 1568], 0.08, 0.18, "square", 0.04); },
+    die: () => { noise(0.8, 0.2, 400); arp([440, 330, 247, 196, 147], 0.1, 0.16, "sawtooth", 0.045); },
+    area: () => arp([523, 659, 784, 1047, 784, 1047, 1319], 0.1, 0.16),
+    over: () => arp([523, 466, 415, 392, 330, 262], 0.15, 0.24, "triangle", 0.05),
+  };
+
+  // ---------- State ----------
+  let difficulty = DIFFICULTIES[load(DIFF_KEY)] ? load(DIFF_KEY) : "normale";
+  let diff = DIFFICULTIES[difficulty];
+  let state = "menu", menu = null, pausedFrom = null, stateT = 0, clock = 0;
+  let score = 0, lives = 3, area = 1, bestCache = 0, nextLife = 20000;
+  let camY = 0, P = null, shots = [], bomb = null, air = [], ground = [], bullets = [], parts = [], popups = [], message = null;
+  let shotT = 0, waveT = 2, nextG = 0, bossSpawned = false, solDone = false, locked = false;
+  let bombPressed = false;
+  const keys = { left: false, right: false, up: false, down: false };
+  const stick = { x: 0, y: 0 };
+
+  // ---------- The land below ----------
+  function hash(a, b) { let h = (a * 374761393 + b * 668265263) | 0; h = (h ^ (h >>> 13)) * 1274126177 | 0; return ((h ^ (h >>> 16)) >>> 0) / 4294967296; }
+  function vnoise(x, y) {
+    const xi = Math.floor(x), yi = Math.floor(y), fx = x - xi, fy = y - yi, sx = fx * fx * (3 - 2 * fx), sy = fy * fy * (3 - 2 * fy);
+    const a = hash(xi, yi), b = hash(xi + 1, yi), c = hash(xi, yi + 1), d = hash(xi + 1, yi + 1);
+    return a + (b - a) * sx + (c - a) * sy + (a - b - c + d) * sx * sy;
+  }
+  const forest = (cx, cy) => vnoise(cx * 0.35, cy * 0.35) * 0.7 + vnoise(cx * 0.9 + 50, cy * 0.9) * 0.3;
+  const riverX = (wy) => W / 2 + Math.sin(wy * 0.0041) * 95 + Math.sin(wy * 0.0113 + 1) * 28;
+  const riverW = (wy) => { const p = Math.sin(wy * 0.0016 - 1.2); return p > 0.15 ? Math.min(46, (p - 0.15) * 160) : 0; };
+  const onRiver = (x, wy) => { const w = riverW(wy); return w > 0 && Math.abs(x - riverX(wy)) < w / 2 + 16; };
+  const ROAD = 800;
+  const roadNear = (wy) => Math.round(wy / ROAD) * ROAD;
+  const sy = (wy) => H - (wy - camY);
+  const wyOf = (y) => camY + (H - y);
+
+  // ---------- Flow ----------
+  const isPlaying = () => ["intro", "play", "dead"].includes(state);
+  function startGame() {
+    if (!audioCtx) { try { audioCtx = new (window.AudioContext || window.webkitAudioContext)(); } catch { audioCtx = null; } }
+    if (audioCtx && audioCtx.state === "suspended") audioCtx.resume();
+    score = 0; lives = diff.lives; area = 1; nextLife = 20000;
+    bestCache = parseInt(load(bestKey(difficulty)), 10) || 0;
+    camY = 0; air = []; ground = []; bullets = []; shots = []; bomb = null; parts = []; popups = [];
+    nextG = H + 60; waveT = 2.5; bossSpawned = false; solDone = false;
+    spawnPlayer();
+    message = { text: "AREA 1", sub: "abbatti i velivoli, bombarda le basi a terra", t: 0 };
+    state = "intro"; stateT = 1.4;
+    menu = null;
+    overlay.classList.add("hidden");
+    syncControls();
+    last = performance.now();
+  }
+  function spawnPlayer() { P = { x: W / 2, y: H - 90, safe: 2.5, tilt: 0 }; }
+  const areaStart = () => (area - 1) * AREA_LEN;
+  function addScore(n, x, y, color = "#f4f6ee", text) {
+    score += n;
+    if (score >= nextLife) { lives++; nextLife += 20000; arp([523, 659, 784, 1047, 1319], 0.07, 0.12); popups.push({ x: W / 2, y: 90, text: "VITA EXTRA!", color: "#ffb03a", t: 0 }); }
+    if (x !== undefined) popups.push({ x, y, text: text || String(n), color, t: 0 });
+  }
+  function burst(x, y, c, n = 12, sp = 110, life = 0.6, ground = false) {
+    for (let k = 0; k < n; k++) { const a = Math.random() * TAU, s = sp * rnd(0.3, 1); parts.push({ x, y, vx: Math.cos(a) * s, vy: Math.sin(a) * s, t: 0, life: life * rnd(0.6, 1.2), c, g: ground }); }
+  }
+  function die() {
+    if (state !== "play" || P.safe > 0) return;
+    lives--; sfx.die();
+    burst(P.x, P.y, "#ffffff", 20, 140, 0.8); burst(P.x, P.y, "#ffb03a", 20, 90, 0.9);
+    state = "dead"; stateT = 1.8;
+  }
+  function gameOver() {
+    state = "over";
+    const prev = parseInt(load(bestKey(difficulty)), 10) || 0;
+    const record = score > prev;
+    if (record) store(bestKey(difficulty), String(score));
+    sfx.over();
+    menu = () => showOverlay(
+      `<h2 class="lose">${lives <= 0 ? "VITE FINITE!" : "PARTITA FINITA"}</h2>
+       <p>Punteggio: <b>${score.toLocaleString("it-IT")}</b> · area ${area} · ${diff.label}</p>
+       ${record ? "<p style='color:var(--pink)'>★ NUOVO RECORD! ★</p>" : ""}
+       ${difficultyHTML()}
+       <button class="start" data-start>GIOCA ANCORA</button>`
+    );
+    menu();
+    syncControls();
+  }
+  function togglePause() {
+    if (isPlaying()) {
+      pausedFrom = state; state = "paused";
+      showOverlay(`<h2>PAUSA</h2><button class="start" data-resume>CONTINUA</button><p class="muted">Premi P per continuare</p>`);
+    } else if (state === "paused") {
+      state = pausedFrom; overlay.classList.add("hidden"); last = performance.now();
+    }
+    syncControls();
+  }
+  // the pause menu can end the game (shared/iniziali.js): it ends here the usual way, saving the record
+  window.addEventListener("sala:termina", () => { if (state !== "paused") return; state = pausedFrom; overlay.classList.add("hidden"); gameOver(); syncControls(); });
+  function syncControls() {
+    pauseBtn.style.display = isPlaying() && touchMode ? "block" : "none";
+    resize();
+  }
+  pauseBtn.addEventListener("click", () => togglePause());
+  function showOverlay(html) { overlay.innerHTML = html; overlay.classList.remove("hidden"); }
+  function difficultyHTML() {
+    const buttons = DIFF_IDS.map((id) => {
+      const d = DIFFICULTIES[id];
+      return `<button type="button" data-diff="${id}" class="${id === difficulty ? "on" : ""}" style="--c:${d.color}">${d.label}</button>`;
+    }).join("");
+    const best = parseInt(load(bestKey(difficulty)), 10);
+    return `<div class="diff">${buttons}</div><p class="muted">${diff.desc}${best ? ` · Record: ${best.toLocaleString("it-IT")}` : ""}</p>`;
+  }
+  function setDifficulty(id) { if (!DIFFICULTIES[id]) return; difficulty = id; diff = DIFFICULTIES[id]; store(DIFF_KEY, id); if (menu) menu(); }
+  function showTitle() {
+    menu = showTitle;
+    showOverlay(
+      `<h1>MIRINO STELLARE</h1>
+       <p>Sorvola la pianura aliena: il cannone spara da solo ai velivoli, le bombe cadono dove punta il mirino davanti alla nave. Quando il mirino si accende di rosso c'è qualcosa da colpire a terra, a volte anche dove non si vede nulla. In fondo a ogni area arriva la nave madre: bombardane il nucleo!</p>
+       <div class="pts">
+         <span><b>Velivoli</b></span><span>anelli 30 · caccia 50 · inseguitori 70 · falchi 100</span>
+         <span><b>A terra</b></span><span>piramidi 100 · radar 200 · torrette 300 · blindati 800 · fortini 1.000 · carri 1.500</span>
+         <span><b>Torre nascosta</b></span><span>una per area, invisibile finché non la bombardi: 2.000</span>
+         <span><b>Nave madre</b></span><span>cannoni 300 · nucleo 4.000 · vita extra ogni 20.000</span>
+       </div>
+       ${touchMode
+         ? `<p class="muted help">Levetta per volare (il cannone spara da solo) · BOMBA per sganciare sul mirino</p>`
+         : `<p class="muted help">Frecce o WASD per volare (il cannone spara da solo) · SPAZIO, X o J per la bomba · P pausa</p>`}
+       ${difficultyHTML()}
+       <button class="start" data-start>DECOLLA!</button>`
+    );
+  }
+  overlay.addEventListener("click", (e) => {
+    const d = e.target.closest("[data-diff]");
+    if (d) { setDifficulty(d.dataset.diff); return; }
+    if (e.target.closest("[data-start]")) startGame();
+    if (e.target.closest("[data-resume]")) togglePause();
+  });
+
+  // ---------- Input ----------
+  const KEYMAP = { arrowleft: "left", a: "left", arrowright: "right", d: "right", arrowup: "up", w: "up", arrowdown: "down", s: "down" };
+  window.addEventListener("keydown", (e) => {
+    const k = e.key.toLowerCase();
+    if ([" ", "arrowup", "arrowdown", "arrowleft", "arrowright"].includes(k)) e.preventDefault();
+    if (state === "menu" || state === "over") {
+      if (e.key === "Enter") startGame();
+      else if (["1", "2", "3"].includes(k)) setDifficulty(DIFF_IDS[+k - 1]);
+      return;
+    }
+    if (k === "p" || k === "escape") { if (!e.repeat) togglePause(); return; }
+    if (state === "paused") { if (e.key === "Enter") togglePause(); return; }
+    if ((k === " " || k === "x" || k === "j" || k === "z") && !e.repeat) bombPressed = true;
+    if (KEYMAP[k]) keys[KEYMAP[k]] = true;
+  });
+  window.addEventListener("keyup", (e) => { const m = KEYMAP[e.key.toLowerCase()]; if (m) keys[m] = false; });
+  window.addEventListener("blur", () => { for (const k in keys) keys[k] = false; stick.x = stick.y = 0; if (isPlaying()) togglePause(); });
+  const bombBtn = touchEl.querySelector(".jump");
+  bombBtn.addEventListener("pointerdown", (e) => { e.preventDefault(); bombPressed = true; bombBtn.classList.add("on"); });
+  for (const ev of ["pointerup", "pointercancel", "pointerleave"]) bombBtn.addEventListener(ev, () => bombBtn.classList.remove("on"));
+  const stickEl = touchEl.querySelector(".stick"), knob = stickEl.querySelector(".knob");
+  let stickId = null;
+  function stickAt(e) {
+    const r = stickEl.getBoundingClientRect(), max = r.width / 2 - 14;
+    let dx = e.clientX - (r.left + r.width / 2), dy = e.clientY - (r.top + r.height / 2);
+    const len = Math.hypot(dx, dy);
+    if (len > max) { dx *= max / len; dy *= max / len; }
+    knob.style.transform = `translate(${dx}px, ${dy}px)`;
+    const m = Math.hypot(dx, dy) / max, s = m < 0.15 ? 0 : Math.min(1, (m - 0.15) / 0.6) / m;
+    stick.x = dx / max * s; stick.y = dy / max * s;
+  }
+  const stickEnd = (e) => { if (e.pointerId !== stickId) return; stickId = null; knob.style.transform = ""; stick.x = stick.y = 0; };
+  stickEl.addEventListener("pointerdown", (e) => { e.preventDefault(); stickId = e.pointerId; try { stickEl.setPointerCapture(e.pointerId); } catch { /* ignore */ } stickAt(e); });
+  stickEl.addEventListener("pointermove", (e) => { if (e.pointerId === stickId) stickAt(e); });
+  for (const ev of ["pointerup", "pointercancel", "lostpointercapture"]) stickEl.addEventListener(ev, stickEnd);
+  window.addEventListener("pointerdown", (e) => { if (e.pointerType === "touch" && !touchMode) { touchMode = true; syncControls(); if (menu) menu(); } }, true);
+
+  // ---------- Spawning ----------
+  const fireP = () => Math.min(0.9, 0.3 + 0.12 * area) * diff.fire;
+  const bulletV = () => Math.min(250, 140 + 14 * area) * diff.bullet;
+  function aimBullet(x, y, spread = 0) {
+    const a = Math.atan2(P.y - y, P.x - x) + spread, v = bulletV();
+    bullets.push({ x, y, vx: Math.cos(a) * v, vy: Math.sin(a) * v });
+    sfx.shot();
+  }
+  function spawnWave() {
+    const opts = ["toroid", "toroid", "torkan"];
+    if (area >= 2) opts.push("kapi", "torkan");
+    if (area >= 3) opts.push("zoshi", "zoshi");
+    const k = pick(opts);
+    if (k === "toroid") {
+      const n = 3 + Math.floor(Math.random() * 3), x0 = rnd(40, W - 40), dir = Math.random() < 0.5 ? -1 : 1;
+      for (let i = 0; i < n; i++) air.push({ kind: k, x: clamp(x0 + dir * i * 22, 20, W - 20), y: -20 - i * 34, vx: 0, vy: 150, turnY: rnd(140, 300), mode: 0, fire: Math.random() < fireP(), t: 0 });
+    } else if (k === "torkan") {
+      const n = Math.random() < 0.5 ? 1 : 2;
+      for (let i = 0; i < n; i++) air.push({ kind: k, x: rnd(30, W - 30), y: -20 - i * 40, vx: 0, vy: 180, ty: rnd(80, 230), mode: 0, t: 0 });
+    } else if (k === "kapi") {
+      const side = Math.random() < 0.5 ? -1 : 1;
+      for (let i = 0; i < 2; i++) air.push({ kind: k, x: side < 0 ? rnd(20, 80) : rnd(W - 80, W - 20), y: -20 - i * 50, vx: -side * 70, vy: 230, mode: 0, t: 0, fire: Math.random() < fireP() + 0.2 });
+    } else {
+      const n = 2 + (Math.random() < 0.4 ? 1 : 0);
+      for (let i = 0; i < n; i++) air.push({ kind: k, x: rnd(30, W - 30), y: -20 - i * 30, vx: 0, vy: 130, mode: 0, t: 0, cd: rnd(1, 2) });
+    }
+  }
+  function placeable(x, wy) { return !onRiver(x, wy) && Math.abs(wy - roadNear(wy)) > 22 && Math.abs(wy - (areaStart() + BOSS_AT)) > 260; }
+  function addGround(kind, x, wy, extra = {}) { ground.push({ kind, x, wy, hp: 1, t: rnd(0, 3), cd: rnd(1.5, 3.5), ...extra }); }
+  function spawnGround() {
+    const wy = nextG;
+    nextG += rnd(120, 210) / diff.dens;
+    const inBoss = Math.abs(wy - (areaStart() + BOSS_AT)) < 300;
+    // the road passing by gets a patrol
+    const road = roadNear(wy);
+    if (area >= 2 && Math.abs(wy - road) < 110 && !ground.some((g) => g.kind === "domogram" && g.wy === road) && !inBoss && Math.random() < 0.8) addGround("domogram", rnd(40, W - 40), road, { vx: pick([-1, 1]) * 40 });
+    if (inBoss) return;
+    const opts = ["barra", "barra", "zolbak", "logram"];
+    if (area >= 2) opts.push("grobda", "logram");
+    if (area >= 3) opts.push("derota");
+    const k = pick(opts);
+    if (k === "barra") {
+      const cx = rnd(50, W - 50), n = 3 + Math.floor(Math.random() * 3);
+      const off = [[0, 0], [-24, -24], [24, -24], [-24, 24], [24, 24]];
+      for (let i = 0; i < n; i++) { const x = cx + off[i][0], y = wy + off[i][1]; if (placeable(x, y)) addGround(k, x, y); }
+      return;
+    }
+    const n = k === "grobda" ? 1 + (Math.random() < 0.5 ? 1 : 0) : k === "logram" && Math.random() < 0.4 ? 2 : 1;
+    for (let i = 0; i < n; i++) {
+      for (let tries = 0; tries < 8; tries++) {
+        const x = rnd(30, W - 30), y = wy + i * 40;
+        if (placeable(x, y)) { addGround(k, x, y, k === "grobda" ? { vx: 0, vy: 0 } : {}); break; }
+      }
+    }
+  }
+  function spawnSol() {
+    for (let tries = 0; tries < 30; tries++) {
+      const wy = areaStart() + rnd(700, 1900), x = rnd(40, W - 40);
+      if (placeable(x, wy)) { addGround("sol", x, wy, { hidden: true }); return; }
+    }
+  }
+  function spawnBoss() {
+    const wy = camY + H + 90, parts = [[-46, -26], [46, -26], [-46, 26], [46, 26]];
+    const boss = { kind: "boss", x: W / 2, wy, hp: 1, t: 0 };
+    ground.push(boss);
+    for (const [dx, dy] of parts) ground.push({ kind: "turret", x: W / 2 + dx, wy: wy - dy, boss, dx, dy, hp: 1, cd: rnd(1, 2.5), t: 0 });
+    ground.push({ kind: "core", x: W / 2, wy, boss, dx: 0, dy: 0, hp: 1, cd: rnd(2, 3), t: 0 });
+    sfx.boss();
+    message = { text: "LA NAVE MADRE!", sub: "bombarda il nucleo al centro", t: 0 };
+  }
+
+  // ---------- Update ----------
+  function updatePlayer(dt) {
+    P.safe = Math.max(0, P.safe - dt);
+    let ux = clamp(stick.x + (keys.right ? 1 : 0) - (keys.left ? 1 : 0), -1, 1), uy = clamp(stick.y + (keys.down ? 1 : 0) - (keys.up ? 1 : 0), -1, 1);
+    const m = Math.hypot(ux, uy); if (m > 1) { ux /= m; uy /= m; }
+    P.x = clamp(P.x + ux * PSPEED * dt, 14, W - 14);
+    P.y = clamp(P.y + uy * PSPEED * dt, TOP + SIGHT + 20, H - 26);
+    P.tilt += (ux - P.tilt) * Math.min(1, dt * 8);
+    // the cannon fires by itself
+    shotT -= dt;
+    if (shotT <= 0) { shotT = SHOT_EVERY; shots.push({ x: P.x + (shots.length % 2 ? 4 : -4), y: P.y - 12 }); sfx.zap(); }
+    if (bombPressed) {
+      bombPressed = false;
+      if (!bomb) { bomb = { x0: P.x, y0: P.y - 8, x: P.x, wy: wyOf(P.y - SIGHT), t: 0 }; sfx.bomb(); }
+    }
+  }
+  function groundPos(g) { return [g.x, sy(g.wy)]; }
+  function targetUnderSight() {
+    const sx = P.x, sY = P.y - SIGHT;
+    return ground.some((g) => g.hp > 0 && g.kind !== "boss" && Math.hypot(g.x - sx, sy(g.wy) - sY) < GROUND[g.kind].r + 8);
+  }
+  function explodeBomb() {
+    const bx = bomb.x, by = sy(bomb.wy);
+    burst(bx, by, "#ffd23a", 14, 80, 0.5, true); burst(bx, by, "#8a5a3a", 10, 50, 0.7, true);
+    parts.push({ x: bx, y: by, vx: 0, vy: 0, t: 0, life: 0.35, ring: true, g: true });
+    sfx.boom();
+    for (const g of ground) {
+      if (g.hp <= 0 || g.kind === "boss") continue;
+      const [gx, gy] = groundPos(g);
+      if (Math.hypot(gx - bx, gy - by) > BOMB_R + GROUND[g.kind].r * 0.5) continue;
+      g.hp = 0; g.dead = 0;
+      addScore(GROUND[g.kind].pts, gx, gy - 14, g.kind === "sol" ? "#ffd23a" : "#ffb03a");
+      burst(gx, gy, g.kind === "sol" ? "#ffd23a" : "#ff8a3a", g.kind === "core" ? 40 : 16, g.kind === "core" ? 160 : 90, 0.8, true);
+      if (g.kind === "sol") { g.hidden = false; sfx.sol(); popups.push({ x: gx, y: gy - 30, text: "TORRE NASCOSTA!", color: "#ffd23a", t: 0 }); }
+      if (g.kind === "core") {
+        g.boss.hp = 0; sfx.bossDown();
+        for (const q of ground) if (q.boss === g.boss && q.hp > 0) { q.hp = 0; const [qx, qy] = groundPos(q); burst(qx, qy, "#ff8a3a", 14, 100, 0.8, true); }
+        message = { text: "NAVE MADRE DISTRUTTA!", sub: "+4.000", t: 0 };
+      }
+    }
+    bomb = null;
+  }
+  function updateAir(dt) {
+    for (const e of air) {
+      e.t += dt;
+      if (e.kind === "toroid") {
+        if (e.mode === 0) { e.vx += clamp(P.x - e.x, -1, 1) * 40 * dt; if (e.y > e.turnY) { e.mode = 1; e.side = e.x < P.x ? -1 : 1; if (e.fire) aimBullet(e.x, e.y); } }
+        else { e.vy = Math.max(-220, e.vy - 420 * dt); e.vx += e.side * 260 * dt; }
+      } else if (e.kind === "torkan") {
+        if (e.mode === 0 && e.y >= e.ty) { e.mode = 1; e.vy = 0; e.wait = 0.7; }
+        else if (e.mode === 1) { e.wait -= dt; if (e.wait <= 0) { aimBullet(e.x, e.y); e.mode = 2; } }
+        else if (e.mode === 2) e.vy = Math.max(-170, e.vy - 300 * dt);
+      } else if (e.kind === "kapi") {
+        e.vy -= 190 * dt;
+        if (e.mode === 0 && e.vy < 0) { e.mode = 1; if (e.fire) aimBullet(e.x, e.y); }
+      } else {
+        // homing, then off it goes
+        if (e.t < 6) {
+          const a = Math.atan2(P.y - e.y, P.x - e.x), sp = 125;
+          e.vx += (Math.cos(a) * sp - e.vx) * Math.min(1, dt * 1.3); e.vy += (Math.sin(a) * sp - e.vy) * Math.min(1, dt * 1.3);
+          e.cd -= dt; if (e.cd <= 0) { e.cd = rnd(1.4, 2.4) / diff.fire; if (e.y < P.y - 60) aimBullet(e.x, e.y); }
+        } else e.vy = Math.max(-200, e.vy - 300 * dt);
+      }
+      e.x += e.vx * dt; e.y += e.vy * dt;
+      if (e.y < -60 || e.y > H + 40 || e.x < -60 || e.x > W + 60) e.gone = true;
+      if (state === "play" && !e.gone && Math.hypot(e.x - P.x, e.y - P.y) < AIR[e.kind].r + 6) { if (P.safe <= 0) { e.gone = true; burst(e.x, e.y, "#ffffff", 10, 100, 0.5); die(); } }
+    }
+    air = air.filter((e) => !e.gone);
+  }
+  function updateGround(dt) {
+    for (const g of ground) {
+      if (g.hp <= 0) { g.dead = (g.dead || 0) + dt; continue; }
+      g.t += dt;
+      const y = sy(g.wy);
+      if (g.kind === "boss") { g.wy += (SCROLL - 24) * dt; continue; }
+      if (g.boss) { g.x = g.boss.x + g.dx; g.wy = g.boss.wy - g.dy; }
+      if (g.kind === "domogram") { g.x += g.vx * dt; if (g.x < 20 || g.x > W - 20) g.vx = -g.vx; }
+      if (g.kind === "grobda") {
+        // a tank that runs from the sight
+        const sxp = P.x, syp = P.y - SIGHT, d = Math.hypot(g.x - sxp, y - syp);
+        if (d < 60 && y > TOP) { const a = Math.atan2(y - syp, g.x - sxp); g.vx = Math.cos(a) * 55; g.vy = Math.sin(a) * 55; }
+        else { g.vx *= 0.96; g.vy *= 0.96; }
+        const nx = clamp(g.x + g.vx * dt, 16, W - 16), nwy = g.wy - g.vy * dt;
+        if (!onRiver(nx, nwy)) { g.x = nx; g.wy = nwy; }
+      }
+      const shooter = g.kind === "logram" || g.kind === "domogram" || g.kind === "derota" || g.kind === "turret" || g.kind === "core";
+      if (shooter && state === "play" && y > TOP + 10 && y < P.y - 40) {
+        g.cd -= dt;
+        if (g.cd <= 0) {
+          g.cd = (g.kind === "derota" ? rnd(2.2, 3.2) : g.kind === "core" ? rnd(3, 4) : rnd(2.4, 4)) / diff.fire;
+          if (g.kind === "derota" || g.kind === "core") { for (const s of [-0.22, 0, 0.22]) aimBullet(g.x, y, s); }
+          else aimBullet(g.x, y);
+        }
+      }
+    }
+    ground = ground.filter((g) => sy(g.wy) < H + 120 && !(g.hp <= 0 && g.dead > 2.5 && g.kind !== "sol"));
+    // the mothership leaves if it is not destroyed in time
+    for (const g of ground) if (g.kind === "boss" && g.hp > 0 && sy(g.wy) > H + 80) { g.hp = 0; message = { text: "LA NAVE MADRE È PASSATA", sub: "", t: 0 }; }
+  }
+  function updateShots(dt) {
+    for (const s of shots) {
+      s.y -= SHOT_V * dt;
+      if (s.y < TOP - 10) { s.gone = true; continue; }
+      for (const e of air) {
+        if (e.gone || Math.abs(e.x - s.x) > AIR[e.kind].r + 3 || Math.abs(e.y - s.y) > AIR[e.kind].r + 6) continue;
+        e.gone = true; s.gone = true;
+        addScore(AIR[e.kind].pts, e.x, e.y - 12);
+        burst(e.x, e.y, e.kind === "zoshi" ? "#ff5a8a" : e.kind === "kapi" ? "#5ad8ff" : "#d8d8e8", 12, 110, 0.5); sfx.pop();
+        break;
+      }
+    }
+    shots = shots.filter((s) => !s.gone);
+    air = air.filter((e) => !e.gone);
+    for (const b of bullets) {
+      b.x += b.vx * dt; b.y += b.vy * dt;
+      if (b.x < -10 || b.x > W + 10 || b.y < -10 || b.y > H + 10) b.gone = true;
+      else if (state === "play" && Math.hypot(b.x - P.x, b.y - P.y) < 6) { b.gone = true; die(); }
+    }
+    bullets = bullets.filter((b) => !b.gone);
+    if (bomb) {
+      bomb.t += dt;
+      const f = Math.min(1, bomb.t / BOMB_T);
+      bomb.y = bomb.y0 + (sy(bomb.wy) - bomb.y0) * f;
+      if (f >= 1) explodeBomb();
+    }
+  }
+  function update(dt) {
+    clock += dt; sfxN = 0;
+    if (message) { message.t += dt; if (message.t > 2.4) message = null; }
+    for (const p of parts) { p.t += dt; p.x += p.vx * dt; p.y += p.vy * dt + (p.g && state !== "menu" ? SCROLL * dt : 0); p.vx *= 0.94; p.vy *= 0.94; }
+    parts = parts.filter((p) => p.t < p.life);
+    for (const p of popups) { p.t += dt; p.y -= 20 * dt; }
+    popups = popups.filter((p) => p.t < 1.1);
+    if (state === "menu") { camY += SCROLL * dt; return; }
+    if (!isPlaying()) return;
+    camY += SCROLL * dt;
+    if (state === "intro") { stateT -= dt; if (stateT <= 0) state = "play"; }
+    if (state === "dead") {
+      stateT -= dt;
+      updateGround(dt); updateAir(dt);
+      for (const b of bullets) { b.x += b.vx * dt; b.y += b.vy * dt; }
+      if (stateT <= 0) {
+        if (lives <= 0) { gameOver(); return; }
+        bullets = []; air = air.filter((e) => e.y < 60);
+        spawnPlayer(); state = "play";
+      }
+      return;
+    }
+    if (window.__bot) window.__bot(dt);
+    if (state === "play") updatePlayer(dt);
+    // the land ahead fills up
+    while (nextG < camY + H + 80) spawnGround();
+    if (!solDone && camY + H + 40 > areaStart()) { solDone = true; spawnSol(); }
+    if (!bossSpawned && camY + H + 90 >= areaStart() + BOSS_AT) { bossSpawned = true; spawnBoss(); }
+    if (state === "play") {
+      const bossOn = ground.some((g) => g.kind === "boss" && g.hp > 0);
+      waveT -= dt;
+      if (waveT <= 0) { waveT = Math.max(1.1, 2.5 - 0.15 * area) / diff.dens * (bossOn ? 1.8 : 1) * rnd(0.8, 1.2); spawnWave(); }
+    }
+    updateGround(dt);
+    updateAir(dt);
+    updateShots(dt);
+    const lk = state === "play" && targetUnderSight();
+    if (lk && !locked) sfx.lock();
+    locked = lk;
+    if (camY >= areaStart() + AREA_LEN) {
+      area++; bossSpawned = false; solDone = false;
+      sfx.area();
+      message = { text: `AREA ${area}`, sub: area === 2 ? "arrivano i blindati e i carri che scappano dal mirino" : area === 3 ? "fortini e inseguitori" : "sempre più nemici", t: 0 };
+    }
+  }
+
+  // ---------- Drawing ----------
+  function drawLand() {
+    ctx.fillStyle = "#8a9a5a"; ctx.fillRect(0, 0, W, H);
+    // fields
+    const c0 = Math.floor(camY / CELL) - 1, rows = Math.ceil(H / CELL) + 2;
+    for (let r = 0; r < rows; r++) {
+      const cy = c0 + r, y = sy(cy * CELL);
+      for (let cx = 0; cx < W / CELL + 1; cx++) {
+        const f = forest(cx, cy), x = cx * CELL;
+        if (f < 0.34) { ctx.fillStyle = "#9aa868"; ctx.fillRect(x, y - CELL, CELL, CELL); }
+        if (f > 0.56) {
+          ctx.fillStyle = "#2e5a2a"; ctx.beginPath(); ctx.arc(x + CELL / 2, y - CELL / 2, CELL * 0.72, 0, TAU); ctx.fill();
+        }
+      }
+    }
+    for (let r = 0; r < rows; r++) {
+      const cy = c0 + r, y = sy(cy * CELL);
+      for (let cx = 0; cx < W / CELL + 1; cx++) {
+        if (forest(cx, cy) <= 0.6) continue;
+        const x = cx * CELL, h = hash(cx, cy);
+        ctx.fillStyle = "#3e6e32"; ctx.beginPath(); ctx.arc(x + 8 + h * 12, y - CELL + 10 + h * 8, 7, 0, TAU); ctx.arc(x + 20 - h * 6, y - 10, 6, 0, TAU); ctx.fill();
+      }
+    }
+    // the river
+    const bank = [];
+    for (let y = -20; y <= H + 20; y += 10) { const wy = wyOf(y), w = riverW(wy); bank.push([riverX(wy), y, w]); }
+    for (const [extra, col] of [[7, "#c8b87a"], [0, "#3a6ab0"]]) {
+      ctx.fillStyle = col; ctx.beginPath();
+      let open = false;
+      for (let i = 0; i < bank.length - 1; i++) {
+        const [x1, y1, w1] = bank[i], [x2, y2, w2] = bank[i + 1];
+        if (w1 <= 0 && w2 <= 0) continue;
+        const a = w1 > 0 ? w1 / 2 + extra : 0, b = w2 > 0 ? w2 / 2 + extra : 0;
+        ctx.moveTo(x1 - a, y1); ctx.lineTo(x2 - b, y2); ctx.lineTo(x2 + b, y2); ctx.lineTo(x1 + a, y1); ctx.closePath(); open = true;
+      }
+      if (open) ctx.fill();
+    }
+    ctx.strokeStyle = "rgba(255,255,255,0.25)"; ctx.lineWidth = 1; ctx.beginPath();
+    for (const [x, y, w] of bank) if (w > 10 && Math.floor((y + camY) / 10) % 3 === 0) { ctx.moveTo(x - w / 4, y); ctx.lineTo(x - w / 4 + 6, y); }
+    ctx.stroke();
+    // roads
+    for (let k = Math.floor(camY / ROAD); k <= Math.floor((camY + H) / ROAD) + 1; k++) {
+      const y = sy(k * ROAD); if (y < -20 || y > H + 20) continue;
+      ctx.fillStyle = "#6a6a5a"; ctx.fillRect(0, y - 8, W, 16);
+      ctx.fillStyle = "#a8a890"; for (let x = (k * 37) % 30; x < W; x += 30) ctx.fillRect(x, y - 1, 14, 2);
+    }
+    // the lines drawn on the plain
+    ctx.strokeStyle = "rgba(240,230,190,0.35)"; ctx.lineWidth = 2;
+    for (let k = Math.floor(camY / 1300); k <= Math.floor((camY + H) / 1300) + 1; k++) {
+      const y = sy(k * 1300 + 650), x = 60 + hash(k, 7) * (W - 120);
+      if (y < -80 || y > H + 80) continue;
+      ctx.beginPath(); ctx.arc(x, y, 34, 0, TAU); ctx.moveTo(x - 50, y + 50); ctx.lineTo(x, y); ctx.lineTo(x + 50, y + 50); ctx.stroke();
+    }
+  }
+  function drawGround(g) {
+    const [x, y] = groundPos(g);
+    if (y < -110 || y > H + 110) return;
+    if (g.hp <= 0) {
+      if (g.kind === "sol") drawSol(x, y, Math.min(1, g.dead / 0.6));
+      else if (g.kind !== "boss" && g.kind !== "turret" && g.kind !== "core") { ctx.fillStyle = "rgba(40,30,20,0.55)"; ctx.beginPath(); ctx.ellipse(x, y, 11, 8, 0, 0, TAU); ctx.fill(); }
+      return;
+    }
+    ctx.save(); ctx.translate(x, y);
+    if (g.kind === "barra") {
+      ctx.fillStyle = "#b8b8c0"; ctx.beginPath(); ctx.moveTo(-10, 0); ctx.lineTo(0, -10); ctx.lineTo(10, 0); ctx.lineTo(0, 10); ctx.closePath(); ctx.fill();
+      ctx.fillStyle = "#7a7a88"; ctx.beginPath(); ctx.moveTo(0, -10); ctx.lineTo(10, 0); ctx.lineTo(0, 10); ctx.closePath(); ctx.fill();
+      ctx.fillStyle = "#ff4a4a"; ctx.fillRect(-1.5, -1.5, 3, 3);
+    } else if (g.kind === "zolbak") {
+      ctx.fillStyle = "#5a5a68"; ctx.fillRect(-9, -9, 18, 18);
+      ctx.save(); ctx.rotate(g.t * 2); ctx.fillStyle = "#e8e8f0"; ctx.fillRect(-8, -2, 16, 4); ctx.restore();
+      ctx.fillStyle = "#ffd23a"; ctx.beginPath(); ctx.arc(0, 0, 2.5, 0, TAU); ctx.fill();
+    } else if (g.kind === "logram" || g.kind === "turret") {
+      ctx.fillStyle = "#4a4a58"; ctx.beginPath(); ctx.arc(0, 0, 10, 0, TAU); ctx.fill();
+      const open = g.cd < 0.5;
+      ctx.fillStyle = open ? "#ff5a3a" : "#9a9aa8"; ctx.beginPath(); ctx.arc(0, 0, open ? 6 : 5, 0, TAU); ctx.fill();
+      ctx.strokeStyle = "#2a2a34"; ctx.lineWidth = 1.5; ctx.beginPath(); ctx.arc(0, 0, 10, 0, TAU); ctx.stroke();
+    } else if (g.kind === "domogram") {
+      ctx.fillStyle = "#6a4a8a"; ctx.fillRect(-12, -8, 24, 16);
+      ctx.fillStyle = "#9a7ac8"; ctx.beginPath(); ctx.arc(0, 0, 6, 0, TAU); ctx.fill();
+      ctx.fillStyle = "#2a2a34"; ctx.fillRect(-12, -9, 24, 3); ctx.fillRect(-12, 6, 24, 3);
+      ctx.fillStyle = g.cd < 0.5 ? "#ff5a3a" : "#e8e8f0"; ctx.fillRect(-1.5, -1.5, 3, 3);
+    } else if (g.kind === "grobda") {
+      ctx.fillStyle = "#3a6a4a"; ctx.fillRect(-9, -11, 18, 22);
+      ctx.fillStyle = "#1a2a1a"; ctx.fillRect(-11, -11, 3, 22); ctx.fillRect(8, -11, 3, 22);
+      ctx.fillStyle = "#6aa87a"; ctx.beginPath(); ctx.arc(0, 0, 5, 0, TAU); ctx.fill(); ctx.fillRect(-1.5, -12, 3, 8);
+    } else if (g.kind === "derota") {
+      ctx.fillStyle = "#5a4a3a"; ctx.beginPath(); for (let i = 0; i < 8; i++) { const a = i / 8 * TAU + Math.PI / 8; ctx.lineTo(Math.cos(a) * 15, Math.sin(a) * 15); } ctx.closePath(); ctx.fill();
+      ctx.fillStyle = "#8a7a6a"; ctx.beginPath(); ctx.arc(0, 0, 9, 0, TAU); ctx.fill();
+      ctx.fillStyle = g.cd < 0.6 ? "#ff5a3a" : "#3a2a1a"; for (const a of [0, 2.1, 4.2]) ctx.fillRect(Math.cos(a + g.t) * 5 - 2, Math.sin(a + g.t) * 5 - 2, 4, 4);
+    } else if (g.kind === "boss") {
+      ctx.fillStyle = "rgba(0,0,0,0.3)"; ctx.beginPath(); ctx.ellipse(10, 14, 92, 72, 0, 0, TAU); ctx.fill();
+      ctx.fillStyle = "#6a6a78"; ctx.beginPath(); for (let i = 0; i < 8; i++) { const a = i / 8 * TAU + Math.PI / 8; ctx.lineTo(Math.cos(a) * 88, Math.sin(a) * 66); } ctx.closePath(); ctx.fill();
+      ctx.fillStyle = "#8a8a98"; ctx.beginPath(); for (let i = 0; i < 8; i++) { const a = i / 8 * TAU + Math.PI / 8; ctx.lineTo(Math.cos(a) * 70, Math.sin(a) * 50); } ctx.closePath(); ctx.fill();
+      ctx.strokeStyle = "#4a4a58"; ctx.lineWidth = 2; ctx.beginPath(); ctx.moveTo(-70, 0); ctx.lineTo(70, 0); ctx.moveTo(0, -50); ctx.lineTo(0, 50); ctx.stroke();
+      for (let i = 0; i < 8; i++) { const a = i / 8 * TAU + g.t; ctx.fillStyle = Math.sin(g.t * 5 + i) > 0 ? "#ffd23a" : "#8a6a2a"; ctx.fillRect(Math.cos(a) * 78 - 2, Math.sin(a) * 58 - 2, 4, 4); }
+    } else if (g.kind === "core") {
+      ctx.fillStyle = "#2a2a34"; ctx.beginPath(); ctx.arc(0, 0, 14, 0, TAU); ctx.fill();
+      ctx.fillStyle = `hsl(${(g.t * 120) % 360},80%,60%)`; ctx.beginPath(); ctx.arc(0, 0, 9, 0, TAU); ctx.fill();
+      ctx.fillStyle = "#ffffff"; ctx.beginPath(); ctx.arc(-3, -3, 2.5, 0, TAU); ctx.fill();
+    } else if (g.kind === "sol" && !g.hidden) drawSol(0, 0, 1);
+    ctx.restore();
+  }
+  function drawSol(x, y, f) {
+    ctx.fillStyle = "#c8a83a"; ctx.fillRect(x - 7, y - 20 * f, 14, 20 * f + 6);
+    ctx.fillStyle = "#ffd23a"; ctx.fillRect(x - 7, y - 20 * f, 6, 20 * f + 6);
+    ctx.fillStyle = "#fff4b0"; ctx.beginPath(); ctx.moveTo(x - 8, y - 20 * f); ctx.lineTo(x, y - 20 * f - 8); ctx.lineTo(x + 8, y - 20 * f); ctx.closePath(); ctx.fill();
+  }
+  function drawAir(e) {
+    ctx.save(); ctx.translate(e.x, e.y);
+    ctx.fillStyle = "rgba(0,0,0,0.25)"; ctx.beginPath(); ctx.ellipse(14, 22, 8, 5, 0, 0, TAU); ctx.fill();
+    if (e.kind === "toroid") {
+      ctx.rotate(e.t * 8); ctx.strokeStyle = "#e8e8f0"; ctx.lineWidth = 4; ctx.beginPath(); ctx.ellipse(0, 0, 8, 5, 0, 0, TAU); ctx.stroke();
+      ctx.strokeStyle = "#8a8aa8"; ctx.lineWidth = 1.5; ctx.beginPath(); ctx.ellipse(0, 0, 8, 5, 0, 0, Math.PI); ctx.stroke();
+    } else if (e.kind === "torkan") {
+      ctx.fillStyle = "#c8c8d8"; ctx.beginPath(); ctx.moveTo(0, 11); ctx.lineTo(-10, -6); ctx.lineTo(0, -2); ctx.lineTo(10, -6); ctx.closePath(); ctx.fill();
+      ctx.fillStyle = e.mode === 1 ? "#ff4a4a" : "#5a5a78"; ctx.beginPath(); ctx.arc(0, 1, 3.5, 0, TAU); ctx.fill();
+    } else if (e.kind === "kapi") {
+      ctx.fillStyle = "#3aa8e8"; ctx.beginPath(); ctx.moveTo(0, 10); ctx.lineTo(-12, -4); ctx.lineTo(-4, -2); ctx.lineTo(0, -9); ctx.lineTo(4, -2); ctx.lineTo(12, -4); ctx.closePath(); ctx.fill();
+      ctx.fillStyle = "#e8f8ff"; ctx.beginPath(); ctx.arc(0, 1, 2.5, 0, TAU); ctx.fill();
+    } else {
+      ctx.rotate(e.t * 5); ctx.fillStyle = "#d83a6a";
+      for (let i = 0; i < 4; i++) { ctx.rotate(TAU / 4); ctx.fillRect(-2, -10, 4, 10); }
+      ctx.fillStyle = "#ffb0c8"; ctx.beginPath(); ctx.arc(0, 0, 4, 0, TAU); ctx.fill();
+    }
+    ctx.restore();
+  }
+  function drawShip() {
+    const blink = P.safe > 0 && Math.floor(clock * 10) % 2;
+    ctx.fillStyle = "rgba(0,0,0,0.3)"; ctx.beginPath(); ctx.ellipse(P.x + 16, P.y + 26, 10, 6, 0, 0, TAU); ctx.fill();
+    if (blink) return;
+    ctx.save(); ctx.translate(P.x, P.y); ctx.scale(1 - Math.abs(P.tilt) * 0.2, 1);
+    ctx.fillStyle = "#e8e8f0"; ctx.beginPath(); ctx.moveTo(0, -15); ctx.lineTo(13, 11); ctx.lineTo(4, 7); ctx.lineTo(0, 12); ctx.lineTo(-4, 7); ctx.lineTo(-13, 11); ctx.closePath(); ctx.fill();
+    ctx.fillStyle = "#9a9aa8"; ctx.beginPath(); ctx.moveTo(0, -15); ctx.lineTo(13, 11); ctx.lineTo(4, 7); ctx.lineTo(0, 12); ctx.closePath(); ctx.fill();
+    ctx.fillStyle = "#e83a3a"; ctx.beginPath(); ctx.moveTo(0, -6); ctx.lineTo(4, 3); ctx.lineTo(-4, 3); ctx.closePath(); ctx.fill();
+    ctx.fillStyle = "#3a8ae8"; ctx.fillRect(-9, 6, 3, 3); ctx.fillRect(6, 6, 3, 3);
+    ctx.restore();
+  }
+  function drawSight() {
+    const x = P.x, y = P.y - SIGHT, s = 11;
+    const on = locked && Math.floor(clock * 10) % 2 === 0;
+    ctx.strokeStyle = on ? "#ff3a3a" : locked ? "#ff9a9a" : "rgba(255,255,255,0.85)"; ctx.lineWidth = 2;
+    ctx.beginPath();
+    for (const [dx, dy] of [[-1, -1], [1, -1], [1, 1], [-1, 1]]) { ctx.moveTo(x + dx * s, y + dy * (s - 5)); ctx.lineTo(x + dx * s, y + dy * s); ctx.lineTo(x + dx * (s - 5), y + dy * s); }
+    ctx.stroke();
+    if (locked) { ctx.fillStyle = "rgba(255,58,58,0.25)"; ctx.fillRect(x - s, y - s, 2 * s, 2 * s); }
+    ctx.fillStyle = "rgba(255,255,255,0.8)"; ctx.fillRect(x - 1, y - 1, 2, 2);
+  }
+  function drawHud() {
+    ctx.fillStyle = "rgba(10,14,24,0.9)"; ctx.fillRect(0, 0, W, TOP);
+    ctx.textBaseline = "middle"; ctx.textAlign = "left";
+    ctx.fillStyle = "#f4f6ee"; ctx.font = "900 16px system-ui"; ctx.fillText(score.toLocaleString("it-IT"), 10, 13);
+    ctx.fillStyle = "#a8a8b8"; ctx.font = "700 9px system-ui"; ctx.fillText(`REC ${Math.max(bestCache, score).toLocaleString("it-IT")}`, 10, 29);
+    ctx.fillStyle = "#ffb03a"; ctx.font = "900 11px system-ui"; ctx.fillText(`AREA ${area}`, 110, 13);
+    // how far to the end of the area
+    const f = clamp((camY - areaStart()) / AREA_LEN, 0, 1), bx = 110, bw = touchMode ? 120 : 150;
+    ctx.fillStyle = "#2a2e3a"; ctx.fillRect(bx, 25, bw, 6);
+    ctx.fillStyle = "#ffb03a"; ctx.fillRect(bx, 25, bw * f, 6);
+    ctx.fillStyle = "#ff5a5a"; ctx.fillRect(bx + bw * (BOSS_AT / AREA_LEN) - 1, 23, 2, 10);
+    ctx.fillStyle = bomb ? "#5a5a68" : "#ffd23a"; ctx.font = "900 9px system-ui"; ctx.fillText(bomb ? "BOMBA…" : "BOMBA", bx + bw + 8, 28);
+    const lx = touchMode ? W - 58 : W - 14;
+    for (let i = 0; i < Math.min(lives - (state === "dead" ? 0 : 1), 6); i++) {
+      const cx = lx - i * 14; ctx.fillStyle = "#e8e8f0";
+      ctx.beginPath(); ctx.moveTo(cx, 7); ctx.lineTo(cx + 6, 19); ctx.lineTo(cx, 16); ctx.lineTo(cx - 6, 19); ctx.closePath(); ctx.fill();
+    }
+    ctx.textBaseline = "alphabetic";
+  }
+  function draw() {
+    ctx.setTransform(pxRatio, 0, 0, pxRatio, 0, 0);
+    drawLand();
+    // the mothership hovers over the land, its cannons and core on top of it
+    for (const g of ground) if (g.kind !== "boss" && !g.boss) drawGround(g);
+    for (const g of ground) if (g.kind === "boss") drawGround(g);
+    for (const g of ground) if (g.boss) drawGround(g);
+    for (const p of parts) if (p.g) drawPart(p);
+    if (state !== "menu" && P) {
+      if (state !== "dead") drawSight();
+      if (bomb) { const f = Math.min(1, bomb.t / BOMB_T), r = 4 - f * 1.5; ctx.fillStyle = "#ffd23a"; ctx.beginPath(); ctx.arc(bomb.x, bomb.y, r, 0, TAU); ctx.fill(); ctx.fillStyle = "#8a5a1a"; ctx.beginPath(); ctx.arc(bomb.x, bomb.y, r * 0.5, 0, TAU); ctx.fill(); }
+    }
+    for (const b of bullets) { ctx.fillStyle = "#ffffff"; ctx.beginPath(); ctx.arc(b.x, b.y, 3.2, 0, TAU); ctx.fill(); ctx.fillStyle = "#ff5a3a"; ctx.beginPath(); ctx.arc(b.x, b.y, 1.8, 0, TAU); ctx.fill(); }
+    for (const e of air) drawAir(e);
+    if (state !== "menu" && P && state !== "dead") drawShip();
+    ctx.fillStyle = "#fff8b0"; for (const s of shots) ctx.fillRect(s.x - 1, s.y - 6, 2, 9);
+    for (const p of parts) if (!p.g) drawPart(p);
+    ctx.globalAlpha = 1;
+    for (const p of popups) {
+      ctx.globalAlpha = Math.max(0, 1 - p.t / 1.1);
+      ctx.textAlign = "center"; ctx.font = "900 11px system-ui";
+      ctx.lineWidth = 3; ctx.strokeStyle = "#0a0e18"; ctx.strokeText(p.text, p.x, p.y); ctx.fillStyle = p.color; ctx.fillText(p.text, p.x, p.y);
+    }
+    ctx.globalAlpha = 1;
+    if (state === "menu") return;
+    drawHud();
+    if (message) {
+      ctx.globalAlpha = Math.min(1, (2.4 - message.t) * 2);
+      ctx.fillStyle = "rgba(0,0,0,0.55)"; ctx.fillRect(0, 230, W, 58);
+      ctx.textAlign = "center"; ctx.font = "italic 900 24px system-ui"; ctx.fillStyle = "#ffb03a";
+      ctx.lineWidth = 5; ctx.strokeStyle = "#0a0e18"; ctx.strokeText(message.text, W / 2, 258); ctx.fillText(message.text, W / 2, 258);
+      if (message.sub) { ctx.font = "800 11px system-ui"; ctx.fillStyle = "#f4f6ee"; ctx.fillText(message.sub, W / 2, 277); }
+      ctx.globalAlpha = 1;
+    }
+  }
+  function drawPart(p) {
+    ctx.globalAlpha = Math.max(0, 1 - p.t / p.life);
+    if (p.ring) { ctx.strokeStyle = "#fff4b0"; ctx.lineWidth = 3; ctx.beginPath(); ctx.arc(p.x, p.y, 4 + p.t / p.life * BOMB_R, 0, TAU); ctx.stroke(); }
+    else { ctx.fillStyle = p.c; ctx.fillRect(p.x - 1.5, p.y - 1.5, 3, 3); }
+    ctx.globalAlpha = 1;
+  }
+
+  // ---------- Loop ----------
+  const STEP = 1 / 120;
+  let last = performance.now(), acc = 0;
+  function frame(now) {
+    const dt = Math.min(0.1, (now - last) / 1000);
+    last = now;
+    if (isPlaying()) {
+      acc += dt;
+      while (acc >= STEP && isPlaying()) { update(STEP); acc -= STEP; }
+    } else { acc = 0; update(dt); }
+    draw();
+    requestAnimationFrame(frame);
+  }
+  syncControls();
+  showTitle();
+  requestAnimationFrame(frame);
+})();
+</script>
+<script src="../../shared/iniziali.js" data-record="mirino-best-" data-kind="score"></script>
+</body>
+</html>
