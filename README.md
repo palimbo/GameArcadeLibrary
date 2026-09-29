@@ -4,7 +4,7 @@ Raccolta di giochi arcade per il browser. Ogni gioco è un singolo file HTML sen
 
 ## 🕹️ Sala Giochi — `index.html`
 
-Apri `index.html` nella cartella principale per la pagina di raccolta: mostra tutti i 98 giochi con copertina, genere, comandi e i tuoi record per ogni difficoltà (Facile, Normale, Difficile). Tocca «Gioca» per avviare un gioco; in ogni gioco il pulsante «← Sala Giochi» in alto a sinistra (visibile nei menu) riporta alla raccolta.
+Apri `index.html` nella cartella principale per la pagina di raccolta: mostra tutti i 99 giochi con copertina, genere, comandi e i tuoi record per ogni difficoltà (Facile, Normale, Difficile). Tocca «Gioca» per avviare un gioco; in ogni gioco il pulsante «← Sala Giochi» in alto a sinistra (visibile nei menu) riporta alla raccolta.
 
 **Iniziali del record:** quando batti un record compare la schermata da sala giochi per inserire le tue tre iniziali (frecce ↑ ↓ per cambiare lettera, ← → per spostarti, oppure scrivile direttamente; su telefono i tasti ▲ ▼ e OK). Le iniziali vengono salvate insieme al record e compaiono nei menu del gioco e nella Sala Giochi. Il codice è condiviso da tutti i giochi in `shared/iniziali.js`.
 
@@ -1528,3 +1528,17 @@ Puzzle a sfida in stile *Puyo Puyo*: due campi affiancati, il tuo a sinistra e q
 - **Touch:** levetta (giù per scendere, su per ruotare) e pulsante RUOTA
 
 Per giocare apri `games/sfida-delle-gelatine/index.html` nel browser.
+
+### 🖌️ Pennello Svelto — `games/pennello-svelto/index.html`
+
+Labirinto da dipingere in stile *Amidar*. Un imbianchino col rullo corre lungo le linee di una griglia: ogni tratto che percorre da un incrocio all'altro resta dipinto di giallo, e quando un riquadro ha tutti i lati dipinti si riempie di colore. Le linee verticali cambiano da una fascia all'altra, quindi i riquadri hanno forme diverse, e ogni livello ha una griglia nuova.
+
+- **Punti:** 10 per ogni tratto dipinto, 50 × livello per ogni riquadro riempito; griglia completata: 500 × livello + 200 per ogni salto avanzato
+- **Guardiani:** scendono a zig-zag (lungo una linea fino al primo tratto verticale, un passo su o giù, poi avanti), e dal secondo livello (dal terzo su Facile, da subito su Difficile) uno gira di continuo lungo il bordo. Se ti prendono perdi una vita, ma i tratti dipinti restano
+- **Salto:** per un attimo tutti i guardiani saltano e puoi passare sotto di loro; i salti sono pochi e si ricaricano a ogni vita
+- **Quattro angoli:** riempi i riquadri dei quattro angoli e per qualche secondo i guardiani scappano, blu: acchiappali (200, 400, 800…)
+- **Difficoltà:** Facile (5 vite, 5 salti, guardiani lenti), Normale (3 vite, 3 salti), Difficile (3 vite, 2 salti, guardiani svelti e più numerosi); record separati per ogni difficoltà. Vita extra ogni 25.000 punti
+- **Comandi:** frecce o `WASD` per correre (tieni premuta in anticipo la direzione della prossima svolta) · `Spazio`, `J` o `Z` salta · `P` pausa
+- **Touch:** levetta per correre e pulsante SALTA
+
+Per giocare apri `games/pennello-svelto/index.html` nel browser.
