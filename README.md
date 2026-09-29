@@ -4,7 +4,7 @@ Raccolta di giochi arcade per il browser. Ogni gioco è un singolo file HTML sen
 
 ## 🕹️ Sala Giochi — `index.html`
 
-Apri `index.html` nella cartella principale per la pagina di raccolta: mostra tutti i 92 giochi con copertina, genere, comandi e i tuoi record per ogni difficoltà (Facile, Normale, Difficile). Tocca «Gioca» per avviare un gioco; in ogni gioco il pulsante «← Sala Giochi» in alto a sinistra (visibile nei menu) riporta alla raccolta.
+Apri `index.html` nella cartella principale per la pagina di raccolta: mostra tutti i 93 giochi con copertina, genere, comandi e i tuoi record per ogni difficoltà (Facile, Normale, Difficile). Tocca «Gioca» per avviare un gioco; in ogni gioco il pulsante «← Sala Giochi» in alto a sinistra (visibile nei menu) riporta alla raccolta.
 
 **Iniziali del record:** quando batti un record compare la schermata da sala giochi per inserire le tue tre iniziali (frecce ↑ ↓ per cambiare lettera, ← → per spostarti, oppure scrivile direttamente; su telefono i tasti ▲ ▼ e OK). Le iniziali vengono salvate insieme al record e compaiono nei menu del gioco e nella Sala Giochi. Il codice è condiviso da tutti i giochi in `shared/iniziali.js`.
 
@@ -1442,3 +1442,18 @@ Puzzle d'azione in stile *Klax*. Le tessere colorate rotolano una capriola dopo 
 - **Touch:** levetta (su per rilanciare) e pulsante LANCIA, oppure tocca direttamente il nastro o un cassone
 
 Per giocare apri `games/rampa-dei-colori/index.html` nel browser.
+
+### 🧲 Raggio Traente — `games/raggio-traente/index.html`
+
+Astronave a gravità in stile *Thrust*. Scendi con la tua navicella nelle caverne di un pianeta, aggancia la sfera di energia posata sul suo piedistallo e riportala fuori, oltre la linea tratteggiata nel cielo. La gravità ti tira sempre giù e la sfera appesa a un'asta rigida dondola sotto la nave: bisogna guidare con delicatezza.
+
+- **Volo:** ruoti la nave e accendi il motore, che spinge nella direzione del muso. Con la sfera agganciata la nave è più pesante e sale più lentamente
+- **Raggio traente:** passa lentamente poco sopra la sfera e si aggancia da sola. Stando sopra un serbatoio FUEL fai il pieno (300 punti a serbatoio vuotato). Senza carburante la nave precipita; ogni nave nuova porta comunque una piccola riserva
+- **Pericoli:** le rocce e i cannoni sulle pareti. Un cannone che ti ha nel mirino si illumina un attimo prima di sparare; abbatterlo vale 750. Sfiorare piano la roccia fa solo rimbalzare (su Facile e Normale), un urto deciso distrugge nave e sfera
+- **Reattore:** ogni colpo zittisce i cannoni per qualche secondo; se lo distruggi, parte il conto alla rovescia e devi scappare prima che il pianeta esploda (3.000, e la missione vale anche senza sfera)
+- **Pianeti:** 6 caverne sempre più profonde e armate, poi si ricomincia con la gravità più forte e i cannoni più svelti. Sfera recuperata 2.000 + 500 per pianeta; nave extra ogni 10.000 punti
+- **Difficoltà:** Facile (5 navi, cannoni lenti e imprecisi, gravità leggera, urti leggeri perdonati), Normale (4 navi), Difficile (3 navi, cannoni svelti e precisi, gravità forte, basta sfiorare la roccia); record separati per ogni difficoltà
+- **Comandi:** `←` `→` ruota · `↑` motore · `Spazio`, `J` o `Z` spara (tieni premuto) · `P` pausa
+- **Touch:** la levetta punta il muso dove vuoi, spinta fino in fondo accende anche il motore; pulsante FUOCO da tenere premuto
+
+Per giocare apri `games/raggio-traente/index.html` nel browser.
