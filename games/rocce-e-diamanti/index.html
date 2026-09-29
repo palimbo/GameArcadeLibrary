@@ -1,0 +1,685 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no, viewport-fit=cover">
+<title>Rocce e Diamanti</title>
+<style>
+  :root {
+    --bg: #120e0a;
+    --fg: #f4f6ee;
+    --muted: #a8b4a8;
+    --pink: #5ae0ff;
+    --yellow: #ffd23a;
+    --red: #ff4a3a;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  html, body {
+    height: 100%;
+    background: var(--bg);
+    color: var(--fg);
+    font-family: system-ui, -apple-system, "Segoe UI", sans-serif;
+    overflow: hidden;
+    user-select: none;
+    -webkit-user-select: none;
+    touch-action: none;
+  }
+  #wrap { position: fixed; inset: 0; display: flex; align-items: center; justify-content: center; }
+  canvas { display: block; touch-action: none; border-radius: 6px; box-shadow: 0 0 0 2px #3a2a1a, 0 10px 40px rgba(0,0,0,0.6); }
+  #pauseBtn {
+    position: fixed; z-index: 3; display: none; right: 10px; top: calc(10px + env(safe-area-inset-top, 0px));
+    font: 700 13px system-ui, sans-serif; color: var(--fg);
+    background: rgba(0, 0, 0, 0.6); border: 1px solid rgba(244, 246, 238, 0.35);
+    border-radius: 8px; padding: 6px 10px; cursor: pointer;
+  }
+  #touch {
+    position: fixed; z-index: 2; display: none; left: 12px; right: 12px;
+    bottom: calc(14px + env(safe-area-inset-bottom, 0px));
+    justify-content: space-between; align-items: flex-end; pointer-events: none;
+  }
+  /* thumb stick: dig in four directions; hold PRENDI and push the stick to grab what is next to you without moving */
+  #touch .stick { position: relative; width: 136px; height: 136px; border-radius: 50%; pointer-events: auto; touch-action: none;
+    border: 2px solid rgba(90, 224, 255, 0.6); background: radial-gradient(circle, rgba(90,224,255,0.14), rgba(90,224,255,0.04)); }
+  #touch .stick .knob { position: absolute; left: 50%; top: 50%; width: 58px; height: 58px; margin: -29px 0 0 -29px; border-radius: 50%;
+    background: rgba(90, 224, 255, 0.45); border: 2px solid rgba(255,255,255,0.7); box-shadow: 0 4px 10px rgba(0,0,0,0.4); pointer-events: none; }
+  #touch .stick .ring { position: absolute; inset: 10px; border-radius: 50%; border: 1px dashed rgba(244,246,238,0.25); pointer-events: none; }
+  #touch .jump { width: 96px; height: 96px; border-radius: 50%; pointer-events: auto; touch-action: none; color: var(--fg);
+    font: 800 13px system-ui, sans-serif; letter-spacing: 1px; border: 2px solid rgba(255, 210, 58, 0.9); background: rgba(255, 210, 58, 0.22); }
+  #touch .jump.on { background: rgba(255, 210, 58, 0.55); }
+  #touch.small .stick { width: 112px; height: 112px; }
+  #touch.small .stick .knob { width: 48px; height: 48px; margin: -24px 0 0 -24px; }
+  #touch.small .jump { width: 80px; height: 80px; font-size: 11px; }
+  #overlay {
+    position: fixed; inset: 0; z-index: 5;
+    display: flex; flex-direction: column; align-items: center; justify-content: flex-start;
+    gap: 14px; padding: 16px; text-align: center; overflow-y: auto;
+    background: rgba(18, 14, 10, 0.93);
+  }
+  #overlay > :first-child { margin-top: auto; }
+  #overlay > :last-child { margin-bottom: auto; }
+  #overlay.hidden { display: none; }
+  #homeLink {
+    position: fixed; top: calc(10px + env(safe-area-inset-top, 0px)); left: 10px; z-index: 6;
+    font: 600 13px/1 system-ui, sans-serif; color: #fff; text-decoration: none;
+    padding: 8px 12px; border-radius: 999px; background: rgba(0,0,0,.55);
+    border: 1px solid rgba(255,255,255,.25);
+  }
+  #homeLink:hover { background: rgba(0,0,0,.8); }
+  #overlay.hidden ~ #homeLink { display: none; }
+  @media (max-width: 700px) { #overlay { padding-top: calc(52px + env(safe-area-inset-top, 0px)); } }
+  #overlay h1 { font-size: clamp(32px, 10vw, 58px); font-weight: 900; font-style: italic; letter-spacing: 1px; color: var(--pink);
+    text-shadow: 3px 3px 0 #0a3a4a, 0 0 22px rgba(90,224,255,0.35); }
+  #overlay h2 { font-size: clamp(26px, 7vw, 42px); font-weight: 900; letter-spacing: 2px; color: var(--pink); }
+  #overlay h2.lose { color: var(--red); }
+  #overlay p { max-width: 540px; font-size: clamp(13px, 3.4vw, 16px); line-height: 1.55; }
+  #overlay p.muted { color: var(--muted); }
+  #overlay .pts { display: grid; grid-template-columns: repeat(2, auto); gap: 4px 18px; font-size: 13px; color: var(--muted); text-align: left; max-width: 560px; }
+  #overlay .pts b { color: var(--fg); }
+  #overlay .diff { display: flex; gap: 10px; flex-wrap: wrap; justify-content: center; }
+  #overlay button {
+    font: 800 15px system-ui, sans-serif; letter-spacing: 1.5px; color: var(--fg);
+    background: transparent; cursor: pointer;
+    border: 2px solid rgba(244,246,238,0.3); border-radius: 10px; padding: 9px 16px;
+  }
+  #overlay .diff button.on { border-color: var(--c); color: var(--c); box-shadow: 0 0 12px var(--c); }
+  #overlay button.start { border-color: var(--pink); color: #04202a; background: var(--pink); padding: 11px 30px; box-shadow: 0 4px 0 #1a8aa8; }
+  @media (max-height: 560px) {
+    #overlay { gap: 8px; }
+    #overlay h1 { font-size: 30px; }
+    #overlay p { font-size: 13px; line-height: 1.4; }
+    #overlay .help, #overlay .pts { display: none; }
+  }
+</style>
+</head>
+<body>
+<div id="wrap"><canvas id="game"></canvas></div>
+<div id="touch">
+  <div class="stick" aria-label="Levetta"><div class="ring"></div><div class="knob"></div></div>
+  <button type="button" class="jump" aria-label="Prendi">PRENDI</button>
+</div>
+<button id="pauseBtn" type="button" aria-label="Pausa">❚❚</button>
+<div id="overlay"></div>
+<a id="homeLink" href="../../index.html">← Sala Giochi</a>
+
+<script>
+(() => {
+  "use strict";
+
+  const W = 640, H = 360, TAU = Math.PI * 2, TOP = 28, TS = 20;
+  const GW = 40, GH = 22;
+  const EMPTY = 0, DIRT = 1, BRICK = 2, STEEL = 3, ROCK = 4, GEM = 5, EXIT = 6, FLY = 7, BUTTER = 8, AMOEBA = 9, BOOM = 10, BOOMGEM = 11, MINER = 12;
+  const DIRS = [[0, -1], [1, 0], [0, 1], [-1, 0]];
+  const PALETTES = [
+    { dirt: "#8a5a2a", dirt2: "#6a4220", brick: "#b85a3a", steel: "#8a8a9a", bg: "#120e0a" },
+    { dirt: "#5a6a9a", dirt2: "#44507a", brick: "#9a5ab8", steel: "#8a9aaa", bg: "#0a0c16" },
+    { dirt: "#4a7a3a", dirt2: "#36602a", brick: "#b8903a", steel: "#9a9a8a", bg: "#0a120a" },
+    { dirt: "#9a3a3a", dirt2: "#7a2a2a", brick: "#5a8ab8", steel: "#9a8a8a", bg: "#160a0a" },
+  ];
+
+  const DIFFICULTIES = {
+    facile:    { label: "FACILE",    color: "#7ed87a", desc: "5 vite · più tempo · servono meno diamanti · caverna più lenta", lives: 5, tick: 0.17, time: 1.5, need: 0.8 },
+    normale:   { label: "NORMALE",   color: "#5ae0ff", desc: "3 vite", lives: 3, tick: 0.14, time: 1, need: 1 },
+    difficile: { label: "DIFFICILE", color: "#ff5a5a", desc: "3 vite · meno tempo · servono più diamanti · caverna più svelta", lives: 3, tick: 0.12, time: 0.8, need: 1.15 },
+  };
+  const DIFF_IDS = Object.keys(DIFFICULTIES);
+  const DIFF_KEY = "rocce-difficulty";
+  const bestKey = (id) => `rocce-best-${id}`;
+  function store(k, v) { try { localStorage.setItem(k, v); } catch { /* ignore */ } }
+  function load(k) { try { return localStorage.getItem(k); } catch { return null; } }
+  const rnd = (a, b) => a + Math.random() * (b - a);
+  const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
+  const sign = (v) => (v < 0 ? -1 : 1);
+  function rng(seed) {
+    let a = seed >>> 0;
+    return () => { a = (a + 0x6d2b79f5) >>> 0; let t = a; t = Math.imul(t ^ (t >>> 15), t | 1); t ^= t + Math.imul(t ^ (t >>> 7), t | 61); return ((t ^ (t >>> 14)) >>> 0) / 4294967296; };
+  }
+
+  // ---------- Canvas ----------
+  const canvas = document.getElementById("game");
+  const ctx = canvas.getContext("2d");
+  const wrapEl = document.getElementById("wrap");
+  const overlay = document.getElementById("overlay");
+  const touchEl = document.getElementById("touch");
+  const pauseBtn = document.getElementById("pauseBtn");
+  let pxRatio = 1, touchMode = !!(window.matchMedia && matchMedia("(pointer: coarse)").matches);
+  function resize() {
+    const portrait = window.innerHeight > window.innerWidth;
+    const showTouch = touchMode && isPlaying();
+    touchEl.style.display = showTouch ? "flex" : "none";
+    touchEl.classList.toggle("small", !portrait && window.innerHeight < 480);
+    wrapEl.style.paddingBottom = showTouch && portrait ? "calc(170px + env(safe-area-inset-bottom, 0px))" : "0";
+    let availW = window.innerWidth - 8, availH = window.innerHeight - 8;
+    if (showTouch && portrait) availH -= 170;
+    if (showTouch && !portrait) {
+      const side = Math.max(...[...touchEl.children].map((el) => el.offsetWidth)) + 20;
+      if (window.innerWidth - 2 * side > 200) availW = window.innerWidth - 2 * side;
+    }
+    const s = Math.max(0.2, Math.min(availW / W, availH / H));
+    pxRatio = Math.min(3, s * (window.devicePixelRatio || 1));
+    canvas.style.width = W * s + "px";
+    canvas.style.height = H * s + "px";
+    canvas.width = Math.round(W * pxRatio);
+    canvas.height = Math.round(H * pxRatio);
+  }
+  window.addEventListener("resize", () => syncControls());
+
+  // ---------- Audio ----------
+  let audioCtx = null;
+  function beep(freq, dur, type = "square", vol = 0.04, slide = 0, delay = 0) {
+    if (!audioCtx) return;
+    const t = audioCtx.currentTime + delay;
+    const osc = audioCtx.createOscillator(), gain = audioCtx.createGain();
+    osc.type = type;
+    osc.frequency.setValueAtTime(freq, t);
+    if (slide) osc.frequency.exponentialRampToValueAtTime(Math.max(20, freq + slide), t + dur);
+    gain.gain.setValueAtTime(vol, t);
+    gain.gain.exponentialRampToValueAtTime(0.0001, t + dur);
+    osc.connect(gain).connect(audioCtx.destination);
+    osc.start(t); osc.stop(t + dur + 0.02);
+  }
+  function noise(dur, vol, freq) {
+    if (!audioCtx) return;
+    const len = Math.floor(audioCtx.sampleRate * dur), buf = audioCtx.createBuffer(1, len, audioCtx.sampleRate), d = buf.getChannelData(0);
+    for (let i = 0; i < len; i++) d[i] = (Math.random() * 2 - 1) * (1 - i / len);
+    const src = audioCtx.createBufferSource(), f = audioCtx.createBiquadFilter(), g = audioCtx.createGain();
+    src.buffer = buf; f.type = "bandpass"; f.frequency.value = freq; g.gain.value = vol;
+    src.connect(f).connect(g).connect(audioCtx.destination); src.start();
+  }
+  const arp = (notes, gap, d, type = "square", vol = 0.04) => notes.forEach((f, i) => beep(f, d, type, vol, 0, i * gap));
+  let sfxN = 0;
+  const lim = (fn) => (...a) => { if (sfxN++ < 5) fn(...a); };
+  const sfx = {
+    dig: lim(() => noise(0.04, 0.05, 900)),
+    step: lim(() => beep(120, 0.02, "square", 0.012)),
+    rock: lim(() => { noise(0.1, 0.14, 180); }),
+    gemFall: lim(() => beep(1800 + Math.random() * 600, 0.05, "triangle", 0.02)),
+    gem: lim(() => beep(1320 + gems * 20, 0.08, "square", 0.035, 400)),
+    push: lim(() => noise(0.08, 0.08, 250)),
+    boom: lim(() => { noise(0.5, 0.2, 350); beep(90, 0.4, "sawtooth", 0.05, -40); }),
+    open: () => arp([523, 659, 784, 1047, 1319], 0.06, 0.12, "square", 0.045),
+    tick: lim(() => beep(900, 0.04, "square", 0.02)),
+    win: () => arp([523, 659, 784, 1047, 784, 1047, 1319], 0.1, 0.16),
+    die: () => arp([392, 330, 262, 196], 0.12, 0.18, "sawtooth", 0.04),
+    over: () => arp([523, 466, 415, 392, 330, 262], 0.15, 0.24, "triangle", 0.05),
+  };
+
+  // ---------- State ----------
+  let difficulty = DIFFICULTIES[load(DIFF_KEY)] ? load(DIFF_KEY) : "normale";
+  let diff = DIFFICULTIES[difficulty];
+  let state = "menu", menu = null, pausedFrom = null, stateT = 0, clock = 0;
+  let score = 0, lives = 3, cave = 0, bestCache = 0, nextLife = 5000;
+  let grid = new Uint8Array(GW * GH), dirs = new Uint8Array(GW * GH), fall = new Uint8Array(GW * GH), done = new Uint8Array(GW * GH), boomT = new Uint8Array(GW * GH);
+  let px = 2, py = 2, face = 1, alive = true, gems = 0, need = 10, gemValue = 10, timeLeft = 150, tickT = 0, exitOpen = false, exitAt = 0, pushTry = 0, amoebaT = 0, ticks = 0;
+  let camX = 0, camY = 0, parts = [], popups = [], message = null, pal = PALETTES[0], snapHeld = false;
+  const keys = { left: false, right: false, up: false, down: false };
+  const stick = { x: 0, y: 0 };
+
+  const at = (x, y) => grid[y * GW + x];
+  const set = (x, y, v) => { grid[y * GW + x] = v; };
+
+  // ---------- The caves ----------
+  // Every cave comes from its own number, so it is the same cave every time you play it.
+  function buildCave(c, tries = 0) {
+    const R = rng(c * 7919 + 13 + tries * 104729), lv = Math.min(c, 10);
+    pal = PALETTES[c % PALETTES.length];
+    grid.fill(DIRT); dirs.fill(0); fall.fill(0); boomT.fill(0);
+    const pRock = 0.1 + lv * 0.012, pGem = 0.055, pEmpty = 0.035;
+    for (let y = 1; y < GH - 1; y++) for (let x = 1; x < GW - 1; x++) {
+      const r = R();
+      set(x, y, r < pRock ? ROCK : r < pRock + pGem ? GEM : r < pRock + pGem + pEmpty ? EMPTY : DIRT);
+    }
+    // brick walls, always with ways round them
+    const lines = 2 + (c % 3) + Math.min(2, Math.floor(lv / 3));
+    for (let i = 0; i < lines; i++) {
+      if (R() < 0.65) { const y = 3 + Math.floor(R() * (GH - 6)), x0 = 2 + Math.floor(R() * (GW - 18)), len = 6 + Math.floor(R() * 10); for (let x = x0; x < x0 + len; x++) set(x, y, BRICK); }
+      else { const x = 4 + Math.floor(R() * (GW - 8)), y0 = 2 + Math.floor(R() * (GH - 12)), len = 4 + Math.floor(R() * 6); for (let y = y0; y < y0 + len; y++) set(x, y, BRICK); }
+    }
+    for (let x = 0; x < GW; x++) { set(x, 0, STEEL); set(x, GH - 1, STEEL); }
+    for (let y = 0; y < GH; y++) { set(0, y, STEEL); set(GW - 1, y, STEEL); }
+    // the miner's corner: nothing overhead, dirt around
+    px = 2 + Math.floor(R() * 3); py = 2 + Math.floor(R() * 3);
+    for (let y = py - 2; y <= py + 1; y++) for (let x = px - 1; x <= px + 1; x++) if (at(x, y) !== STEEL) set(x, y, DIRT);
+    set(px, py, MINER);
+    // creatures in their pockets, well away from the start
+    const flies = Math.min(1 + Math.floor(lv / 2), 5), butters = c >= 1 ? Math.min(1 + Math.floor((lv - 1) / 3), 3) : 0;
+    const pocket = (kind) => {
+      for (let t = 0; t < 200; t++) {
+        const x = 3 + Math.floor(R() * (GW - 6)), y = 3 + Math.floor(R() * (GH - 6));
+        if (Math.abs(x - px) + Math.abs(y - py) < 15) continue;
+        let ok = true; for (let yy = y - 2; yy <= y + 1; yy++) for (let xx = x - 1; xx <= x + 1; xx++) if ([STEEL, FLY, BUTTER, AMOEBA].includes(at(xx, yy))) ok = false;
+        if (!ok) continue;
+        for (let xx = x - 1; xx <= x + 1; xx++) { set(xx, y - 2, DIRT); for (let yy = y - 1; yy <= y + 1; yy++) set(xx, yy, EMPTY); }
+        set(x, y, kind); dirs[y * GW + x] = Math.floor(R() * 4);
+        return;
+      }
+    };
+    for (let i = 0; i < flies; i++) pocket(FLY);
+    for (let i = 0; i < butters; i++) pocket(BUTTER);
+    if (c >= 3 && c % 3 === 0) pocket(AMOEBA);
+    // loose rocks and gems over empty spaces fall at once; let them settle before the start
+    // the exit, hidden in the rock wall
+    const ey = 2 + Math.floor(R() * (GH - 4)), ex = GW - 1;
+    // a brick roof over the doorstep, so no rock can ever land in front of the exit
+    exitAt = ey * GW + ex; set(ex - 1, ey, DIRT); set(ex - 1, ey - 1, BRICK); set(ex - 2, ey, DIRT);
+    // enough gems must be reachable from the start
+    const seen = new Uint8Array(GW * GH), q = [py * GW + px]; seen[q[0]] = 1; let reach = 0, total = 0;
+    for (let i = 0; i < GW * GH; i++) if (grid[i] === GEM) total++;
+    for (let h = 0; h < q.length; h++) {
+      const k = q[h], x = k % GW, y = (k - x) / GW;
+      if (grid[k] === GEM) reach++;
+      for (const [dx, dy] of DIRS) { const kk = (y + dy) * GW + x + dx; if (!seen[kk] && ![BRICK, STEEL].includes(grid[kk])) { seen[kk] = 1; q.push(kk); } }
+    }
+    const exitReach = seen[exitAt - 1];
+    if ((!exitReach || reach < total * 0.8) && tries < 20) return buildCave(c, tries + 1);
+    need = Math.max(8, Math.round(Math.min(reach * 0.75, total * 0.5 * diff.need + butters * 3)));
+    gemValue = 10 + Math.min(lv, 8) * 5;
+    timeLeft = Math.round(Math.max(90, 150 - lv * 5) * diff.time);
+    gems = 0; exitOpen = false; alive = true; pushTry = 0; amoebaT = 0; ticks = 0; face = 1;
+    camX = clamp(px * TS - W / 2, 0, GW * TS - W); camY = clamp(py * TS - (H - TOP) / 2, 0, GH * TS - (H - TOP));
+  }
+
+  // ---------- Flow ----------
+  const isPlaying = () => ["intro", "play", "dead", "clear"].includes(state);
+  function startGame() {
+    if (!audioCtx) { try { audioCtx = new (window.AudioContext || window.webkitAudioContext)(); } catch { audioCtx = null; } }
+    if (audioCtx && audioCtx.state === "suspended") audioCtx.resume();
+    score = 0; lives = diff.lives; cave = 0; nextLife = 5000;
+    bestCache = parseInt(load(bestKey(difficulty)), 10) || 0;
+    beginCave();
+    menu = null;
+    overlay.classList.add("hidden");
+    syncControls();
+    last = performance.now();
+  }
+  function beginCave() {
+    buildCave(cave);
+    message = { text: `CAVERNA ${cave + 1}`, sub: `raccogli ${need} diamanti in ${timeLeft} secondi`, t: 0 };
+    state = "intro"; stateT = 1.8; tickT = 0;
+  }
+  function addScore(n, x, y, color = "#f4f6ee") {
+    score += n;
+    if (score >= nextLife) { lives++; nextLife += 5000; arp([523, 659, 784, 1047, 1319], 0.07, 0.12); popups.push({ x: W / 2, y: 70, text: "VITA EXTRA!", color: "#ffd23a", t: 0, screen: true }); }
+    if (x !== undefined) popups.push({ x, y, text: String(n), color, t: 0 });
+  }
+  function burst(x, y, c, n = 12, sp = 110, life = 0.6) {
+    for (let k = 0; k < n; k++) { const a = Math.random() * TAU, s = sp * rnd(0.3, 1); parts.push({ x, y, vx: Math.cos(a) * s, vy: Math.sin(a) * s, t: 0, life: life * rnd(0.6, 1.2), c }); }
+  }
+  function killMiner(why) {
+    if (!alive) return;
+    alive = false; why = why || "boom";
+    lives--; sfx.die();
+    message = { text: { rock: "SCHIACCIATO!", boom: "BOOM!", time: "TEMPO SCADUTO!" }[why] || "BOOM!", sub: lives > 0 ? "si ricomincia la caverna" : "", t: 0 };
+    state = "dead"; stateT = 2;
+  }
+  function gameOver() {
+    state = "over";
+    const prev = parseInt(load(bestKey(difficulty)), 10) || 0;
+    const record = score > prev;
+    if (record) store(bestKey(difficulty), String(score));
+    sfx.over();
+    menu = () => showOverlay(
+      `<h2 class="lose">${lives <= 0 ? "VITE FINITE!" : "PARTITA FINITA"}</h2>
+       <p>Punteggio: <b>${score.toLocaleString("it-IT")}</b> · caverna ${cave + 1} · ${diff.label}</p>
+       ${record ? "<p style='color:var(--yellow)'>★ NUOVO RECORD! ★</p>" : ""}
+       ${difficultyHTML()}
+       <button class="start" data-start>GIOCA ANCORA</button>`
+    );
+    menu();
+    syncControls();
+  }
+  function togglePause() {
+    if (isPlaying()) {
+      pausedFrom = state; state = "paused";
+      showOverlay(`<h2>PAUSA</h2><button class="start" data-resume>CONTINUA</button><p class="muted">Premi P per continuare</p>`);
+    } else if (state === "paused") {
+      state = pausedFrom; overlay.classList.add("hidden"); last = performance.now();
+    }
+    syncControls();
+  }
+  // the pause menu can end the game (shared/iniziali.js): it ends here the usual way, saving the record
+  window.addEventListener("sala:termina", () => { if (state !== "paused") return; state = pausedFrom; overlay.classList.add("hidden"); gameOver(); syncControls(); });
+  function syncControls() {
+    pauseBtn.style.display = isPlaying() && touchMode ? "block" : "none";
+    resize();
+  }
+  pauseBtn.addEventListener("click", () => togglePause());
+  function showOverlay(html) { overlay.innerHTML = html; overlay.classList.remove("hidden"); }
+  function difficultyHTML() {
+    const buttons = DIFF_IDS.map((id) => {
+      const d = DIFFICULTIES[id];
+      return `<button type="button" data-diff="${id}" class="${id === difficulty ? "on" : ""}" style="--c:${d.color}">${d.label}</button>`;
+    }).join("");
+    const best = parseInt(load(bestKey(difficulty)), 10);
+    return `<div class="diff">${buttons}</div><p class="muted">${diff.desc}${best ? ` · Record: ${best.toLocaleString("it-IT")}` : ""}</p>`;
+  }
+  function setDifficulty(id) { if (!DIFFICULTIES[id]) return; difficulty = id; diff = DIFFICULTIES[id]; store(DIFF_KEY, id); if (menu) menu(); }
+  function showTitle() {
+    menu = showTitle;
+    showOverlay(
+      `<h1>ROCCE E DIAMANTI</h1>
+       <p>Scava nella caverna e raccogli i diamanti che servono ad aprire l'uscita, prima che scada il tempo. Ma ogni volta che togli la terra da sotto un masso, quello cade… e se rotola giù dai sassi, ti schiaccia!</p>
+       <div class="pts">
+         <span><b>Diamante</b></span><span>10 e più (vale di più nelle caverne profonde, e il doppio dopo aver aperto l'uscita)</span>
+         <span><b>Lucciola</b></span><span>esplode se la tocchi · falle cadere addosso un masso</span>
+         <span><b>Farfalla</b></span><span>colpita da un masso esplode in nove diamanti!</span>
+         <span><b>Uscita</b></span><span>lampeggia quando hai i diamanti · 10 punti per ogni secondo avanzato · vita extra ogni 5.000</span>
+       </div>
+       ${touchMode
+         ? `<p class="muted help">Levetta per scavare nelle quattro direzioni · tieni PRENDI e muovi la levetta per afferrare senza spostarti</p>`
+         : `<p class="muted help">Frecce o WASD per scavare · tieni SPAZIO e premi una freccia per afferrare senza spostarti · P pausa</p>`}
+       ${difficultyHTML()}
+       <button class="start" data-start>SCAVA!</button>`
+    );
+  }
+  overlay.addEventListener("click", (e) => {
+    const d = e.target.closest("[data-diff]");
+    if (d) { setDifficulty(d.dataset.diff); return; }
+    if (e.target.closest("[data-start]")) startGame();
+    if (e.target.closest("[data-resume]")) togglePause();
+  });
+
+  // ---------- Input ----------
+  const KEYMAP = { arrowleft: "left", a: "left", arrowright: "right", d: "right", arrowup: "up", w: "up", arrowdown: "down", s: "down" };
+  let lastKey = null;
+  window.addEventListener("keydown", (e) => {
+    const k = e.key.toLowerCase();
+    if ([" ", "arrowup", "arrowdown", "arrowleft", "arrowright"].includes(k)) e.preventDefault();
+    if (state === "menu" || state === "over") {
+      if (e.key === "Enter") startGame();
+      else if (["1", "2", "3"].includes(k)) setDifficulty(DIFF_IDS[+k - 1]);
+      return;
+    }
+    if (k === "p" || k === "escape") { if (!e.repeat) togglePause(); return; }
+    if (state === "paused") { if (e.key === "Enter") togglePause(); return; }
+    if (k === " " || k === "shift" || k === "j") snapHeld = true;
+    if (KEYMAP[k]) { keys[KEYMAP[k]] = true; lastKey = KEYMAP[k]; }
+  });
+  window.addEventListener("keyup", (e) => { const k = e.key.toLowerCase(); if (k === " " || k === "shift" || k === "j") snapHeld = false; const m = KEYMAP[k]; if (m) keys[m] = false; });
+  window.addEventListener("blur", () => { for (const k in keys) keys[k] = false; stick.x = stick.y = 0; snapHeld = false; if (isPlaying()) togglePause(); });
+  const snapBtn = touchEl.querySelector(".jump");
+  snapBtn.addEventListener("pointerdown", (e) => { e.preventDefault(); snapHeld = true; snapBtn.classList.add("on"); try { snapBtn.setPointerCapture(e.pointerId); } catch { /* ignore */ } });
+  for (const ev of ["pointerup", "pointercancel", "lostpointercapture"]) snapBtn.addEventListener(ev, () => { snapHeld = false; snapBtn.classList.remove("on"); });
+  const stickEl = touchEl.querySelector(".stick"), knob = stickEl.querySelector(".knob");
+  let stickId = null;
+  function stickAt(e) {
+    const r = stickEl.getBoundingClientRect(), max = r.width / 2 - 14;
+    let dx = e.clientX - (r.left + r.width / 2), dy = e.clientY - (r.top + r.height / 2);
+    const len = Math.hypot(dx, dy);
+    if (len > max) { dx *= max / len; dy *= max / len; }
+    knob.style.transform = `translate(${dx}px, ${dy}px)`;
+    const f = (v) => { const a = Math.abs(v) / max; return a < 0.25 ? 0 : sign(v) * Math.min(1, (a - 0.25) / 0.6); };
+    stick.x = f(dx); stick.y = f(dy);
+  }
+  const stickEnd = (e) => { if (e.pointerId !== stickId) return; stickId = null; knob.style.transform = ""; stick.x = stick.y = 0; };
+  stickEl.addEventListener("pointerdown", (e) => { e.preventDefault(); stickId = e.pointerId; try { stickEl.setPointerCapture(e.pointerId); } catch { /* ignore */ } stickAt(e); });
+  stickEl.addEventListener("pointermove", (e) => { if (e.pointerId === stickId) stickAt(e); });
+  for (const ev of ["pointerup", "pointercancel", "lostpointercapture"]) stickEl.addEventListener(ev, stickEnd);
+  window.addEventListener("pointerdown", (e) => { if (e.pointerType === "touch" && !touchMode) { touchMode = true; syncControls(); if (menu) menu(); } }, true);
+  function wanted() {
+    // one direction at a time: the stick's stronger axis, or the last key pressed
+    if (Math.abs(stick.x) > 0 || Math.abs(stick.y) > 0) return Math.abs(stick.x) >= Math.abs(stick.y) ? [sign(stick.x), 0] : [0, sign(stick.y)];
+    const held = ["left", "right", "up", "down"].filter((k) => keys[k]);
+    if (!held.length) return null;
+    const k = held.includes(lastKey) ? lastKey : held[0];
+    return { left: [-1, 0], right: [1, 0], up: [0, -1], down: [0, 1] }[k];
+  }
+
+  // ---------- The cave, one tick at a time ----------
+  function explode(cx, cy, to, why = "boom") {
+    sfx.boom();
+    for (let y = cy - 1; y <= cy + 1; y++) for (let x = cx - 1; x <= cx + 1; x++) {
+      const t = at(x, y);
+      if (t === STEEL || (y * GW + x === exitAt)) continue;
+      if (t === MINER) killMiner(why);
+      set(x, y, to); boomT[y * GW + x] = 4; done[y * GW + x] = 1; fall[y * GW + x] = 0;
+      burst(x * TS + TS / 2, y * TS + TS / 2, to === BOOMGEM ? "#5ae0ff" : "#ffd23a", 3, 80, 0.5);
+    }
+  }
+  function moveMiner() {
+    const d = wanted();
+    if (!d) { pushTry = 0; return; }
+    const [dx, dy] = d, tx = px + dx, ty = py + dy, t = at(tx, ty), k = ty * GW + tx;
+    if (dx) face = dx;
+    const take = () => { gems++; addScore(exitOpen ? gemValue * 2 : gemValue, tx * TS + TS / 2, ty * TS, "#5ae0ff"); sfx.gem(); if (!exitOpen && gems >= need) { exitOpen = true; sfx.open(); message = { text: "USCITA APERTA!", sub: "raggiungi la porta che lampeggia", t: 0 }; } };
+    if (snapHeld) {
+      // grab without stepping in
+      if (t === DIRT) { set(tx, ty, EMPTY); sfx.dig(); } else if (t === GEM) { set(tx, ty, EMPTY); take(); }
+      return;
+    }
+    if (t === EMPTY || t === DIRT || t === GEM) {
+      if (t === DIRT) sfx.dig(); else if (t === EMPTY) sfx.step();
+      if (t === GEM) take();
+      set(px, py, EMPTY); px = tx; py = ty; set(px, py, MINER); pushTry = 0;
+    } else if (k === exitAt && exitOpen) {
+      set(px, py, EMPTY); px = tx; py = ty; state = "clear";
+      const bonus = Math.ceil(timeLeft) * 10;
+      addScore(bonus);
+      message = { text: "CAVERNA SUPERATA!", sub: `${Math.ceil(timeLeft)} secondi avanzati · bonus ${bonus.toLocaleString("it-IT")}`, t: 0 };
+      sfx.win(); stateT = 2.6;
+    } else if (t === ROCK && dy === 0 && at(tx + dx, ty) === EMPTY && !fall[k]) {
+      // pushing a rock sideways takes a little effort
+      if (++pushTry >= 2) { set(tx + dx, ty, ROCK); set(tx, ty, EMPTY); set(px, py, EMPTY); px = tx; set(px, py, MINER); pushTry = 0; sfx.push(); }
+    } else pushTry = 0;
+  }
+  function tick() {
+    ticks++;
+    done.fill(0);
+    if (alive) moveMiner();
+    if (state !== "play") return;
+    let amoebas = 0, canGrow = false;
+    for (let y = 1; y < GH - 1; y++) for (let x = 1; x < GW - 1; x++) {
+      const k = y * GW + x;
+      if (done[k]) continue;
+      const t = grid[k];
+      if (t === ROCK || t === GEM) {
+        const below = at(x, y + 1);
+        if (below === EMPTY) { set(x, y + 1, t); set(x, y, EMPTY); fall[k + GW] = 1; fall[k] = 0; done[k + GW] = 1; continue; }
+        if (fall[k]) {
+          fall[k] = 0;
+          // landing on something
+          if (below === MINER) { explode(x, y + 1, BOOM, "rock"); continue; }
+          if (below === FLY) { explode(x, y + 1, BOOM); continue; }
+          if (below === BUTTER) { explode(x, y + 1, BOOMGEM); continue; }
+          (t === ROCK ? sfx.rock : sfx.gemFall)();
+        }
+        // rolling off round things
+        if (below === ROCK || below === GEM || below === BRICK) {
+          for (const s of [-1, 1]) if (at(x + s, y) === EMPTY && at(x + s, y + 1) === EMPTY) { set(x + s, y, t); set(x, y, EMPTY); fall[k + s] = 1; done[k + s] = 1; break; }
+        }
+      } else if (t === FLY || t === BUTTER) {
+        // touching the miner or the amoeba sets them off
+        if ([[0, -1], [1, 0], [0, 1], [-1, 0]].some(([dx, dy]) => at(x + dx, y + dy) === MINER || at(x + dx, y + dy) === AMOEBA)) { explode(x, y, t === BUTTER ? BOOMGEM : BOOM); continue; }
+        // fireflies keep the wall on their left, butterflies on their right
+        const d = dirs[k], turn = t === FLY ? 3 : 1, side = (d + turn) % 4;
+        const [sx, sy] = DIRS[side], [fx, fy] = DIRS[d];
+        if (at(x + sx, y + sy) === EMPTY) { const kk = (y + sy) * GW + x + sx; set(x + sx, y + sy, t); set(x, y, EMPTY); dirs[kk] = side; done[kk] = 1; }
+        else if (at(x + fx, y + fy) === EMPTY) { const kk = (y + fy) * GW + x + fx; set(x + fx, y + fy, t); set(x, y, EMPTY); dirs[kk] = d; done[kk] = 1; }
+        else dirs[k] = (d + (t === FLY ? 1 : 3)) % 4;
+      } else if (t === BOOM || t === BOOMGEM) {
+        if (--boomT[k] <= 0) set(x, y, t === BOOMGEM ? GEM : EMPTY);
+      } else if (t === AMOEBA) {
+        amoebas++;
+        for (const [dx, dy] of DIRS) { const n = at(x + dx, y + dy); if (n === EMPTY || n === DIRT) canGrow = true; }
+      }
+    }
+    // the amoeba creeps on; boxed in it turns to gems, grown too big it turns to rock
+    if (amoebas) {
+      amoebaT++;
+      if (!canGrow) { for (let i = 0; i < grid.length; i++) if (grid[i] === AMOEBA) grid[i] = GEM; sfx.open(); }
+      else if (amoebas >= 120) { for (let i = 0; i < grid.length; i++) if (grid[i] === AMOEBA) grid[i] = ROCK; }
+      else {
+        const p = amoebaT > 200 ? 0.06 : 0.015;
+        for (let i = 0; i < grid.length; i++) if (grid[i] === AMOEBA && Math.random() < p) { const [dx, dy] = DIRS[Math.floor(Math.random() * 4)], j = i + dy * GW + dx; if (grid[j] === EMPTY || grid[j] === DIRT) { grid[j] = AMOEBA; done[j] = 1; } }
+      }
+    }
+  }
+  function update(dt) {
+    clock += dt; sfxN = 0;
+    if (message) { message.t += dt; if (message.t > 2.4) message = null; }
+    for (const p of parts) { p.t += dt; p.x += p.vx * dt; p.y += p.vy * dt; p.vx *= 0.93; p.vy *= 0.93; }
+    parts = parts.filter((p) => p.t < p.life);
+    for (const p of popups) { p.t += dt; p.y -= 20 * dt; }
+    popups = popups.filter((p) => p.t < 1);
+    // the camera keeps the miner well inside the view
+    const tx = clamp(px * TS + TS / 2 - W / 2, 0, GW * TS - W), ty = clamp(py * TS + TS / 2 - (H - TOP) / 2, 0, GH * TS - (H - TOP));
+    camX += (tx - camX) * Math.min(1, dt * 5); camY += (ty - camY) * Math.min(1, dt * 5);
+    if (state === "menu") { tickT += dt; if (tickT > 0.2) { tickT = 0; demoTick(); } return; }
+    if (!isPlaying()) return;
+    if (state === "intro") { stateT -= dt; if (stateT <= 0) state = "play"; return; }
+    if (state === "dead") {
+      stateT -= dt; tickT += dt; if (tickT >= diff.tick) { tickT = 0; tick(); }
+      if (stateT <= 0) { if (lives <= 0) gameOver(); else beginCave(); }
+      return;
+    }
+    if (state === "clear") { stateT -= dt; if (stateT <= 0) { cave++; beginCave(); } return; }
+    if (window.__bot) window.__bot(dt);
+    const before = Math.ceil(timeLeft);
+    timeLeft -= dt;
+    if (timeLeft <= 10 && Math.ceil(timeLeft) !== before) sfx.tick();
+    if (timeLeft <= 0) { timeLeft = 0; killMiner("time"); return; }
+    tickT += dt;
+    if (tickT >= diff.tick) { tickT -= diff.tick; tick(); }
+  }
+  function demoTick() {
+    // the title screen: the cave settles by itself
+    const save = alive; alive = false; const st = state; state = "play"; tick(); state = st; alive = save;
+  }
+
+  // ---------- Drawing ----------
+  function drawTile(t, x, y, k) {
+    const sx = x * TS, sy = y * TS;
+    switch (t) {
+      case DIRT:
+        ctx.fillStyle = pal.dirt; ctx.fillRect(sx, sy, TS, TS);
+        ctx.fillStyle = pal.dirt2; for (let i = 0; i < 4; i++) { const h = (k * 7 + i * 13) % 17; ctx.fillRect(sx + (h % 5) * 4, sy + ((h * 3) % 5) * 4, 3, 2); }
+        break;
+      case BRICK:
+        ctx.fillStyle = pal.brick; ctx.fillRect(sx, sy, TS, TS);
+        ctx.fillStyle = "rgba(0,0,0,0.35)"; ctx.fillRect(sx, sy + 9, TS, 2); ctx.fillRect(sx, sy + 19, TS, 1); ctx.fillRect(sx + 9, sy, 2, 9); ctx.fillRect(sx + (y % 2 ? 4 : 14), sy + 11, 2, 8);
+        break;
+      case STEEL: case EXIT:
+        if (k === exitAt && exitOpen) {
+          ctx.fillStyle = Math.floor(clock * 4) % 2 ? "#ffd23a" : "#f4f6ee"; ctx.fillRect(sx, sy, TS, TS);
+          ctx.fillStyle = "#3a2a1a"; ctx.fillRect(sx + 4, sy + 3, TS - 8, TS - 3);
+          break;
+        }
+        ctx.fillStyle = pal.steel; ctx.fillRect(sx, sy, TS, TS);
+        ctx.fillStyle = "rgba(255,255,255,0.25)"; ctx.fillRect(sx + 1, sy + 1, TS - 2, 2);
+        ctx.fillStyle = "rgba(0,0,0,0.3)"; ctx.fillRect(sx + 1, sy + TS - 3, TS - 2, 2);
+        ctx.fillStyle = "rgba(0,0,0,0.4)"; for (const [a, b] of [[4, 4], [15, 4], [4, 15], [15, 15]]) ctx.fillRect(sx + a, sy + b, 2, 2);
+        break;
+      case ROCK:
+        ctx.fillStyle = "#6a6a72"; ctx.beginPath(); ctx.arc(sx + 10, sy + 11, 9, 0, TAU); ctx.fill();
+        ctx.fillStyle = "#9a9aa2"; ctx.beginPath(); ctx.arc(sx + 8, sy + 8, 5, 0, TAU); ctx.fill();
+        ctx.fillStyle = "#4a4a52"; ctx.fillRect(sx + 11, sy + 13, 4, 2);
+        break;
+      case GEM: case BOOMGEM: {
+        if (t === BOOMGEM) { ctx.fillStyle = "#fff4a0"; ctx.beginPath(); ctx.arc(sx + 10, sy + 10, 4 + boomT[k] * 2, 0, TAU); ctx.fill(); }
+        const tw = (Math.floor(clock * 6) + k) % 6;
+        ctx.fillStyle = "#2ab0e0"; ctx.beginPath(); ctx.moveTo(sx + 10, sy + 2); ctx.lineTo(sx + 18, sy + 9); ctx.lineTo(sx + 10, sy + 18); ctx.lineTo(sx + 2, sy + 9); ctx.closePath(); ctx.fill();
+        ctx.fillStyle = "#9af0ff"; ctx.beginPath(); ctx.moveTo(sx + 10, sy + 2); ctx.lineTo(sx + 14, sy + 9); ctx.lineTo(sx + 6, sy + 9); ctx.closePath(); ctx.fill();
+        if (tw === 0) { ctx.fillStyle = "#ffffff"; ctx.fillRect(sx + 13, sy + 4, 2, 2); ctx.fillRect(sx + 12, sy + 5, 4, 0.8); }
+        break;
+      }
+      case FLY: {
+        const a = clock * 8 + k;
+        ctx.strokeStyle = "#ff8a1a"; ctx.lineWidth = 2; ctx.save(); ctx.translate(sx + 10, sy + 10); ctx.rotate(a);
+        ctx.strokeRect(-7, -7, 14, 14); ctx.fillStyle = "#ffd23a"; ctx.fillRect(-3, -3, 6, 6); ctx.restore();
+        break;
+      }
+      case BUTTER: {
+        const w = 4 + Math.abs(Math.sin(clock * 10 + k)) * 5;
+        ctx.fillStyle = "#c86aff"; ctx.beginPath(); ctx.ellipse(sx + 10 - w / 2, sy + 10, w / 2 + 1, 7, 0, 0, TAU); ctx.ellipse(sx + 10 + w / 2, sy + 10, w / 2 + 1, 7, 0, 0, TAU); ctx.fill();
+        ctx.fillStyle = "#3a1a5a"; ctx.fillRect(sx + 9, sy + 4, 2, 12);
+        break;
+      }
+      case AMOEBA: {
+        ctx.fillStyle = "#3ab84a"; ctx.fillRect(sx, sy, TS, TS);
+        ctx.fillStyle = "#6ae07a"; const b = Math.sin(clock * 5 + k) * 2;
+        ctx.beginPath(); ctx.arc(sx + 6, sy + 7 + b, 3, 0, TAU); ctx.arc(sx + 14, sy + 13 - b, 3.5, 0, TAU); ctx.fill();
+        break;
+      }
+      case BOOM:
+        ctx.fillStyle = boomT[k] % 2 ? "#ffd23a" : "#ff6a3a"; ctx.beginPath(); ctx.arc(sx + 10, sy + 10, 4 + boomT[k] * 2, 0, TAU); ctx.fill();
+        break;
+      case MINER: {
+        if (!alive) break;
+        const walk = Math.floor(clock * 8) % 2;
+        ctx.save(); ctx.translate(sx + 10, sy + 10); ctx.scale(face, 1);
+        ctx.fillStyle = "#3a5aa8"; ctx.fillRect(-4, 2, 3, 7 - walk); ctx.fillRect(1, 2, 3, 6 + walk);
+        ctx.fillStyle = "#e84a3a"; ctx.fillRect(-5, -3, 10, 7);
+        ctx.fillStyle = "#f0c8a0"; ctx.beginPath(); ctx.arc(0, -6, 4, 0, TAU); ctx.fill();
+        ctx.fillStyle = "#ffd23a"; ctx.fillRect(-5, -11, 10, 3); ctx.fillStyle = "#ffffff"; ctx.fillRect(2, -11, 2, 2);
+        ctx.fillStyle = "#1a1a1a"; ctx.fillRect(1, -7, 1.5, 1.5);
+        ctx.fillStyle = "#8a6a4a"; ctx.fillRect(4, -2, 2, 7); ctx.fillStyle = "#aaaaaa"; ctx.fillRect(3, -4, 5, 2);
+        ctx.restore();
+        break;
+      }
+    }
+  }
+  function drawHud() {
+    ctx.fillStyle = "rgba(10,8,6,0.95)"; ctx.fillRect(0, 0, W, TOP);
+    ctx.textBaseline = "middle"; ctx.textAlign = "left";
+    const x0 = touchMode ? 130 : 10;
+    // gems wanted and gems taken
+    ctx.fillStyle = "#2ab0e0"; ctx.beginPath(); ctx.moveTo(x0 + 7, 6); ctx.lineTo(x0 + 13, 12); ctx.lineTo(x0 + 7, 21); ctx.lineTo(x0 + 1, 12); ctx.fill();
+    ctx.fillStyle = exitOpen ? "#ffd23a" : "#f4f6ee"; ctx.font = "900 15px system-ui"; ctx.fillText(`${gems}/${need}`, x0 + 18, 14);
+    ctx.fillStyle = "#5ae0ff"; ctx.font = "800 9px system-ui"; ctx.fillText(`×${gemValue}`, x0 + 70, 14);
+    ctx.fillStyle = "#f4f6ee"; ctx.font = "900 15px system-ui"; ctx.fillText(score.toLocaleString("it-IT"), x0 + 108, 14);
+    ctx.fillStyle = "#a8a098"; ctx.font = "700 9px system-ui"; ctx.fillText(`REC ${Math.max(bestCache, score).toLocaleString("it-IT")}`, x0 + 190, 9);
+    ctx.fillStyle = "#5ae0ff"; ctx.font = "900 9px system-ui"; ctx.fillText(`CAVERNA ${cave + 1}`, x0 + 190, 20);
+    ctx.fillStyle = timeLeft < 15 && Math.floor(clock * 4) % 2 ? "#ff5a5a" : "#ffd23a"; ctx.font = "900 15px system-ui"; ctx.fillText(`TEMPO ${Math.ceil(timeLeft)}`, x0 + 270, 14);
+    const lx = touchMode ? W - 60 : W - 12;
+    for (let i = 0; i < Math.min(lives - (state === "dead" ? 0 : 1), 6); i++) { ctx.fillStyle = "#ffd23a"; ctx.fillRect(lx - i * 13 - 5, 9, 10, 4); ctx.fillStyle = "#f0c8a0"; ctx.beginPath(); ctx.arc(lx - i * 13, 17, 3.5, 0, TAU); ctx.fill(); }
+    ctx.textBaseline = "alphabetic";
+  }
+  function draw() {
+    ctx.setTransform(pxRatio, 0, 0, pxRatio, 0, 0);
+    if (state === "menu" && !grid.some((t) => t === MINER)) buildCave(0);
+    ctx.fillStyle = pal.bg; ctx.fillRect(0, 0, W, H);
+    ctx.save(); ctx.translate(-Math.round(camX), TOP - Math.round(camY));
+    const x0 = Math.max(0, Math.floor(camX / TS)), x1 = Math.min(GW - 1, Math.ceil((camX + W) / TS)), y0 = Math.max(0, Math.floor(camY / TS)), y1 = Math.min(GH - 1, Math.ceil((camY + H) / TS));
+    for (let y = y0; y <= y1; y++) for (let x = x0; x <= x1; x++) { const k = y * GW + x; drawTile(grid[k], x, y, k); }
+    for (const p of parts) { ctx.globalAlpha = Math.max(0, 1 - p.t / p.life); ctx.fillStyle = p.c; ctx.fillRect(p.x - 1.5, p.y - 1.5, 3, 3); }
+    ctx.globalAlpha = 1;
+    for (const p of popups) {
+      if (p.screen) continue;
+      ctx.globalAlpha = Math.max(0, 1 - p.t); ctx.textAlign = "center"; ctx.font = "900 11px system-ui";
+      ctx.lineWidth = 3; ctx.strokeStyle = "#120e0a"; ctx.strokeText(p.text, p.x, p.y); ctx.fillStyle = p.color; ctx.fillText(p.text, p.x, p.y);
+    }
+    ctx.globalAlpha = 1;
+    ctx.restore();
+    for (const p of popups) if (p.screen) { ctx.globalAlpha = Math.max(0, 1 - p.t); ctx.textAlign = "center"; ctx.font = "900 16px system-ui"; ctx.fillStyle = p.color; ctx.fillText(p.text, p.x, p.y); ctx.globalAlpha = 1; }
+    if (state === "menu") return;
+    drawHud();
+    if (message) {
+      ctx.globalAlpha = Math.min(1, (2.4 - message.t) * 2);
+      ctx.fillStyle = "rgba(0,0,0,0.6)"; ctx.fillRect(0, 150, W, 58);
+      ctx.textAlign = "center"; ctx.font = "italic 900 24px system-ui"; ctx.fillStyle = "#5ae0ff";
+      ctx.lineWidth = 5; ctx.strokeStyle = "#120e0a"; ctx.strokeText(message.text, W / 2, 178); ctx.fillText(message.text, W / 2, 178);
+      if (message.sub) { ctx.font = "800 12px system-ui"; ctx.fillStyle = "#f4f6ee"; ctx.fillText(message.sub, W / 2, 198); }
+      ctx.globalAlpha = 1;
+    }
+  }
+
+  // ---------- Loop ----------
+  const STEP = 1 / 120;
+  let last = performance.now(), acc = 0;
+  function frame(now) {
+    const dt = Math.min(0.1, (now - last) / 1000);
+    last = now;
+    if (isPlaying()) {
+      acc += dt;
+      while (acc >= STEP && isPlaying()) { update(STEP); acc -= STEP; }
+    } else { acc = 0; update(dt); }
+    draw();
+    requestAnimationFrame(frame);
+  }
+  syncControls();
+  showTitle();
+  requestAnimationFrame(frame);
+})();
+</script>
+<script src="../../shared/iniziali.js" data-record="rocce-best-" data-kind="score"></script>
+</body>
+</html>

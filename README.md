@@ -4,7 +4,7 @@ Raccolta di giochi arcade per il browser. Ogni gioco è un singolo file HTML sen
 
 ## 🕹️ Sala Giochi — `index.html`
 
-Apri `index.html` nella cartella principale per la pagina di raccolta: mostra tutti i 96 giochi con copertina, genere, comandi e i tuoi record per ogni difficoltà (Facile, Normale, Difficile). Tocca «Gioca» per avviare un gioco; in ogni gioco il pulsante «← Sala Giochi» in alto a sinistra (visibile nei menu) riporta alla raccolta.
+Apri `index.html` nella cartella principale per la pagina di raccolta: mostra tutti i 97 giochi con copertina, genere, comandi e i tuoi record per ogni difficoltà (Facile, Normale, Difficile). Tocca «Gioca» per avviare un gioco; in ogni gioco il pulsante «← Sala Giochi» in alto a sinistra (visibile nei menu) riporta alla raccolta.
 
 **Iniziali del record:** quando batti un record compare la schermata da sala giochi per inserire le tue tre iniziali (frecce ↑ ↓ per cambiare lettera, ← → per spostarti, oppure scrivile direttamente; su telefono i tasti ▲ ▼ e OK). Le iniziali vengono salvate insieme al record e compaiono nei menu del gioco e nella Sala Giochi. Il codice è condiviso da tutti i giochi in `shared/iniziali.js`.
 
@@ -1499,3 +1499,18 @@ Biliardo a buche da sala giochi, in stile *Side Pocket*. Sul tavolo ci sono nove
 - **Touch:** levetta per girare la stecca (una spinta leggera per la mira fine), oppure tocca il tavolo per mirare lì; tieni premuto TIRA e lascialo per tirare
 
 Per giocare apri `games/colpo-di-stecca/index.html` nel browser.
+
+### 🪨 Rocce e Diamanti — `games/rocce-e-diamanti/index.html`
+
+Rompicapo d'azione in stile *Boulder Dash*. Un minatore col caschetto scava nella terra di una caverna piena di massi e diamanti: per aprire l'uscita deve raccoglierne abbastanza prima che scada il tempo. Ogni caverna è grande più dello schermo, che la segue scorrendo.
+
+- **Massi e diamanti:** cadono appena non hanno più terra sotto e rotolano giù da altri massi, diamanti e muri di mattoni. Un masso che ti cade in testa ti schiaccia: se ci passi sotto e poi scendi, scansati subito di lato! Puoi spingere un masso di lato se dietro c'è spazio vuoto
+- **Lucciole e farfalle:** girano lungo le pareti delle loro tane; se le tocchi esplodono. Fai cadere loro addosso un masso: la lucciola esplode e basta, la farfalla diventa nove diamanti
+- **Ameba:** in alcune caverne una massa verde cresce nella terra. Se resta chiusa si trasforma in diamanti, se diventa troppo grande in un mucchio di massi
+- **Uscita:** quando hai i diamanti che servono, la porta nel muro comincia a lampeggiare; i diamanti raccolti dopo valgono il doppio, e ogni secondo avanzato 10 punti. Vita extra ogni 5.000 punti
+- **Caverne:** ognuna è sempre la stessa, sempre più piena di massi, lucciole e farfalle; se perdi una vita la caverna ricomincia da capo
+- **Difficoltà:** Facile (5 vite, più tempo, servono meno diamanti, la caverna si muove più lenta), Normale (3 vite), Difficile (3 vite, meno tempo, più diamanti, caverna più svelta); record separati per ogni difficoltà
+- **Comandi:** frecce o `WASD` per scavare · tieni `Spazio` e premi una freccia per afferrare ciò che hai accanto senza spostarti · `P` pausa
+- **Touch:** levetta nelle quattro direzioni; tieni PRENDI e muovi la levetta per afferrare senza spostarti
+
+Per giocare apri `games/rocce-e-diamanti/index.html` nel browser.
