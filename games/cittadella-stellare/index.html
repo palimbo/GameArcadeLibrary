@@ -1,0 +1,642 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no, viewport-fit=cover">
+<title>Cittadella Stellare</title>
+<style>
+  :root {
+    --bg: #05060e;
+    --fg: #eef2ff;
+    --muted: #9aa4c8;
+    --cyan: #3af0ff;
+    --magenta: #ff3ad8;
+    --yellow: #ffe23a;
+    --red: #ff4a4a;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  html, body {
+    height: 100%;
+    background: var(--bg);
+    color: var(--fg);
+    font-family: system-ui, -apple-system, "Segoe UI", sans-serif;
+    overflow: hidden;
+    user-select: none;
+    -webkit-user-select: none;
+    touch-action: none;
+  }
+  #wrap { position: fixed; inset: 0; display: flex; align-items: center; justify-content: center; }
+  canvas { display: block; touch-action: none; border-radius: 6px; box-shadow: 0 0 0 2px #1a1e3a, 0 10px 40px rgba(0,0,0,0.6); }
+  #pauseBtn {
+    position: fixed; z-index: 3; display: none; right: 10px; top: calc(10px + env(safe-area-inset-top, 0px));
+    font: 700 13px system-ui, sans-serif; color: var(--fg);
+    background: rgba(0, 0, 0, 0.6); border: 1px solid rgba(238, 242, 255, 0.35);
+    border-radius: 8px; padding: 6px 10px; cursor: pointer;
+  }
+  #touch {
+    position: fixed; z-index: 2; display: none; left: 12px; right: 12px;
+    bottom: calc(14px + env(safe-area-inset-bottom, 0px));
+    justify-content: space-between; align-items: flex-end; pointer-events: none;
+  }
+  /* thumb stick: the ship turns toward it and pushes forward; FUOCO held down keeps shooting */
+  #touch .stick { position: relative; width: 136px; height: 136px; border-radius: 50%; pointer-events: auto; touch-action: none;
+    border: 2px solid rgba(58, 240, 255, 0.6); background: radial-gradient(circle, rgba(58,240,255,0.14), rgba(58,240,255,0.04)); }
+  #touch .stick .knob { position: absolute; left: 50%; top: 50%; width: 58px; height: 58px; margin: -29px 0 0 -29px; border-radius: 50%;
+    background: rgba(58, 240, 255, 0.45); border: 2px solid rgba(255,255,255,0.7); box-shadow: 0 4px 10px rgba(0,0,0,0.4); pointer-events: none; }
+  #touch .stick .ring { position: absolute; inset: 10px; border-radius: 50%; border: 1px dashed rgba(238,242,255,0.25); pointer-events: none; }
+  #touch .fire { width: 96px; height: 96px; border-radius: 50%; pointer-events: auto; touch-action: none; color: var(--fg);
+    font: 800 13px system-ui, sans-serif; letter-spacing: 1px; border: 2px solid rgba(255, 58, 216, 0.9); background: rgba(255, 58, 216, 0.22); }
+  #touch .fire.on { background: rgba(255, 58, 216, 0.55); }
+  #touch.small .stick { width: 112px; height: 112px; }
+  #touch.small .stick .knob { width: 48px; height: 48px; margin: -24px 0 0 -24px; }
+  #touch.small .fire { width: 80px; height: 80px; font-size: 11px; }
+  #overlay {
+    position: fixed; inset: 0; z-index: 5;
+    display: flex; flex-direction: column; align-items: center; justify-content: flex-start;
+    gap: 14px; padding: 16px; text-align: center; overflow-y: auto;
+    background: rgba(5, 6, 14, 0.93);
+  }
+  #overlay > :first-child { margin-top: auto; }
+  #overlay > :last-child { margin-bottom: auto; }
+  #overlay.hidden { display: none; }
+  #homeLink {
+    position: fixed; top: calc(10px + env(safe-area-inset-top, 0px)); left: 10px; z-index: 6;
+    font: 600 13px/1 system-ui, sans-serif; color: #fff; text-decoration: none;
+    padding: 8px 12px; border-radius: 999px; background: rgba(0,0,0,.55);
+    border: 1px solid rgba(255,255,255,.25);
+  }
+  #homeLink:hover { background: rgba(0,0,0,.8); }
+  #overlay.hidden ~ #homeLink { display: none; }
+  @media (max-width: 700px) { #overlay { padding-top: calc(52px + env(safe-area-inset-top, 0px)); } }
+  #overlay h1 { font-size: clamp(30px, 9vw, 56px); font-weight: 900; letter-spacing: 3px; color: var(--cyan);
+    text-shadow: 0 0 14px rgba(58,240,255,0.7), 3px 3px 0 #7a1a6a; }
+  #overlay h2 { font-size: clamp(26px, 7vw, 42px); font-weight: 900; letter-spacing: 2px; color: var(--cyan); }
+  #overlay h2.lose { color: var(--red); }
+  #overlay p { max-width: 540px; font-size: clamp(13px, 3.4vw, 16px); line-height: 1.55; }
+  #overlay p.muted { color: var(--muted); }
+  #overlay .pts { display: grid; grid-template-columns: repeat(2, auto); gap: 4px 18px; font-size: 13px; color: var(--muted); text-align: left; max-width: 560px; }
+  #overlay .pts b { color: var(--fg); }
+  #overlay .diff { display: flex; gap: 10px; flex-wrap: wrap; justify-content: center; }
+  #overlay button {
+    font: 800 15px system-ui, sans-serif; letter-spacing: 1.5px; color: var(--fg);
+    background: transparent; cursor: pointer;
+    border: 2px solid rgba(238,242,255,0.3); border-radius: 10px; padding: 9px 16px;
+  }
+  #overlay .diff button.on { border-color: var(--c); color: var(--c); box-shadow: 0 0 12px var(--c); }
+  #overlay button.start { border-color: var(--cyan); color: #04121a; background: var(--cyan); padding: 11px 30px; box-shadow: 0 0 18px rgba(58,240,255,0.5); }
+  @media (max-height: 560px) {
+    #overlay { gap: 8px; }
+    #overlay h1 { font-size: 28px; }
+    #overlay p { font-size: 13px; line-height: 1.4; }
+    #overlay .help, #overlay .pts { display: none; }
+  }
+</style>
+</head>
+<body>
+<div id="wrap"><canvas id="game"></canvas></div>
+<div id="touch">
+  <div class="stick" aria-label="Levetta"><div class="ring"></div><div class="knob"></div></div>
+  <button type="button" class="fire" aria-label="Fuoco">FUOCO</button>
+</div>
+<button id="pauseBtn" type="button" aria-label="Pausa">❚❚</button>
+<div id="overlay"></div>
+<a id="homeLink" href="../../index.html">← Sala Giochi</a>
+
+<script>
+(() => {
+  "use strict";
+
+  const W = 640, H = 360, CX = 320, CY = 186, TAU = Math.PI * 2;
+  const RINGS = [
+    { r: 76, color: "#ff3ad8", dark: "#7a1a6a", pts: 10, spin: 0.55 },
+    { r: 60, color: "#ffe23a", dark: "#7a6a1a", pts: 20, spin: -0.8 },
+    { r: 44, color: "#3af0ff", dark: "#1a6a7a", pts: 30, spin: 1.05 },
+  ];
+  const SEGS = 12, SEG_A = TAU / SEGS, CORE_R = 15, KEEP_OUT = 90;
+  const SHIP_R = 8, BULLET_SPEED = 470, BULLET_LIFE = 0.85, MAX_BULLETS = 4;
+
+  const DIFFICULTIES = {
+    facile:    { label: "FACILE",    color: "#7ed87a", desc: "5 astronavi · il cannone avvisa prima e spara piano · mine lente", lives: 5, cool: 1.7, mine: 0.8, turn: 0.8, charge: 0.62, ball: 0.9 },
+    normale:   { label: "NORMALE",   color: "#3af0ff", desc: "3 astronavi", lives: 3, cool: 1.25, mine: 1, turn: 1, charge: 0.5, ball: 1 },
+    difficile: { label: "DIFFICILE", color: "#ff4a4a", desc: "3 astronavi · il cannone spara spesso · mine veloci", lives: 3, cool: 0.9, mine: 1.25, turn: 1.25, charge: 0.45, ball: 1.1 },
+  };
+  const DIFF_IDS = Object.keys(DIFFICULTIES);
+  const DIFF_KEY = "cittadella-difficulty";
+  const bestKey = (id) => `cittadella-best-${id}`;
+  function store(k, v) { try { localStorage.setItem(k, v); } catch { /* ignore */ } }
+  function load(k) { try { return localStorage.getItem(k); } catch { return null; } }
+  const rnd = (a, b) => a + Math.random() * (b - a);
+  const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
+  const sign = (v) => (v < 0 ? -1 : 1);
+  const wrapA = (a) => { a %= TAU; return a < 0 ? a + TAU : a; };
+  const angDiff = (a, b) => { let d = (b - a) % TAU; if (d > Math.PI) d -= TAU; if (d < -Math.PI) d += TAU; return d; };
+
+  // ---------- Canvas ----------
+  const canvas = document.getElementById("game");
+  const ctx = canvas.getContext("2d");
+  const wrapEl = document.getElementById("wrap");
+  const overlay = document.getElementById("overlay");
+  const touchEl = document.getElementById("touch");
+  const pauseBtn = document.getElementById("pauseBtn");
+  let pxRatio = 1, touchMode = !!(window.matchMedia && matchMedia("(pointer: coarse)").matches);
+  function resize() {
+    const portrait = window.innerHeight > window.innerWidth;
+    const showTouch = touchMode && isPlaying();
+    touchEl.style.display = showTouch ? "flex" : "none";
+    touchEl.classList.toggle("small", !portrait && window.innerHeight < 480);
+    wrapEl.style.paddingBottom = showTouch && portrait ? "calc(170px + env(safe-area-inset-bottom, 0px))" : "0";
+    let availW = window.innerWidth - 8, availH = window.innerHeight - 8;
+    if (showTouch && portrait) availH -= 170;
+    if (showTouch && !portrait) {
+      const side = Math.max(...[...touchEl.children].map((el) => el.offsetWidth)) + 20;
+      if (window.innerWidth - 2 * side > 200) availW = window.innerWidth - 2 * side;
+    }
+    const s = Math.max(0.2, Math.min(availW / W, availH / H));
+    pxRatio = Math.min(3, s * (window.devicePixelRatio || 1));
+    canvas.style.width = W * s + "px";
+    canvas.style.height = H * s + "px";
+    canvas.width = Math.round(W * pxRatio);
+    canvas.height = Math.round(H * pxRatio);
+  }
+  window.addEventListener("resize", () => syncControls());
+
+  // ---------- Audio ----------
+  let audioCtx = null;
+  function beep(freq, dur, type = "square", vol = 0.04, slide = 0, delay = 0) {
+    if (!audioCtx) return;
+    const t = audioCtx.currentTime + delay;
+    const osc = audioCtx.createOscillator(), gain = audioCtx.createGain();
+    osc.type = type;
+    osc.frequency.setValueAtTime(freq, t);
+    if (slide) osc.frequency.exponentialRampToValueAtTime(Math.max(20, freq + slide), t + dur);
+    gain.gain.setValueAtTime(vol, t);
+    gain.gain.exponentialRampToValueAtTime(0.0001, t + dur);
+    osc.connect(gain).connect(audioCtx.destination);
+    osc.start(t); osc.stop(t + dur + 0.02);
+  }
+  function noise(dur, vol, freq) {
+    if (!audioCtx) return;
+    const len = Math.floor(audioCtx.sampleRate * dur), buf = audioCtx.createBuffer(1, len, audioCtx.sampleRate), d = buf.getChannelData(0);
+    for (let i = 0; i < len; i++) d[i] = (Math.random() * 2 - 1) * (1 - i / len);
+    const src = audioCtx.createBufferSource(), f = audioCtx.createBiquadFilter(), g = audioCtx.createGain();
+    src.buffer = buf; f.type = "bandpass"; f.frequency.value = freq; g.gain.value = vol;
+    src.connect(f).connect(g).connect(audioCtx.destination); src.start();
+  }
+  const arp = (notes, gap, d, type = "square", vol = 0.04) => notes.forEach((f, i) => beep(f, d, type, vol, 0, i * gap));
+  let sfxN = 0;
+  const lim = (fn) => (...a) => { if (sfxN++ < 6) fn(...a); };
+  const sfx = {
+    shot: lim(() => beep(1200, 0.05, "square", 0.02, -700)),
+    seg: lim((k) => beep(300 + k * 200, 0.05, "triangle", 0.04)),
+    crack: lim((k) => beep(200 + k * 150, 0.04, "square", 0.025)),
+    mine: lim(() => { noise(0.15, 0.08, 1500); beep(700, 0.08, "square", 0.03, -400); }),
+    charge: lim(() => beep(120, 0.4, "sawtooth", 0.03, 500)),
+    fire: lim(() => { noise(0.3, 0.1, 400); beep(90, 0.3, "sawtooth", 0.05, -40); }),
+    boom: () => { noise(0.6, 0.2, 200); beep(80, 0.5, "sawtooth", 0.06, -50); },
+    core: () => { noise(1.2, 0.25, 300); arp([392, 523, 659, 784, 1047, 1319], 0.09, 0.2); },
+    regen: lim(() => arp([220, 330, 440], 0.05, 0.1, "sine", 0.04)),
+    life: () => arp([523, 659, 784, 1047, 1319], 0.07, 0.12),
+    over: () => arp([523, 466, 415, 392, 330, 262], 0.15, 0.24, "triangle", 0.05),
+  };
+
+  // ---------- State ----------
+  let difficulty = DIFFICULTIES[load(DIFF_KEY)] ? load(DIFF_KEY) : "normale";
+  let diff = DIFFICULTIES[difficulty];
+  let state = "menu", menu = null, pausedFrom = null, stateT = 0, clock = 0;
+  let score = 0, lives = 3, wave = 0, bestCache = 0, nextLife = 10000;
+  let ship = null, bullets = [], rings = [], cannon = null, fireballs = [], mines = [], parts = [], popups = [], message = null;
+  let mineT = 0, respawnT = 0, fireHeld = false, fireCool = 0, stars = [];
+  const keys = { left: false, right: false, up: false, fire: false };
+  const stick = { x: 0, y: 0 };
+  for (let i = 0; i < 90; i++) stars.push({ x: rnd(0, W), y: rnd(0, H), b: rnd(0.2, 1), s: rnd(0.5, 1.6) });
+
+  const waveK = () => 1 + Math.min(wave, 10) * 0.09;
+  function buildCastle() {
+    rings = RINGS.map((R, k) => ({ ...R, k, rot: rnd(0, TAU), segs: Array(SEGS).fill(2), regen: 0 }));
+    cannon = { a: rnd(0, TAU), cool: 2.2, charge: 0, dead: 0 };
+    fireballs = []; mines = []; mineT = 3.5;
+  }
+  // which segment of a ring sits at world angle `a`
+  const segAt = (ring, a) => Math.floor(wrapA(a - ring.rot) / SEG_A) % SEGS;
+  // can the cannon see the ship? every ring must have a gap on that line
+  function lineClear(a) { return rings.every((rg) => rg.segs[segAt(rg, a)] <= 0); }
+
+  // ---------- Flow ----------
+  const isPlaying = () => ["intro", "play", "cleared", "dying"].includes(state);
+  function startGame() {
+    if (!audioCtx) { try { audioCtx = new (window.AudioContext || window.webkitAudioContext)(); } catch { audioCtx = null; } }
+    if (audioCtx && audioCtx.state === "suspended") audioCtx.resume();
+    score = 0; lives = diff.lives; wave = 0; nextLife = 10000;
+    bestCache = parseInt(load(bestKey(difficulty)), 10) || 0;
+    beginWave();
+    menu = null;
+    overlay.classList.add("hidden");
+    syncControls();
+    last = performance.now();
+  }
+  function beginWave() {
+    buildCastle();
+    bullets = []; parts = [];
+    spawnShip();
+    message = { text: `CITTADELLA ${wave + 1}`, sub: "apri un varco negli anelli e colpisci il nucleo", t: 0 };
+    state = "intro"; stateT = 1.8;
+  }
+  function spawnShip() {
+    // start well away from the cannon's line of fire
+    const corners = [[70, 70], [W - 70, 70], [70, H - 60], [W - 70, H - 60]];
+    const [x, y] = corners[Math.floor(Math.random() * 4)];
+    ship = { x, y, vx: 0, vy: 0, a: Math.atan2(CY - y, CX - x), alive: true, shield: 2.5, thrust: 0 };
+  }
+  function addScore(n, x, y, color = "#eef2ff") {
+    score += n;
+    if (score >= nextLife) { lives++; nextLife += 10000; sfx.life(); popups.push({ x: W / 2, y: 70, text: "ASTRONAVE EXTRA!", color: "#ffe23a", t: 0 }); }
+    if (x !== undefined) popups.push({ x, y, text: String(n), color, t: 0 });
+  }
+  function burst(x, y, c, n = 12, sp = 120, life = 0.6) {
+    for (let k = 0; k < n; k++) { const a = Math.random() * TAU, s = sp * rnd(0.3, 1); parts.push({ x, y, vx: Math.cos(a) * s, vy: Math.sin(a) * s, t: 0, life: life * rnd(0.6, 1.2), c }); }
+  }
+  function shipHit() {
+    if (!ship.alive || ship.shield > 0) return;
+    ship.alive = false;
+    burst(ship.x, ship.y, "#3af0ff", 30, 160, 1); burst(ship.x, ship.y, "#ffffff", 14, 90, 0.7);
+    sfx.boom();
+    lives--;
+    if (lives <= 0) { message = { text: "ASTRONAVE PERDUTA", t: 0 }; state = "dying"; stateT = 2.2; }
+    else respawnT = 1.6;
+  }
+  function coreHit() {
+    cannon.dead = 1;
+    const pts = 1000 * Math.min(wave + 1, 5);
+    addScore(pts, CX, CY - 30, "#ffe23a");
+    for (let k = 0; k < 3; k++) burst(CX, CY, ["#ffe23a", "#ff3ad8", "#3af0ff"][k], 30, 220, 1.4);
+    for (const m of mines) burst(m.x, m.y, "#ff8a3a", 8, 80, 0.5);
+    mines = []; fireballs = [];
+    sfx.core();
+    message = { text: "NUCLEO DISTRUTTO!", sub: `+${pts.toLocaleString("it-IT")}`, t: 0 };
+    state = "cleared"; stateT = 2.6;
+  }
+  function gameOver() {
+    state = "over";
+    const prev = parseInt(load(bestKey(difficulty)), 10) || 0;
+    const record = score > prev;
+    if (record) store(bestKey(difficulty), String(score));
+    sfx.over();
+    menu = () => showOverlay(
+      `<h2 class="lose">GAME OVER</h2>
+       <p>Punteggio: <b>${score.toLocaleString("it-IT")}</b> · cittadelle distrutte: ${wave} · ${diff.label}</p>
+       ${record ? "<p style='color:var(--yellow)'>★ NUOVO RECORD! ★</p>" : ""}
+       ${difficultyHTML()}
+       <button class="start" data-start>GIOCA ANCORA</button>`
+    );
+    menu();
+    syncControls();
+  }
+  function togglePause() {
+    if (isPlaying()) {
+      pausedFrom = state; state = "paused";
+      showOverlay(`<h2>PAUSA</h2><button class="start" data-resume>CONTINUA</button><p class="muted">Premi P per continuare</p>`);
+    } else if (state === "paused") {
+      state = pausedFrom; overlay.classList.add("hidden"); last = performance.now();
+    }
+    syncControls();
+  }
+  // the pause menu can end the game (shared/iniziali.js): it ends here the usual way, saving the record
+  window.addEventListener("sala:termina", () => { if (state !== "paused") return; state = pausedFrom; overlay.classList.add("hidden"); gameOver(); syncControls(); });
+  function syncControls() {
+    pauseBtn.style.display = isPlaying() && touchMode ? "block" : "none";
+    resize();
+  }
+  pauseBtn.addEventListener("click", () => togglePause());
+  function showOverlay(html) { overlay.innerHTML = html; overlay.classList.remove("hidden"); }
+  function difficultyHTML() {
+    const buttons = DIFF_IDS.map((id) => {
+      const d = DIFFICULTIES[id];
+      return `<button type="button" data-diff="${id}" class="${id === difficulty ? "on" : ""}" style="--c:${d.color}">${d.label}</button>`;
+    }).join("");
+    const best = parseInt(load(bestKey(difficulty)), 10);
+    return `<div class="diff">${buttons}</div><p class="muted">${diff.desc}${best ? ` · Record: ${best.toLocaleString("it-IT")}` : ""}</p>`;
+  }
+  function setDifficulty(id) { if (!DIFFICULTIES[id]) return; difficulty = id; diff = DIFFICULTIES[id]; store(DIFF_KEY, id); if (menu) menu(); }
+  function showTitle() {
+    menu = showTitle;
+    showOverlay(
+      `<h1>CITTADELLA STELLARE</h1>
+       <p>Al centro dello spazio c'è un cannone protetto da tre anelli di energia che girano in versi opposti. Sfonda gli anelli a colpi, aspetta che i varchi si allineino e colpisci il nucleo. Quando il cannone ti vede attraverso i varchi si carica e spara: spostati!</p>
+       <div class="pts">
+         <span><b>Anelli</b></span><span>ogni pezzo regge due colpi · esterno 10 · centrale 20 · interno 30. Un anello distrutto del tutto si ricostruisce</span>
+         <span><b>Nucleo</b></span><span>1.000 × numero della cittadella (fino a 5.000); poi ne arriva una più veloce</span>
+         <span><b>Mine</b></span><span>escono dal centro e ti inseguono · colpiscile: 50</span>
+         <span><b>Astronave</b></span><span>ne guadagni una ogni 10.000 punti · lo schermo continua dai bordi</span>
+       </div>
+       ${touchMode
+         ? `<p class="muted help">Levetta: l'astronave si gira da quella parte e accelera · tieni premuto FUOCO per sparare</p>`
+         : `<p class="muted help">← → ruota · ↑ spinta · SPAZIO o J fuoco (tieni premuto) · P pausa</p>`}
+       ${difficultyHTML()}
+       <button class="start" data-start>ALL'ATTACCO!</button>`
+    );
+  }
+  overlay.addEventListener("click", (e) => {
+    const d = e.target.closest("[data-diff]");
+    if (d) { setDifficulty(d.dataset.diff); return; }
+    if (e.target.closest("[data-start]")) startGame();
+    if (e.target.closest("[data-resume]")) togglePause();
+  });
+
+  // ---------- Input ----------
+  const KEYMAP = { arrowleft: "left", a: "left", arrowright: "right", d: "right", arrowup: "up", w: "up", " ": "fire", j: "fire", z: "fire" };
+  window.addEventListener("keydown", (e) => {
+    const k = e.key.toLowerCase();
+    if ([" ", "arrowup", "arrowdown", "arrowleft", "arrowright"].includes(k)) e.preventDefault();
+    if (state === "menu" || state === "over") {
+      if (e.key === "Enter") startGame();
+      else if (["1", "2", "3"].includes(k)) setDifficulty(DIFF_IDS[+k - 1]);
+      return;
+    }
+    if (k === "p" || k === "escape") { if (!e.repeat) togglePause(); return; }
+    if (state === "paused") { if (e.key === "Enter") togglePause(); return; }
+    if (KEYMAP[k]) keys[KEYMAP[k]] = true;
+  });
+  window.addEventListener("keyup", (e) => { const m = KEYMAP[e.key.toLowerCase()]; if (m) keys[m] = false; });
+  window.addEventListener("blur", () => { for (const k in keys) keys[k] = false; stick.x = stick.y = 0; if (isPlaying()) togglePause(); });
+  const fireBtn = touchEl.querySelector(".fire");
+  let fireId = null;
+  fireBtn.addEventListener("pointerdown", (e) => { e.preventDefault(); fireId = e.pointerId; try { fireBtn.setPointerCapture(e.pointerId); } catch { /* ignore */ } fireHeld = true; fireBtn.classList.add("on"); });
+  for (const ev of ["pointerup", "pointercancel"]) fireBtn.addEventListener(ev, (e) => { if (e.pointerId !== fireId) return; fireId = null; fireHeld = false; fireBtn.classList.remove("on"); });
+  const stickEl = touchEl.querySelector(".stick"), knob = stickEl.querySelector(".knob");
+  let stickId = null;
+  function stickAt(e) {
+    const r = stickEl.getBoundingClientRect(), max = r.width / 2 - 14;
+    let dx = e.clientX - (r.left + r.width / 2), dy = e.clientY - (r.top + r.height / 2);
+    const len = Math.hypot(dx, dy);
+    if (len > max) { dx *= max / len; dy *= max / len; }
+    knob.style.transform = `translate(${dx}px, ${dy}px)`;
+    const f = (v) => { const a = Math.abs(v) / max; return a < 0.15 ? 0 : sign(v) * Math.min(1, (a - 0.15) / 0.7); };
+    stick.x = f(dx); stick.y = f(dy);
+  }
+  const stickEnd = (e) => { if (e.pointerId !== stickId) return; stickId = null; knob.style.transform = ""; stick.x = stick.y = 0; };
+  stickEl.addEventListener("pointerdown", (e) => { e.preventDefault(); stickId = e.pointerId; try { stickEl.setPointerCapture(e.pointerId); } catch { /* ignore */ } stickAt(e); });
+  stickEl.addEventListener("pointermove", (e) => { if (e.pointerId === stickId) stickAt(e); });
+  for (const ev of ["pointerup", "pointercancel", "lostpointercapture"]) stickEl.addEventListener(ev, stickEnd);
+  window.addEventListener("pointerdown", (e) => { if (e.pointerType === "touch" && !touchMode) { touchMode = true; syncControls(); if (menu) menu(); } }, true);
+
+  // ---------- Update ----------
+  function updateShip(dt) {
+    if (!ship.alive) {
+      if (state === "play" && lives > 0) { respawnT -= dt; if (respawnT <= 0) spawnShip(); }
+      return;
+    }
+    ship.shield = Math.max(0, ship.shield - dt);
+    let thrust = 0;
+    const sm = Math.hypot(stick.x, stick.y);
+    if (sm > 0.2) {
+      // the stick points where to go: turn that way, push once roughly facing it
+      const want = Math.atan2(stick.y, stick.x), d = angDiff(ship.a, want);
+      ship.a += clamp(d, -7 * dt, 7 * dt);
+      if (Math.abs(d) < 1.1) thrust = Math.min(1, sm);
+    } else {
+      ship.a += ((keys.right ? 1 : 0) - (keys.left ? 1 : 0)) * 4.6 * dt;
+      if (keys.up) thrust = 1;
+    }
+    ship.thrust = thrust;
+    ship.vx += Math.cos(ship.a) * 270 * thrust * dt; ship.vy += Math.sin(ship.a) * 270 * thrust * dt;
+    const damp = Math.pow(0.45, dt); ship.vx *= damp; ship.vy *= damp;
+    const sp = Math.hypot(ship.vx, ship.vy); if (sp > 230) { ship.vx *= 230 / sp; ship.vy *= 230 / sp; }
+    ship.x += ship.vx * dt; ship.y += ship.vy * dt;
+    if (ship.x < 0) ship.x += W; if (ship.x > W) ship.x -= W; if (ship.y < 22) ship.y += H - 22; if (ship.y > H) ship.y -= H - 22;
+    // the castle's field pushes the ship back
+    const dx = ship.x - CX, dy = ship.y - CY, d = Math.hypot(dx, dy);
+    if (d < KEEP_OUT && d > 0) {
+      const nx = dx / d, ny = dy / d;
+      ship.x = CX + nx * KEEP_OUT; ship.y = CY + ny * KEEP_OUT;
+      const vn = ship.vx * nx + ship.vy * ny;
+      if (vn < 0) { ship.vx -= 1.7 * vn * nx; ship.vy -= 1.7 * vn * ny; }
+    }
+    // shooting
+    fireCool = Math.max(0, fireCool - dt);
+    if ((keys.fire || fireHeld) && fireCool <= 0 && bullets.length < MAX_BULLETS) {
+      bullets.push({ x: ship.x + Math.cos(ship.a) * 11, y: ship.y + Math.sin(ship.a) * 11, vx: Math.cos(ship.a) * BULLET_SPEED + ship.vx * 0.3, vy: Math.sin(ship.a) * BULLET_SPEED + ship.vy * 0.3, t: 0 });
+      fireCool = 0.18; sfx.shot();
+    }
+  }
+  function updateBullets(dt) {
+    for (const b of bullets) {
+      b.t += dt;
+      const n = 4;
+      for (let s = 0; s < n && !b.dead; s++) {
+        b.x += b.vx * dt / n; b.y += b.vy * dt / n;
+        if (b.x < 0) b.x += W; if (b.x > W) b.x -= W; if (b.y < 22) b.y += H - 22; if (b.y > H) b.y -= H - 22;
+        const dx = b.x - CX, dy = b.y - CY, d = Math.hypot(dx, dy), a = Math.atan2(dy, dx);
+        if (cannon && !cannon.dead && d < CORE_R) { b.dead = true; coreHit(); break; }
+        for (const rg of rings) {
+          if (Math.abs(d - rg.r) > 4.5) continue;
+          const i = segAt(rg, a);
+          if (rg.segs[i] <= 0) continue;
+          rg.segs[i]--;
+          b.dead = true;
+          const px = CX + Math.cos(a) * rg.r, py = CY + Math.sin(a) * rg.r;
+          if (rg.segs[i] <= 0) { addScore(rg.pts, px, py - 8, rg.color); burst(px, py, rg.color, 8, 90, 0.4); sfx.seg(rg.k); }
+          else { burst(px, py, "#ffffff", 3, 50, 0.2); sfx.crack(rg.k); }
+          break;
+        }
+        if (b.dead) break;
+        for (const m of mines) {
+          if (m.dead || Math.hypot(m.x - b.x, m.y - b.y) > 8) continue;
+          m.dead = true; b.dead = true; addScore(50, m.x, m.y - 8, "#ff8a3a"); burst(m.x, m.y, "#ff8a3a", 10, 100, 0.5); sfx.mine();
+          break;
+        }
+      }
+      if (b.t > BULLET_LIFE) b.dead = true;
+    }
+    bullets = bullets.filter((b) => !b.dead);
+    mines = mines.filter((m) => !m.dead);
+  }
+  function updateCastle(dt) {
+    const k = waveK();
+    for (const rg of rings) {
+      rg.rot += rg.spin * k * dt;
+      // a ring shot away completely comes back after a moment
+      if (rg.segs.every((s) => s <= 0)) {
+        rg.regen += dt;
+        if (rg.regen > 2.4) { rg.segs = Array(SEGS).fill(2); rg.regen = 0; sfx.regen(); }
+      } else rg.regen = 0;
+    }
+    if (!cannon || cannon.dead) return;
+    // the cannon turns toward the ship and fires when it can see it
+    if (ship.alive) {
+      const want = Math.atan2(ship.y - CY, ship.x - CX);
+      cannon.a += clamp(angDiff(cannon.a, want), -(0.9 + 0.08 * wave) * diff.turn * dt, (0.9 + 0.08 * wave) * diff.turn * dt);
+      cannon.cool -= dt;
+      const aimed = Math.abs(angDiff(cannon.a, want)) < 0.12 && lineClear(cannon.a);
+      if (cannon.charge > 0) {
+        cannon.charge += dt;
+        if (cannon.charge > diff.charge) {
+          fireballs.push({ x: CX + Math.cos(cannon.a) * 18, y: CY + Math.sin(cannon.a) * 18, vx: Math.cos(cannon.a) * 240 * k * diff.ball, vy: Math.sin(cannon.a) * 240 * k * diff.ball, t: 0 });
+          cannon.charge = 0; cannon.cool = diff.cool * Math.pow(0.94, Math.min(wave, 8)); sfx.fire();
+        }
+      } else if (aimed && cannon.cool <= 0 && ship.shield <= 0) { cannon.charge = 0.001; sfx.charge(); }
+    } else cannon.charge = 0;
+    // mines
+    mineT -= dt;
+    if (mineT <= 0 && mines.length < 3) { const a = rnd(0, TAU); mines.push({ x: CX, y: CY, a, out: 0, t: 0 }); mineT = rnd(3, 5) / k; }
+    for (const m of mines) {
+      m.t += dt;
+      if (m.out < 1) { m.out = Math.min(1, m.out + dt * 0.9); const r = 20 + m.out * 80; m.x = CX + Math.cos(m.a) * r; m.y = CY + Math.sin(m.a) * r; continue; }
+      if (!ship.alive) continue;
+      const want = Math.atan2(ship.y - m.y, ship.x - m.x);
+      m.a += clamp(angDiff(m.a, want), -1.8 * dt, 1.8 * dt);
+      const sp = 62 * diff.mine * k;
+      m.x += Math.cos(m.a) * sp * dt; m.y += Math.sin(m.a) * sp * dt;
+      if (Math.hypot(m.x - ship.x, m.y - ship.y) < SHIP_R + 5) { m.dead = true; burst(m.x, m.y, "#ff8a3a", 8, 80, 0.4); shipHit(); }
+    }
+    mines = mines.filter((m) => !m.dead);
+  }
+  function updateFireballs(dt) {
+    for (const f of fireballs) {
+      f.t += dt; f.x += f.vx * dt; f.y += f.vy * dt;
+      if (ship.alive && Math.hypot(f.x - ship.x, f.y - ship.y) < SHIP_R + 7) { f.dead = true; shipHit(); }
+      if (f.x < -20 || f.x > W + 20 || f.y < -20 || f.y > H + 20) f.dead = true;
+      if (Math.random() < 0.6) parts.push({ x: f.x, y: f.y, vx: rnd(-20, 20), vy: rnd(-20, 20), t: 0, life: 0.3, c: "#ff8a3a" });
+    }
+    fireballs = fireballs.filter((f) => !f.dead);
+  }
+  function update(dt) {
+    clock += dt; sfxN = 0;
+    if (message) { message.t += dt; if (message.t > 2.2) message = null; }
+    for (const p of parts) { p.t += dt; p.x += p.vx * dt; p.y += p.vy * dt; p.vx *= 0.97; p.vy *= 0.97; }
+    parts = parts.filter((p) => p.t < p.life);
+    for (const p of popups) { p.t += dt; p.y -= 20 * dt; }
+    popups = popups.filter((p) => p.t < 1.2);
+    if (state === "menu") { for (const rg of rings) rg.rot += rg.spin * dt; if (cannon) cannon.a += dt * 0.5; return; }
+    if (!isPlaying()) return;
+    if (state === "intro") { stateT -= dt; for (const rg of rings) rg.rot += rg.spin * waveK() * dt; if (stateT <= 0) state = "play"; return; }
+    if (state === "cleared") {
+      stateT -= dt; updateShip(dt); updateBullets(dt);
+      if (stateT <= 0) { wave++; beginWave(); }
+      return;
+    }
+    if (state === "dying") { stateT -= dt; updateBullets(dt); updateFireballs(dt); if (stateT <= 0) gameOver(); return; }
+    if (window.__bot) window.__bot(dt);
+    updateShip(dt);
+    updateCastle(dt);
+    updateBullets(dt);
+    updateFireballs(dt);
+  }
+
+  // ---------- Drawing ----------
+  function drawRings() {
+    for (const rg of rings) {
+      ctx.lineCap = "butt";
+      for (let i = 0; i < SEGS; i++) {
+        const hp = rg.segs[i]; if (hp <= 0) continue;
+        const a0 = rg.rot + i * SEG_A + 0.05, a1 = rg.rot + (i + 1) * SEG_A - 0.05;
+        ctx.strokeStyle = hp === 2 ? rg.color : rg.dark; ctx.lineWidth = 6;
+        ctx.shadowColor = rg.color; ctx.shadowBlur = hp === 2 ? 10 : 3;
+        ctx.beginPath(); ctx.arc(CX, CY, rg.r, a0, a1); ctx.stroke();
+      }
+      ctx.shadowBlur = 0;
+      if (rg.regen > 0) { ctx.strokeStyle = `rgba(255,255,255,${0.15 + 0.15 * Math.sin(clock * 20)})`; ctx.lineWidth = 2; ctx.setLineDash([3, 6]); ctx.beginPath(); ctx.arc(CX, CY, rg.r, 0, TAU); ctx.stroke(); ctx.setLineDash([]); }
+    }
+  }
+  function drawCannon() {
+    if (!cannon) return;
+    if (cannon.dead) { ctx.fillStyle = `rgba(255,226,58,${0.3 + 0.2 * Math.sin(clock * 12)})`; ctx.beginPath(); ctx.arc(CX, CY, 10, 0, TAU); ctx.fill(); return; }
+    const glow = cannon.charge > 0 ? cannon.charge / diff.charge : 0;
+    if (glow > 0) {
+      // the warning line: it is about to fire along it
+      ctx.strokeStyle = `rgba(255,74,74,${0.25 + glow * 0.5})`; ctx.lineWidth = 1 + glow * 2; ctx.setLineDash([6, 6]);
+      ctx.beginPath(); ctx.moveTo(CX, CY); ctx.lineTo(CX + Math.cos(cannon.a) * 700, CY + Math.sin(cannon.a) * 700); ctx.stroke(); ctx.setLineDash([]);
+    }
+    ctx.save(); ctx.translate(CX, CY); ctx.rotate(cannon.a);
+    ctx.fillStyle = glow > 0 ? `rgb(255,${Math.round(200 - glow * 150)},${Math.round(80 - glow * 60)})` : "#ffe23a";
+    ctx.shadowColor = "#ffe23a"; ctx.shadowBlur = 12 + glow * 16;
+    ctx.beginPath(); ctx.moveTo(22, 0); ctx.lineTo(-10, -12); ctx.lineTo(-5, 0); ctx.lineTo(-10, 12); ctx.closePath(); ctx.fill();
+    ctx.shadowBlur = 0;
+    ctx.fillStyle = "#05060e"; ctx.beginPath(); ctx.arc(0, 0, 4, 0, TAU); ctx.fill();
+    ctx.restore();
+  }
+  function drawShip() {
+    if (!ship || !ship.alive) return;
+    if (ship.shield > 0 && Math.floor(clock * 12) % 2) return;
+    ctx.save(); ctx.translate(ship.x, ship.y); ctx.rotate(ship.a);
+    if (ship.thrust > 0) { ctx.fillStyle = "#ff8a3a"; ctx.beginPath(); ctx.moveTo(-7, -3); ctx.lineTo(-7 - 8 * ship.thrust - Math.random() * 4, 0); ctx.lineTo(-7, 3); ctx.fill(); }
+    ctx.strokeStyle = "#eef2ff"; ctx.lineWidth = 1.8; ctx.shadowColor = "#3af0ff"; ctx.shadowBlur = 8;
+    ctx.beginPath(); ctx.moveTo(11, 0); ctx.lineTo(-8, -7); ctx.lineTo(-4, 0); ctx.lineTo(-8, 7); ctx.closePath(); ctx.stroke();
+    ctx.shadowBlur = 0;
+    ctx.restore();
+  }
+  function drawHud() {
+    ctx.fillStyle = "rgba(5,6,14,0.85)"; ctx.fillRect(0, 0, W, 22);
+    ctx.textBaseline = "middle"; ctx.textAlign = "left";
+    ctx.fillStyle = "#eef2ff"; ctx.font = "900 14px system-ui"; ctx.fillText(score.toLocaleString("it-IT"), 10, 11);
+    ctx.fillStyle = "#9aa4c8"; ctx.font = "700 9px system-ui"; ctx.fillText(`REC ${Math.max(bestCache, score).toLocaleString("it-IT")}`, 100, 11);
+    ctx.textAlign = "center"; ctx.fillStyle = "#3af0ff"; ctx.font = "900 11px system-ui"; ctx.fillText(`CITTADELLA ${wave + 1}`, W / 2, 11);
+    ctx.textAlign = "right";
+    const lx = touchMode ? W - 70 : W - 10;
+    for (let i = 0; i < Math.min(lives, 8); i++) {
+      ctx.save(); ctx.translate(lx - i * 16, 11); ctx.rotate(-Math.PI / 2);
+      ctx.strokeStyle = "#eef2ff"; ctx.lineWidth = 1.3; ctx.beginPath(); ctx.moveTo(6, 0); ctx.lineTo(-5, -4); ctx.lineTo(-2, 0); ctx.lineTo(-5, 4); ctx.closePath(); ctx.stroke();
+      ctx.restore();
+    }
+    ctx.textBaseline = "alphabetic";
+  }
+  function draw() {
+    ctx.setTransform(pxRatio, 0, 0, pxRatio, 0, 0);
+    ctx.fillStyle = "#05060e"; ctx.fillRect(0, 0, W, H);
+    for (const s of stars) { ctx.fillStyle = `rgba(200,210,255,${s.b * (0.7 + 0.3 * Math.sin(clock * 2 + s.x))})`; ctx.fillRect(s.x, s.y, s.s, s.s); }
+    if (state === "menu" && !rings.length) { buildCastle(); rings[0].segs[2] = 0; rings[0].segs[3] = 1; rings[1].segs[5] = 0; rings[2].segs[8] = 1; }
+    drawRings();
+    drawCannon();
+    for (const m of mines) {
+      const sz = 5 + Math.sin(clock * 10 + m.a) * 1.2;
+      ctx.strokeStyle = "#ff8a3a"; ctx.lineWidth = 1.6; ctx.shadowColor = "#ff8a3a"; ctx.shadowBlur = 8;
+      ctx.beginPath(); for (let k = 0; k < 8; k++) { const a = k * Math.PI / 4 + clock * 3, r = k % 2 ? sz * 0.45 : sz; ctx.lineTo(m.x + Math.cos(a) * r, m.y + Math.sin(a) * r); } ctx.closePath(); ctx.stroke();
+      ctx.shadowBlur = 0;
+    }
+    for (const f of fireballs) {
+      ctx.fillStyle = "#ff4a4a"; ctx.shadowColor = "#ff8a3a"; ctx.shadowBlur = 16;
+      ctx.beginPath(); ctx.arc(f.x, f.y, 7, 0, TAU); ctx.fill();
+      ctx.fillStyle = "#ffe23a"; ctx.beginPath(); ctx.arc(f.x, f.y, 3.5, 0, TAU); ctx.fill();
+      ctx.shadowBlur = 0;
+    }
+    ctx.fillStyle = "#eef2ff";
+    for (const b of bullets) { ctx.fillRect(b.x - 1.5, b.y - 1.5, 3, 3); }
+    drawShip();
+    for (const p of parts) { ctx.globalAlpha = Math.max(0, 1 - p.t / p.life); ctx.fillStyle = p.c; ctx.fillRect(p.x - 1.2, p.y - 1.2, 2.4, 2.4); }
+    ctx.globalAlpha = 1;
+    for (const p of popups) {
+      ctx.globalAlpha = Math.max(0, 1 - p.t / 1.2);
+      ctx.textAlign = "center"; ctx.font = "900 11px system-ui"; ctx.fillStyle = p.color; ctx.fillText(p.text, p.x, p.y);
+    }
+    ctx.globalAlpha = 1;
+    if (state === "menu") return;
+    drawHud();
+    if (message) {
+      ctx.globalAlpha = Math.min(1, (2.2 - message.t) * 2);
+      ctx.textAlign = "center"; ctx.font = "900 26px system-ui"; ctx.fillStyle = "#3af0ff"; ctx.shadowColor = "#3af0ff"; ctx.shadowBlur = 14;
+      ctx.fillText(message.text, W / 2, 70); ctx.shadowBlur = 0;
+      if (message.sub) { ctx.font = "800 12px system-ui"; ctx.fillStyle = "#eef2ff"; ctx.fillText(message.sub, W / 2, 92); }
+      ctx.globalAlpha = 1;
+    }
+  }
+
+  // ---------- Loop ----------
+  const STEP = 1 / 120;
+  let last = performance.now(), acc = 0;
+  function frame(now) {
+    const dt = Math.min(0.1, (now - last) / 1000);
+    last = now;
+    if (isPlaying()) {
+      acc += dt;
+      while (acc >= STEP && isPlaying()) { update(STEP); acc -= STEP; }
+    } else { acc = 0; update(dt); }
+    draw();
+    requestAnimationFrame(frame);
+  }
+  syncControls();
+  showTitle();
+  requestAnimationFrame(frame);
+})();
+</script>
+<script src="../../shared/iniziali.js" data-record="cittadella-best-" data-kind="score"></script>
+</body>
+</html>

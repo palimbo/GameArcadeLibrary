@@ -4,7 +4,7 @@ Raccolta di giochi arcade per il browser. Ogni gioco è un singolo file HTML sen
 
 ## 🕹️ Sala Giochi — `index.html`
 
-Apri `index.html` nella cartella principale per la pagina di raccolta: mostra tutti i 84 giochi con copertina, genere, comandi e i tuoi record per ogni difficoltà (Facile, Normale, Difficile). Tocca «Gioca» per avviare un gioco; in ogni gioco il pulsante «← Sala Giochi» in alto a sinistra (visibile nei menu) riporta alla raccolta.
+Apri `index.html` nella cartella principale per la pagina di raccolta: mostra tutti i 85 giochi con copertina, genere, comandi e i tuoi record per ogni difficoltà (Facile, Normale, Difficile). Tocca «Gioca» per avviare un gioco; in ogni gioco il pulsante «← Sala Giochi» in alto a sinistra (visibile nei menu) riporta alla raccolta.
 
 **Iniziali del record:** quando batti un record compare la schermata da sala giochi per inserire le tue tre iniziali (frecce ↑ ↓ per cambiare lettera, ← → per spostarti, oppure scrivile direttamente; su telefono i tasti ▲ ▼ e OK). Le iniziali vengono salvate insieme al record e compaiono nei menu del gioco e nella Sala Giochi. Il codice è condiviso da tutti i giochi in `shared/iniziali.js`.
 
@@ -1325,3 +1325,18 @@ Rompicapo a tempo in stile *Pipe Dream*. Su un pavimento di 7×9 caselle c'è un
 - **Touch:** tocca una casella per posare il pezzo, tocca ACCELERA per far correre l'acqua
 
 Per giocare apri `games/idraulico-lampo/index.html` nel browser.
+
+### 🌀 Cittadella Stellare — `games/cittadella-stellare/index.html`
+
+Sparatutto vettoriale in stile *Star Castle*. Al centro dello schermo c'è un cannone protetto da tre anelli di energia che ruotano in versi opposti; tu guidi un'astronave che ruota e accelera (lo schermo continua dai bordi) e devi aprire un varco fino al nucleo.
+
+- **Anelli:** ogni pezzo regge due colpi (al primo si scurisce) · esterno 10 · centrale 20 · interno 30. Un anello distrutto del tutto si ricostruisce dopo un paio di secondi: bisogna far passare un colpo quando i varchi dei tre anelli si allineano
+- **Nucleo:** colpirlo vale 1.000 × numero della cittadella (fino a 5.000); poi ne arriva una nuova, più veloce
+- **Il cannone:** ruota verso di te e, quando ti vede attraverso i varchi, si carica (compare una linea rossa tratteggiata) e spara una palla di fuoco che non si può fermare: spostati di lato. Le astronavi appena arrivate hanno qualche secondo di scudo
+- **Mine:** escono dal centro e ti inseguono; colpiscile (50)
+- **Astronavi:** una in più ogni 10.000 punti; il campo della cittadella respinge l'astronave se ti avvicini troppo
+- **Difficoltà:** Facile (5 astronavi, il cannone avvisa prima e spara piano, mine lente), Normale (3 astronavi), Difficile (3 astronavi, il cannone spara spesso, mine veloci); record separati per ogni difficoltà
+- **Comandi:** `←` `→` ruota · `↑` spinta · `Spazio`, `J` o `Z` fuoco (tieni premuto) · `P` pausa
+- **Touch:** levetta (l'astronave si gira da quella parte e accelera) e pulsante FUOCO
+
+Per giocare apri `games/cittadella-stellare/index.html` nel browser.
