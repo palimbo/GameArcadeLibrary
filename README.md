@@ -4,7 +4,7 @@ Raccolta di giochi arcade per il browser. Ogni gioco è un singolo file HTML sen
 
 ## 🕹️ Sala Giochi — `index.html`
 
-Apri `index.html` nella cartella principale per la pagina di raccolta: mostra tutti i 93 giochi con copertina, genere, comandi e i tuoi record per ogni difficoltà (Facile, Normale, Difficile). Tocca «Gioca» per avviare un gioco; in ogni gioco il pulsante «← Sala Giochi» in alto a sinistra (visibile nei menu) riporta alla raccolta.
+Apri `index.html` nella cartella principale per la pagina di raccolta: mostra tutti i 94 giochi con copertina, genere, comandi e i tuoi record per ogni difficoltà (Facile, Normale, Difficile). Tocca «Gioca» per avviare un gioco; in ogni gioco il pulsante «← Sala Giochi» in alto a sinistra (visibile nei menu) riporta alla raccolta.
 
 **Iniziali del record:** quando batti un record compare la schermata da sala giochi per inserire le tue tre iniziali (frecce ↑ ↓ per cambiare lettera, ← → per spostarti, oppure scrivile direttamente; su telefono i tasti ▲ ▼ e OK). Le iniziali vengono salvate insieme al record e compaiono nei menu del gioco e nella Sala Giochi. Il codice è condiviso da tutti i giochi in `shared/iniziali.js`.
 
@@ -1457,3 +1457,17 @@ Astronave a gravità in stile *Thrust*. Scendi con la tua navicella nelle cavern
 - **Touch:** la levetta punta il muso dove vuoi, spinta fino in fondo accende anche il motore; pulsante FUOCO da tenere premuto
 
 Per giocare apri `games/raggio-traente/index.html` nel browser.
+
+### 🦁 Guardiano dello Zoo — `games/guardiano-dello-zoo/index.html`
+
+Azione in stile *Zoo Keeper*. Gli animali chiusi nel recinto prendono a testate i mattoni del muro per scappare; tu sei il guardiano e corri lungo il muro per rimetterli a posto.
+
+- **Il muro:** 48 mattoni. Ogni testata li incrina (l'orso vale doppio, l'elefante triplo) finché crollano, e da un varco l'animale scappa. Passando lungo il muro ripari ogni mattone davanti a te: 10 punti, 20 se era crollato
+- **Animali in fuga:** ti inseguono (senza mai essere veloci quanto te) e se ti prendono perdi una vita. Appena usciti dal varco restano un attimo frastornati. Con il salto li scavalchi (100 per ogni animale saltato)
+- **Retino e frutta:** quando qualcuno è scappato, ogni tanto compare un retino: per qualche secondo acchiappi gli animali in fuga e li riporti nel recinto (300). La frutta dà punti extra
+- **Round:** resisti fino allo scadere del tempo; 250 punti per ogni animale ancora nel recinto. Poi il recinto viene ricostruito e arrivano più animali, sempre più svelti: conigli e leoni, poi serpenti, orsi ed elefanti. Se ti prendono, gli animali in fuga vengono riportati dentro. Vita extra ogni 20.000 punti
+- **Difficoltà:** Facile (5 vite, animali lenti, retini più frequenti), Normale (3 vite), Difficile (3 vite, animali svelti, mattoni più fragili); record separati per ogni difficoltà
+- **Comandi:** frecce o `WASD` per correre · `Spazio`, `J` o `Z` salta · `P` pausa
+- **Touch:** levetta per correre e pulsante SALTA
+
+Per giocare apri `games/guardiano-dello-zoo/index.html` nel browser.
