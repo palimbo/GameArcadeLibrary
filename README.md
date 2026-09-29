@@ -4,7 +4,7 @@ Raccolta di giochi arcade per il browser. Ogni gioco è un singolo file HTML sen
 
 ## 🕹️ Sala Giochi — `index.html`
 
-Apri `index.html` nella cartella principale per la pagina di raccolta: mostra tutti i 89 giochi con copertina, genere, comandi e i tuoi record per ogni difficoltà (Facile, Normale, Difficile). Tocca «Gioca» per avviare un gioco; in ogni gioco il pulsante «← Sala Giochi» in alto a sinistra (visibile nei menu) riporta alla raccolta.
+Apri `index.html` nella cartella principale per la pagina di raccolta: mostra tutti i 90 giochi con copertina, genere, comandi e i tuoi record per ogni difficoltà (Facile, Normale, Difficile). Tocca «Gioca» per avviare un gioco; in ogni gioco il pulsante «← Sala Giochi» in alto a sinistra (visibile nei menu) riporta alla raccolta.
 
 **Iniziali del record:** quando batti un record compare la schermata da sala giochi per inserire le tue tre iniziali (frecce ↑ ↓ per cambiare lettera, ← → per spostarti, oppure scrivile direttamente; su telefono i tasti ▲ ▼ e OK). Le iniziali vengono salvate insieme al record e compaiono nei menu del gioco e nella Sala Giochi. Il codice è condiviso da tutti i giochi in `shared/iniziali.js`.
 
@@ -1399,3 +1399,18 @@ Il classico *Whac-A-Mole* delle sale giochi. Nove buche in un prato: le talpe sp
 - **Touch:** tocca la talpa
 
 Per giocare apri `games/martella-la-talpa/index.html` nel browser.
+
+### 🐢 Colpo da Sotto — `games/colpo-da-sotto/index.html`
+
+Piattaforme su schermo singolo in stile *Mario Bros* (quello da sala giochi). Un muratore col caschetto giallo lavora in un cantiere sotterraneo a quattro piani di piattaforme; dai tubi in alto escono bestiacce che camminano, cadono di piano in piano e, arrivate in fondo, rientrano nei tubi per ricominciare dall'alto. I lati dello schermo sono collegati.
+
+- **Come si batte un nemico:** non ci si salta sopra. Si salta **sotto** la piattaforma su cui cammina: il colpo lo ribalta. Poi bisogna raggiungerlo e toccarlo per buttarlo fuori con un calcio (800) prima che si rialzi, più arrabbiato e più veloce
+- **Nemici:** tartaruga (un colpo) · granchio (al primo colpo si arrabbia, al secondo si ribalta) · mosca (salta di continuo: si ribalta solo mentre tocca la piattaforma). L'ultimo nemico di ogni fase corre più veloce, ma mai più del muratore
+- **POW:** il blocco al centro, colpito da sotto, ribalta tutti i nemici a terra; regge 3 colpi e torna nuovo ogni 3 fasi
+- **Monete:** dopo ogni calcio una moneta esce da un tubo: prendila o colpiscila da sotto (800)
+- **Fasi:** tartarughe, poi granchi, poi mosche, poi tutto insieme, con sempre più nemici; fase superata 1.000 × fase (fino a 5.000). Vita extra ogni 20.000 punti
+- **Difficoltà:** Facile (5 vite, nemici lenti, restano ribaltati a lungo), Normale (3 vite), Difficile (3 vite, nemici veloci che si rialzano in fretta); record separati per ogni difficoltà
+- **Comandi:** `←` `→` corri · `Spazio`, `↑`, `J` o `Z` salta · `P` pausa
+- **Touch:** levetta per correre e pulsante SALTA
+
+Per giocare apri `games/colpo-da-sotto/index.html` nel browser.
