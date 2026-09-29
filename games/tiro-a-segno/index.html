@@ -1,0 +1,746 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no, viewport-fit=cover">
+<title>Tiro a Segno</title>
+<style>
+  :root {
+    --bg: #120c1e;
+    --fg: #fff6e8;
+    --muted: #c8b8a8;
+    --red: #e83a3a;
+    --gold: #ffcf3a;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  html, body {
+    height: 100%;
+    background: var(--bg);
+    color: var(--fg);
+    font-family: system-ui, -apple-system, "Segoe UI", sans-serif;
+    overflow: hidden;
+    user-select: none;
+    -webkit-user-select: none;
+    touch-action: none;
+  }
+  #wrap { position: fixed; inset: 0; display: flex; align-items: center; justify-content: center; }
+  canvas { display: block; touch-action: none; border-radius: 6px; box-shadow: 0 0 0 2px #3a2a4a, 0 10px 40px rgba(0,0,0,0.6); cursor: none; }
+  #pauseBtn {
+    position: fixed; z-index: 3; display: none; right: 10px; top: calc(10px + env(safe-area-inset-top, 0px));
+    font: 700 13px system-ui, sans-serif; color: var(--fg);
+    background: rgba(0, 0, 0, 0.6); border: 1px solid rgba(255, 246, 232, 0.35);
+    border-radius: 8px; padding: 6px 10px; cursor: pointer;
+  }
+  #overlay {
+    position: fixed; inset: 0; z-index: 5;
+    display: flex; flex-direction: column; align-items: center; justify-content: flex-start;
+    gap: 14px; padding: 16px; text-align: center; overflow-y: auto;
+    background: rgba(18, 12, 30, 0.93);
+  }
+  #overlay > :first-child { margin-top: auto; }
+  #overlay > :last-child { margin-bottom: auto; }
+  #overlay.hidden { display: none; }
+  #homeLink {
+    position: fixed; top: calc(10px + env(safe-area-inset-top, 0px)); left: 10px; z-index: 6;
+    font: 600 13px/1 system-ui, sans-serif; color: #fff; text-decoration: none;
+    padding: 8px 12px; border-radius: 999px; background: rgba(0,0,0,.55);
+    border: 1px solid rgba(255,255,255,.25);
+  }
+  #homeLink:hover { background: rgba(0,0,0,.8); }
+  #overlay.hidden ~ #homeLink { display: none; }
+  @media (max-width: 700px) { #overlay { padding-top: calc(52px + env(safe-area-inset-top, 0px)); } }
+  #overlay h1 { font-size: clamp(34px, 10vw, 60px); font-weight: 900; letter-spacing: 1px; color: var(--gold);
+    text-shadow: 3px 3px 0 #a82a2a, 0 0 22px rgba(255,207,58,0.35); }
+  #overlay h2 { font-size: clamp(26px, 7vw, 42px); font-weight: 900; letter-spacing: 2px; color: var(--gold); }
+  #overlay h2.lose { color: var(--red); }
+  #overlay p { max-width: 540px; font-size: clamp(13px, 3.4vw, 16px); line-height: 1.55; }
+  #overlay p.muted { color: var(--muted); }
+  #overlay .pts { display: grid; grid-template-columns: repeat(2, auto); gap: 4px 18px; font-size: 13px; color: var(--muted); text-align: left; max-width: 560px; }
+  #overlay .pts b { color: var(--fg); }
+  #overlay .diff { display: flex; gap: 10px; flex-wrap: wrap; justify-content: center; }
+  #overlay button {
+    font: 800 15px system-ui, sans-serif; letter-spacing: 1.5px; color: var(--fg);
+    background: transparent; cursor: pointer;
+    border: 2px solid rgba(255,246,232,0.3); border-radius: 10px; padding: 9px 16px;
+  }
+  #overlay .diff button.on { border-color: var(--c); color: var(--c); box-shadow: 0 0 12px var(--c); }
+  #overlay button.start { border-color: var(--gold); color: #3a1a0a; background: var(--gold); padding: 11px 30px; box-shadow: 0 4px 0 #a86a1a; }
+  @media (max-height: 560px) {
+    #overlay { gap: 8px; }
+    #overlay h1 { font-size: 30px; }
+    #overlay p { font-size: 13px; line-height: 1.4; }
+    #overlay .help, #overlay .pts { display: none; }
+  }
+</style>
+</head>
+<body>
+<div id="wrap"><canvas id="game"></canvas></div>
+<button id="pauseBtn" type="button" aria-label="Pausa">❚❚</button>
+<div id="overlay"></div>
+<a id="homeLink" href="../../index.html">← Sala Giochi</a>
+
+<script>
+(() => {
+  "use strict";
+
+  const W = 640, H = 360, TAU = Math.PI * 2;
+  const ROW1 = 118, ROW2 = 196, SHELF = 268, COUNTER = 300;
+  const CLIP = 6, RELOAD_TIME = 0.9, ROUND_TIME = 40, BONUS_TIME = 20;
+  const RELOAD_BOX = { x: 532, y: 314, w: 98, h: 38 };
+  const BOTTLE_SLOTS = [110, 190, 270, 370, 450, 530];
+  const POP_SLOTS = [150, 230, 320, 410, 490];
+  const PTS = { bottle: 40, duck: 60, rabbit: 100, balloon: 30, golden: 500, clock: 50 };
+
+  const DIFFICULTIES = {
+    facile:    { label: "FACILE",    color: "#7ed87a", desc: "bersagli lenti · punteggio minimo basso", speed: 0.85, quota: 0.75, pop: 1.9 },
+    normale:   { label: "NORMALE",   color: "#ffcf3a", desc: "bersagli a velocità normale", speed: 1, quota: 1, pop: 1.5 },
+    difficile: { label: "DIFFICILE", color: "#e83a3a", desc: "bersagli veloci · punteggio minimo alto", speed: 1.2, quota: 1.25, pop: 1.2 },
+  };
+  const DIFF_IDS = Object.keys(DIFFICULTIES);
+  const DIFF_KEY = "tiro-difficulty";
+  const bestKey = (id) => `tiro-best-${id}`;
+  function store(k, v) { try { localStorage.setItem(k, v); } catch { /* ignore */ } }
+  function load(k) { try { return localStorage.getItem(k); } catch { return null; } }
+  const rnd = (a, b) => a + Math.random() * (b - a);
+  const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
+
+  // ---------- Canvas ----------
+  const canvas = document.getElementById("game");
+  const ctx = canvas.getContext("2d");
+  const overlay = document.getElementById("overlay");
+  const pauseBtn = document.getElementById("pauseBtn");
+  let pxRatio = 1, touchMode = !!(window.matchMedia && matchMedia("(pointer: coarse)").matches);
+  function resize() {
+    const availW = window.innerWidth - 8, availH = window.innerHeight - 8;
+    const s = Math.max(0.2, Math.min(availW / W, availH / H));
+    pxRatio = Math.min(3, s * (window.devicePixelRatio || 1));
+    canvas.style.width = W * s + "px";
+    canvas.style.height = H * s + "px";
+    canvas.width = Math.round(W * pxRatio);
+    canvas.height = Math.round(H * pxRatio);
+  }
+  window.addEventListener("resize", () => syncControls());
+
+  // ---------- Audio ----------
+  let audioCtx = null;
+  function beep(freq, dur, type = "square", vol = 0.04, slide = 0, delay = 0) {
+    if (!audioCtx) return;
+    const t = audioCtx.currentTime + delay;
+    const osc = audioCtx.createOscillator(), gain = audioCtx.createGain();
+    osc.type = type;
+    osc.frequency.setValueAtTime(freq, t);
+    if (slide) osc.frequency.exponentialRampToValueAtTime(Math.max(20, freq + slide), t + dur);
+    gain.gain.setValueAtTime(vol, t);
+    gain.gain.exponentialRampToValueAtTime(0.0001, t + dur);
+    osc.connect(gain).connect(audioCtx.destination);
+    osc.start(t); osc.stop(t + dur + 0.02);
+  }
+  function noise(dur, vol, freq) {
+    if (!audioCtx) return;
+    const len = Math.floor(audioCtx.sampleRate * dur), buf = audioCtx.createBuffer(1, len, audioCtx.sampleRate), d = buf.getChannelData(0);
+    for (let i = 0; i < len; i++) d[i] = (Math.random() * 2 - 1) * (1 - i / len);
+    const src = audioCtx.createBufferSource(), f = audioCtx.createBiquadFilter(), g = audioCtx.createGain();
+    src.buffer = buf; f.type = "bandpass"; f.frequency.value = freq; g.gain.value = vol;
+    src.connect(f).connect(g).connect(audioCtx.destination); src.start();
+  }
+  const arp = (notes, gap, d, type = "square", vol = 0.04) => notes.forEach((f, i) => beep(f, d, type, vol, 0, i * gap));
+  let sfxN = 0;
+  const lim = (fn) => (...a) => { if (sfxN++ < 6) fn(...a); };
+  const sfx = {
+    shot: lim(() => { noise(0.08, 0.16, 1800); beep(180, 0.06, "square", 0.04, -100); }),
+    ding: lim((p) => beep(880 + p * 60, 0.12, "triangle", 0.06)),
+    glass: lim(() => { noise(0.2, 0.1, 5000); beep(2400, 0.08, "sine", 0.03); }),
+    pop: lim(() => { noise(0.06, 0.14, 3000); beep(1200, 0.04, "square", 0.03, -600); }),
+    miss: lim(() => beep(140, 0.05, "square", 0.02)),
+    empty: lim(() => beep(260, 0.03, "square", 0.03)),
+    reload: () => { beep(500, 0.04, "square", 0.03); beep(700, 0.05, "square", 0.03, 0, 0.35); beep(900, 0.05, "square", 0.03, 0, 0.7); },
+    owl: () => arp([330, 262, 196], 0.08, 0.14, "sawtooth", 0.04),
+    golden: () => arp([1047, 1319, 1568, 2093], 0.05, 0.1),
+    clock: () => arp([784, 1047], 0.06, 0.1),
+    combo: lim(() => arp([1319, 1568], 0.04, 0.07, "triangle", 0.04)),
+    pass: () => arp([523, 659, 784, 1047, 784, 1047, 1319], 0.1, 0.18),
+    tick: lim(() => beep(1500, 0.03, "square", 0.02)),
+    over: () => arp([523, 466, 415, 392, 330, 262], 0.15, 0.24, "triangle", 0.05),
+  };
+
+  // ---------- State ----------
+  let difficulty = DIFFICULTIES[load(DIFF_KEY)] ? load(DIFF_KEY) : "normale";
+  let diff = DIFFICULTIES[difficulty];
+  let state = "menu", menu = null, pausedFrom = null, stateT = 0, clock = 0;
+  let score = 0, round = 0, roundScore = 0, quota = 0, timeLeft = 0, bestCache = 0, bonusRound = false;
+  let ammo = CLIP, reloadT = 0, streak = 0, shots = 0, hits = 0, roundShots = 0, roundHits = 0;
+  let targets = [], bottles = [], parts = [], popups = [], holes = [], message = null, tally = null;
+  let spawn1 = 0, spawn2 = 0, spawnPop = 0, spawnBalloon = 0, spawnGold = 0, recoil = 0;
+  const cross = { x: W / 2, y: 180, seen: false };
+  const keys = { left: false, right: false, up: false, down: false };
+
+  const isBonus = (r) => r % 3 === 2;
+  const speedK = () => diff.speed * (1 + Math.min(round, 12) * 0.06);
+  const mult = () => Math.min(4, 1 + Math.floor(streak / 5));
+
+  // ---------- Flow ----------
+  const isPlaying = () => ["intro", "play", "tally"].includes(state);
+  function startGame() {
+    if (!audioCtx) { try { audioCtx = new (window.AudioContext || window.webkitAudioContext)(); } catch { audioCtx = null; } }
+    if (audioCtx && audioCtx.state === "suspended") audioCtx.resume();
+    score = 0; round = 0; shots = 0; hits = 0;
+    bestCache = parseInt(load(bestKey(difficulty)), 10) || 0;
+    beginRound();
+    menu = null;
+    overlay.classList.add("hidden");
+    syncControls();
+    last = performance.now();
+  }
+  function beginRound() {
+    bonusRound = isBonus(round);
+    roundScore = 0; roundShots = 0; roundHits = 0; streak = 0;
+    const n = round - Math.floor(round / 3);
+    quota = bonusRound ? 0 : Math.round((4000 + 1900 * n) * diff.quota / 100) * 100;
+    timeLeft = bonusRound ? BONUS_TIME : ROUND_TIME;
+    ammo = CLIP; reloadT = 0;
+    targets = []; parts = []; popups = []; holes = [];
+    bottles = BOTTLE_SLOTS.map((x) => ({ x, alive: true, t: rnd(0, 1) }));
+    spawn1 = 0; spawn2 = 0.5; spawnPop = 1.5; spawnBalloon = bonusRound ? 0 : 3; spawnGold = rnd(8, 16);
+    if (!bonusRound) {
+      // start with the rails already populated
+      for (let x = -20; x < W; x += rnd(80, 130)) addDuck(x);
+      for (let x = W + 20; x > 0; x -= rnd(100, 160)) addRabbit(x);
+    }
+    message = bonusRound ? { text: "PIOGGIA DI PALLONCINI!", sub: "round bonus: nessun minimo da raggiungere", t: 0 }
+      : { text: `ROUND ${round + 1}`, sub: `punteggio minimo ${quota.toLocaleString("it-IT")} in ${ROUND_TIME} secondi`, t: 0 };
+    state = "intro"; stateT = 2;
+  }
+  function addDuck(x) {
+    // now and then a clock (extra time) or an owl you must not hit rides the duck rail
+    const r = Math.random();
+    const kind = r < 0.1 + Math.min(round, 8) * 0.012 ? "owl" : r < 0.16 + Math.min(round, 8) * 0.012 ? "clock" : "duck";
+    targets.push({ kind, x, y: ROW1, vx: 70 * speedK(), r: kind === "clock" ? 13 : 15, ph: rnd(0, TAU), hitT: 0 });
+  }
+  function addRabbit(x) {
+    const kind = Math.random() < 0.08 + Math.min(round, 8) * 0.01 ? "owl" : "rabbit";
+    targets.push({ kind, x, y: ROW2, vx: -105 * speedK(), r: kind === "owl" ? 15 : 13, ph: rnd(0, TAU), hitT: 0 });
+  }
+  function addPopup() {
+    const free = POP_SLOTS.filter((x) => !targets.some((t) => t.kind === "bull" && t.x === x));
+    if (!free.length) return;
+    targets.push({ kind: "bull", x: free[Math.floor(Math.random() * free.length)], y: SHELF - 30, vx: 0, r: 22, up: 0, life: diff.pop * (1 - Math.min(round, 10) * 0.03), hitT: 0 });
+  }
+  function addBalloon() {
+    const colors = ["#e83a3a", "#3a8aff", "#ffcf3a", "#6ae86a", "#c86aff", "#ff8ad0"];
+    targets.push({ kind: "balloon", x: rnd(60, W - 60), y: COUNTER + 20, vx: 0, vy: -rnd(38, 60) * speedK(), r: 13, ph: rnd(0, TAU), c: colors[Math.floor(Math.random() * colors.length)], hitT: 0 });
+  }
+  function addGolden() {
+    const dir = Math.random() < 0.5 ? 1 : -1;
+    targets.push({ kind: "golden", x: dir > 0 ? -30 : W + 30, y: rnd(72, 90), vx: dir * 230 * speedK(), r: 12, ph: 0, hitT: 0 });
+  }
+  function addScore(n, x, y, color = "#fff6e8") {
+    score += n; roundScore += n;
+    if (x !== undefined) popups.push({ x, y, text: (n > 0 ? "" : "") + n, color, t: 0 });
+  }
+  function burst(x, y, c, n = 10, sp = 120, life = 0.6, g = 300) {
+    for (let k = 0; k < n; k++) { const a = Math.random() * TAU, s = sp * rnd(0.3, 1); parts.push({ x, y, vx: Math.cos(a) * s, vy: Math.sin(a) * s - 60, g, t: 0, life: life * rnd(0.6, 1.2), c }); }
+  }
+  function endRound() {
+    const acc = roundShots ? roundHits / roundShots : 0;
+    const accBonus = Math.round(acc * 10) * 100;
+    const passed = bonusRound || roundScore >= quota;
+    if (passed) { score += accBonus; sfx.pass(); }
+    tally = { passed, acc, accBonus, roundScore, quota };
+    state = "tally"; stateT = 3.2;
+  }
+  function afterTally() {
+    if (!tally.passed) { gameOver(); return; }
+    round++;
+    beginRound();
+  }
+  function gameOver() {
+    state = "over";
+    const prev = parseInt(load(bestKey(difficulty)), 10) || 0;
+    const record = score > prev;
+    if (record) store(bestKey(difficulty), String(score));
+    sfx.over();
+    const acc = shots ? Math.round(hits / shots * 100) : 0;
+    const failed = tally && !tally.passed;
+    menu = () => showOverlay(
+      `<h2 class="lose">${failed ? "PUNTEGGIO MINIMO MANCATO" : "PARTITA FINITA"}</h2>
+       ${failed ? `<p>Round ${round + 1}: ${tally.roundScore.toLocaleString("it-IT")} punti su ${tally.quota.toLocaleString("it-IT")}.</p>` : ""}
+       <p>Punteggio: <b>${score.toLocaleString("it-IT")}</b> · precisione ${acc}% · ${diff.label}</p>
+       ${record ? "<p style='color:var(--gold)'>★ NUOVO RECORD! ★</p>" : ""}
+       ${difficultyHTML()}
+       <button class="start" data-start>GIOCA ANCORA</button>`
+    );
+    menu();
+    syncControls();
+  }
+  function togglePause() {
+    if (isPlaying()) {
+      pausedFrom = state; state = "paused";
+      showOverlay(`<h2>PAUSA</h2><button class="start" data-resume>CONTINUA</button><p class="muted">Premi P per continuare</p>`);
+    } else if (state === "paused") {
+      state = pausedFrom; overlay.classList.add("hidden"); last = performance.now();
+    }
+    syncControls();
+  }
+  // the pause menu can end the game (shared/iniziali.js): it ends here the usual way, saving the record
+  window.addEventListener("sala:termina", () => { if (state !== "paused") return; state = pausedFrom; overlay.classList.add("hidden"); tally = null; gameOver(); syncControls(); });
+  function syncControls() {
+    pauseBtn.style.display = isPlaying() && touchMode ? "block" : "none";
+    resize();
+  }
+  pauseBtn.addEventListener("click", () => togglePause());
+  function showOverlay(html) { overlay.innerHTML = html; overlay.classList.remove("hidden"); }
+  function difficultyHTML() {
+    const buttons = DIFF_IDS.map((id) => {
+      const d = DIFFICULTIES[id];
+      return `<button type="button" data-diff="${id}" class="${id === difficulty ? "on" : ""}" style="--c:${d.color}">${d.label}</button>`;
+    }).join("");
+    const best = parseInt(load(bestKey(difficulty)), 10);
+    return `<div class="diff">${buttons}</div><p class="muted">${diff.desc}${best ? ` · Record: ${best.toLocaleString("it-IT")}` : ""}</p>`;
+  }
+  function setDifficulty(id) { if (!DIFFICULTIES[id]) return; difficulty = id; diff = DIFFICULTIES[id]; store(DIFF_KEY, id); if (menu) menu(); }
+  function showTitle() {
+    menu = showTitle;
+    showOverlay(
+      `<h1>TIRO A SEGNO</h1>
+       <p>Il baraccone del luna park è aperto! Papere, conigli, bottiglie e bersagli che spuntano dal bancone: in ogni round devi fare almeno il punteggio minimo prima che scada il tempo. Occhio al gufo col cartello: non va colpito.</p>
+       <div class="pts">
+         <span><b>Bersagli</b></span><span>bottiglia 40 · papera 60 · coniglio 100 · palloncino 30 · bersaglio 50/100/200 (centro)</span>
+         <span><b>Speciali</b></span><span>papera d'oro in volo 500 · orologio +5 secondi</span>
+         <span><b>Gufo</b></span><span>colpirlo costa 200 punti e 3 secondi</span>
+         <span><b>Combo</b></span><span>ogni 5 colpi a segno di fila il moltiplicatore sale (fino a ×4); un colpo a vuoto lo azzera</span>
+         <span><b>Fucile</b></span><span>${CLIP} colpi, poi si ricarica da solo; puoi ricaricare prima quando vuoi</span>
+       </div>
+       ${touchMode
+         ? `<p class="muted help">Tocca un bersaglio per sparare · tocca RICARICA sul bancone per ricaricare</p>`
+         : `<p class="muted help">Mira col mouse e clicca per sparare · tasto destro o R per ricaricare · (anche frecce + SPAZIO) · P pausa</p>`}
+       ${difficultyHTML()}
+       <button class="start" data-start>SI SPARA!</button>`
+    );
+  }
+  overlay.addEventListener("click", (e) => {
+    const d = e.target.closest("[data-diff]");
+    if (d) { setDifficulty(d.dataset.diff); return; }
+    if (e.target.closest("[data-start]")) startGame();
+    if (e.target.closest("[data-resume]")) togglePause();
+  });
+
+  // ---------- Shooting ----------
+  function startReload() {
+    if (reloadT > 0 || ammo === CLIP || state !== "play") return;
+    reloadT = RELOAD_TIME; sfx.reload();
+  }
+  const inReloadBox = (x, y) => x >= RELOAD_BOX.x && x <= RELOAD_BOX.x + RELOAD_BOX.w && y >= RELOAD_BOX.y && y <= RELOAD_BOX.y + RELOAD_BOX.h;
+  function shoot(x, y) {
+    if (state !== "play") return;
+    if (inReloadBox(x, y)) { startReload(); return; }
+    if (reloadT > 0) return;
+    if (ammo <= 0) { sfx.empty(); startReload(); return; }
+    ammo--; shots++; roundShots++; recoil = 1;
+    sfx.shot();
+    // the front-most target under the sight takes the shot
+    let hit = null;
+    for (let i = targets.length - 1; i >= 0; i--) {
+      const t = targets[i];
+      if (t.hitT > 0) continue;
+      if (t.kind === "bull" && t.up < 0.6) continue;
+      const dx = x - t.x, dy = y - (t.kind === "bull" ? t.y : t.y);
+      if (dx * dx + dy * dy <= t.r * t.r) { hit = t; break; }
+    }
+    let bottle = null;
+    if (!hit) for (const b of bottles) if (b.alive && Math.abs(x - b.x) < 8 && y > SHELF - 34 && y < SHELF) bottle = b;
+    if (hit) hitTarget(hit, x, y);
+    else if (bottle) {
+      bottle.alive = false; bottle.t = rnd(2.5, 4);
+      registerHit(PTS.bottle, bottle.x, SHELF - 36);
+      sfx.glass(); burst(bottle.x, SHELF - 16, "#8ae8a8", 14, 140, 0.6);
+    } else {
+      streak = 0; sfx.miss();
+      holes.push({ x, y, t: 0 });
+      burst(x, y, "#c8a878", 4, 50, 0.3);
+    }
+    if (ammo === 0) startReload();
+  }
+  function registerHit(base, x, y, color) {
+    hits++; roundHits++; streak++;
+    const m = mult();
+    if (streak % 5 === 0 && m > 1) sfx.combo();
+    addScore(base * m, x, y, color || (m > 1 ? "#ffcf3a" : "#fff6e8"));
+  }
+  function hitTarget(t, x, y) {
+    t.hitT = 0.001;
+    if (t.kind === "owl") {
+      streak = 0; hits++; roundHits++;
+      addScore(-200, t.x, t.y - 24, "#e83a3a");
+      timeLeft = Math.max(0, timeLeft - 3);
+      popups.push({ x: t.x, y: t.y - 40, text: "−3 s", color: "#e83a3a", t: 0 });
+      sfx.owl();
+      return;
+    }
+    if (t.kind === "bull") {
+      const d = Math.hypot(x - t.x, y - t.y), ring = d < 7 ? 200 : d < 15 ? 100 : 50;
+      registerHit(ring, t.x, t.y - 30, ring === 200 ? "#ffcf3a" : undefined);
+      sfx.ding(ring / 50);
+      if (ring === 200) burst(t.x, t.y, "#ffcf3a", 12, 110, 0.5);
+      return;
+    }
+    if (t.kind === "balloon") { registerHit(PTS.balloon, t.x, t.y - 18); sfx.pop(); burst(t.x, t.y, t.c, 12, 140, 0.4, 100); return; }
+    if (t.kind === "golden") { registerHit(PTS.golden, t.x, t.y - 18, "#ffcf3a"); sfx.golden(); burst(t.x, t.y, "#ffcf3a", 24, 160, 0.8); return; }
+    if (t.kind === "clock") {
+      registerHit(PTS.clock, t.x, t.y - 24); timeLeft += 5; sfx.clock();
+      popups.push({ x: t.x, y: t.y - 40, text: "+5 s", color: "#7ad0ff", t: 0 });
+      return;
+    }
+    registerHit(PTS[t.kind], t.x, t.y - 24);
+    sfx.ding(t.kind === "rabbit" ? 3 : 1);
+  }
+
+  // ---------- Input ----------
+  const KEYMAP = { arrowleft: "left", a: "left", arrowright: "right", d: "right", arrowup: "up", w: "up", arrowdown: "down", s: "down" };
+  window.addEventListener("keydown", (e) => {
+    const k = e.key.toLowerCase();
+    if ([" ", "arrowup", "arrowdown", "arrowleft", "arrowright"].includes(k)) e.preventDefault();
+    if (state === "menu" || state === "over") {
+      if (e.key === "Enter") startGame();
+      else if (["1", "2", "3"].includes(k)) setDifficulty(DIFF_IDS[+k - 1]);
+      return;
+    }
+    if (k === "p" || k === "escape") { if (!e.repeat) togglePause(); return; }
+    if (state === "paused") { if (e.key === "Enter") togglePause(); return; }
+    if ((k === " " || k === "j") && !e.repeat) { cross.seen = true; shoot(cross.x, cross.y); }
+    if (k === "r" && !e.repeat) startReload();
+    if (KEYMAP[k]) { keys[KEYMAP[k]] = true; cross.seen = true; }
+  });
+  window.addEventListener("keyup", (e) => { const k = e.key.toLowerCase(); if (KEYMAP[k]) keys[KEYMAP[k]] = false; });
+  window.addEventListener("blur", () => { for (const k in keys) keys[k] = false; if (isPlaying()) togglePause(); });
+  const toWorld = (e) => { const rc = canvas.getBoundingClientRect(); return { x: (e.clientX - rc.left) / rc.width * W, y: (e.clientY - rc.top) / rc.height * H }; };
+  canvas.addEventListener("pointermove", (e) => { if (e.pointerType === "touch") return; const p = toWorld(e); cross.x = p.x; cross.y = p.y; cross.seen = true; });
+  canvas.addEventListener("pointerdown", (e) => {
+    e.preventDefault();
+    const p = toWorld(e);
+    if (e.pointerType === "touch") { cross.seen = false; }
+    else { cross.x = p.x; cross.y = p.y; cross.seen = true; }
+    if (e.button === 2) { startReload(); return; }
+    shoot(p.x, p.y);
+    if (e.pointerType === "touch") holes.push({ x: p.x, y: p.y, t: 0, mark: true });
+  });
+  canvas.addEventListener("contextmenu", (e) => e.preventDefault());
+  window.addEventListener("pointerdown", (e) => { if (e.pointerType === "touch" && !touchMode) { touchMode = true; syncControls(); if (menu) menu(); } }, true);
+
+  // ---------- Update ----------
+  function update(dt) {
+    clock += dt; sfxN = 0;
+    if (message) { message.t += dt; if (message.t > 2.2) message = null; }
+    for (const p of parts) { p.t += dt; p.x += p.vx * dt; p.y += p.vy * dt; p.vy += p.g * dt; }
+    parts = parts.filter((p) => p.t < p.life);
+    for (const p of popups) { p.t += dt; p.y -= 24 * dt; }
+    popups = popups.filter((p) => p.t < 1.1);
+    for (const h of holes) h.t += dt;
+    holes = holes.filter((h) => h.t < (h.mark ? 0.25 : 1.5));
+    recoil = Math.max(0, recoil - dt * 6);
+    // the keyboard sight
+    const kx = (keys.right ? 1 : 0) - (keys.left ? 1 : 0), ky = (keys.down ? 1 : 0) - (keys.up ? 1 : 0);
+    if (kx || ky) { cross.x = clamp(cross.x + kx * 380 * dt, 0, W); cross.y = clamp(cross.y + ky * 380 * dt, 36, H); }
+    if (!isPlaying()) { if (state === "menu") animateTargets(dt * 0.6, true); return; }
+    if (state === "intro") { stateT -= dt; animateTargets(dt, false); if (stateT <= 0) state = "play"; return; }
+    if (state === "tally") { stateT -= dt; if (stateT <= 0) afterTally(); return; }
+    if (window.__bot) window.__bot(dt);
+    if (reloadT > 0) { reloadT -= dt; if (reloadT <= 0) { reloadT = 0; ammo = CLIP; } }
+    const before = Math.ceil(timeLeft);
+    timeLeft -= dt;
+    if (Math.ceil(timeLeft) !== before && timeLeft < 5 && timeLeft > 0) sfx.tick();
+    animateTargets(dt, true);
+    if (timeLeft <= 0) { timeLeft = 0; endRound(); }
+  }
+  function animateTargets(dt, spawning) {
+    for (const t of targets) {
+      t.ph = (t.ph || 0) + dt * 6;
+      if (t.hitT > 0) { t.hitT += dt; if (t.kind === "balloon" || t.kind === "golden") t.gone = t.hitT > 0.05; }
+      if (t.kind === "bull") {
+        if (t.hitT > 0) { t.up = Math.max(0, t.up - dt * 3); if (t.up <= 0) t.gone = true; t.y = SHELF - 56 * t.up + 26; continue; }
+        t.life -= dt;
+        t.up = t.life > 0 ? Math.min(1, t.up + dt * 4) : t.up - dt * 4;
+        if (t.up <= 0 && t.life <= 0) t.gone = true;
+        t.y = SHELF - 56 * Math.max(0, t.up) + 26;
+        continue;
+      }
+      if (t.kind === "balloon") { t.y += t.vy * dt; t.x += Math.sin(t.ph * 0.3) * 12 * dt; if (t.y < 30) t.gone = true; continue; }
+      t.x += t.vx * dt;
+      if (t.kind === "golden") t.y += Math.sin(t.ph * 0.8) * 30 * dt;
+      if (t.hitT > 0.6 || t.x > W + 40 || t.x < -40) t.gone = true;
+    }
+    targets = targets.filter((t) => !t.gone);
+    for (const b of bottles) if (!b.alive) { b.t -= dt; if (b.t <= 0) b.alive = true; }
+    if (!spawning) return;
+    // keep the rails filled
+    if (!bonusRound) {
+      spawn1 -= dt; spawn2 -= dt; spawnPop -= dt; spawnGold -= dt;
+      if (spawn1 <= 0) { addDuck(-20); spawn1 = rnd(80, 140) / (70 * speedK()); }
+      if (spawn2 <= 0) { addRabbit(W + 20); spawn2 = rnd(110, 190) / (105 * speedK()); }
+      if (spawnPop <= 0) { addPopup(); spawnPop = rnd(1.2, 2.4) / Math.min(1.6, speedK()); }
+      if (spawnGold <= 0) { addGolden(); spawnGold = rnd(12, 20); }
+    }
+    spawnBalloon -= dt;
+    if (spawnBalloon <= 0) { addBalloon(); spawnBalloon = bonusRound ? rnd(0.25, 0.5) : rnd(3, 5); }
+  }
+
+  // ---------- Drawing ----------
+  function drawBooth() {
+    // night sky and fairground lights
+    const g = ctx.createLinearGradient(0, 0, 0, H);
+    g.addColorStop(0, "#1a1030"); g.addColorStop(1, "#3a1a3a");
+    ctx.fillStyle = g; ctx.fillRect(0, 0, W, H);
+    // back wall: blue velvet with stars
+    ctx.fillStyle = "#1e2a5a"; ctx.fillRect(20, 58, W - 40, COUNTER - 58);
+    ctx.fillStyle = "rgba(255,255,255,0.08)";
+    for (let i = 0; i < 40; i++) { const x = 30 + (i * 137) % (W - 60), y = 64 + (i * 71) % 220; ctx.beginPath(); ctx.arc(x, y, 1.5 + (i % 3), 0, TAU); ctx.fill(); }
+    // rails
+    for (const y of [ROW1 + 18, ROW2 + 18]) {
+      ctx.fillStyle = "#6a6a7a"; ctx.fillRect(20, y, W - 40, 5);
+      ctx.fillStyle = "#b8b8c8"; ctx.fillRect(20, y, W - 40, 1.5);
+    }
+    // the shelf for bottles and pop-ups
+    ctx.fillStyle = "#6a3a1a"; ctx.fillRect(20, SHELF, W - 40, 10);
+    ctx.fillStyle = "#8a5a2a"; ctx.fillRect(20, SHELF, W - 40, 3);
+  }
+  function drawPosts() {
+    // side posts with light bulbs, in front of the targets sliding in and out
+    ctx.fillStyle = "#120c1e"; ctx.fillRect(0, 40, 8, COUNTER - 40); ctx.fillRect(W - 8, 40, 8, COUNTER - 40);
+    for (const x of [8, W - 20]) {
+      ctx.fillStyle = "#a82a2a"; ctx.fillRect(x, 40, 12, COUNTER - 40);
+      for (let y = 52; y < COUNTER; y += 18) { const on = Math.floor(clock * 4 + y / 18) % 2; ctx.fillStyle = on ? "#ffe07a" : "#8a6a3a"; ctx.beginPath(); ctx.arc(x + 6, y, 3.5, 0, TAU); ctx.fill(); }
+    }
+  }
+  function drawAwning() {
+    // striped awning with a scalloped edge
+    for (let i = 0; i < 16; i++) { ctx.fillStyle = i % 2 ? "#fff6e8" : "#e83a3a"; ctx.fillRect(i * 40, 34, 40, 20); }
+    for (let i = 0; i < 16; i++) { ctx.fillStyle = i % 2 ? "#fff6e8" : "#e83a3a"; ctx.beginPath(); ctx.arc(i * 40 + 20, 54, 20, 0, Math.PI); ctx.fill(); }
+    ctx.fillStyle = "#ffcf3a"; ctx.fillRect(0, 34, W, 3);
+  }
+  function drawCounter() {
+    ctx.fillStyle = "#8a4a1a"; ctx.fillRect(0, COUNTER, W, H - COUNTER);
+    ctx.fillStyle = "#a86a2a"; ctx.fillRect(0, COUNTER, W, 6);
+    for (let x = 0; x < W; x += 64) { ctx.fillStyle = "rgba(0,0,0,0.12)"; ctx.fillRect(x, COUNTER + 6, 2, H - COUNTER); }
+    // shells left, as cartridges on the counter
+    for (let i = 0; i < CLIP; i++) {
+      const x = 22 + i * 16, y = 322, full = i < ammo;
+      ctx.fillStyle = full ? "#d8a83a" : "rgba(0,0,0,0.25)"; ctx.fillRect(x, y, 9, 20);
+      if (full) { ctx.fillStyle = "#c83a2a"; ctx.fillRect(x, y + 12, 9, 8); ctx.fillStyle = "#f4d88a"; ctx.fillRect(x + 1, y + 1, 2, 10); }
+    }
+    if (reloadT > 0) {
+      ctx.fillStyle = "#ffcf3a"; ctx.font = "900 12px system-ui"; ctx.textAlign = "left"; ctx.textBaseline = "middle";
+      ctx.fillText("RICARICA…", 124, 332);
+      ctx.fillStyle = "rgba(255,255,255,0.2)"; ctx.fillRect(124, 342, 80, 4);
+      ctx.fillStyle = "#ffcf3a"; ctx.fillRect(124, 342, 80 * (1 - reloadT / RELOAD_TIME), 4);
+    }
+    // the reload button
+    const b = RELOAD_BOX, low = ammo <= 2 && reloadT <= 0;
+    ctx.fillStyle = low && Math.floor(clock * 4) % 2 ? "#ffcf3a" : "#5a2a0a"; ctx.fillRect(b.x, b.y, b.w, b.h);
+    ctx.strokeStyle = "#ffcf3a"; ctx.lineWidth = 2; ctx.strokeRect(b.x + 1, b.y + 1, b.w - 2, b.h - 2);
+    ctx.fillStyle = low && Math.floor(clock * 4) % 2 ? "#3a1a0a" : "#ffcf3a"; ctx.font = "900 12px system-ui"; ctx.textAlign = "center"; ctx.textBaseline = "middle";
+    ctx.fillText("RICARICA", b.x + b.w / 2, b.y + b.h / 2);
+    // the rifle, pointing at the sight
+    const px = 330, py = H + 6;
+    const tx = cross.seen ? cross.x : W / 2, ty = cross.seen ? cross.y : 180;
+    const a = Math.atan2(ty - py, tx - px);
+    ctx.save(); ctx.translate(px, py); ctx.rotate(a); ctx.translate(-recoil * 8, 0);
+    ctx.fillStyle = "#3a2a1a"; ctx.fillRect(-20, -7, 60, 14);
+    ctx.fillStyle = "#2a2a30"; ctx.fillRect(30, -4, 70, 8);
+    ctx.fillStyle = "#6a6a78"; ctx.fillRect(30, -4, 70, 2);
+    ctx.fillStyle = "#1a1a1e"; ctx.fillRect(96, -6, 4, 3);
+    if (recoil > 0.7) { ctx.fillStyle = "#ffe07a"; ctx.beginPath(); ctx.arc(106, 0, 8 * recoil, 0, TAU); ctx.fill(); }
+    ctx.restore();
+  }
+  function drawDuck(t) {
+    const flip = t.hitT > 0 ? Math.min(1, t.hitT * 4) : 0;
+    ctx.save(); ctx.translate(t.x, t.y + 16);
+    ctx.scale(1, Math.cos(flip * Math.PI / 2));
+    ctx.translate(0, -16 + Math.sin(t.ph) * 1.5);
+    ctx.fillStyle = "#6a6a7a"; ctx.fillRect(-2, 6, 4, 12);
+    ctx.fillStyle = "#ffcf3a"; ctx.beginPath(); ctx.ellipse(0, 2, 15, 9, 0, 0, TAU); ctx.fill();
+    ctx.beginPath(); ctx.arc(9, -8, 7, 0, TAU); ctx.fill();
+    ctx.fillStyle = "#ff8a2a"; ctx.beginPath(); ctx.moveTo(15, -9); ctx.lineTo(22, -7); ctx.lineTo(15, -5); ctx.fill();
+    ctx.fillStyle = "#1a1a1a"; ctx.beginPath(); ctx.arc(11, -10, 1.6, 0, TAU); ctx.fill();
+    ctx.fillStyle = "#e8b82a"; ctx.beginPath(); ctx.ellipse(-3, 1, 7, 4, -0.3, 0, TAU); ctx.fill();
+    ctx.strokeStyle = "#8a6a1a"; ctx.lineWidth = 1; ctx.beginPath(); ctx.ellipse(0, 2, 15, 9, 0, 0, TAU); ctx.stroke();
+    ctx.restore();
+  }
+  function drawRabbit(t) {
+    const flip = t.hitT > 0 ? Math.min(1, t.hitT * 4) : 0;
+    ctx.save(); ctx.translate(t.x, t.y + 16);
+    ctx.scale(1, Math.cos(flip * Math.PI / 2));
+    ctx.translate(0, -16 + Math.abs(Math.sin(t.ph * 1.3)) * -3);
+    ctx.fillStyle = "#6a6a7a"; ctx.fillRect(-2, 6, 4, 12);
+    ctx.fillStyle = "#e8e0d8"; ctx.beginPath(); ctx.ellipse(0, 1, 12, 8, 0, 0, TAU); ctx.fill();
+    ctx.beginPath(); ctx.arc(-9, -5, 6, 0, TAU); ctx.fill();
+    ctx.beginPath(); ctx.ellipse(-8, -15, 2.5, 7, -0.2, 0, TAU); ctx.fill(); ctx.beginPath(); ctx.ellipse(-12, -14, 2.5, 7, -0.5, 0, TAU); ctx.fill();
+    ctx.fillStyle = "#ff9ab8"; ctx.beginPath(); ctx.ellipse(-8, -15, 1, 5, -0.2, 0, TAU); ctx.fill();
+    ctx.fillStyle = "#1a1a1a"; ctx.beginPath(); ctx.arc(-11, -6, 1.4, 0, TAU); ctx.fill();
+    ctx.fillStyle = "#fff"; ctx.beginPath(); ctx.arc(11, 0, 3.5, 0, TAU); ctx.fill();
+    ctx.strokeStyle = "#8a8078"; ctx.lineWidth = 1; ctx.beginPath(); ctx.ellipse(0, 1, 12, 8, 0, 0, TAU); ctx.stroke();
+    ctx.restore();
+  }
+  function drawOwl(t) {
+    const flip = t.hitT > 0 ? Math.min(1, t.hitT * 4) : 0;
+    ctx.save(); ctx.translate(t.x, t.y + 16);
+    ctx.scale(1, Math.cos(flip * Math.PI / 2));
+    ctx.translate(0, -16);
+    ctx.fillStyle = "#6a6a7a"; ctx.fillRect(-2, 8, 4, 10);
+    ctx.fillStyle = "#8a5a2a"; ctx.beginPath(); ctx.ellipse(0, 0, 12, 14, 0, 0, TAU); ctx.fill();
+    ctx.beginPath(); ctx.moveTo(-10, -10); ctx.lineTo(-8, -18); ctx.lineTo(-3, -12); ctx.fill(); ctx.beginPath(); ctx.moveTo(10, -10); ctx.lineTo(8, -18); ctx.lineTo(3, -12); ctx.fill();
+    ctx.fillStyle = "#fff6e8"; ctx.beginPath(); ctx.arc(-5, -4, 5, 0, TAU); ctx.arc(5, -4, 5, 0, TAU); ctx.fill();
+    ctx.fillStyle = "#1a1a1a"; ctx.beginPath(); ctx.arc(-5, -4, 2.5, 0, TAU); ctx.arc(5, -4, 2.5, 0, TAU); ctx.fill();
+    ctx.fillStyle = "#ffcf3a"; ctx.beginPath(); ctx.moveTo(-2, 1); ctx.lineTo(2, 1); ctx.lineTo(0, 5); ctx.fill();
+    // the "no" sign
+    ctx.fillStyle = "#fff6e8"; ctx.fillRect(-14, 5, 28, 12); ctx.strokeStyle = "#e83a3a"; ctx.lineWidth = 2; ctx.strokeRect(-14, 5, 28, 12);
+    ctx.fillStyle = "#e83a3a"; ctx.font = "900 9px system-ui"; ctx.textAlign = "center"; ctx.textBaseline = "middle"; ctx.fillText("NO!", 0, 11.5);
+    ctx.restore();
+  }
+  function drawClock(t) {
+    const flip = t.hitT > 0 ? Math.min(1, t.hitT * 4) : 0;
+    ctx.save(); ctx.translate(t.x, t.y + 16); ctx.scale(1, Math.cos(flip * Math.PI / 2)); ctx.translate(0, -16);
+    ctx.fillStyle = "#6a6a7a"; ctx.fillRect(-2, 8, 4, 10);
+    ctx.fillStyle = "#3a8aff"; ctx.beginPath(); ctx.arc(0, 0, 13, 0, TAU); ctx.fill();
+    ctx.fillStyle = "#fff6e8"; ctx.beginPath(); ctx.arc(0, 0, 10, 0, TAU); ctx.fill();
+    ctx.strokeStyle = "#1a1a1a"; ctx.lineWidth = 2; ctx.beginPath(); ctx.moveTo(0, 0); ctx.lineTo(0, -7); ctx.moveTo(0, 0); ctx.lineTo(5, 2); ctx.stroke();
+    ctx.fillStyle = "#3a8aff"; ctx.font = "900 8px system-ui"; ctx.textAlign = "center"; ctx.fillText("+5", 0, 8);
+    ctx.restore();
+  }
+  function drawBull(t) {
+    const h = 56 * t.up;
+    ctx.save();
+    ctx.beginPath(); ctx.rect(t.x - 30, SHELF - 70, 60, 70); ctx.clip();
+    const y = SHELF - h + 28;
+    ctx.fillStyle = "#6a6a7a"; ctx.fillRect(t.x - 2, y, 4, 40);
+    for (const [r, c] of [[22, "#fff6e8"], [18, "#e83a3a"], [15, "#fff6e8"], [11, "#e83a3a"], [7, "#fff6e8"], [4, "#e83a3a"]]) { ctx.fillStyle = c; ctx.beginPath(); ctx.arc(t.x, y - 2, r, 0, TAU); ctx.fill(); }
+    ctx.restore();
+  }
+  function drawBottle(b) {
+    if (!b.alive) return;
+    const x = b.x, y = SHELF;
+    ctx.fillStyle = "rgba(90,200,120,0.85)"; ctx.fillRect(x - 6, y - 24, 12, 24);
+    ctx.fillRect(x - 3, y - 34, 6, 11);
+    ctx.fillStyle = "rgba(255,255,255,0.45)"; ctx.fillRect(x - 4, y - 22, 2, 18);
+    ctx.fillStyle = "#c8a878"; ctx.fillRect(x - 3, y - 36, 6, 3);
+  }
+  function drawBalloon(t) {
+    ctx.strokeStyle = "rgba(255,255,255,0.5)"; ctx.lineWidth = 1; ctx.beginPath(); ctx.moveTo(t.x, t.y + 15); ctx.quadraticCurveTo(t.x + Math.sin(t.ph) * 5, t.y + 26, t.x, t.y + 36); ctx.stroke();
+    ctx.fillStyle = t.c; ctx.beginPath(); ctx.ellipse(t.x, t.y, 12, 15, 0, 0, TAU); ctx.fill();
+    ctx.beginPath(); ctx.moveTo(t.x - 3, t.y + 16); ctx.lineTo(t.x + 3, t.y + 16); ctx.lineTo(t.x, t.y + 13); ctx.fill();
+    ctx.fillStyle = "rgba(255,255,255,0.45)"; ctx.beginPath(); ctx.ellipse(t.x - 4, t.y - 6, 3, 5, -0.4, 0, TAU); ctx.fill();
+  }
+  function drawGolden(t) {
+    const flap = Math.sin(t.ph * 2.5) * 8, d = Math.sign(t.vx) || 1;
+    ctx.save(); ctx.translate(t.x, t.y); ctx.scale(d, 1);
+    ctx.fillStyle = "#ffcf3a"; ctx.beginPath(); ctx.ellipse(0, 0, 13, 7, 0, 0, TAU); ctx.fill();
+    ctx.beginPath(); ctx.arc(10, -5, 5.5, 0, TAU); ctx.fill();
+    ctx.fillStyle = "#ffe89a"; ctx.beginPath(); ctx.moveTo(-4, -2); ctx.lineTo(4, -2); ctx.lineTo(0, -8 - flap); ctx.fill();
+    ctx.fillStyle = "#ff8a2a"; ctx.beginPath(); ctx.moveTo(15, -6); ctx.lineTo(21, -4); ctx.lineTo(15, -3); ctx.fill();
+    ctx.fillStyle = "#1a1a1a"; ctx.beginPath(); ctx.arc(11, -6, 1.3, 0, TAU); ctx.fill();
+    ctx.restore();
+    ctx.fillStyle = "rgba(255,230,120,0.7)";
+    for (let k = 1; k < 4; k++) ctx.fillRect(t.x - d * (k * 10 + 8), t.y + Math.sin(t.ph + k) * 3, 3, 3);
+  }
+  function drawHud() {
+    ctx.fillStyle = "#120c1e"; ctx.fillRect(0, 0, W, 34);
+    ctx.textBaseline = "middle"; ctx.textAlign = "left";
+    ctx.fillStyle = "#fff6e8"; ctx.font = "900 17px system-ui"; ctx.fillText(score.toLocaleString("it-IT"), 12, 12);
+    ctx.fillStyle = "#c8b8a8"; ctx.font = "700 9px system-ui"; ctx.fillText(`REC ${Math.max(bestCache, score).toLocaleString("it-IT")}`, 12, 26);
+    ctx.fillStyle = "#ffcf3a"; ctx.font = "900 12px system-ui"; ctx.fillText(bonusRound ? `ROUND ${round + 1} · BONUS` : `ROUND ${round + 1}`, 120, 12);
+    if (mult() > 1) { ctx.fillStyle = "#ffcf3a"; ctx.font = "900 13px system-ui"; ctx.fillText(`COMBO ×${mult()}`, 120, 26); }
+    else { ctx.fillStyle = "#c8b8a8"; ctx.font = "700 9px system-ui"; ctx.fillText(`combo ${streak % 5}/5`, 120, 26); }
+    // the minimum to reach this round
+    const qx = 250, qw = 180;
+    if (!bonusRound) {
+      ctx.fillStyle = "rgba(255,255,255,0.12)"; ctx.fillRect(qx, 8, qw, 8);
+      const f = clamp(roundScore / quota, 0, 1);
+      ctx.fillStyle = f >= 1 ? "#6ae86a" : "#ffcf3a"; ctx.fillRect(qx, 8, qw * f, 8);
+      ctx.fillStyle = "#fff6e8"; ctx.font = "800 9px system-ui"; ctx.textAlign = "center";
+      ctx.fillText(`${Math.max(0, roundScore).toLocaleString("it-IT")} / ${quota.toLocaleString("it-IT")}${f >= 1 ? " ✓" : ""}`, qx + qw / 2, 26);
+    }
+    // time left
+    const tx = touchMode ? 470 : 500;
+    ctx.textAlign = "left"; ctx.font = "900 16px system-ui";
+    ctx.fillStyle = timeLeft < 6 && Math.floor(clock * 4) % 2 ? "#e83a3a" : "#fff6e8";
+    ctx.fillText(`⏱ ${Math.ceil(timeLeft)}`, tx, 17);
+    ctx.textBaseline = "alphabetic";
+  }
+  function drawCross() {
+    if (!cross.seen || touchMode) return;
+    const x = cross.x, y = cross.y;
+    ctx.strokeStyle = "rgba(0,0,0,0.6)"; ctx.lineWidth = 4;
+    ctx.beginPath(); ctx.arc(x, y, 11, 0, TAU); ctx.moveTo(x - 17, y); ctx.lineTo(x - 5, y); ctx.moveTo(x + 5, y); ctx.lineTo(x + 17, y); ctx.moveTo(x, y - 17); ctx.lineTo(x, y - 5); ctx.moveTo(x, y + 5); ctx.lineTo(x, y + 17); ctx.stroke();
+    ctx.strokeStyle = reloadT > 0 || ammo === 0 ? "#8a8a8a" : "#ff4a3a"; ctx.lineWidth = 2; ctx.stroke();
+    ctx.fillStyle = "#ff4a3a"; ctx.fillRect(x - 1, y - 1, 2, 2);
+  }
+  function draw() {
+    ctx.setTransform(pxRatio, 0, 0, pxRatio, 0, 0);
+    drawBooth();
+    for (const b of bottles) drawBottle(b);
+    for (const t of targets) if (t.kind === "bull") drawBull(t);
+    for (const t of targets) {
+      if (t.kind === "duck") drawDuck(t); else if (t.kind === "rabbit") drawRabbit(t); else if (t.kind === "owl") drawOwl(t); else if (t.kind === "clock") drawClock(t);
+    }
+    for (const h of holes) {
+      if (h.mark) { ctx.strokeStyle = `rgba(255,74,58,${1 - h.t / 0.25})`; ctx.lineWidth = 2; ctx.beginPath(); ctx.arc(h.x, h.y, 6 + h.t * 40, 0, TAU); ctx.stroke(); continue; }
+      ctx.fillStyle = `rgba(10,10,20,${0.8 * (1 - h.t / 1.5)})`; ctx.beginPath(); ctx.arc(h.x, h.y, 2.5, 0, TAU); ctx.fill();
+    }
+    for (const t of targets) { if (t.kind === "balloon") drawBalloon(t); else if (t.kind === "golden") drawGolden(t); }
+    drawPosts();
+    drawAwning();
+    drawCounter();
+    for (const p of parts) { ctx.globalAlpha = Math.max(0, 1 - p.t / p.life); ctx.fillStyle = p.c; ctx.fillRect(p.x - 1.5, p.y - 1.5, 3, 3); }
+    ctx.globalAlpha = 1;
+    for (const p of popups) {
+      ctx.globalAlpha = Math.max(0, 1 - p.t / 1.1);
+      ctx.textAlign = "center"; ctx.font = "900 13px system-ui";
+      ctx.lineWidth = 3; ctx.strokeStyle = "#120c1e"; ctx.strokeText(p.text, p.x, p.y); ctx.fillStyle = p.color; ctx.fillText(p.text, p.x, p.y);
+    }
+    ctx.globalAlpha = 1;
+    if (state === "menu") return;
+    drawHud();
+    if (state === "tally" && tally) {
+      ctx.fillStyle = "rgba(0,0,0,0.65)"; ctx.fillRect(140, 110, 360, 130);
+      ctx.strokeStyle = "#ffcf3a"; ctx.lineWidth = 2; ctx.strokeRect(140, 110, 360, 130);
+      ctx.textAlign = "center"; ctx.font = "900 24px system-ui"; ctx.fillStyle = tally.passed ? "#6ae86a" : "#e83a3a";
+      ctx.fillText(bonusRound ? "FINE DEL BONUS" : tally.passed ? "ROUND SUPERATO!" : "TEMPO SCADUTO", W / 2, 145);
+      ctx.font = "800 13px system-ui"; ctx.fillStyle = "#fff6e8";
+      if (!bonusRound) ctx.fillText(`Punti del round: ${tally.roundScore.toLocaleString("it-IT")} (minimo ${tally.quota.toLocaleString("it-IT")})`, W / 2, 175);
+      ctx.fillText(`Precisione ${Math.round(tally.acc * 100)}%${tally.passed ? ` · bonus ${tally.accBonus.toLocaleString("it-IT")}` : ""}`, W / 2, 198);
+      ctx.fillStyle = "#ffcf3a"; ctx.fillText(`Totale ${score.toLocaleString("it-IT")}`, W / 2, 222);
+    }
+    if (message) {
+      ctx.globalAlpha = Math.min(1, (2.2 - message.t) * 2);
+      ctx.fillStyle = "rgba(0,0,0,0.55)"; ctx.fillRect(0, 140, W, 64);
+      ctx.textAlign = "center"; ctx.font = "900 28px system-ui"; ctx.fillStyle = "#ffcf3a";
+      ctx.lineWidth = 5; ctx.strokeStyle = "#120c1e"; ctx.strokeText(message.text, W / 2, 173); ctx.fillText(message.text, W / 2, 173);
+      if (message.sub) { ctx.font = "800 13px system-ui"; ctx.fillStyle = "#fff6e8"; ctx.fillText(message.sub, W / 2, 195); }
+      ctx.globalAlpha = 1;
+    }
+    drawCross();
+  }
+
+  // ---------- Loop ----------
+  const STEP = 1 / 120;
+  let last = performance.now(), acc = 0;
+  function frame(now) {
+    const dt = Math.min(0.1, (now - last) / 1000);
+    last = now;
+    if (isPlaying()) {
+      acc += dt;
+      while (acc >= STEP && isPlaying()) { update(STEP); acc -= STEP; }
+    } else { acc = 0; update(dt); }
+    draw();
+    requestAnimationFrame(frame);
+  }
+  // the booth is dressed up behind the title screen
+  bottles = BOTTLE_SLOTS.map((x) => ({ x, alive: true, t: 0 }));
+  for (let x = 40; x < W; x += 110) targets.push({ kind: "duck", x, y: ROW1, vx: 40, r: 15, ph: x, hitT: 0 });
+  for (let x = 90; x < W; x += 150) targets.push({ kind: "rabbit", x, y: ROW2, vx: -50, r: 13, ph: x, hitT: 0 });
+  syncControls();
+  showTitle();
+  requestAnimationFrame(frame);
+})();
+</script>
+<script src="../../shared/iniziali.js" data-record="tiro-best-" data-kind="score"></script>
+</body>
+</html>

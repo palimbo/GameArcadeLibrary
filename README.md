@@ -4,7 +4,7 @@ Raccolta di giochi arcade per il browser. Ogni gioco è un singolo file HTML sen
 
 ## 🕹️ Sala Giochi — `index.html`
 
-Apri `index.html` nella cartella principale per la pagina di raccolta: mostra tutti i 81 giochi con copertina, genere, comandi e i tuoi record per ogni difficoltà (Facile, Normale, Difficile). Tocca «Gioca» per avviare un gioco; in ogni gioco il pulsante «← Sala Giochi» in alto a sinistra (visibile nei menu) riporta alla raccolta.
+Apri `index.html` nella cartella principale per la pagina di raccolta: mostra tutti i 82 giochi con copertina, genere, comandi e i tuoi record per ogni difficoltà (Facile, Normale, Difficile). Tocca «Gioca» per avviare un gioco; in ogni gioco il pulsante «← Sala Giochi» in alto a sinistra (visibile nei menu) riporta alla raccolta.
 
 **Iniziali del record:** quando batti un record compare la schermata da sala giochi per inserire le tue tre iniziali (frecce ↑ ↓ per cambiare lettera, ← → per spostarti, oppure scrivile direttamente; su telefono i tasti ▲ ▼ e OK). Le iniziali vengono salvate insieme al record e compaiono nei menu del gioco e nella Sala Giochi. Il codice è condiviso da tutti i giochi in `shared/iniziali.js`.
 
@@ -1281,3 +1281,18 @@ Carri armati in un labirinto visto dall'alto, in stile *Battle City*. In fondo a
 - **Touch:** levetta per guidare (quattro direzioni) e pulsante FUOCO
 
 Per giocare apri `games/carri-di-latta/index.html` nel browser.
+
+### 🎯 Tiro a Segno — `games/tiro-a-segno/index.html`
+
+Il baraccone del tiro a segno del luna park, in stile *Duck Hunt*: si spara toccando o cliccando direttamente sui bersagli. In ogni round di 40 secondi bisogna raggiungere un punteggio minimo, che cresce round dopo round; se non ci arrivi, la partita finisce.
+
+- **Bersagli:** papere sulla fila alta 60 · conigli sulla fila di mezzo, più piccoli e veloci, 100 · bottiglie sulla mensola 40 (si rimettono a posto dopo qualche secondo) · bersagli che spuntano dal bancone 50, 100 o 200 al centro · palloncini 30
+- **Speciali:** papera d'oro che vola in alto 500 · orologio +5 secondi. Il **gufo col cartello NO!** non va colpito: costa 200 punti e 3 secondi
+- **Combo:** ogni 5 colpi a segno di fila il moltiplicatore sale (fino a ×4); un colpo a vuoto lo azzera
+- **Fucile:** 6 colpi; a caricatore vuoto si ricarica da solo, ma puoi ricaricare prima con il pulsante RICARICA sul bancone
+- **Round:** a fine round, bonus per la precisione; ogni tre round c'è un round bonus di palloncini senza punteggio minimo
+- **Difficoltà:** Facile (bersagli lenti, minimo basso), Normale, Difficile (bersagli veloci, minimo alto); record separati per ogni difficoltà
+- **Comandi:** mouse per mirare e clic per sparare · tasto destro o `R` ricarica · in alternativa frecce per spostare il mirino e `Spazio` per sparare · `P` pausa
+- **Touch:** tocca un bersaglio per sparargli, tocca RICARICA per ricaricare
+
+Per giocare apri `games/tiro-a-segno/index.html` nel browser.
