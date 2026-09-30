@@ -4,7 +4,7 @@ Raccolta di giochi arcade per il browser. Ogni gioco è un singolo file HTML sen
 
 ## 🕹️ Sala Giochi — `index.html`
 
-Apri `index.html` nella cartella principale per la pagina di raccolta: mostra tutti i 102 giochi con copertina, genere, comandi e i tuoi record per ogni difficoltà (Facile, Normale, Difficile). Tocca «Gioca» per avviare un gioco; in ogni gioco il pulsante «← Sala Giochi» in alto a sinistra (visibile nei menu) riporta alla raccolta.
+Apri `index.html` nella cartella principale per la pagina di raccolta: mostra tutti i 103 giochi con copertina, genere, comandi e i tuoi record per ogni difficoltà (Facile, Normale, Difficile). Tocca «Gioca» per avviare un gioco; in ogni gioco il pulsante «← Sala Giochi» in alto a sinistra (visibile nei menu) riporta alla raccolta.
 
 **Iniziali del record:** quando batti un record compare la schermata da sala giochi per inserire le tue tre iniziali (frecce ↑ ↓ per cambiare lettera, ← → per spostarti, oppure scrivile direttamente; su telefono i tasti ▲ ▼ e OK). Le iniziali vengono salvate insieme al record e compaiono nei menu del gioco e nella Sala Giochi. Il codice è condiviso da tutti i giochi in `shared/iniziali.js`.
 
@@ -1587,3 +1587,19 @@ Caccia nello spazio in stile *Sinistar*. La nave vola in un settore di spazio ch
 - **Touch:** levetta per volare e pulsante BOMBA
 
 Per giocare apri `games/stella-maligna/index.html` nel browser.
+
+### 🏺 Tomba del Faraone — `games/tomba-del-faraone/index.html`
+
+Labirinto a scorrimento in stile *Tutankham*. Un esploratore entra in una tomba egizia che scorre in orizzontale: corridoi di arenaria con geroglifici e torce, tesori nei vicoli ciechi e, verso il fondo, la chiave che apre la porta d'uscita. Ogni tomba è un labirinto nuovo, più lungo del precedente.
+
+- **Il fucile:** spara solo a destra e a sinistra, nella direzione in cui guardi (puoi girarti senza muoverti). Nei corridoi verticali sei scoperto
+- **Il lampo:** elimina tutte le creature sullo schermo e blocca per un po' le tane vicine; uno per vita (due su Facile)
+- **Il tempo:** ogni tomba ha il suo tempo; quando finisce il fucile s'inceppa e resta solo il lampo. Il tempo avanzato vale 10 punti al secondo all'uscita
+- **Creature:** escono dalle tane scavate nel pavimento quando ti avvicini: cobra (100), pipistrelli veloci e imprevedibili (200, dalla seconda tomba), scorpioni che non mollano (150, dalla terza)
+- **Tesori:** coppa 500, anello 800, scarabeo 1.000, corona 1.500, maschera 2.000 · chiave 1.000 · uscita 1.000 × tomba
+- **Punti di ripartenza:** i simboli ankh lungo il percorso; se perdi una vita riparti dall'ultimo che hai superato. Vita extra ogni 20.000 punti
+- **Difficoltà:** Facile (5 vite, creature lente e rare, 2 lampi, più tempo), Normale (3 vite, 1 lampo), Difficile (3 vite, creature svelte e numerose, meno tempo); record separati per ogni difficoltà
+- **Comandi:** frecce o `WASD` per muoverti · `Spazio`, `J` o `Z` spara (tenendo premuto spara di continuo) · `X` o `K` lampo · `P` pausa
+- **Touch:** levetta per muoverti, pulsanti FUOCO e LAMPO
+
+Per giocare apri `games/tomba-del-faraone/index.html` nel browser.
