@@ -4,7 +4,7 @@ Raccolta di giochi arcade per il browser. Ogni gioco è un singolo file HTML sen
 
 ## 🕹️ Sala Giochi — `index.html`
 
-Apri `index.html` nella cartella principale per la pagina di raccolta: mostra tutti i 108 giochi con copertina, genere, comandi e i tuoi record per ogni difficoltà (Facile, Normale, Difficile). Tocca «Gioca» per avviare un gioco; in ogni gioco il pulsante «← Sala Giochi» in alto a sinistra (visibile nei menu) riporta alla raccolta.
+Apri `index.html` nella cartella principale per la pagina di raccolta: mostra tutti i 109 giochi con copertina, genere, comandi e i tuoi record per ogni difficoltà (Facile, Normale, Difficile). Tocca «Gioca» per avviare un gioco; in ogni gioco il pulsante «← Sala Giochi» in alto a sinistra (visibile nei menu) riporta alla raccolta.
 
 **Iniziali del record:** quando batti un record compare la schermata da sala giochi per inserire le tue tre iniziali (frecce ↑ ↓ per cambiare lettera, ← → per spostarti, oppure scrivile direttamente; su telefono i tasti ▲ ▼ e OK). Le iniziali vengono salvate insieme al record e compaiono nei menu del gioco e nella Sala Giochi. Il codice è condiviso da tutti i giochi in `shared/iniziali.js`.
 
@@ -1676,3 +1676,17 @@ Arcade in stile *Bubbles*. Sei una bolla di sapone che scivola in un lavandino v
 - **Touch:** levetta per scivolare, pulsante SCATTO
 
 Per giocare apri `games/bolla-pulita/index.html` nel browser.
+
+### 🍦 Corsa al Gelato — `games/corsa-al-gelato/index.html`
+
+Battaglia di cibo in stile *Food Fight*. In fondo a una piazza c'è un cono gelato che si scioglie; per prenderlo bisogna prima liberarlo dalla campana di vetro centrando abbastanza cuochi, che escono dai tombini, ti inseguono e ti tirano addosso di tutto.
+
+- **Il cibo:** passando su un mucchio con le mani vuote prendi 3 colpi di quel tipo e li lanci nella direzione in cui guardi. Il pomodoro è veloce, la torta è grossa e facile da far arrivare, l'anguria trapassa più cuochi, i piselli partono a ventaglio. Quando il cibo scarseggia arrivano nuovi vassoi
+- **I cuochi:** 100 punti a colpo, che salgono se ne prendi tanti di fila; un cuoco colpito torna nel tombino e poi riesce. Raccolgono anche loro il cibo e, quando alzano il braccio, stanno per tirare (mirando dove stai andando); i più svelti si scansano dai tuoi lanci. Colpire al volo il cibo di un cuoco vale 50
+- **Tombini:** quando un tombino è aperto (bordo rosso, coperchio spostato) non camminarci sopra
+- **Il gelato:** la campana si alza dopo un certo numero di cuochi colpiti (indicato sulla campana e nell'HUD, uno in più a ogni piazza); prendere il cono vale 1.000 più 50 per ogni secondo rimasto. Se si scioglie perdi una vita, ma i cuochi già colpiti restano contati
+- **Difficoltà:** Facile (5 vite, cuochi lenti, pochi e con la mira scarsa, il gelato dura di più), Normale (3 vite), Difficile (3 vite, più cuochi, più svelti, mirano meglio e servono più colpi); record separati per ogni difficoltà. Vita extra ogni 30.000 punti
+- **Comandi:** frecce o `WASD` per correre e mirare · `Spazio`, `J` o `Z` per lanciare · `P` pausa
+- **Touch:** levetta per correre e mirare, pulsante LANCIA
+
+Per giocare apri `games/corsa-al-gelato/index.html` nel browser.
