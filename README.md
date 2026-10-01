@@ -4,7 +4,7 @@ Raccolta di giochi arcade per il browser. Ogni gioco è un singolo file HTML sen
 
 ## 🕹️ Sala Giochi — `index.html`
 
-Apri `index.html` nella cartella principale per la pagina di raccolta: mostra tutti i 106 giochi con copertina, genere, comandi e i tuoi record per ogni difficoltà (Facile, Normale, Difficile). Tocca «Gioca» per avviare un gioco; in ogni gioco il pulsante «← Sala Giochi» in alto a sinistra (visibile nei menu) riporta alla raccolta.
+Apri `index.html` nella cartella principale per la pagina di raccolta: mostra tutti i 107 giochi con copertina, genere, comandi e i tuoi record per ogni difficoltà (Facile, Normale, Difficile). Tocca «Gioca» per avviare un gioco; in ogni gioco il pulsante «← Sala Giochi» in alto a sinistra (visibile nei menu) riporta alla raccolta.
 
 **Iniziali del record:** quando batti un record compare la schermata da sala giochi per inserire le tue tre iniziali (frecce ↑ ↓ per cambiare lettera, ← → per spostarti, oppure scrivile direttamente; su telefono i tasti ▲ ▼ e OK). Le iniziali vengono salvate insieme al record e compaiono nei menu del gioco e nella Sala Giochi. Il codice è condiviso da tutti i giochi in `shared/iniziali.js`.
 
@@ -1646,3 +1646,17 @@ Caccia nel labirinto in stile *Wizard of Wor*. Un guerriero entra nei sotterrane
 - **Touch:** levetta per muoverti e pulsante FUOCO
 
 Per giocare apri `games/sotterranei-del-mago/index.html` nel browser.
+
+### 💘 Cuori dal Cielo — `games/cuori-dal-cielo/index.html`
+
+Piattaforme in stile *Popeye*. Dal balcone di una casa sul porto una ragazza lancia cuori che scendono ondeggiando verso il mare; un marinaio gira per quattro pontili collegati da scale e deve prenderli tutti prima che affondino. Il layout delle scale cambia a ogni livello e i pontili si attraversano da un lato all'altro.
+
+- **I cuori:** valgono di più se li prendi in alto (100 dal molo, 300, 500, 800 sui pontili più alti). Uno che cade in acqua resta a galla qualche secondo (dal molo puoi ancora salvarlo, 50); se affonda perdi una vita. Prendine il numero richiesto per passare livello
+- **Il bullo:** ti insegue per pontili e scale; se ti tocca perdi una vita, e se sei proprio sopra o sotto di lui carica un pugno attraverso il pavimento (il punto colpito si illumina prima). Un tuo pugno lo stordisce per un attimo
+- **Spinaci:** una lattina per livello; per qualche secondo il bullo scappa e se lo prendi vola in mare (3.000), poi torna dall'alto. Finire un livello senza spinaci vale 1.500 in più
+- **La strega:** dal secondo livello compare sul bordo di un pontile e tira bottiglie lungo il pavimento: respingile a pugni (100) o colpisci lei (500) e se ne va
+- **Difficoltà:** Facile (5 vite, bullo lento, i cuori affondano piano), Normale (3 vite), Difficile (3 vite, bullo svelto, più cuori insieme e affondano prima); record separati per ogni difficoltà. Vita extra ogni 20.000 punti
+- **Comandi:** frecce o `WASD` (su e giù sulle scale) · `Spazio`, `J`, `Z` o `X` per il pugno · `P` pausa
+- **Touch:** levetta per camminare e salire, pulsante PUGNO
+
+Per giocare apri `games/cuori-dal-cielo/index.html` nel browser.
