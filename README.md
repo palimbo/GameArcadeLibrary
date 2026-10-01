@@ -4,7 +4,7 @@ Raccolta di giochi arcade per il browser. Ogni gioco è un singolo file HTML sen
 
 ## 🕹️ Sala Giochi — `index.html`
 
-Apri `index.html` nella cartella principale per la pagina di raccolta: mostra tutti i 109 giochi con copertina, genere, comandi e i tuoi record per ogni difficoltà (Facile, Normale, Difficile). Tocca «Gioca» per avviare un gioco; in ogni gioco il pulsante «← Sala Giochi» in alto a sinistra (visibile nei menu) riporta alla raccolta.
+Apri `index.html` nella cartella principale per la pagina di raccolta: mostra tutti i 110 giochi con copertina, genere, comandi e i tuoi record per ogni difficoltà (Facile, Normale, Difficile). Tocca «Gioca» per avviare un gioco; in ogni gioco il pulsante «← Sala Giochi» in alto a sinistra (visibile nei menu) riporta alla raccolta.
 
 **Iniziali del record:** quando batti un record compare la schermata da sala giochi per inserire le tue tre iniziali (frecce ↑ ↓ per cambiare lettera, ← → per spostarti, oppure scrivile direttamente; su telefono i tasti ▲ ▼ e OK). Le iniziali vengono salvate insieme al record e compaiono nei menu del gioco e nella Sala Giochi. Il codice è condiviso da tutti i giochi in `shared/iniziali.js`.
 
@@ -1690,3 +1690,17 @@ Battaglia di cibo in stile *Food Fight*. In fondo a una piazza c'è un cono gela
 - **Touch:** levetta per correre e mirare, pulsante LANCIA
 
 Per giocare apri `games/corsa-al-gelato/index.html` nel browser.
+
+### 👨‍🚀 Panico Spaziale — `games/panico-spaziale/index.html`
+
+Piattaforme in stile *Space Panic*. Una stazione spaziale di cinque piani collegati da scale è invasa dagli alieni, e l'astronauta non ha armi: solo una pala e una bombola d'ossigeno che si svuota.
+
+- **Scavare:** tieni premuto SCAVA per aprire una buca nel pavimento davanti a te (non dove ci sono le scale e non sul piano più basso). L'astronauta ci passa sopra con cautela, gli alieni invece ci cadono dentro. Tenendo premuto davanti a una buca vuota la riempi di nuovo
+- **Colpire:** un alieno intrappolato resta nella buca per qualche secondo (la barretta sopra di lui); premi SCAVA davanti a lui per farlo precipitare al piano di sotto. Se non lo colpisci in tempo esce, la buca si richiude e lui diventa più svelto per un po'
+- **Gli alieni:** il rosso muore con una caduta (100), il verde deve cadere per due piani in tutto (300), il bianco per tre (500); i pallini gialli mostrano quanto sono già caduti. Scava buche una sopra l'altra per farli precipitare di più piani in un colpo (punti × piani). Chi cade schiaccia gli alieni che trova sotto (punti doppi)
+- **Ossigeno:** se finisce perdi una vita; quando sta per finire gli alieni si agitano. Liberata la stazione, l'ossigeno rimasto vale 10 punti al secondo
+- **Difficoltà:** Facile (5 vite, alieni lenti che restano a lungo nelle buche, tanto ossigeno), Normale (3 vite), Difficile (3 vite, alieni svelti che ti inseguono ed escono presto dalle buche, meno ossigeno); record separati per ogni difficoltà. Vita extra ogni 20.000 punti
+- **Comandi:** frecce o `WASD` per camminare e salire le scale · tieni premuto `Spazio`, `J` o `Z` per scavare o riempire, premilo per colpire · `P` pausa
+- **Touch:** levetta per camminare e salire, pulsante SCAVA
+
+Per giocare apri `games/panico-spaziale/index.html` nel browser.
