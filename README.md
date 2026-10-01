@@ -4,7 +4,7 @@ Raccolta di giochi arcade per il browser. Ogni gioco è un singolo file HTML sen
 
 ## 🕹️ Sala Giochi — `index.html`
 
-Apri `index.html` nella cartella principale per la pagina di raccolta: mostra tutti i 115 giochi con copertina, genere, comandi e i tuoi record per ogni difficoltà (Facile, Normale, Difficile). Tocca «Gioca» per avviare un gioco; in ogni gioco il pulsante «← Sala Giochi» in alto a sinistra (visibile nei menu) riporta alla raccolta.
+Apri `index.html` nella cartella principale per la pagina di raccolta: mostra tutti i 116 giochi con copertina, genere, comandi e i tuoi record per ogni difficoltà (Facile, Normale, Difficile). Tocca «Gioca» per avviare un gioco; in ogni gioco il pulsante «← Sala Giochi» in alto a sinistra (visibile nei menu) riporta alla raccolta.
 
 **Iniziali del record:** quando batti un record compare la schermata da sala giochi per inserire le tue tre iniziali (frecce ↑ ↓ per cambiare lettera, ← → per spostarti, oppure scrivile direttamente; su telefono i tasti ▲ ▼ e OK). Le iniziali vengono salvate insieme al record e compaiono nei menu del gioco e nella Sala Giochi. Il codice è condiviso da tutti i giochi in `shared/iniziali.js`.
 
@@ -1775,3 +1775,16 @@ Arrampicata in stile *Ice Climber*. Uno scalatore col martello deve arrivare in 
 - **Touch:** levetta per camminare, pulsanti SALTA e MAZZA
 
 Per giocare apri `games/vetta-ghiacciata/index.html` nel browser.
+
+### 🤸 Acrobati in Altalena — `games/acrobati-in-altalena/index.html`
+
+Arcade in stile *Circus*. Sotto il tendone ci sono due acrobati e un'altalena: uno vola in alto scoppiando i palloncini, l'altro aspetta seduto sull'estremità bassa. Si controlla solo l'altalena, spostandola a destra e a sinistra.
+
+- **L'atterraggio:** chi ricade deve atterrare sulla metà alzata dell'altalena: l'asse si ribalta e lancia in aria il compagno. Più vicino alla punta atterri, più alto vola il compagno; vicino al centro il lancio è più basso. Se atterri sul lato del compagno o per terra perdi un acrobata
+- **I palloncini:** tre file che scorrono in direzioni diverse: blu 30, gialli 20, rossi 10. Una fila completata vale 500, 300 o 200 × il numero e si riempie di nuovo
+- **I numeri:** ogni tre file completate si passa al numero successivo: palloncini più veloci, gravità più forte e rimbalzi laterali più larghi. Gli acrobati rimbalzano sulle pareti del tendone
+- **Difficoltà:** Facile (5 acrobati, voli più lenti, altalena più tollerante), Normale (3 acrobati), Difficile (3 acrobati, voli svelti, rimbalzi larghi e nessun margine); record separati per ogni difficoltà. Acrobata extra a 10.000 punti e poi ogni 15.000
+- **Comandi:** frecce o `A` `D` per spostare l'altalena · `P` pausa
+- **Touch:** levetta a destra e sinistra
+
+Per giocare apri `games/acrobati-in-altalena/index.html` nel browser.
