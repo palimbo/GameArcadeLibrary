@@ -81,6 +81,8 @@
     background: transparent; cursor: pointer;
     border: 2px solid rgba(244,246,238,0.3); border-radius: 10px; padding: 9px 16px;
   }
+  #overlay .diff.win { align-items: center; gap: 8px; font-size: 13px; color: var(--muted); }
+  #overlay .diff.win button { font-size: 12px; padding: 6px 12px; }
   #overlay .diff button.on { border-color: var(--c); color: var(--c); box-shadow: 0 0 12px var(--c); }
   #overlay button.start { border-color: var(--pink); color: #04200e; background: var(--pink); padding: 11px 30px; box-shadow: 0 4px 0 #1a8a4a; }
   @media (max-height: 560px) {
@@ -123,7 +125,7 @@
     difficile: { label: "DIFFICILE", color: "#ff5a5a", desc: "6 colpi · solo un pezzetto di traiettoria", shots: 6, guide: "short", every: 3 },
   };
   const DIFF_IDS = Object.keys(DIFFICULTIES);
-  const DIFF_KEY = "stecca-difficulty", MODE_KEY = "stecca-mode";
+  const DIFF_KEY = "stecca-difficulty", MODE_KEY = "stecca-mode", WIN_KEY = "stecca-win";
   // two players on the same device take turns at the table: three racks, the higher score wins
   const RACKS_2P = 3, PCOL = ["#3db8ff", "#ff4f6a"], PNAME = ["GIOCATORE 1", "GIOCATORE 2"];
   const bestKey = (id) => `stecca-best-${id}`;
@@ -207,7 +209,7 @@
   let score = 0, shotsLeft = 3, rack = 1, bestCache = 0, streak = 0, breakShot = true;
   let balls = [], aim = 0, power = 0, charging = false, chargeT = 0, pocketedNow = [], firstHit = null, lowestAtShot = 0, parts = [], popups = [], message = null;
   let chargePressed = false, chargeReleased = false;
-  let twoPlayers = load(MODE_KEY) === "2", turn = 0, breaker = 0, scores = [0, 0], racksWon = [0, 0];
+  let twoPlayers = load(MODE_KEY) === "2", byRacks = load(WIN_KEY) === "tavoli", turn = 0, breaker = 0, scores = [0, 0], racksWon = [0, 0];
   const keys = { left: false, right: false, up: false, down: false, fire: false };
   const stick = { x: 0, y: 0 };
 
@@ -406,7 +408,9 @@
   }
   function matchOver() {
     state = "over";
-    const w = scores[0] === scores[1] ? -1 : scores[0] > scores[1] ? 0 : 1;
+    // the chosen rule decides, the other one breaks a tie
+    const a = byRacks ? racksWon : scores, b = byRacks ? scores : racksWon;
+    const w = a[0] !== a[1] ? (a[0] > a[1] ? 0 : 1) : b[0] !== b[1] ? (b[0] > b[1] ? 0 : 1) : -1;
     sfx.rack();
     menu = () => showOverlay(
       `<h2 style="color:${w < 0 ? "var(--fg)" : PCOL[w]}">${w < 0 ? "PAREGGIO!" : `VINCE IL ${PNAME[w]}!`}</h2>
@@ -440,7 +444,15 @@
     return `<div class="diff">
         <button type="button" data-mode="1" class="${twoPlayers ? "" : "on"}" style="--c:#3ad07a">1 GIOCATORE</button>
         <button type="button" data-mode="2" class="${twoPlayers ? "on" : ""}" style="--c:#ff4f6a">2 GIOCATORI</button>
-      </div>`;
+      </div>${twoPlayers ? `<div class="diff win"><span>Vince chi ha</span>
+        <button type="button" data-win="punti" class="${byRacks ? "" : "on"}" style="--c:#ffd23a">PIÙ PUNTI</button>
+        <button type="button" data-win="tavoli" class="${byRacks ? "on" : ""}" style="--c:#3db8ff">PIÙ TAVOLI</button>
+      </div>` : ""}`;
+  }
+  function winText() {
+    return byRacks
+      ? `Vince chi pulisce più tavoli: al meglio dei ${RACKS_2P}, chi ne prende ${Math.ceil(RACKS_2P / 2)} ha vinto (a parità decidono i punti).`
+      : `Vince chi ha più punti dopo ${RACKS_2P} tavoli (a parità decidono i tavoli presi).`;
   }
   function difficultyHTML() {
     const buttons = DIFF_IDS.map((id) => {
@@ -458,7 +470,7 @@
     showOverlay(
       `<h1>COLPO DI STECCA</h1>
        <p>${twoPlayers
-         ? `Sfida a due sullo stesso dispositivo, su ${RACKS_2P} tavoli: tirate a turno, e chi manda in buca una bilia tira ancora. Una steccata a vuoto o la bianca in buca passano la stecca all'altro. Chi pulisce un tavolo prende 1.000 punti; alla fine vince chi ha più punti.`
+         ? `Sfida a due sullo stesso dispositivo, su ${RACKS_2P} tavoli: tirate a turno, e chi manda in buca una bilia tira ancora. Una steccata a vuoto o la bianca in buca passano la stecca all'altro. Chi pulisce un tavolo prende 1.000 punti. ${winText()}`
          : "Biliardo a buche da sala giochi: manda in buca le nove bilie e pulisci il tavolo! Ogni steccata a vuoto, o la bianca in buca, ti costa un colpo. Quando i colpi finiscono, la partita è chiusa."}</p>
        <div class="pts">
          <span><b>Bilia</b></span><span>50 × il suo numero</span>
@@ -479,6 +491,8 @@
     if (d) { setDifficulty(d.dataset.diff); return; }
     const m = e.target.closest("[data-mode]");
     if (m) { twoPlayers = m.dataset.mode === "2"; store(MODE_KEY, twoPlayers ? "2" : "1"); if (menu) menu(); return; }
+    const v = e.target.closest("[data-win]");
+    if (v) { byRacks = v.dataset.win === "tavoli"; store(WIN_KEY, byRacks ? "tavoli" : "punti"); if (menu) menu(); return; }
     if (e.target.closest("[data-start]")) startGame();
     if (e.target.closest("[data-resume]")) togglePause();
   });
@@ -557,7 +571,7 @@
       if (!moving()) judge();
       return;
     }
-    if (state === "result") { stateT -= dt; if (stateT <= 0) { if (twoPlayers ? rack > RACKS_2P : shotsLeft <= 0) gameOver(); else newRack(); } }
+    if (state === "result") { stateT -= dt; if (stateT <= 0) { if (twoPlayers ? rack > RACKS_2P || (byRacks && Math.max(...racksWon) > RACKS_2P / 2) : shotsLeft <= 0) gameOver(); else newRack(); } }
   }
 
   // ---------- Aim guide ----------
@@ -666,7 +680,7 @@
       ctx.fillStyle = PCOL[i]; ctx.font = "900 9px system-ui"; ctx.fillText(`${on ? "▶ " : ""}${PNAME[i]}${racksWon[i] ? " · " + "●".repeat(racksWon[i]) : ""}`, x, 12);
       ctx.fillStyle = "#f4f6ee"; ctx.font = "900 15px system-ui"; ctx.fillText(scores[i].toLocaleString("it-IT"), x, 25);
     }
-    ctx.fillStyle = "#3ad07a"; ctx.font = "900 10px system-ui"; ctx.fillText(`TAVOLO ${Math.min(rack, RACKS_2P)}/${RACKS_2P}`, L - 20, B + 29);
+    ctx.fillStyle = "#3ad07a"; ctx.font = "900 10px system-ui"; ctx.fillText(`TAVOLO ${Math.min(rack, RACKS_2P)}/${RACKS_2P} · ${byRacks ? "VINCONO I TAVOLI" : "VINCONO I PUNTI"}`, L - 20, B + 29);
     const left = live().filter((b) => b.n).map((b) => b.n).sort((a, b) => a - b);
     const bx = touchMode ? W - 70 - left.length * 13 : W - 14 - left.length * 13;
     left.forEach((n, i) => { const k = BALLS[n]; ctx.fillStyle = k.c; ctx.beginPath(); ctx.arc(bx + i * 13, 18, 5, 0, TAU); ctx.fill(); if (i === 0) { ctx.strokeStyle = "#ffd23a"; ctx.lineWidth = 1.5; ctx.stroke(); } });
