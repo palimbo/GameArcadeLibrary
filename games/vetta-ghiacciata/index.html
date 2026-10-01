@@ -1,0 +1,676 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no, viewport-fit=cover">
+<title>Vetta Ghiacciata</title>
+<style>
+  :root {
+    --bg: #0a1a30;
+    --fg: #f4f6ee;
+    --muted: #a8c8d8;
+    --pink: #6ad8ff;
+    --yellow: #8ae05a;
+    --red: #ff4a3a;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  html, body {
+    height: 100%;
+    background: var(--bg);
+    color: var(--fg);
+    font-family: system-ui, -apple-system, "Segoe UI", sans-serif;
+    overflow: hidden;
+    user-select: none;
+    -webkit-user-select: none;
+    touch-action: none;
+  }
+  #wrap { position: fixed; inset: 0; display: flex; align-items: center; justify-content: center; }
+  canvas { display: block; touch-action: none; border-radius: 6px; box-shadow: 0 0 0 2px #1a3a5a, 0 10px 40px rgba(0,0,0,0.6); }
+  #pauseBtn {
+    position: fixed; z-index: 3; display: none; right: 10px; top: calc(10px + env(safe-area-inset-top, 0px));
+    font: 700 13px system-ui, sans-serif; color: var(--fg);
+    background: rgba(0, 0, 0, 0.6); border: 1px solid rgba(244, 246, 238, 0.35);
+    border-radius: 8px; padding: 6px 10px; cursor: pointer;
+  }
+  #touch {
+    position: fixed; z-index: 2; display: none; left: 12px; right: 12px;
+    bottom: calc(14px + env(safe-area-inset-bottom, 0px));
+    justify-content: space-between; align-items: flex-end; pointer-events: none;
+  }
+  /* thumb stick: walk; SALTA jumps and breaks the ice overhead, MAZZA swings the mallet */
+  #touch .stick { position: relative; width: 136px; height: 136px; border-radius: 50%; pointer-events: auto; touch-action: none;
+    border: 2px solid rgba(255, 200, 58, 0.6); background: radial-gradient(circle, rgba(255,200,58,0.14), rgba(255,200,58,0.04)); }
+  #touch .stick .knob { position: absolute; left: 50%; top: 50%; width: 58px; height: 58px; margin: -29px 0 0 -29px; border-radius: 50%;
+    background: rgba(255, 200, 58, 0.45); border: 2px solid rgba(255,255,255,0.7); box-shadow: 0 4px 10px rgba(0,0,0,0.4); pointer-events: none; }
+  #touch .stick .ring { position: absolute; inset: 10px; border-radius: 50%; border: 1px dashed rgba(244,246,238,0.25); pointer-events: none; }
+  #touch .jump { width: 96px; height: 96px; border-radius: 50%; pointer-events: auto; touch-action: none; color: var(--fg);
+    font: 800 13px system-ui, sans-serif; letter-spacing: 1px; border: 2px solid rgba(122, 228, 255, 0.9); background: rgba(122, 228, 255, 0.22); }
+  #touch .jump.on { background: rgba(122, 228, 255, 0.55); }
+  #touch.small .stick { width: 112px; height: 112px; }
+  #touch.small .stick .knob { width: 48px; height: 48px; margin: -24px 0 0 -24px; }
+  #touch.small .jump { width: 80px; height: 80px; font-size: 11px; }
+  #touch .btns { display: flex; flex-direction: column; align-items: center; gap: 10px; pointer-events: none; }
+  #touch .jump.axe { width: 64px; height: 64px; font-size: 11px; border-color: rgba(255, 244, 200, 0.9); background: rgba(255, 244, 200, 0.16); }
+  #touch .jump.axe.on { background: rgba(255, 244, 200, 0.5); }
+  #touch.small .jump.axe { width: 54px; height: 54px; font-size: 10px; }
+  #overlay {
+    position: fixed; inset: 0; z-index: 5;
+    display: flex; flex-direction: column; align-items: center; justify-content: flex-start;
+    gap: 14px; padding: 16px; text-align: center; overflow-y: auto;
+    background: rgba(10, 30, 50, 0.93);
+  }
+  #overlay > :first-child { margin-top: auto; }
+  #overlay > :last-child { margin-bottom: auto; }
+  #overlay.hidden { display: none; }
+  #homeLink {
+    position: fixed; top: calc(10px + env(safe-area-inset-top, 0px)); left: 10px; z-index: 6;
+    font: 600 13px/1 system-ui, sans-serif; color: #fff; text-decoration: none;
+    padding: 8px 12px; border-radius: 999px; background: rgba(0,0,0,.55);
+    border: 1px solid rgba(255,255,255,.25);
+  }
+  #homeLink:hover { background: rgba(0,0,0,.8); }
+  #overlay.hidden ~ #homeLink { display: none; }
+  @media (max-width: 700px) { #overlay { padding-top: calc(52px + env(safe-area-inset-top, 0px)); } }
+  #overlay h1 { font-size: clamp(32px, 10vw, 58px); font-weight: 900; font-style: italic; letter-spacing: 1px; color: var(--pink);
+    text-shadow: 3px 3px 0 #1a4a6a, 0 0 22px rgba(106,216,255,0.35); }
+  #overlay h2 { font-size: clamp(26px, 7vw, 42px); font-weight: 900; letter-spacing: 2px; color: var(--pink); }
+  #overlay h2.lose { color: var(--red); }
+  #overlay p { max-width: 540px; font-size: clamp(13px, 3.4vw, 16px); line-height: 1.55; }
+  #overlay p.muted { color: var(--muted); }
+  #overlay .pts { display: grid; grid-template-columns: repeat(2, auto); gap: 4px 18px; font-size: 13px; color: var(--muted); text-align: left; max-width: 560px; }
+  #overlay .pts b { color: var(--fg); }
+  #overlay .diff { display: flex; gap: 10px; flex-wrap: wrap; justify-content: center; }
+  #overlay button {
+    font: 800 15px system-ui, sans-serif; letter-spacing: 1.5px; color: var(--fg);
+    background: transparent; cursor: pointer;
+    border: 2px solid rgba(244,246,238,0.3); border-radius: 10px; padding: 9px 16px;
+  }
+  #overlay .diff button.on { border-color: var(--c); color: var(--c); box-shadow: 0 0 12px var(--c); }
+  #overlay button.start { border-color: var(--pink); color: #04202e; background: var(--pink); padding: 11px 30px; box-shadow: 0 4px 0 #2a8ab8; }
+  @media (max-height: 560px) {
+    #overlay { gap: 8px; }
+    #overlay h1 { font-size: 30px; }
+    #overlay p { font-size: 13px; line-height: 1.4; }
+    #overlay .help, #overlay .pts { display: none; }
+  }
+</style>
+</head>
+<body>
+<div id="wrap"><canvas id="game"></canvas></div>
+<div id="touch">
+  <div class="stick" aria-label="Levetta"><div class="ring"></div><div class="knob"></div></div>
+  <div class="btns"><button type="button" class="jump axe" aria-label="Mazza">MAZZA</button><button type="button" class="jump hop" aria-label="Salta">SALTA</button></div>
+</div>
+<button id="pauseBtn" type="button" aria-label="Pausa">❚❚</button>
+<div id="overlay"></div>
+<a id="homeLink" href="../../index.html">← Sala Giochi</a>
+
+
+<script>
+(() => {
+  "use strict";
+
+  const W = 640, H = 360, TAU = Math.PI * 2, TOP = 28;
+  // the mountain: floors of ice blocks, 20px wide, one above the other
+  const BW = 20, NC = 32, FH = 72, FT = 12, PW = 5, PH = 20;
+  const GRAV = 1000, JH = 92, JV = Math.sqrt(2 * GRAV * JH), WALK = 110, VIEW = 270;
+  const ICE = 1, ROCK = 2, PATCH = 3;
+
+  const DIFFICULTIES = {
+    facile:    { label: "FACILE",    color: "#7ed87a", desc: "5 vite · foche lente e pochi uccelli", lives: 5, speed: 0.75, topi: 0.7, birds: 0.5 },
+    normale:   { label: "NORMALE",   color: "#6ad8ff", desc: "3 vite", lives: 3, speed: 1, topi: 1, birds: 1 },
+    difficile: { label: "DIFFICILE", color: "#ff5a5a", desc: "3 vite · foche svelte e numerose, tanti uccelli", lives: 3, speed: 1.25, topi: 1.35, birds: 1.5 },
+  };
+  const DIFF_IDS = Object.keys(DIFFICULTIES);
+  const DIFF_KEY = "vetta-difficulty";
+  const bestKey = (id) => `vetta-best-${id}`;
+  function store(k, v) { try { localStorage.setItem(k, v); } catch { /* ignore */ } }
+  function load(k) { try { return localStorage.getItem(k); } catch { return null; } }
+  const rnd = (a, b) => a + Math.random() * (b - a);
+  const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
+  const pick = (arr) => arr[Math.floor(Math.random() * arr.length)];
+  const colOf = (x) => clamp(Math.floor(x / BW), 0, NC - 1);
+  const colX = (c) => c * BW + BW / 2;
+  const floorTop = (f) => -f * FH;
+
+  // ---------- Canvas ----------
+  const canvas = document.getElementById("game");
+  const ctx = canvas.getContext("2d");
+  const wrapEl = document.getElementById("wrap");
+  const overlay = document.getElementById("overlay");
+  const touchEl = document.getElementById("touch");
+  const pauseBtn = document.getElementById("pauseBtn");
+  let pxRatio = 1, touchMode = !!(window.matchMedia && matchMedia("(pointer: coarse)").matches);
+  function resize() {
+    const portrait = window.innerHeight > window.innerWidth;
+    const showTouch = touchMode && isPlaying();
+    touchEl.style.display = showTouch ? "flex" : "none";
+    touchEl.classList.toggle("small", !portrait && window.innerHeight < 480);
+    wrapEl.style.paddingBottom = showTouch && portrait ? "calc(170px + env(safe-area-inset-bottom, 0px))" : "0";
+    let availW = window.innerWidth - 8, availH = window.innerHeight - 8;
+    if (showTouch && portrait) availH -= 170;
+    if (showTouch && !portrait) {
+      const side = Math.max(...[...touchEl.children].map((el) => el.offsetWidth)) + 20;
+      if (window.innerWidth - 2 * side > 200) availW = window.innerWidth - 2 * side;
+    }
+    const s = Math.max(0.2, Math.min(availW / W, availH / H));
+    pxRatio = Math.min(3, s * (window.devicePixelRatio || 1));
+    canvas.style.width = W * s + "px";
+    canvas.style.height = H * s + "px";
+    canvas.width = Math.round(W * pxRatio);
+    canvas.height = Math.round(H * pxRatio);
+  }
+  window.addEventListener("resize", () => syncControls());
+
+  // ---------- Audio ----------
+  let audioCtx = null;
+  function beep(freq, dur, type = "square", vol = 0.04, slide = 0, delay = 0) {
+    if (!audioCtx) return;
+    const t = audioCtx.currentTime + delay;
+    const osc = audioCtx.createOscillator(), gain = audioCtx.createGain();
+    osc.type = type;
+    osc.frequency.setValueAtTime(freq, t);
+    if (slide) osc.frequency.exponentialRampToValueAtTime(Math.max(20, freq + slide), t + dur);
+    gain.gain.setValueAtTime(vol, t);
+    gain.gain.exponentialRampToValueAtTime(0.0001, t + dur);
+    osc.connect(gain).connect(audioCtx.destination);
+    osc.start(t); osc.stop(t + dur + 0.02);
+  }
+  function noise(dur, vol, freq) {
+    if (!audioCtx) return;
+    const len = Math.floor(audioCtx.sampleRate * dur), buf = audioCtx.createBuffer(1, len, audioCtx.sampleRate), d = buf.getChannelData(0);
+    for (let i = 0; i < len; i++) d[i] = (Math.random() * 2 - 1) * (1 - i / len);
+    const src = audioCtx.createBufferSource(), f = audioCtx.createBiquadFilter(), g = audioCtx.createGain();
+    src.buffer = buf; f.type = "bandpass"; f.frequency.value = freq; g.gain.value = vol;
+    src.connect(f).connect(g).connect(audioCtx.destination); src.start();
+  }
+  const arp = (notes, gap, d, type = "square", vol = 0.04) => notes.forEach((f, i) => beep(f, d, type, vol, 0, i * gap));
+  let sfxN = 0;
+  const lim = (fn) => (...a) => { if (sfxN++ < 6) fn(...a); };
+  const sfx = {
+    jump: lim(() => beep(300, 0.14, "square", 0.03, 400)),
+    crack: lim(() => { noise(0.1, 0.12, 3000); beep(1600, 0.06, "triangle", 0.03, -600); }),
+    thud: lim(() => beep(120, 0.08, "triangle", 0.04, -40)),
+    swing: lim(() => noise(0.08, 0.05, 1500)),
+    bonk: lim(() => { noise(0.12, 0.14, 600); arp([660, 880], 0.05, 0.08, "square", 0.04); }),
+    patch: lim(() => beep(500, 0.12, "sine", 0.03, -200)),
+    bird: lim(() => arp([1400, 1200], 0.05, 0.05, "sine", 0.02)),
+    land: lim(() => beep(200, 0.05, "triangle", 0.03)),
+    summit: () => arp([523, 659, 784, 1047, 784, 1047, 1319, 1568], 0.08, 0.14, "square", 0.045),
+    die: () => { noise(0.3, 0.14, 500); for (let i = 0; i < 8; i++) beep(800 - i * 80, 0.1, "triangle", 0.04, 0, i * 0.06); },
+    over: () => arp([523, 466, 415, 392, 330, 262], 0.15, 0.24, "triangle", 0.05),
+  };
+
+  // ---------- State ----------
+  let difficulty = DIFFICULTIES[load(DIFF_KEY)] ? load(DIFF_KEY) : "normale";
+  let diff = DIFFICULTIES[difficulty];
+  let state = "menu", menu = null, pausedFrom = null, stateT = 0, clock = 0;
+  let score = 0, lives = 3, level = 1, bestCache = 0, nextLife = 20000;
+  let floors = [], N = 8, P = null, camY = -VIEW, camT = -VIEW, best = 0, timer = 0;
+  let topis = [], birds = [], parts = [], popups = [], message = null, lastBy = "", birdT = 0;
+  let jumpPressed = false, hammerPressed = false;
+  const keys = { left: false, right: false, up: false, down: false };
+  const stick = { x: 0, y: 0 };
+  const snow = Array.from({ length: 50 }, (_, i) => ({ x: (i * 131) % W, y: (i * 71) % H, s: 0.5 + (i % 3) * 0.4 }));
+
+  // ---------- The mountain ----------
+  function buildMountain() {
+    N = Math.min(14, 7 + level);
+    floors = [];
+    for (let f = 0; f <= N + 1; f++) {
+      const cells = new Array(NC).fill(f === 0 || f === N + 1 ? ROCK : ICE);
+      if (f > 0 && f <= N) {
+        // a stretch or two of rock that can't be broken
+        const nr = 1 + Math.floor(Math.random() * 2);
+        for (let k = 0; k < nr; k++) { const len = 3 + Math.floor(Math.random() * 4), c0 = Math.floor(rnd(1, NC - len - 1)); for (let c = c0; c < c0 + len; c++) cells[c] = ROCK; }
+        // a few holes already open
+        const nh = 1 + Math.floor(Math.random() * 3);
+        for (let k = 0; k < nh; k++) { const c = Math.floor(rnd(1, NC - 2)); if (cells[c] === ICE) cells[c] = 0; }
+        // and never a floor without ice to break
+        if (cells.filter((v) => v === ICE).length < 8) for (let c = 2; c < NC - 2; c += 3) cells[c] = ICE;
+      }
+      if (f === N + 1) {
+        // the summit: rock, with a few gaps to climb through
+        for (const c of [4, 5, 12, 19, 26, 27]) cells[c] = 0;
+      }
+      floors.push({ cells, tint: f % 2 });
+    }
+  }
+  const cellAt = (f, c) => (f < 0 || f >= floors.length || c < 0 || c >= NC) ? 0 : floors[f].cells[c];
+  // the floor whose ice slab spans this height
+  function slabAt(y) { const f = Math.floor(-y / FH + 1); const t = floorTop(f); return y >= t && y <= t + FT ? f : -1; }
+  function supportAt(x, f) { return cellAt(f, colOf(x - PW + 1)) || cellAt(f, colOf(x + PW - 1)); }
+
+  // ---------- Flow ----------
+  const isPlaying = () => ["intro", "play", "dead", "clear"].includes(state);
+  function startGame() {
+    if (!audioCtx) { try { audioCtx = new (window.AudioContext || window.webkitAudioContext)(); } catch { audioCtx = null; } }
+    if (audioCtx && audioCtx.state === "suspended") audioCtx.resume();
+    score = 0; lives = diff.lives; level = 1; nextLife = 20000;
+    bestCache = parseInt(load(bestKey(difficulty)), 10) || 0;
+    beginLevel();
+    menu = null;
+    overlay.classList.add("hidden");
+    syncControls();
+    last = performance.now();
+  }
+  function beginLevel() {
+    buildMountain();
+    best = 0; camT = camY = floorTop(0) - VIEW; timer = 0;
+    P = { x: W / 2, y: 0, vx: 0, vy: 0, f: 0, face: 1, walk: 0, safe: 2, ham: 0 };
+    topis = []; birds = []; birdT = 6;
+    for (let f = 1; f <= Math.min(N, 3); f++) if (Math.random() < 0.8 * diff.topi) spawnTopi(f);
+    message = { text: `MONTAGNA ${level}`, sub: `${N} piani di ghiaccio fino alla vetta`, t: 0 };
+    state = "intro"; stateT = 1.6;
+  }
+  function spawnTopi(f) {
+    if (f < 1 || f > N || topis.filter((t) => t.f === f).length) return;
+    const left = Math.random() < 0.5;
+    topis.push({ x: left ? 12 : W - 12, y: floorTop(f), f, dir: left ? 1 : -1, vy: 0, state: "walk", t: 0, walk: 0 });
+  }
+  function addScore(n, x, y, color = "#ffffff", text) {
+    score += n;
+    if (score >= nextLife) { lives++; nextLife += 30000; arp([523, 659, 784, 1047, 1319], 0.07, 0.12); popups.push({ x: W / 2, y: 80, text: "VITA EXTRA!", color: "#8ae05a", t: 0, screen: true }); }
+    if (x !== undefined) popups.push({ x, y, text: text || String(n), color, t: 0 });
+  }
+  function burst(x, y, c, n = 12, sp = 110, life = 0.6) {
+    for (let k = 0; k < n; k++) { const a = Math.random() * TAU, s = sp * rnd(0.3, 1); parts.push({ x, y, vx: Math.cos(a) * s, vy: Math.sin(a) * s - 40, t: 0, life: life * rnd(0.6, 1.2), c }); }
+  }
+  function die(by) {
+    if (state !== "play" || P.safe > 0) return;
+    if (window.__deaths) window.__deaths.push([level, by, best]);
+    if (window.__god) return;
+    lives--; lastBy = by; sfx.die(); burst(P.x, P.y - 10, "#ff6a8a", 18, 110, 0.6);
+    state = "dead"; stateT = 2;
+  }
+  function respawn() {
+    // back on the lowest floor still on screen, on solid ground
+    let f = Math.max(0, Math.ceil((-(camY + H - 40)) / FH));
+    f = Math.min(f, best);
+    let x = W / 2;
+    for (let k = 0; k < NC; k++) { const c = (16 + (k % 2 ? -1 : 1) * Math.ceil(k / 2) + NC) % NC; if (cellAt(f, c) && cellAt(f, c + 1)) { x = (c + 1) * BW; break; } }
+    P = { x, y: floorTop(f), vx: 0, vy: 0, f, face: 1, walk: 0, safe: 2, ham: 0 };
+    topis = topis.filter((t) => Math.abs(t.f - f) > 0 || Math.abs(t.x - x) > 160);
+    birds = [];
+  }
+  function gameOver() {
+    state = "over";
+    const prev = parseInt(load(bestKey(difficulty)), 10) || 0;
+    const record = score > prev;
+    if (record) store(bestKey(difficulty), String(score));
+    sfx.over();
+    menu = () => showOverlay(
+      `<h2 class="lose">${lives <= 0 ? "VITE FINITE!" : "PARTITA FINITA"}</h2>
+       <p>Punteggio: <b>${score.toLocaleString("it-IT")}</b> · montagna ${level} · ${diff.label}</p>
+       ${record ? "<p style='color:var(--pink)'>★ NUOVO RECORD! ★</p>" : ""}
+       ${difficultyHTML()}
+       <button class="start" data-start>GIOCA ANCORA</button>`
+    );
+    menu();
+    syncControls();
+  }
+  function togglePause() {
+    if (isPlaying()) {
+      pausedFrom = state; state = "paused";
+      showOverlay(`<h2>PAUSA</h2><button class="start" data-resume>CONTINUA</button><p class="muted">Premi P per continuare</p>`);
+    } else if (state === "paused") {
+      state = pausedFrom; overlay.classList.add("hidden"); last = performance.now();
+    }
+    syncControls();
+  }
+  // the pause menu can end the game (shared/iniziali.js): it ends here the usual way, saving the record
+  window.addEventListener("sala:termina", () => { if (state !== "paused") return; state = pausedFrom; overlay.classList.add("hidden"); gameOver(); syncControls(); });
+  function syncControls() {
+    pauseBtn.style.display = isPlaying() && touchMode ? "block" : "none";
+    resize();
+  }
+  pauseBtn.addEventListener("click", () => togglePause());
+  function showOverlay(html) { overlay.innerHTML = html; overlay.classList.remove("hidden"); }
+  function difficultyHTML() {
+    const buttons = DIFF_IDS.map((id) => {
+      const d = DIFFICULTIES[id];
+      return `<button type="button" data-diff="${id}" class="${id === difficulty ? "on" : ""}" style="--c:${d.color}">${d.label}</button>`;
+    }).join("");
+    const bs = parseInt(load(bestKey(difficulty)), 10);
+    return `<div class="diff">${buttons}</div><p class="muted">${diff.desc}${bs ? ` · Record: ${bs.toLocaleString("it-IT")}` : ""}</p>`;
+  }
+  function setDifficulty(id) { if (!DIFFICULTIES[id]) return; difficulty = id; diff = DIFFICULTIES[id]; store(DIFF_KEY, id); if (menu) menu(); }
+  function showTitle() {
+    menu = showTitle;
+    showOverlay(
+      `<h1>VETTA GHIACCIATA</h1>
+       <p>Uno scalatore col martello deve arrivare in cima alla montagna, piano dopo piano. Salta sotto il ghiaccio per romperlo con la testa e passa dal buco al piano di sopra! Le foche girano per i piani e richiudono i buchi con nuovi blocchi, gli uccelli scendono in picchiata: tienili lontani con la mazza.</p>
+       <div class="pts">
+         <span><b>Ghiaccio</b></span><span>10 a blocco rotto · la roccia marrone non si rompe</span>
+         <span><b>Nemici</b></span><span>foca 400 · uccello 300 · colpiscili con la mazza</span>
+         <span><b>Vetta</b></span><span>3.000 + bonus tempo · se cadi sotto lo schermo perdi una vita</span>
+       </div>
+       ${touchMode
+         ? `<p class="muted help">Levetta per camminare · SALTA per saltare (e rompere il ghiaccio sopra) · MAZZA per colpire</p>`
+         : `<p class="muted help">Frecce o A D per camminare · SPAZIO, W, ↑ o J per saltare · X, K o Z per la mazza · P pausa</p>`}
+       ${difficultyHTML()}
+       <button class="start" data-start>SI SALE!</button>`
+    );
+  }
+  overlay.addEventListener("click", (e) => {
+    const d = e.target.closest("[data-diff]");
+    if (d) { setDifficulty(d.dataset.diff); return; }
+    if (e.target.closest("[data-start]")) startGame();
+    if (e.target.closest("[data-resume]")) togglePause();
+  });
+
+  // ---------- Input ----------
+  const KEYMAP = { arrowleft: "left", a: "left", arrowright: "right", d: "right" };
+  const JUMPKEYS = [" ", "w", "arrowup", "j"], HAMKEYS = ["x", "k", "z"];
+  window.addEventListener("keydown", (e) => {
+    const k = e.key.toLowerCase();
+    if ([" ", "arrowup", "arrowdown", "arrowleft", "arrowright"].includes(k)) e.preventDefault();
+    if (state === "menu" || state === "over") {
+      if (e.key === "Enter") startGame();
+      else if (["1", "2", "3"].includes(k)) setDifficulty(DIFF_IDS[+k - 1]);
+      return;
+    }
+    if (k === "p" || k === "escape") { if (!e.repeat) togglePause(); return; }
+    if (state === "paused") { if (e.key === "Enter") togglePause(); return; }
+    if (JUMPKEYS.includes(k) && !e.repeat) jumpPressed = true;
+    if (HAMKEYS.includes(k) && !e.repeat) hammerPressed = true;
+    if (KEYMAP[k]) keys[KEYMAP[k]] = true;
+  });
+  window.addEventListener("keyup", (e) => { const m = KEYMAP[e.key.toLowerCase()]; if (m) keys[m] = false; });
+  window.addEventListener("blur", () => { for (const k in keys) keys[k] = false; stick.x = stick.y = 0; if (isPlaying()) togglePause(); });
+  for (const [sel, fn] of [[".hop", () => { jumpPressed = true; }], [".axe", () => { hammerPressed = true; }]]) {
+    const b = touchEl.querySelector(sel);
+    b.addEventListener("pointerdown", (e) => { e.preventDefault(); fn(); b.classList.add("on"); });
+    for (const ev of ["pointerup", "pointercancel", "pointerleave"]) b.addEventListener(ev, () => b.classList.remove("on"));
+  }
+  const stickEl = touchEl.querySelector(".stick"), knob = stickEl.querySelector(".knob");
+  let stickId = null;
+  function stickAt(e) {
+    const r = stickEl.getBoundingClientRect(), max = r.width / 2 - 14;
+    let dx = e.clientX - (r.left + r.width / 2), dy = e.clientY - (r.top + r.height / 2);
+    const len = Math.hypot(dx, dy);
+    if (len > max) { dx *= max / len; dy *= max / len; }
+    knob.style.transform = `translate(${dx}px, ${dy}px)`;
+    const m = Math.abs(dx) / max;
+    stick.x = m < 0.15 ? 0 : Math.sign(dx) * Math.min(1, (m - 0.15) / 0.6); stick.y = 0;
+  }
+  const stickEnd = (e) => { if (e.pointerId !== stickId) return; stickId = null; knob.style.transform = ""; stick.x = stick.y = 0; };
+  stickEl.addEventListener("pointerdown", (e) => { e.preventDefault(); stickId = e.pointerId; try { stickEl.setPointerCapture(e.pointerId); } catch { /* ignore */ } stickAt(e); });
+  stickEl.addEventListener("pointermove", (e) => { if (e.pointerId === stickId) stickAt(e); });
+  for (const ev of ["pointerup", "pointercancel", "lostpointercapture"]) stickEl.addEventListener(ev, stickEnd);
+  window.addEventListener("pointerdown", (e) => { if (e.pointerType === "touch" && !touchMode) { touchMode = true; syncControls(); if (menu) menu(); } }, true);
+
+  // ---------- Update ----------
+  function breakCell(f, c) {
+    const v = cellAt(f, c);
+    if (v === ICE || v === PATCH) {
+      floors[f].cells[c] = 0; addScore(10); sfx.crack();
+      for (let k = 0; k < 6; k++) parts.push({ x: colX(c) + rnd(-8, 8), y: floorTop(f) + rnd(0, FT), vx: rnd(-60, 60), vy: rnd(-40, 60), t: 0, life: 0.8, c: "#bfefff", grav: true });
+      // whatever stood on it drops
+      for (const t of topis) if (t.f === f && t.state === "walk" && colOf(t.x) === c) { t.state = "fall"; t.vy = 0; }
+      return true;
+    }
+    sfx.thud(); return false;
+  }
+  function updatePlayer(dt) {
+    P.safe = Math.max(0, P.safe - dt); P.ham = Math.max(0, P.ham - dt);
+    const ix = clamp(stick.x + (keys.right ? 1 : 0) - (keys.left ? 1 : 0), -1, 1);
+    if (Math.abs(ix) > 0.1) P.face = Math.sign(ix);
+    const onGround = P.f >= 0;
+    const target = ix * WALK;
+    P.vx += (target - P.vx) * Math.min(1, dt * (onGround ? 14 : 4));
+    if (jumpPressed && onGround) { P.vy = -JV; P.from = P.f; P.f = -1; sfx.jump(); }
+    jumpPressed = false;
+    if (hammerPressed && P.ham <= 0) { P.ham = 0.28; sfx.swing(); }
+    hammerPressed = false;
+    // horizontal
+    P.x = clamp(P.x + P.vx * dt, PW, W - PW);
+    if (onGround && Math.abs(P.vx) > 10) P.walk += dt * 12;
+    if (P.f >= 0) {
+      if (!supportAt(P.x, P.f)) { P.f = -1; P.vy = 0; }
+      else return;
+    }
+    // airborne
+    const py = P.y;
+    P.vy += GRAV * dt; P.y += P.vy * dt;
+    if (P.vy < 0) {
+      // the head meets a slab of ice from below
+      const hy = P.y - PH, f = slabAt(hy);
+      if (f >= 0) {
+        const cL = colOf(P.x - PW), cR = colOf(P.x + PW), vL = cellAt(f, cL), vR = cellAt(f, cR);
+        if (vL || vR) {
+          // nearly in the hole: slide in sideways
+          if (!vL && vR && P.x + PW - cR * BW < 6) P.x = cR * BW - PW - 0.1;
+          else if (vL && !vR && (cL + 1) * BW - (P.x - PW) < 6) P.x = (cL + 1) * BW + PW + 0.1;
+          else {
+            // a bump: the block over the head breaks (rock doesn't)
+            const cc = colOf(P.x);
+            breakCell(f, cellAt(f, cc) ? cc : (vL ? cL : cR));
+            P.vy = 60; P.y = floorTop(f) + FT + PH + 0.5;
+          }
+        }
+      }
+    } else {
+      // landing on a floor
+      for (let f = 0; f < floors.length; f++) {
+        const t = floorTop(f);
+        if (py <= t + 0.5 && P.y >= t && !supportAt(P.x, f) && f > (P.from ?? 99)) {
+          // came up through a hole: step onto its nearer edge
+          for (const dx of [3, -3, 6, -6, 9, -9, 11, -11]) if (supportAt(P.x + dx, f)) { P.x += dx; break; }
+        }
+        if (py <= t + 0.5 && P.y >= t && supportAt(P.x, f)) {
+          P.y = t; P.vy = 0; P.f = f; P.from = undefined; sfx.land();
+          if (f > best) { best = f; addScore(f === N + 1 ? 0 : 50 * f); }
+          break;
+        }
+      }
+    }
+  }
+  function updateCamera(dt) {
+    // the view climbs with the climber, never goes back down
+    const want = Math.min(camT, floorTop(Math.max(best - 0, 0)) - VIEW);
+    camT = want;
+    camY += (camT - camY) * Math.min(1, dt * 3);
+    if (P.y - camY > H + 20) die("UNA CADUTA");
+  }
+  function hammerHits(o) {
+    if (P.ham <= 0.04) return false;
+    const hx = P.x + P.face * 14;
+    return Math.abs(o.x - hx) < 16 && o.y > P.y - 30 && o.y < P.y + 8;
+  }
+  function updateEnemies(dt) {
+    const sp = diff.speed * Math.min(1.5, 1 + 0.06 * (level - 1));
+    for (const t of topis) {
+      t.walk += dt * 8;
+      if (t.state === "ko") { t.x += t.vx * dt; t.vy += GRAV * dt; t.y += t.vy * dt; if (t.y - camY > H + 40) t.gone = true; continue; }
+      if (t.state === "fall") {
+        t.vy += GRAV * dt; const py = t.y; t.y += t.vy * dt;
+        for (let f = 0; f < floors.length; f++) { const top = floorTop(f); if (py <= top && t.y >= top && cellAt(f, colOf(t.x))) { t.y = top; t.f = f; t.state = "walk"; t.vy = 0; break; } }
+        if (t.y - camY > H + 40) t.gone = true;
+        continue;
+      }
+      if (t.state === "fill") {
+        t.t -= dt;
+        if (t.t <= 0) { const c = colOf(t.x + t.dir * 14); if (!cellAt(t.f, c)) { floors[t.f].cells[c] = PATCH; sfx.patch(); } t.state = "walk"; }
+      } else {
+        // a seal pushes a fresh block into any hole it meets
+        const ahead = colOf(t.x + t.dir * 14);
+        if (!cellAt(t.f, ahead) && t.x + t.dir * 14 > 0 && t.x + t.dir * 14 < W) { t.state = "fill"; t.t = 1.4 / sp; }
+        else {
+          t.x += t.dir * 42 * sp * dt;
+          if (t.x < 10 || t.x > W - 10) { t.dir *= -1; t.x = clamp(t.x, 10, W - 10); }
+        }
+      }
+      if (hammerHits(t)) { t.state = "ko"; t.vx = P.face * 160; t.vy = -260; addScore(400, t.x, t.y - 20, "#ffd23a"); sfx.bonk(); continue; }
+      if (P.safe <= 0 && Math.abs(t.x - P.x) < 13 && Math.abs(t.y - P.y) < 14) die("UNA FOCA");
+    }
+    topis = topis.filter((t) => !t.gone);
+    // seals come back to the floors around the climber
+    if (Math.random() < dt * 0.25 * diff.topi && topis.length < Math.min(5, 2 + Math.floor(level / 2) + (diff.topi > 1 ? 1 : 0))) spawnTopi(Math.max(1, P.f >= 0 ? P.f : best) + Math.floor(rnd(0, 3)));
+    // birds, higher up the mountain
+    birdT -= dt;
+    if (birdT <= 0 && best >= 3) {
+      birdT = rnd(6, 10) / diff.birds;
+      const left = Math.random() < 0.5;
+      birds.push({ x: left ? -20 : W + 20, by: P.y - rnd(10, 60), y: P.y - 40, dir: left ? 1 : -1, t: 0 }); sfx.bird();
+    }
+    for (const b of birds) {
+      b.t += dt; b.x += b.dir * 80 * sp * dt;
+      // swoops towards the climber's height
+      b.by += clamp(P.y - 14 - b.by, -40 * dt, 40 * dt);
+      b.y = b.by + Math.sin(b.t * 3) * 22;
+      if (b.x < -40 || b.x > W + 40) b.gone = true;
+      if (hammerHits(b)) { b.gone = true; addScore(300, b.x, b.y - 14, "#ffd23a"); burst(b.x, b.y, "#e8e8f0", 10, 90, 0.5); sfx.bonk(); continue; }
+      if (P.safe <= 0 && Math.abs(b.x - P.x) < 10 && Math.abs(b.y - (P.y - 10)) < 11) die("UN UCCELLO");
+    }
+    birds = birds.filter((b) => !b.gone);
+  }
+  function update(dt) {
+    clock += dt; sfxN = 0;
+    if (message) { message.t += dt; if (message.t > 2.4) message = null; }
+    for (const p of parts) { p.t += dt; p.x += p.vx * dt; p.y += p.vy * dt; if (p.grav) p.vy += 400 * dt; }
+    parts = parts.filter((p) => p.t < p.life);
+    for (const p of popups) { p.t += dt; p.y -= 20 * dt; }
+    popups = popups.filter((p) => p.t < 1.2);
+    for (const s of snow) { s.y += 20 * s.s * dt; s.x += Math.sin(clock + s.y * 0.05) * 6 * dt; if (s.y > H) { s.y = TOP; s.x = Math.random() * W; } }
+    if (!isPlaying()) return;
+    if (state === "intro") { stateT -= dt; if (stateT <= 0) state = "play"; return; }
+    if (state === "dead") { stateT -= dt; if (stateT <= 0) { if (lives <= 0) { gameOver(); return; } respawn(); state = "play"; } return; }
+    if (state === "clear") { stateT -= dt; if (stateT <= 0) { level++; beginLevel(); } return; }
+    timer += dt;
+    if (window.__bot) window.__bot(dt);
+    updatePlayer(dt);
+    if (P.f === N + 1) {
+      const tb = Math.max(0, Math.round((60 + N * 8 - timer)) * 20), b = 3000 + tb;
+      addScore(b); message = { text: "IN VETTA!", sub: `3.000 + bonus tempo ${tb.toLocaleString("it-IT")}`, t: 0 };
+      sfx.summit(); state = "clear"; stateT = 2.6; return;
+    }
+    updateCamera(dt);
+    if (state !== "play") return;
+    updateEnemies(dt);
+  }
+
+  // ---------- Drawing ----------
+  function drawMountain() {
+    const g = ctx.createLinearGradient(0, TOP, 0, H);
+    g.addColorStop(0, "#0a1a3a"); g.addColorStop(1, "#2a5a8a");
+    ctx.fillStyle = g; ctx.fillRect(0, TOP, W, H - TOP);
+    // distant peaks
+    ctx.fillStyle = "rgba(200,230,255,0.08)"; ctx.beginPath(); ctx.moveTo(0, H); for (let x = 0; x <= W; x += 80) ctx.lineTo(x, H - 120 - ((x * 7) % 90) + (camY - floorTop(0) + VIEW) * 0.05); ctx.lineTo(W, H); ctx.fill();
+    for (const s of snow) { ctx.fillStyle = `rgba(255,255,255,${0.3 + s.s * 0.3})`; ctx.fillRect(s.x, s.y, s.s * 2, s.s * 2); }
+    for (let f = 0; f < floors.length; f++) {
+      const y = floorTop(f) - camY;
+      if (y < TOP - 20 || y > H + 20) continue;
+      const fl = floors[f];
+      for (let c = 0; c < NC; c++) {
+        const v = fl.cells[c]; if (!v) continue;
+        const x = c * BW;
+        if (v === ROCK) { ctx.fillStyle = f === 0 ? "#6a4a2a" : "#8a5a3a"; ctx.fillRect(x, y, BW, FT); ctx.fillStyle = "#a87a4a"; ctx.fillRect(x + 2, y + 2, 7, 3); ctx.fillRect(x + 11, y + 6, 6, 3); }
+        else { ctx.fillStyle = v === PATCH ? "#9ad8f0" : fl.tint ? "#7ac8f0" : "#8ad8ff"; ctx.fillRect(x, y, BW, FT); ctx.fillStyle = "rgba(255,255,255,0.7)"; ctx.fillRect(x + 2, y + 1, BW - 4, 2); ctx.strokeStyle = "rgba(30,90,140,0.6)"; ctx.lineWidth = 1; ctx.strokeRect(x + 0.5, y + 0.5, BW - 1, FT - 1); }
+      }
+      if (f > 0 && f <= N) { ctx.fillStyle = "rgba(255,255,255,0.35)"; ctx.font = "800 9px system-ui"; ctx.textAlign = "left"; ctx.fillText(f, 4, y + FT + 10); }
+      if (f === N + 1) {
+        // the summit flag
+        ctx.fillStyle = "#c8c8d8"; ctx.fillRect(W / 2 - 1, y - 40, 2, 40); ctx.fillStyle = "#ff3a5a"; ctx.beginPath(); ctx.moveTo(W / 2 + 1, y - 40); ctx.lineTo(W / 2 + 24 + Math.sin(clock * 6) * 3, y - 33); ctx.lineTo(W / 2 + 1, y - 26); ctx.fill();
+        ctx.fillStyle = "#ffd23a"; ctx.font = "900 10px system-ui"; ctx.textAlign = "center"; ctx.fillText("VETTA", W / 2, y - 46);
+      }
+    }
+  }
+  function drawClimber() {
+    if (P.safe > 0 && Math.floor(clock * 10) % 2) return;
+    const x = P.x, y = P.y - camY, f = P.face, air = P.f < 0, w = air ? 0 : Math.sin(P.walk) * 2;
+    ctx.fillStyle = "#3a3a8a"; ctx.fillRect(x - 4 + w * 0.5, y - 7, 3, 7); ctx.fillRect(x + 1 - w * 0.5, y - 7, 3, 7);
+    ctx.fillStyle = "#3a8aff"; ctx.beginPath(); ctx.roundRect(x - 5, y - 16, 10, 10, 3); ctx.fill();
+    ctx.fillStyle = "#ffd8b8"; ctx.beginPath(); ctx.arc(x, y - 19, 4, 0, TAU); ctx.fill();
+    ctx.fillStyle = "#3a8aff"; ctx.beginPath(); ctx.arc(x, y - 21, 4.5, Math.PI, TAU); ctx.fill(); ctx.fillStyle = "#ffffff"; ctx.beginPath(); ctx.arc(x, y - 26, 2, 0, TAU); ctx.fill();
+    ctx.fillStyle = "#1a1a1a"; ctx.fillRect(x + f * 2 - 0.5, y - 20, 1.5, 1.5);
+    // the mallet: up over the head when jumping, swung in front when hitting
+    ctx.save(); ctx.translate(x + f * 4, y - 13); ctx.scale(f, 1);
+    const a = P.ham > 0 ? -1.6 + (1 - P.ham / 0.28) * 2.6 : air ? -2.2 : -0.6;
+    ctx.rotate(a); ctx.fillStyle = "#a87a4a"; ctx.fillRect(0, -1, 12, 2); ctx.fillStyle = "#c84a3a"; ctx.fillRect(10, -4, 5, 8);
+    ctx.restore();
+  }
+  function drawTopi(t) {
+    const x = t.x, y = t.y - camY, d = t.dir;
+    ctx.save(); if (t.state === "ko") { ctx.translate(x, y - 6); ctx.rotate(clock * 12); ctx.translate(-x, -(y - 6)); }
+    ctx.fillStyle = "#e8e8f0"; ctx.beginPath(); ctx.ellipse(x, y - 6, 9, 6, 0, 0, TAU); ctx.fill();
+    ctx.beginPath(); ctx.arc(x + d * 7, y - 10, 4.5, 0, TAU); ctx.fill();
+    ctx.fillStyle = "#1a1a2a"; ctx.fillRect(x + d * 8, y - 12, 1.6, 1.6); ctx.fillRect(x + d * 11, y - 10, 1.6, 1.6);
+    ctx.fillStyle = "#c8c8d8"; ctx.fillRect(x - d * 9, y - 3, 4, 3);
+    if (t.state === "fill") { ctx.fillStyle = "#9ad8f0"; ctx.fillRect(x + d * 12 - 6, y - 11, 12, 10); ctx.strokeStyle = "#3a8ab8"; ctx.strokeRect(x + d * 12 - 6, y - 11, 12, 10); }
+    ctx.restore();
+  }
+  function drawBird(b) {
+    const x = b.x, y = b.y - camY, fl = Math.sin(b.t * 14) * 5;
+    ctx.fillStyle = "#e85a3a"; ctx.beginPath(); ctx.ellipse(x, y, 7, 4, 0, 0, TAU); ctx.fill();
+    ctx.strokeStyle = "#c83a2a"; ctx.lineWidth = 2; ctx.beginPath(); ctx.moveTo(x - 6, y); ctx.lineTo(x, y - 4 - fl); ctx.lineTo(x + 6, y); ctx.stroke();
+    ctx.fillStyle = "#ffd23a"; ctx.beginPath(); ctx.moveTo(x + b.dir * 7, y - 1); ctx.lineTo(x + b.dir * 11, y); ctx.lineTo(x + b.dir * 7, y + 1); ctx.fill();
+  }
+  function drawHud() {
+    ctx.fillStyle = "rgba(6,16,32,0.95)"; ctx.fillRect(0, 0, W, TOP);
+    ctx.textBaseline = "middle"; ctx.textAlign = "left";
+    const x0 = touchMode ? 130 : 10;
+    ctx.fillStyle = "#ffffff"; ctx.font = "900 15px system-ui"; ctx.fillText(score.toLocaleString("it-IT"), x0, 14);
+    ctx.fillStyle = "#a8c8d8"; ctx.font = "700 9px system-ui"; ctx.fillText(`REC ${Math.max(bestCache, score).toLocaleString("it-IT")}`, x0 + 80, 9);
+    ctx.fillStyle = "#6ad8ff"; ctx.font = "900 10px system-ui"; ctx.fillText(`MONTAGNA ${level}`, x0 + 80, 21);
+    // how high: one notch per floor
+    const bx = x0 + 180;
+    ctx.fillStyle = "#a8c8d8"; ctx.font = "800 9px system-ui"; ctx.fillText(`PIANO ${Math.min(best, N + 1)}/${N + 1}`, bx, 14);
+    for (let f = 1; f <= N + 1; f++) { ctx.fillStyle = f <= best ? (f === N + 1 ? "#ff3a5a" : "#6ad8ff") : "#2a3a5a"; ctx.fillRect(bx + 58 + f * 7, 9, 5, 10); }
+    const lx = touchMode ? W - 60 : W - 12;
+    for (let i = 0; i < Math.min(lives - (state === "dead" ? 0 : 1), 6); i++) { const cx = lx - i * 14; ctx.fillStyle = "#3a8aff"; ctx.beginPath(); ctx.arc(cx, 14, 5, Math.PI, TAU); ctx.fill(); ctx.fillStyle = "#ffd8b8"; ctx.beginPath(); ctx.arc(cx, 16, 3.5, 0, TAU); ctx.fill(); }
+    ctx.textBaseline = "alphabetic";
+  }
+  function draw() {
+    ctx.setTransform(pxRatio, 0, 0, pxRatio, 0, 0);
+    if (!floors.length) { buildMountain(); P = { x: 300, y: floorTop(1), vx: 0, vy: 0, f: 1, face: 1, walk: 0, safe: 0, ham: 0 }; camY = floorTop(1) - VIEW; topis = [{ x: 450, y: floorTop(2), f: 2, dir: -1, state: "walk", walk: 0 }]; }
+    drawMountain();
+    for (const t of topis) drawTopi(t);
+    for (const b of birds) drawBird(b);
+    if (state !== "menu" && (state !== "dead" || Math.floor(clock * 6) % 2)) drawClimber();
+    for (const p of parts) { ctx.globalAlpha = Math.max(0, 1 - p.t / p.life); ctx.fillStyle = p.c; ctx.fillRect(p.x - 1.5, p.y - camY - 1.5, 3, 3); }
+    ctx.globalAlpha = 1;
+    for (const p of popups) {
+      ctx.globalAlpha = Math.max(0, 1 - p.t / 1.2);
+      ctx.textAlign = "center"; ctx.font = "900 11px system-ui";
+      const y = p.screen ? p.y : p.y - camY;
+      ctx.lineWidth = 3; ctx.strokeStyle = "#0a1a30"; ctx.strokeText(p.text, p.x, y); ctx.fillStyle = p.color; ctx.fillText(p.text, p.x, y);
+    }
+    ctx.globalAlpha = 1;
+    if (state === "menu") return;
+    drawHud();
+    if (message) {
+      ctx.globalAlpha = Math.min(1, (2.4 - message.t) * 2);
+      ctx.textAlign = "center"; ctx.font = "italic 900 24px system-ui"; ctx.fillStyle = "#6ad8ff";
+      ctx.lineWidth = 5; ctx.strokeStyle = "#0a1a30"; ctx.strokeText(message.text, W / 2, 80); ctx.fillText(message.text, W / 2, 80);
+      if (message.sub) { ctx.font = "800 12px system-ui"; ctx.fillStyle = "#ffffff"; ctx.strokeText(message.sub, W / 2, 99); ctx.fillText(message.sub, W / 2, 99); }
+      ctx.globalAlpha = 1;
+    }
+    if (state === "dead") {
+      ctx.textAlign = "center"; ctx.font = "900 17px system-ui"; ctx.fillStyle = "#ff3a3a"; ctx.lineWidth = 4; ctx.strokeStyle = "#ffffff";
+      const t = lastBy === "UNA CADUTA" ? "CADUTO DALLA MONTAGNA!" : `PRESO DA ${lastBy}!`;
+      ctx.strokeText(t, W / 2, 160); ctx.fillText(t, W / 2, 160);
+    }
+  }
+
+  // ---------- Loop ----------
+  const STEP = 1 / 120;
+  let last = performance.now(), acc = 0;
+  function frame(now) {
+    const dt = Math.min(0.1, (now - last) / 1000);
+    last = now;
+    if (isPlaying()) {
+      acc += dt;
+      while (acc >= STEP && isPlaying()) { update(STEP); acc -= STEP; }
+    } else { acc = 0; update(dt); }
+    draw();
+    requestAnimationFrame(frame);
+  }
+  syncControls();
+  showTitle();
+  requestAnimationFrame(frame);
+})();
+</script>
+<script src="../../shared/iniziali.js" data-record="vetta-best-" data-kind="score"></script>
+</body>
+</html>

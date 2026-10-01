@@ -4,7 +4,7 @@ Raccolta di giochi arcade per il browser. Ogni gioco è un singolo file HTML sen
 
 ## 🕹️ Sala Giochi — `index.html`
 
-Apri `index.html` nella cartella principale per la pagina di raccolta: mostra tutti i 114 giochi con copertina, genere, comandi e i tuoi record per ogni difficoltà (Facile, Normale, Difficile). Tocca «Gioca» per avviare un gioco; in ogni gioco il pulsante «← Sala Giochi» in alto a sinistra (visibile nei menu) riporta alla raccolta.
+Apri `index.html` nella cartella principale per la pagina di raccolta: mostra tutti i 115 giochi con copertina, genere, comandi e i tuoi record per ogni difficoltà (Facile, Normale, Difficile). Tocca «Gioca» per avviare un gioco; in ogni gioco il pulsante «← Sala Giochi» in alto a sinistra (visibile nei menu) riporta alla raccolta.
 
 **Iniziali del record:** quando batti un record compare la schermata da sala giochi per inserire le tue tre iniziali (frecce ↑ ↓ per cambiare lettera, ← → per spostarti, oppure scrivile direttamente; su telefono i tasti ▲ ▼ e OK). Le iniziali vengono salvate insieme al record e compaiono nei menu del gioco e nella Sala Giochi. Il codice è condiviso da tutti i giochi in `shared/iniziali.js`.
 
@@ -1760,3 +1760,18 @@ Sparatutto a scorrimento orizzontale in stile *Sky Kid*. Un piccolo biplano attr
 - **Touch:** levetta per volare, pulsante GIRO
 
 Per giocare apri `games/biplano-ribelle/index.html` nel browser.
+
+### 🏔️ Vetta Ghiacciata — `games/vetta-ghiacciata/index.html`
+
+Arrampicata in stile *Ice Climber*. Uno scalatore col martello deve arrivare in cima alla montagna, piano dopo piano; la visuale sale insieme a lui e non torna indietro.
+
+- **Il ghiaccio:** saltando sotto un blocco di ghiaccio lo rompi con la testa (10 punti) e apri un buco: salta di nuovo per passare al piano di sopra (chi sale da un buco largo un blocco atterra sul bordo più vicino). La roccia marrone non si rompe
+- **Le foche:** girano per i piani e, quando trovano un buco, lo richiudono spingendoci dentro un blocco nuovo. Se rompi il ghiaccio sotto una foca, cade al piano di sotto. Toccarle costa una vita; con la mazza le mandi via (400)
+- **Gli uccelli:** dal terzo piano scendono in picchiata verso di te; la mazza li abbatte (300)
+- **Le cadute:** se cadi più in basso del fondo dello schermo perdi una vita e riparti dal piano più basso ancora visibile
+- **La vetta:** in cima c'è un tetto di roccia con qualche varco e la bandiera: arrivarci vale 3.000 più un bonus per il tempo. Ogni montagna ha più piani della precedente (fino a 14)
+- **Difficoltà:** Facile (5 vite, foche lente e pochi uccelli), Normale (3 vite), Difficile (3 vite, foche svelte e numerose, tanti uccelli); record separati per ogni difficoltà. Vita extra a 20.000 punti e poi ogni 30.000
+- **Comandi:** frecce o `A` `D` per camminare · `Spazio`, `W`, `↑` o `J` per saltare · `X`, `K` o `Z` per la mazza · `P` pausa
+- **Touch:** levetta per camminare, pulsanti SALTA e MAZZA
+
+Per giocare apri `games/vetta-ghiacciata/index.html` nel browser.
