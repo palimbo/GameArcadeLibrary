@@ -4,7 +4,7 @@ Raccolta di giochi arcade per il browser. Ogni gioco è un singolo file HTML sen
 
 ## 🕹️ Sala Giochi — `index.html`
 
-Apri `index.html` nella cartella principale per la pagina di raccolta: mostra tutti i 110 giochi con copertina, genere, comandi e i tuoi record per ogni difficoltà (Facile, Normale, Difficile). Tocca «Gioca» per avviare un gioco; in ogni gioco il pulsante «← Sala Giochi» in alto a sinistra (visibile nei menu) riporta alla raccolta.
+Apri `index.html` nella cartella principale per la pagina di raccolta: mostra tutti i 111 giochi con copertina, genere, comandi e i tuoi record per ogni difficoltà (Facile, Normale, Difficile). Tocca «Gioca» per avviare un gioco; in ogni gioco il pulsante «← Sala Giochi» in alto a sinistra (visibile nei menu) riporta alla raccolta.
 
 **Iniziali del record:** quando batti un record compare la schermata da sala giochi per inserire le tue tre iniziali (frecce ↑ ↓ per cambiare lettera, ← → per spostarti, oppure scrivile direttamente; su telefono i tasti ▲ ▼ e OK). Le iniziali vengono salvate insieme al record e compaiono nei menu del gioco e nella Sala Giochi. Il codice è condiviso da tutti i giochi in `shared/iniziali.js`.
 
@@ -1704,3 +1704,17 @@ Piattaforme in stile *Space Panic*. Una stazione spaziale di cinque piani colleg
 - **Touch:** levetta per camminare e salire, pulsante SCAVA
 
 Per giocare apri `games/panico-spaziale/index.html` nel browser.
+
+### ⛽ Ladri di Carburante — `games/ladri-di-carburante/index.html`
+
+Difesa in grafica vettoriale in stile *Rip Off*. Al centro del deserto ci sono le ultime taniche di carburante; i predoni arrivano a ondate dai bordi, le agganciano e cercano di trascinarle fuori dallo schermo. Il tuo carro armato rinasce sempre: la partita finisce quando hai perso l'ultima tanica.
+
+- **Il carro:** gira e avanza nella direzione della levetta (o delle frecce) e spara dal cannone; al massimo due colpi in volo alla volta
+- **I predoni:** valgono 50 punti più 25 per ogni ondata. Se abbatti un predone mentre traina, la tanica resta dov'è (ma un altro può venire a prenderla). Avvicinandosi zigzagano, e a ogni ondata sono di più e più veloci
+- **Armati e corazzati:** con il passare delle ondate alcuni predoni hanno il cannone e ti sparano se ti avvicini; quelli con il doppio scafo vanno colpiti due volte. Se ti colpiscono o ti speronano il carro esplode e rientra dopo un paio di secondi
+- **Ondata pulita:** se non perdi nessuna tanica prendi 200 × il numero dell'ondata
+- **Difficoltà:** Facile (10 taniche, predoni lenti che sparano poco e crescono piano), Normale (8 taniche), Difficile (6 taniche, predoni svelti, armati e corazzati prima, mira migliore); record separati per ogni difficoltà
+- **Comandi:** frecce o `WASD` per guidare · `Spazio`, `J` o `Z` per sparare (tieni premuto per sparare di continuo) · `P` pausa
+- **Touch:** levetta per guidare, pulsante FUOCO
+
+Per giocare apri `games/ladri-di-carburante/index.html` nel browser.

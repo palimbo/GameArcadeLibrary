@@ -1,0 +1,590 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no, viewport-fit=cover">
+<title>Ladri di Carburante</title>
+<style>
+  :root {
+    --bg: #02040a;
+    --fg: #f4f6ee;
+    --muted: #90c8d0;
+    --pink: #3affd0;
+    --yellow: #ff5ad0;
+    --red: #ff4a3a;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  html, body {
+    height: 100%;
+    background: var(--bg);
+    color: var(--fg);
+    font-family: system-ui, -apple-system, "Segoe UI", sans-serif;
+    overflow: hidden;
+    user-select: none;
+    -webkit-user-select: none;
+    touch-action: none;
+  }
+  #wrap { position: fixed; inset: 0; display: flex; align-items: center; justify-content: center; }
+  canvas { display: block; touch-action: none; border-radius: 6px; box-shadow: 0 0 0 2px #0a4a4a, 0 10px 40px rgba(0,0,0,0.6); }
+  #pauseBtn {
+    position: fixed; z-index: 3; display: none; right: 10px; top: calc(10px + env(safe-area-inset-top, 0px));
+    font: 700 13px system-ui, sans-serif; color: var(--fg);
+    background: rgba(0, 0, 0, 0.6); border: 1px solid rgba(244, 246, 238, 0.35);
+    border-radius: 8px; padding: 6px 10px; cursor: pointer;
+  }
+  #touch {
+    position: fixed; z-index: 2; display: none; left: 12px; right: 12px;
+    bottom: calc(14px + env(safe-area-inset-bottom, 0px));
+    justify-content: space-between; align-items: flex-end; pointer-events: none;
+  }
+  /* thumb stick: drive the tank where the stick points; FUOCO fires from the cannon */
+  #touch .stick { position: relative; width: 136px; height: 136px; border-radius: 50%; pointer-events: auto; touch-action: none;
+    border: 2px solid rgba(58, 255, 208, 0.6); background: radial-gradient(circle, rgba(58,255,208,0.14), rgba(58,255,208,0.04)); }
+  #touch .stick .knob { position: absolute; left: 50%; top: 50%; width: 58px; height: 58px; margin: -29px 0 0 -29px; border-radius: 50%;
+    background: rgba(58, 255, 208, 0.45); border: 2px solid rgba(255,255,255,0.7); box-shadow: 0 4px 10px rgba(0,0,0,0.4); pointer-events: none; }
+  #touch .stick .ring { position: absolute; inset: 10px; border-radius: 50%; border: 1px dashed rgba(244,246,238,0.25); pointer-events: none; }
+  #touch .jump { width: 96px; height: 96px; border-radius: 50%; pointer-events: auto; touch-action: none; color: var(--fg);
+    font: 800 13px system-ui, sans-serif; letter-spacing: 1px; border: 2px solid rgba(255, 176, 58, 0.9); background: rgba(255, 176, 58, 0.22); }
+  #touch .jump.on { background: rgba(255, 176, 58, 0.55); }
+  #touch.small .stick { width: 112px; height: 112px; }
+  #touch.small .stick .knob { width: 48px; height: 48px; margin: -24px 0 0 -24px; }
+  #touch.small .jump { width: 80px; height: 80px; font-size: 11px; }
+  #overlay {
+    position: fixed; inset: 0; z-index: 5;
+    display: flex; flex-direction: column; align-items: center; justify-content: flex-start;
+    gap: 14px; padding: 16px; text-align: center; overflow-y: auto;
+    background: rgba(2, 4, 10, 0.93);
+  }
+  #overlay > :first-child { margin-top: auto; }
+  #overlay > :last-child { margin-bottom: auto; }
+  #overlay.hidden { display: none; }
+  #homeLink {
+    position: fixed; top: calc(10px + env(safe-area-inset-top, 0px)); left: 10px; z-index: 6;
+    font: 600 13px/1 system-ui, sans-serif; color: #fff; text-decoration: none;
+    padding: 8px 12px; border-radius: 999px; background: rgba(0,0,0,.55);
+    border: 1px solid rgba(255,255,255,.25);
+  }
+  #homeLink:hover { background: rgba(0,0,0,.8); }
+  #overlay.hidden ~ #homeLink { display: none; }
+  @media (max-width: 700px) { #overlay { padding-top: calc(52px + env(safe-area-inset-top, 0px)); } }
+  #overlay h1 { font-size: clamp(32px, 10vw, 58px); font-weight: 900; font-style: italic; letter-spacing: 1px; color: var(--pink);
+    text-shadow: 3px 3px 0 #0a5a4a, 0 0 22px rgba(58,255,208,0.35); }
+  #overlay h2 { font-size: clamp(26px, 7vw, 42px); font-weight: 900; letter-spacing: 2px; color: var(--pink); }
+  #overlay h2.lose { color: var(--red); }
+  #overlay p { max-width: 540px; font-size: clamp(13px, 3.4vw, 16px); line-height: 1.55; }
+  #overlay p.muted { color: var(--muted); }
+  #overlay .pts { display: grid; grid-template-columns: repeat(2, auto); gap: 4px 18px; font-size: 13px; color: var(--muted); text-align: left; max-width: 560px; }
+  #overlay .pts b { color: var(--fg); }
+  #overlay .diff { display: flex; gap: 10px; flex-wrap: wrap; justify-content: center; }
+  #overlay button {
+    font: 800 15px system-ui, sans-serif; letter-spacing: 1.5px; color: var(--fg);
+    background: transparent; cursor: pointer;
+    border: 2px solid rgba(244,246,238,0.3); border-radius: 10px; padding: 9px 16px;
+  }
+  #overlay .diff button.on { border-color: var(--c); color: var(--c); box-shadow: 0 0 12px var(--c); }
+  #overlay button.start { border-color: var(--pink); color: #022a20; background: var(--pink); padding: 11px 30px; box-shadow: 0 4px 0 #10a888; }
+  @media (max-height: 560px) {
+    #overlay { gap: 8px; }
+    #overlay h1 { font-size: 30px; }
+    #overlay p { font-size: 13px; line-height: 1.4; }
+    #overlay .help, #overlay .pts { display: none; }
+  }
+</style>
+</head>
+<body>
+<div id="wrap"><canvas id="game"></canvas></div>
+<div id="touch">
+  <div class="stick" aria-label="Levetta"><div class="ring"></div><div class="knob"></div></div>
+  <button type="button" class="jump" aria-label="Fuoco">FUOCO</button>
+</div>
+<button id="pauseBtn" type="button" aria-label="Pausa">❚❚</button>
+<div id="overlay"></div>
+<a id="homeLink" href="../../index.html">← Sala Giochi</a>
+
+
+<script>
+(() => {
+  "use strict";
+
+  const W = 640, H = 360, TAU = Math.PI * 2, TOP = 28;
+  const X0 = 0, X1 = W, Y0 = TOP, Y1 = H, CX = W / 2, CY = (TOP + H) / 2;
+  const PSPEED = 135, PTURN = 5.5, BSPEED = 360, BRANGE = 240, MAXB = 2, PR = 9, RR = 9;
+  const COLORS = ["#ff5ad0", "#ffb03a", "#ff4a4a", "#c87aff", "#5ab0ff", "#e8ff5a"];
+
+  const DIFFICULTIES = {
+    facile:    { label: "FACILE",    color: "#7ed87a", desc: "10 taniche · predoni lenti che sparano poco", cans: 10, speed: 0.75, gun: 0.5, shot: 0.7, grow: 0.03, size: 0.33, arm: 6 },
+    normale:   { label: "NORMALE",   color: "#3affd0", desc: "8 taniche", cans: 8, speed: 1, gun: 1, shot: 1, grow: 0.045, size: 0.42, arm: 4 },
+    difficile: { label: "DIFFICILE", color: "#ff5a5a", desc: "6 taniche · predoni svelti, armati prima e con la mira migliore", cans: 6, speed: 1.15, gun: 1.5, shot: 1.25, grow: 0.06, size: 0.5, arm: 3 },
+  };
+  const DIFF_IDS = Object.keys(DIFFICULTIES);
+  const DIFF_KEY = "ladri-difficulty";
+  const bestKey = (id) => `ladri-best-${id}`;
+  function store(k, v) { try { localStorage.setItem(k, v); } catch { /* ignore */ } }
+  function load(k) { try { return localStorage.getItem(k); } catch { return null; } }
+  const rnd = (a, b) => a + Math.random() * (b - a);
+  const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
+  const angDiff = (a, b) => { let d = (b - a) % TAU; if (d > Math.PI) d -= TAU; if (d < -Math.PI) d += TAU; return d; };
+  const dist = (a, b) => Math.hypot(a.x - b.x, a.y - b.y);
+
+  // ---------- Canvas ----------
+  const canvas = document.getElementById("game");
+  const ctx = canvas.getContext("2d");
+  const wrapEl = document.getElementById("wrap");
+  const overlay = document.getElementById("overlay");
+  const touchEl = document.getElementById("touch");
+  const pauseBtn = document.getElementById("pauseBtn");
+  let pxRatio = 1, touchMode = !!(window.matchMedia && matchMedia("(pointer: coarse)").matches);
+  function resize() {
+    const portrait = window.innerHeight > window.innerWidth;
+    const showTouch = touchMode && isPlaying();
+    touchEl.style.display = showTouch ? "flex" : "none";
+    touchEl.classList.toggle("small", !portrait && window.innerHeight < 480);
+    wrapEl.style.paddingBottom = showTouch && portrait ? "calc(170px + env(safe-area-inset-bottom, 0px))" : "0";
+    let availW = window.innerWidth - 8, availH = window.innerHeight - 8;
+    if (showTouch && portrait) availH -= 170;
+    if (showTouch && !portrait) {
+      const side = Math.max(...[...touchEl.children].map((el) => el.offsetWidth)) + 20;
+      if (window.innerWidth - 2 * side > 200) availW = window.innerWidth - 2 * side;
+    }
+    const s = Math.max(0.2, Math.min(availW / W, availH / H));
+    pxRatio = Math.min(3, s * (window.devicePixelRatio || 1));
+    canvas.style.width = W * s + "px";
+    canvas.style.height = H * s + "px";
+    canvas.width = Math.round(W * pxRatio);
+    canvas.height = Math.round(H * pxRatio);
+  }
+  window.addEventListener("resize", () => syncControls());
+
+  // ---------- Audio ----------
+  let audioCtx = null;
+  function beep(freq, dur, type = "square", vol = 0.04, slide = 0, delay = 0) {
+    if (!audioCtx) return;
+    const t = audioCtx.currentTime + delay;
+    const osc = audioCtx.createOscillator(), gain = audioCtx.createGain();
+    osc.type = type;
+    osc.frequency.setValueAtTime(freq, t);
+    if (slide) osc.frequency.exponentialRampToValueAtTime(Math.max(20, freq + slide), t + dur);
+    gain.gain.setValueAtTime(vol, t);
+    gain.gain.exponentialRampToValueAtTime(0.0001, t + dur);
+    osc.connect(gain).connect(audioCtx.destination);
+    osc.start(t); osc.stop(t + dur + 0.02);
+  }
+  function noise(dur, vol, freq) {
+    if (!audioCtx) return;
+    const len = Math.floor(audioCtx.sampleRate * dur), buf = audioCtx.createBuffer(1, len, audioCtx.sampleRate), d = buf.getChannelData(0);
+    for (let i = 0; i < len; i++) d[i] = (Math.random() * 2 - 1) * (1 - i / len);
+    const src = audioCtx.createBufferSource(), f = audioCtx.createBiquadFilter(), g = audioCtx.createGain();
+    src.buffer = buf; f.type = "bandpass"; f.frequency.value = freq; g.gain.value = vol;
+    src.connect(f).connect(g).connect(audioCtx.destination); src.start();
+  }
+  const arp = (notes, gap, d, type = "square", vol = 0.04) => notes.forEach((f, i) => beep(f, d, type, vol, 0, i * gap));
+  let sfxN = 0;
+  const lim = (fn) => (...a) => { if (sfxN++ < 6) fn(...a); };
+  const sfx = {
+    shoot: lim(() => beep(1300, 0.08, "square", 0.025, -900)),
+    eshoot: lim(() => beep(500, 0.12, "sawtooth", 0.02, -250)),
+    boom: lim(() => { noise(0.35, 0.16, 400); beep(120, 0.3, "triangle", 0.05, -60); }),
+    hook: lim(() => arp([300, 240, 300], 0.05, 0.06, "square", 0.03)),
+    lost: lim(() => { for (let i = 0; i < 5; i++) beep(500 - i * 70, 0.1, "square", 0.035, 0, i * 0.07); }),
+    drop: lim(() => beep(700, 0.1, "sine", 0.04, 300)),
+    hit: () => { noise(0.5, 0.2, 300); arp([392, 330, 262], 0.08, 0.14, "triangle", 0.05); },
+    wave: () => arp([523, 659, 784, 1047], 0.07, 0.12, "square", 0.04),
+    over: () => arp([523, 466, 415, 392, 330, 262], 0.15, 0.24, "triangle", 0.05),
+  };
+
+  // ---------- State ----------
+  let difficulty = DIFFICULTIES[load(DIFF_KEY)] ? load(DIFF_KEY) : "normale";
+  let diff = DIFFICULTIES[difficulty];
+  let state = "menu", menu = null, pausedFrom = null, stateT = 0, clock = 0;
+  let score = 0, wave = 1, bestCache = 0, lost = 0;
+  let P = null, raiders = [], cans = [], bullets = [], parts = [], popups = [], message = null;
+  let firePressed = false, fireHeld = false, waveKills = 0;
+  const keys = { left: false, right: false, up: false, down: false };
+  const stick = { x: 0, y: 0 };
+  const stars = Array.from({ length: 60 }, (_, i) => ({ x: (i * 137) % W, y: TOP + ((i * 71) % (H - TOP)), p: i }));
+
+  // ---------- Flow ----------
+  const isPlaying = () => ["intro", "play", "wave"].includes(state);
+  function startGame() {
+    if (!audioCtx) { try { audioCtx = new (window.AudioContext || window.webkitAudioContext)(); } catch { audioCtx = null; } }
+    if (audioCtx && audioCtx.state === "suspended") audioCtx.resume();
+    score = 0; wave = 1; lost = 0;
+    bestCache = parseInt(load(bestKey(difficulty)), 10) || 0;
+    makeCans(); spawnPlayer(); raiders = []; bullets = [];
+    message = { text: "DIFENDI LE TANICHE!", sub: "i predoni le agganciano e le trascinano fuori", t: 0 };
+    state = "intro"; stateT = 1.8;
+    menu = null;
+    overlay.classList.add("hidden");
+    syncControls();
+    last = performance.now();
+  }
+  function makeCans() {
+    cans = [];
+    const n = diff.cans;
+    for (let i = 0; i < n; i++) {
+      // a tidy ring of canisters round the middle, plus one in the centre
+      const a = i / (n - 1) * TAU, r = i === n - 1 ? 0 : 30;
+      cans.push({ x: CX + Math.cos(a) * r, y: CY + Math.sin(a) * r * 0.85, by: null, rot: rnd(0, TAU) });
+    }
+  }
+  function spawnPlayer() { P = { x: CX, y: CY + 70, a: -Math.PI / 2, v: 0, dead: 0, safe: 2.2, cd: 0 }; }
+  function startWave() {
+    const n = Math.min(9, 3 + Math.floor((wave - 1) * diff.size)), armored = wave < diff.arm ? 0 : Math.min(n - 1, 1 + Math.floor((wave - diff.arm) / 3)), guns = Math.min(n, Math.floor((wave - 1) * 0.5 * diff.gun + (diff.gun > 1 ? 1 : 0)));
+    raiders = [];
+    for (let i = 0; i < n; i++) {
+      // in from the edges, a little apart
+      const side = Math.floor(Math.random() * 4), t = rnd(0.1, 0.9);
+      const x = side === 0 ? -20 : side === 1 ? W + 20 : t * W, y = side === 2 ? TOP - 20 : side === 3 ? H + 20 : TOP + t * (H - TOP);
+      raiders.push({ x, y, a: Math.atan2(CY - y, CX - x), tow: null, target: null, gun: i < guns, cd: rnd(1.5, 3), hp: i >= n - armored ? 2 : 1, col: COLORS[(wave - 1 + (i < guns ? 2 : 0)) % COLORS.length], delay: i * 0.45, wob: rnd(0, TAU), orbit: rnd(0, TAU) });
+    }
+    waveKills = 0;
+    message = { text: `ONDATA ${wave}`, sub: `${n} predoni${guns ? ` · ${guns} armati` : ""}`, t: 0 };
+    sfx.wave();
+  }
+  function addScore(n, x, y, color = "#ffffff", text) {
+    score += n;
+    if (x !== undefined) popups.push({ x, y, text: text || String(n), color, t: 0 });
+  }
+  function burst(x, y, c, n = 16, sp = 120, life = 0.6) {
+    for (let k = 0; k < n; k++) { const a = Math.random() * TAU, s = sp * rnd(0.3, 1); parts.push({ x, y, vx: Math.cos(a) * s, vy: Math.sin(a) * s, t: 0, life: life * rnd(0.6, 1.2), c, line: Math.random() < 0.5 }); }
+  }
+  function hitPlayer(by) {
+    if (P.dead > 0 || P.safe > 0) return;
+    if (window.__hits) window.__hits.push([wave, by]);
+    if (window.__god) return;
+    P.dead = 2; sfx.hit(); burst(P.x, P.y, "#3affd0", 28, 160, 0.9);
+  }
+  function gameOver() {
+    state = "over";
+    const prev = parseInt(load(bestKey(difficulty)), 10) || 0;
+    const record = score > prev;
+    if (record) store(bestKey(difficulty), String(score));
+    sfx.over();
+    menu = () => showOverlay(
+      `<h2 class="lose">${cans.length ? "PARTITA FINITA" : "TANICHE PERSE!"}</h2>
+       <p>Punteggio: <b>${score.toLocaleString("it-IT")}</b> · ondata ${wave} · ${diff.label}</p>
+       ${record ? "<p style='color:var(--pink)'>★ NUOVO RECORD! ★</p>" : ""}
+       ${difficultyHTML()}
+       <button class="start" data-start>GIOCA ANCORA</button>`
+    );
+    menu();
+    syncControls();
+  }
+  function togglePause() {
+    if (isPlaying()) {
+      pausedFrom = state; state = "paused";
+      showOverlay(`<h2>PAUSA</h2><button class="start" data-resume>CONTINUA</button><p class="muted">Premi P per continuare</p>`);
+    } else if (state === "paused") {
+      state = pausedFrom; overlay.classList.add("hidden"); last = performance.now();
+    }
+    syncControls();
+  }
+  // the pause menu can end the game (shared/iniziali.js): it ends here the usual way, saving the record
+  window.addEventListener("sala:termina", () => { if (state !== "paused") return; state = pausedFrom; overlay.classList.add("hidden"); gameOver(); syncControls(); });
+  function syncControls() {
+    pauseBtn.style.display = isPlaying() && touchMode ? "block" : "none";
+    resize();
+  }
+  pauseBtn.addEventListener("click", () => togglePause());
+  function showOverlay(html) { overlay.innerHTML = html; overlay.classList.remove("hidden"); }
+  function difficultyHTML() {
+    const buttons = DIFF_IDS.map((id) => {
+      const d = DIFFICULTIES[id];
+      return `<button type="button" data-diff="${id}" class="${id === difficulty ? "on" : ""}" style="--c:${d.color}">${d.label}</button>`;
+    }).join("");
+    const best = parseInt(load(bestKey(difficulty)), 10);
+    return `<div class="diff">${buttons}</div><p class="muted">${diff.desc}${best ? ` · Record: ${best.toLocaleString("it-IT")}` : ""}</p>`;
+  }
+  function setDifficulty(id) { if (!DIFFICULTIES[id]) return; difficulty = id; diff = DIFFICULTIES[id]; store(DIFF_KEY, id); if (menu) menu(); }
+  function showTitle() {
+    menu = showTitle;
+    showOverlay(
+      `<h1>LADRI DI CARBURANTE</h1>
+       <p>Al centro del deserto ci sono le ultime taniche di carburante, e i predoni arrivano a ondate per agganciarle e trascinarle via. Guida il tuo carro armato e fermali! Il tuo carro rinasce sempre: la partita finisce solo quando hai perso l'ultima tanica.</p>
+       <div class="pts">
+         <span><b>Predoni</b></span><span>50 + 25 per ogni ondata · se ne colpisci uno che traina, la tanica resta dov'è</span>
+         <span><b>Armati</b></span><span>dalle ondate successive alcuni predoni sparano: occhio ai loro colpi</span>
+         <span><b>Corazzati</b></span><span>quelli col doppio scafo vanno colpiti due volte</span>
+         <span><b>Ondata pulita</b></span><span>nessuna tanica persa: bonus 200 × ondata</span>
+       </div>
+       ${touchMode
+         ? `<p class="muted help">Levetta: il carro gira e va dove punti · FUOCO per sparare (tieni premuto per sparare di continuo)</p>`
+         : `<p class="muted help">Frecce o WASD: il carro gira e va in quella direzione · SPAZIO, J o Z per sparare · P pausa</p>`}
+       ${difficultyHTML()}
+       <button class="start" data-start>IN MARCIA!</button>`
+    );
+  }
+  overlay.addEventListener("click", (e) => {
+    const d = e.target.closest("[data-diff]");
+    if (d) { setDifficulty(d.dataset.diff); return; }
+    if (e.target.closest("[data-start]")) startGame();
+    if (e.target.closest("[data-resume]")) togglePause();
+  });
+
+  // ---------- Input ----------
+  const KEYMAP = { arrowleft: "left", a: "left", arrowright: "right", d: "right", arrowup: "up", w: "up", arrowdown: "down", s: "down" };
+  const FIREKEYS = [" ", "j", "z", "x"];
+  window.addEventListener("keydown", (e) => {
+    const k = e.key.toLowerCase();
+    if ([" ", "arrowup", "arrowdown", "arrowleft", "arrowright"].includes(k)) e.preventDefault();
+    if (state === "menu" || state === "over") {
+      if (e.key === "Enter") startGame();
+      else if (["1", "2", "3"].includes(k)) setDifficulty(DIFF_IDS[+k - 1]);
+      return;
+    }
+    if (k === "p" || k === "escape") { if (!e.repeat) togglePause(); return; }
+    if (state === "paused") { if (e.key === "Enter") togglePause(); return; }
+    if (FIREKEYS.includes(k)) { if (!e.repeat) firePressed = true; fireHeld = true; }
+    if (KEYMAP[k]) keys[KEYMAP[k]] = true;
+  });
+  window.addEventListener("keyup", (e) => { const k = e.key.toLowerCase(); if (FIREKEYS.includes(k)) fireHeld = false; const m = KEYMAP[k]; if (m) keys[m] = false; });
+  window.addEventListener("blur", () => { for (const k in keys) keys[k] = false; fireHeld = false; stick.x = stick.y = 0; if (isPlaying()) togglePause(); });
+  const fireBtn = touchEl.querySelector(".jump");
+  fireBtn.addEventListener("pointerdown", (e) => { e.preventDefault(); firePressed = true; fireHeld = true; fireBtn.classList.add("on"); });
+  for (const ev of ["pointerup", "pointercancel", "pointerleave"]) fireBtn.addEventListener(ev, () => { fireHeld = false; fireBtn.classList.remove("on"); });
+  const stickEl = touchEl.querySelector(".stick"), knob = stickEl.querySelector(".knob");
+  let stickId = null;
+  function stickAt(e) {
+    const r = stickEl.getBoundingClientRect(), max = r.width / 2 - 14;
+    let dx = e.clientX - (r.left + r.width / 2), dy = e.clientY - (r.top + r.height / 2);
+    const len = Math.hypot(dx, dy);
+    if (len > max) { dx *= max / len; dy *= max / len; }
+    knob.style.transform = `translate(${dx}px, ${dy}px)`;
+    const m = Math.hypot(dx, dy) / max, s = m < 0.15 ? 0 : Math.min(1, (m - 0.15) / 0.6) / m;
+    stick.x = dx / max * s; stick.y = dy / max * s;
+  }
+  const stickEnd = (e) => { if (e.pointerId !== stickId) return; stickId = null; knob.style.transform = ""; stick.x = stick.y = 0; };
+  stickEl.addEventListener("pointerdown", (e) => { e.preventDefault(); stickId = e.pointerId; try { stickEl.setPointerCapture(e.pointerId); } catch { /* ignore */ } stickAt(e); });
+  stickEl.addEventListener("pointermove", (e) => { if (e.pointerId === stickId) stickAt(e); });
+  for (const ev of ["pointerup", "pointercancel", "lostpointercapture"]) stickEl.addEventListener(ev, stickEnd);
+  window.addEventListener("pointerdown", (e) => { if (e.pointerType === "touch" && !touchMode) { touchMode = true; syncControls(); if (menu) menu(); } }, true);
+
+  // ---------- Update ----------
+  function updatePlayer(dt) {
+    if (P.dead > 0) { P.dead -= dt; if (P.dead <= 0) spawnPlayer(); return; }
+    P.safe = Math.max(0, P.safe - dt); P.cd -= dt;
+    let ix = clamp(stick.x + (keys.right ? 1 : 0) - (keys.left ? 1 : 0), -1, 1), iy = clamp(stick.y + (keys.down ? 1 : 0) - (keys.up ? 1 : 0), -1, 1);
+    const m = Math.min(1, Math.hypot(ix, iy));
+    if (m > 0.15) {
+      // turn towards the stick; drive once roughly facing it
+      const d = angDiff(P.a, Math.atan2(iy, ix));
+      P.a += clamp(d, -PTURN * dt, PTURN * dt);
+      const want = Math.abs(d) < 1.2 ? PSPEED * m * (1 - Math.abs(d) / 2) : 0;
+      P.v += (want - P.v) * Math.min(1, dt * 6);
+    } else P.v += (0 - P.v) * Math.min(1, dt * 6);
+    P.x = clamp(P.x + Math.cos(P.a) * P.v * dt, 10, W - 10); P.y = clamp(P.y + Math.sin(P.a) * P.v * dt, TOP + 10, H - 10);
+    const mine = bullets.filter((b) => b.by === "P").length;
+    if ((firePressed || (fireHeld && P.cd <= -0.15)) && mine < MAXB && P.cd <= 0) {
+      bullets.push({ x: P.x + Math.cos(P.a) * 12, y: P.y + Math.sin(P.a) * 12, vx: Math.cos(P.a) * BSPEED, vy: Math.sin(P.a) * BSPEED, life: BRANGE / BSPEED, by: "P" });
+      P.cd = 0.26; sfx.shoot();
+    }
+    firePressed = false;
+  }
+  function exitPoint(o) {
+    // the nearest way out of the screen
+    const opts = [{ x: -40, y: o.y, d: o.x }, { x: W + 40, y: o.y, d: W - o.x }, { x: o.x, y: TOP - 40, d: o.y - TOP }, { x: o.x, y: H + 40, d: H - o.y }];
+    return opts.sort((a, b) => a.d - b.d)[0];
+  }
+  function updateRaiders(dt) {
+    const sp0 = 66 * diff.speed * Math.min(1.8, 1 + diff.grow * (wave - 1)), weave = Math.min(0.7, 0.15 * (wave - 1));
+    for (const r of raiders) {
+      if (r.delay > 0) { r.delay -= dt; continue; }
+      r.wob += dt * 8; r.cd -= dt;
+      let tx, ty, sp = sp0;
+      if (r.tow) {
+        // dragging a canister off the screen
+        if (!r.exit) r.exit = exitPoint(r);
+        tx = r.exit.x; ty = r.exit.y; sp = Math.min(sp0 * 0.5, 60);
+      } else {
+        if (!r.target || r.target.by || !cans.includes(r.target)) {
+          r.target = null;
+          let best = null, bd = 1e9;
+          for (const c of cans) { if (c.by) continue; const d = dist(r, c) + raiders.filter((o) => o !== r && o.target === c).length * 80; if (d < bd) { bd = d; best = c; } }
+          r.target = best;
+        }
+        if (r.target) { tx = r.target.x; ty = r.target.y; }
+        else { r.orbit += dt * 0.6; tx = P.x + Math.cos(r.orbit) * 110; ty = P.y + Math.sin(r.orbit) * 80; }
+        // armed raiders turn on a tank that comes close
+        const dP = P.dead > 0 ? 1e9 : dist(r, P);
+        if (r.gun && dP < 230 && r.cd < 0.8) {
+          tx = P.x; ty = P.y; sp = sp0 * 0.5;
+          if (r.cd <= 0 && Math.abs(angDiff(r.a, Math.atan2(P.y - r.y, P.x - r.x))) < 0.18) {
+            const v = 175 * diff.shot;
+            bullets.push({ x: r.x + Math.cos(r.a) * 12, y: r.y + Math.sin(r.a) * 12, vx: Math.cos(r.a) * v, vy: Math.sin(r.a) * v, life: 1.6, by: "R" });
+            r.cd = rnd(1.8, 3) / diff.shot; sfx.eshoot();
+          }
+        }
+      }
+      const d = angDiff(r.a, Math.atan2(ty - r.y, tx - r.x));
+      r.a += clamp(d, -3 * dt, 3 * dt);
+      const v = sp * (Math.abs(d) > 1.2 ? 0.35 : 1);
+      // they zigzag on the way in, harder to hit
+      const mv = r.a + (r.tow ? 0 : Math.sin(r.wob * 0.35) * weave);
+      r.x += Math.cos(mv) * v * dt; r.y += Math.sin(mv) * v * dt;
+      if (!r.tow && r.target && dist(r, r.target) < 13) { r.tow = r.target; r.target.by = r; r.exit = null; sfx.hook(); }
+      if (r.tow) {
+        const c = r.tow; c.x = r.x - Math.cos(r.a) * 16; c.y = r.y - Math.sin(r.a) * 16;
+        if (c.x < -12 || c.x > W + 12 || c.y < TOP - 12 || c.y > H + 12) {
+          // gone with it
+          cans.splice(cans.indexOf(c), 1); lost++; r.gone = true; sfx.lost();
+          popups.push({ x: clamp(r.x, 60, W - 60), y: clamp(r.y, TOP + 30, H - 20), text: "TANICA PERSA!", color: "#ff4a4a", t: 0 });
+        }
+      }
+      // ramming the tank
+      if (P.dead <= 0 && dist(r, P) < PR + RR - 3 && !r.gone) { killRaider(r, false); hitPlayer("speronato"); }
+    }
+    raiders = raiders.filter((r) => !r.gone);
+  }
+  function killRaider(r, scored = true) {
+    r.gone = true;
+    if (r.tow) { const c = r.tow; c.by = null; c.x = clamp(c.x, 10, W - 10); c.y = clamp(c.y, TOP + 10, H - 10); sfx.drop(); }
+    burst(r.x, r.y, r.col, 18, 130, 0.6); sfx.boom();
+    if (scored) { const pts = 50 + 25 * (wave - 1); addScore(pts, r.x, r.y - 14, "#3affd0"); waveKills++; }
+  }
+  function updateBullets(dt) {
+    for (const b of bullets) {
+      b.x += b.vx * dt; b.y += b.vy * dt; b.life -= dt;
+      if (b.life <= 0 || b.x < -10 || b.x > W + 10 || b.y < TOP - 10 || b.y > H + 10) { b.gone = true; continue; }
+      if (b.by === "P") {
+        for (const r of raiders) if (!r.gone && r.delay <= 0 && Math.hypot(r.x - b.x, r.y - b.y) < RR + 2) {
+          b.gone = true;
+          if (--r.hp > 0) { burst(b.x, b.y, "#ffffff", 8, 80, 0.3); sfx.drop(); r.flash = 0.2; } else killRaider(r);
+          break;
+        }
+      } else if (P.dead <= 0 && Math.hypot(P.x - b.x, P.y - b.y) < PR) { b.gone = true; hitPlayer("colpito"); }
+    }
+    bullets = bullets.filter((b) => !b.gone);
+    raiders = raiders.filter((r) => !r.gone);
+  }
+  function update(dt) {
+    clock += dt; sfxN = 0;
+    if (message) { message.t += dt; if (message.t > 2.4) message = null; }
+    for (const p of parts) { p.t += dt; p.x += p.vx * dt; p.y += p.vy * dt; p.vx *= 0.95; p.vy *= 0.95; }
+    parts = parts.filter((p) => p.t < p.life);
+    for (const p of popups) { p.t += dt; p.y -= 18 * dt; }
+    popups = popups.filter((p) => p.t < 1.2);
+    if (!isPlaying()) return;
+    if (state === "intro") { stateT -= dt; if (stateT <= 0) { state = "play"; startWave(); } return; }
+    if (window.__bot) window.__bot(dt);
+    updatePlayer(dt);
+    updateRaiders(dt);
+    updateBullets(dt);
+    if (!cans.length) { gameOver(); return; }
+    if (state === "play" && !raiders.length) {
+      // the wave is over
+      if (lost === 0) { const b = 200 * wave; addScore(b); popups.push({ x: W / 2, y: 90, text: `ONDATA PULITA +${b.toLocaleString("it-IT")}`, color: "#3affd0", t: 0 }); }
+      lost = 0; state = "wave"; stateT = 2.2;
+      for (const c of cans) c.by = null;
+    }
+    if (state === "wave") { stateT -= dt; if (stateT <= 0) { wave++; state = "play"; startWave(); } }
+  }
+
+  // ---------- Drawing ----------
+  function glow(c, b = 8) { ctx.strokeStyle = c; ctx.shadowColor = c; ctx.shadowBlur = b; }
+  function drawTank(x, y, a, c) {
+    ctx.save(); ctx.translate(x, y); ctx.rotate(a);
+    glow(c); ctx.lineWidth = 1.6;
+    ctx.beginPath(); ctx.moveTo(-9, -8); ctx.lineTo(9, -8); ctx.lineTo(9, 8); ctx.lineTo(-9, 8); ctx.closePath(); ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(-9, -5); ctx.lineTo(9, -5); ctx.moveTo(-9, 5); ctx.lineTo(9, 5); ctx.stroke();
+    ctx.beginPath(); ctx.arc(0, 0, 4, 0, TAU); ctx.moveTo(4, 0); ctx.lineTo(15, 0); ctx.stroke();
+    ctx.restore(); ctx.shadowBlur = 0;
+  }
+  function drawRaider(r) {
+    ctx.save(); ctx.translate(r.x, r.y); ctx.rotate(r.a);
+    glow(r.col); ctx.lineWidth = 1.6;
+    // a spiky little raider buggy
+    ctx.beginPath(); ctx.moveTo(11, 0); ctx.lineTo(-7, -8); ctx.lineTo(-3, 0); ctx.lineTo(-7, 8); ctx.closePath(); ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(-7, -8); ctx.lineTo(-10, -3); ctx.moveTo(-7, 8); ctx.lineTo(-10, 3); ctx.stroke();
+    if (r.hp > 1) { ctx.beginPath(); ctx.moveTo(13, 0); ctx.lineTo(-9, -10); ctx.lineTo(-9, 10); ctx.closePath(); ctx.stroke(); }
+    if (r.gun) { ctx.beginPath(); ctx.moveTo(2, -3); ctx.lineTo(13, -3); ctx.moveTo(2, 3); ctx.lineTo(13, 3); ctx.stroke(); }
+    if (r.tow) { ctx.setLineDash([2, 3]); ctx.beginPath(); ctx.moveTo(-3, 0); ctx.lineTo(-10, 0); ctx.stroke(); ctx.setLineDash([]); }
+    ctx.restore(); ctx.shadowBlur = 0;
+  }
+  function drawCan(c) {
+    ctx.save(); ctx.translate(c.x, c.y); ctx.rotate(c.rot);
+    glow(c.by ? "#ff4a4a" : "#ffe85a", 6); ctx.lineWidth = 1.5;
+    ctx.beginPath(); for (let i = 0; i < 5; i++) { const a = i / 5 * TAU; ctx.lineTo(Math.cos(a) * 6.5, Math.sin(a) * 6.5); } ctx.closePath(); ctx.stroke();
+    ctx.beginPath(); ctx.arc(0, 0, 2, 0, TAU); ctx.stroke();
+    ctx.restore(); ctx.shadowBlur = 0;
+  }
+  function drawHud() {
+    ctx.fillStyle = "rgba(2,8,14,0.95)"; ctx.fillRect(0, 0, W, TOP);
+    ctx.strokeStyle = "rgba(58,255,208,0.4)"; ctx.lineWidth = 1; ctx.beginPath(); ctx.moveTo(0, TOP - 0.5); ctx.lineTo(W, TOP - 0.5); ctx.stroke();
+    ctx.textBaseline = "middle"; ctx.textAlign = "left";
+    const x0 = touchMode ? 130 : 10;
+    ctx.fillStyle = "#ffffff"; ctx.font = "900 15px system-ui"; ctx.fillText(score.toLocaleString("it-IT"), x0, 14);
+    ctx.fillStyle = "#90c8d0"; ctx.font = "700 9px system-ui"; ctx.fillText(`REC ${Math.max(bestCache, score).toLocaleString("it-IT")}`, x0 + 80, 9);
+    ctx.fillStyle = "#3affd0"; ctx.font = "900 10px system-ui"; ctx.fillText(`ONDATA ${wave}`, x0 + 80, 21);
+    // canisters left
+    ctx.fillStyle = "#ffe85a"; ctx.font = "800 9px system-ui"; ctx.fillText("TANICHE", x0 + 170, 14);
+    for (let i = 0; i < diff.cans; i++) {
+      const x = x0 + 222 + i * 13, on = i < cans.length;
+      ctx.save(); ctx.translate(x, 14); glow(on ? "#ffe85a" : "#3a3a2a", on ? 4 : 0); ctx.lineWidth = 1.3;
+      ctx.beginPath(); for (let k = 0; k < 5; k++) { const a = k / 5 * TAU - Math.PI / 2; ctx.lineTo(Math.cos(a) * 4.5, Math.sin(a) * 4.5); } ctx.closePath(); ctx.stroke(); ctx.restore(); ctx.shadowBlur = 0;
+    }
+    const left = raiders.length;
+    ctx.textAlign = "right"; ctx.fillStyle = "#ff5ad0"; ctx.font = "800 9px system-ui"; ctx.fillText(`PREDONI ${left}`, touchMode ? W - 60 : W - 12, 14);
+    ctx.textBaseline = "alphabetic";
+  }
+  function draw() {
+    ctx.setTransform(pxRatio, 0, 0, pxRatio, 0, 0);
+    if (!P) { makeCans(); spawnPlayer(); P.safe = 0; raiders = [0, 1, 2].map((i) => ({ x: [140, 500, 470][i], y: [120, 250, 110][i], a: [0.3, 2.8, 2.2][i], col: COLORS[i], gun: i === 2, delay: 0, wob: 0 })); }
+    ctx.fillStyle = "#02040a"; ctx.fillRect(0, TOP, W, H - TOP);
+    for (const s of stars) { ctx.fillStyle = `rgba(120,200,210,${0.15 + 0.15 * Math.sin(clock + s.p)})`; ctx.fillRect(s.x, s.y, 1, 1); }
+    // a faint grid of dunes
+    ctx.strokeStyle = "rgba(58,255,208,0.05)"; ctx.lineWidth = 1;
+    for (let x = 0; x < W; x += 40) { ctx.beginPath(); ctx.moveTo(x, TOP); ctx.lineTo(x, H); ctx.stroke(); }
+    for (let y = TOP; y < H; y += 40) { ctx.beginPath(); ctx.moveTo(0, y); ctx.lineTo(W, y); ctx.stroke(); }
+    for (const c of cans) drawCan(c);
+    for (const r of raiders) if (!(r.delay > 0)) drawRaider(r);
+    if (P.dead <= 0 && !(P.safe > 0 && Math.floor(clock * 10) % 2)) drawTank(P.x, P.y, P.a, "#3affd0");
+    for (const b of bullets) {
+      glow(b.by === "P" ? "#ffffff" : "#ff5a5a", 6); ctx.lineWidth = 2;
+      ctx.beginPath(); ctx.moveTo(b.x, b.y); ctx.lineTo(b.x - b.vx * 0.015, b.y - b.vy * 0.015); ctx.stroke();
+    }
+    ctx.shadowBlur = 0;
+    for (const p of parts) {
+      ctx.globalAlpha = Math.max(0, 1 - p.t / p.life);
+      if (p.line) { ctx.strokeStyle = p.c; ctx.lineWidth = 1.2; ctx.beginPath(); ctx.moveTo(p.x, p.y); ctx.lineTo(p.x - p.vx * 0.04, p.y - p.vy * 0.04); ctx.stroke(); }
+      else { ctx.fillStyle = p.c; ctx.fillRect(p.x - 1, p.y - 1, 2, 2); }
+    }
+    ctx.globalAlpha = 1;
+    for (const p of popups) {
+      ctx.globalAlpha = Math.max(0, 1 - p.t / 1.2);
+      ctx.textAlign = "center"; ctx.font = "900 11px system-ui";
+      ctx.lineWidth = 3; ctx.strokeStyle = "#02040a"; ctx.strokeText(p.text, p.x, p.y); ctx.fillStyle = p.color; ctx.fillText(p.text, p.x, p.y);
+    }
+    ctx.globalAlpha = 1;
+    if (state === "menu") return;
+    drawHud();
+    if (message) {
+      ctx.globalAlpha = Math.min(1, (2.4 - message.t) * 2);
+      ctx.textAlign = "center"; ctx.font = "italic 900 24px system-ui"; ctx.fillStyle = "#3affd0"; ctx.shadowColor = "#3affd0"; ctx.shadowBlur = 12;
+      ctx.fillText(message.text, W / 2, 110); ctx.shadowBlur = 0;
+      if (message.sub) { ctx.font = "800 12px system-ui"; ctx.fillStyle = "#ffffff"; ctx.fillText(message.sub, W / 2, 130); }
+      ctx.globalAlpha = 1;
+    }
+    if (P.dead > 0) { ctx.textAlign = "center"; ctx.font = "900 13px system-ui"; ctx.fillStyle = "#ff5a5a"; ctx.fillText("CARRO DISTRUTTO · RIENTRA FRA POCO", W / 2, H - 16); }
+  }
+
+  // ---------- Loop ----------
+  const STEP = 1 / 120;
+  let last = performance.now(), acc = 0;
+  function frame(now) {
+    const dt = Math.min(0.1, (now - last) / 1000);
+    last = now;
+    if (isPlaying()) {
+      acc += dt;
+      while (acc >= STEP && isPlaying()) { update(STEP); acc -= STEP; }
+    } else { acc = 0; update(dt); }
+    draw();
+    requestAnimationFrame(frame);
+  }
+  syncControls();
+  showTitle();
+  requestAnimationFrame(frame);
+})();
+</script>
+<script src="../../shared/iniziali.js" data-record="ladri-best-" data-kind="score"></script>
+</body>
+</html>
