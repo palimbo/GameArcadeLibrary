@@ -4,7 +4,7 @@ Raccolta di giochi arcade per il browser. Ogni gioco è un singolo file HTML sen
 
 ## 🕹️ Sala Giochi — `index.html`
 
-Apri `index.html` nella cartella principale per la pagina di raccolta: mostra tutti i 104 giochi con copertina, genere, comandi e i tuoi record per ogni difficoltà (Facile, Normale, Difficile). Tocca «Gioca» per avviare un gioco; in ogni gioco il pulsante «← Sala Giochi» in alto a sinistra (visibile nei menu) riporta alla raccolta.
+Apri `index.html` nella cartella principale per la pagina di raccolta: mostra tutti i 105 giochi con copertina, genere, comandi e i tuoi record per ogni difficoltà (Facile, Normale, Difficile). Tocca «Gioca» per avviare un gioco; in ogni gioco il pulsante «← Sala Giochi» in alto a sinistra (visibile nei menu) riporta alla raccolta.
 
 **Iniziali del record:** quando batti un record compare la schermata da sala giochi per inserire le tue tre iniziali (frecce ↑ ↓ per cambiare lettera, ← → per spostarti, oppure scrivile direttamente; su telefono i tasti ▲ ▼ e OK). Le iniziali vengono salvate insieme al record e compaiono nei menu del gioco e nella Sala Giochi. Il codice è condiviso da tutti i giochi in `shared/iniziali.js`.
 
@@ -1616,3 +1616,18 @@ Sparatutto in prospettiva in stile *Juno First*. La nave corre su una griglia lu
 - **Touch:** levetta per muoverti e regolare la velocità, tieni premuto FUOCO
 
 Per giocare apri `games/orizzonte-di-fuoco/index.html` nel browser.
+
+### 🏝️ Isola della Frutta — `games/isola-della-frutta/index.html`
+
+Corsa a piattaforme in stile *Wonder Boy*. Un ragazzino attraversa di corsa un'isola tropicale fatta di prati, buche, gradini e piattaforme di legno. La vitalità (la barra in alto) cala di continuo: per andare avanti bisogna mangiare la frutta sparsa lungo il percorso.
+
+- **Ostacoli:** buche (ci si cade), sassi (si inciampa e si perde vitalità), falò (dalla seconda isola) e gradini da saltare. Il salto è più alto se tieni premuto
+- **Nemici:** lumache, api che volano basse (pericolose nei salti), rane che saltano verso di te (dalla seconda isola), ragni appesi al filo e cobra (dalla terza). Si scavalcano, oppure si abbattono con l'ascia
+- **Uova:** si rompono toccandole. Dentro c'è l'ascia da lanciare (resta finché non perdi una vita), lo skateboard (corri più veloce e para un colpo), la fata (invincibile per 6 secondi, travolgi i nemici), un cesto di frutta (1.000 punti e vitalità piena)… oppure la melanzana, che per 8 secondi fa calare la vitalità tre volte più in fretta
+- **Punti:** frutta 50–500, nemici 100–200; all'arrivo vitalità × 20 + 1.000 × isola. Ogni isola è nuova e più lunga. Vita extra ogni 20.000 punti
+- **Ripartenze:** due bandierine lungo il percorso; se perdi una vita riparti dall'ultima toccata, con la vitalità piena
+- **Difficoltà:** Facile (5 vite, vitalità che cala piano, nemici lenti), Normale (3 vite), Difficile (3 vite, vitalità che cala in fretta, più ostacoli); record separati per ogni difficoltà
+- **Comandi:** frecce o `WASD` per correre · `Spazio`, `Z` o freccia su per saltare (tieni premuto per saltare più in alto) · `X` o `J` lancia l'ascia · `P` pausa
+- **Touch:** levetta per correre, pulsanti SALTA e ASCIA
+
+Per giocare apri `games/isola-della-frutta/index.html` nel browser.
