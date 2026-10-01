@@ -71,7 +71,21 @@
   @keyframes ai-blink { 50% { opacity: 0.35; } }
   .ai-name { color: #ffd34d; font-weight: 800; letter-spacing: 1px; }
   #overlay .ai-quit { display: flex; flex-wrap: wrap; gap: 10px; justify-content: center; pointer-events: auto; }
-  #overlay .ai-quit button { font-size: 13px; }`;
+  #overlay .ai-quit button { font-size: 13px; }
+  #overlay .ai-pad { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; justify-content: center; font-size: 13px; color: #c8c8e0; pointer-events: auto; }
+  #overlay .ai-pad button { font-size: 12px; padding: 6px 12px; }
+  #overlay .ai-pad button.ai-on { border-color: #ffd34d; color: #ffd34d; box-shadow: 0 0 10px rgba(255,211,77,0.45); }
+  .stick.ai-dpad { border-radius: 22% !important; }
+  .stick.ai-dpad .knob, .stick.ai-dpad .ring { opacity: 0 !important; }
+  .stick .ai-cross { display: none; }
+  .stick.ai-dpad .ai-cross { display: block; position: absolute; inset: 8%; pointer-events: none; }
+  .ai-cross i { position: absolute; width: 34%; height: 34%; border-radius: 8px; background: rgba(255,255,255,0.14); border: 2px solid rgba(255,255,255,0.45); box-sizing: border-box; }
+  .ai-cross i::after { content: ""; position: absolute; left: 50%; top: 50%; width: 0; height: 0; transform: translate(-50%, -50%); border: 7px solid transparent; }
+  .ai-cross .u { left: 33%; top: 0; } .ai-cross .u::after { border-bottom: 10px solid rgba(255,255,255,0.85); border-top-width: 0; }
+  .ai-cross .d { left: 33%; bottom: 0; } .ai-cross .d::after { border-top: 10px solid rgba(255,255,255,0.85); border-bottom-width: 0; }
+  .ai-cross .l { left: 0; top: 33%; } .ai-cross .l::after { border-right: 10px solid rgba(255,255,255,0.85); border-left-width: 0; }
+  .ai-cross .r { right: 0; top: 33%; } .ai-cross .r::after { border-left: 10px solid rgba(255,255,255,0.85); border-right-width: 0; }
+  .ai-cross i.on { background: rgba(255,211,77,0.55); border-color: #ffd34d; }`;
   function injectCss() {
     if (document.getElementById("ai-css")) return;
     const st = document.createElement("style"); st.id = "ai-css"; st.textContent = css;
@@ -199,6 +213,53 @@
     }
     if (observer) observer.observe(ov, { childList: true, subtree: true, characterData: true });
   }
+  // ---------- Touch controls: thumb stick or arrow pad ----------
+  // One setting for the whole hall ("sala-comandi"). With the arrows, every thumb stick of the game is
+  // drawn as a cross of four arrows; a touch on it is snapped to one of eight directions at full push and
+  // handed on to the game's own stick, so each game keeps working exactly as before.
+  const PAD_KEY = "sala-comandi";
+  const padMode = () => (get(PAD_KEY) === "frecce" ? "frecce" : "levetta");
+  const sticks = () => [...document.querySelectorAll(".stick")];
+  function applyPad() {
+    const on = padMode() === "frecce";
+    for (const st of sticks()) {
+      if (!st.querySelector(".ai-cross")) {
+        const c = document.createElement("div"); c.className = "ai-cross";
+        c.innerHTML = '<i class="u"></i><i class="d"></i><i class="l"></i><i class="r"></i>';
+        st.appendChild(c);
+      }
+      st.classList.toggle("ai-dpad", on);
+    }
+  }
+  function snapPoint(st, e) {
+    const r = st.getBoundingClientRect(), cx = r.left + r.width / 2, cy = r.top + r.height / 2;
+    const dx = e.clientX - cx, dy = e.clientY - cy, R = r.width / 2;
+    const lit = (cls) => st.querySelectorAll(".ai-cross i").forEach((i) => i.classList.toggle("on", cls.includes(i.className.replace(" on", ""))));
+    if (Math.hypot(dx, dy) < R * 0.2) { lit([]); return { x: cx, y: cy }; }
+    // straight directions get the wider share, so the diagonals are only taken on purpose
+    const a = Math.atan2(dy, dx), oct = Math.round(a / (Math.PI / 4));
+    const off = Math.abs(a - oct * Math.PI / 4);
+    let ang = oct * Math.PI / 4;
+    if (oct % 2 !== 0 && off > Math.PI / 12) ang = (Math.abs(a - (oct - 1) * Math.PI / 4) < Math.abs(a - (oct + 1) * Math.PI / 4) ? oct - 1 : oct + 1) * Math.PI / 4;
+    const ux = Math.round(Math.cos(ang) * 1000) / 1000, uy = Math.round(Math.sin(ang) * 1000) / 1000;
+    lit([ux < 0 ? "l" : "", ux > 0 ? "r" : "", uy < 0 ? "u" : "", uy > 0 ? "d" : ""]);
+    return { x: cx + ux * R, y: cy + uy * R };
+  }
+  function padRelay(e) {
+    if (!e.isTrusted) return;
+    const st = e.target && e.target.closest && e.target.closest(".stick.ai-dpad");
+    if (!st) return;
+    if (e.type === "pointerup" || e.type === "pointercancel") { st.querySelectorAll(".ai-cross i").forEach((i) => i.classList.remove("on")); return; }
+    e.stopImmediatePropagation(); e.preventDefault();
+    const p = snapPoint(st, e);
+    st.dispatchEvent(new PointerEvent(e.type, { pointerId: e.pointerId, pointerType: e.pointerType, isPrimary: e.isPrimary, clientX: p.x, clientY: p.y, screenX: p.x, screenY: p.y, buttons: e.buttons, bubbles: true, cancelable: true, composed: true }));
+  }
+  for (const t of ["pointerdown", "pointermove", "pointerup", "pointercancel"]) window.addEventListener(t, padRelay, true);
+  function padHTML() {
+    const m = padMode();
+    return `<span>Comandi touch:</span><button type="button" data-pad="levetta" class="${m === "levetta" ? "ai-on" : ""}">🕹️ LEVETTA</button><button type="button" data-pad="frecce" class="${m === "frecce" ? "ai-on" : ""}">✚ FRECCE</button>`;
+  }
+
   // ---------- Ending the game from the pause menu ----------
   // The pause screen (the overlay with a "continua" button) gets two more buttons. The game listens for
   // "sala:termina" and ends itself the usual way, so the score is saved as a record, and the initials asked
@@ -213,6 +274,11 @@
     box.className = "ai-quit";
     box.innerHTML = `<button type="button" data-quit>TERMINA PARTITA</button><button type="button" data-leave>ESCI ALLA SALA GIOCHI</button>`;
     resume.insertAdjacentElement("afterend", box);
+    if (sticks().length) {
+      const pad = document.createElement("div");
+      pad.className = "ai-pad"; pad.innerHTML = padHTML();
+      box.insertAdjacentElement("afterend", pad);
+    }
   }
   function endGame() { window.dispatchEvent(new CustomEvent("sala:termina")); }
   function goHome() {
@@ -228,12 +294,21 @@
     setTimeout(() => { if (modal || pending.length) leaveAfter = true; else goHome(); }, 600);
   }
   document.addEventListener("click", (e) => {
+    const pb = e.target.closest("[data-pad]");
+    if (pb) {
+      e.stopPropagation(); e.preventDefault(); set(PAD_KEY, pb.dataset.pad); applyPad();
+      document.querySelectorAll(".ai-pad").forEach((n) => { n.innerHTML = padHTML(); });
+      return;
+    }
     if (e.target.closest("[data-quit]")) { e.stopPropagation(); e.preventDefault(); endGame(); }
     else if (e.target.closest("[data-leave]")) { e.stopPropagation(); e.preventDefault(); leave(); }
     else if (!goingHome && e.target.closest("#homeLink") && paused()) { e.stopImmediatePropagation(); e.preventDefault(); leave(); }
   }, true);
+  // the hall may change the setting in another tab
+  window.addEventListener("storage", (e) => { if (e.key === PAD_KEY) applyPad(); });
   function start() {
     injectCss();
+    applyPad();
     const ov = document.getElementById("overlay");
     if (!ov) return;
     observer = new MutationObserver(() => { extendPause(); decorate(); });

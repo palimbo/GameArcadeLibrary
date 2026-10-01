@@ -37,7 +37,7 @@
     bottom: calc(14px + env(safe-area-inset-bottom, 0px));
     justify-content: space-between; align-items: flex-end; pointer-events: none;
   }
-  /* thumb stick: turn the cue (a little for fine aim); hold TIRA to load the power, let go to shoot */
+  /* thumb stick: left/right turns the cue, up/down fine aim; hold TIRA to load the power, let go to shoot */
   #touch .stick { position: relative; width: 136px; height: 136px; border-radius: 50%; pointer-events: auto; touch-action: none;
     border: 2px solid rgba(58, 208, 122, 0.6); background: radial-gradient(circle, rgba(58,208,122,0.14), rgba(58,208,122,0.04)); }
   #touch .stick .knob { position: absolute; left: 50%; top: 50%; width: 58px; height: 58px; margin: -29px 0 0 -29px; border-radius: 50%;
@@ -208,7 +208,7 @@
   let state = "menu", menu = null, pausedFrom = null, stateT = 0, clock = 0;
   let score = 0, shotsLeft = 3, rack = 1, bestCache = 0, streak = 0, breakShot = true;
   let balls = [], aim = 0, power = 0, charging = false, chargeT = 0, pocketedNow = [], firstHit = null, lowestAtShot = 0, parts = [], popups = [], message = null;
-  let chargePressed = false, chargeReleased = false;
+  let chargePressed = false, chargeReleased = false, turnT = 0;
   let twoPlayers = load(MODE_KEY) === "2", byRacks = load(WIN_KEY) === "tavoli", turn = 0, breaker = 0, scores = [0, 0], racksWon = [0, 0];
   const keys = { left: false, right: false, up: false, down: false, fire: false };
   const stick = { x: 0, y: 0 };
@@ -479,8 +479,8 @@
          ${twoPlayers ? `<span><b>Tavolo pulito</b></span><span>1.000 a chi manda in buca l'ultima bilia · la spaccata si alterna</span>` : `<span><b>Colpi extra</b></span><span>uno ogni ${diff.every} colpi buoni di fila · tre a ogni tavolo pulito</span>`}
        </div>
        ${touchMode
-         ? `<p class="muted help">Levetta a destra e sinistra per girare la stecca (poco per la mira fine) · oppure tocca il tavolo per mirare lì · tieni premuto TIRA e lascia per tirare</p>`
-         : `<p class="muted help">← → gira la stecca · ↑ ↓ mira fine · clic sul tavolo per mirare lì · tieni premuto SPAZIO e lascia per tirare · P pausa</p>`}
+         ? `<p class="muted help">Tocca il tavolo (o una bilia) e trascina il dito per puntare la stecca · levetta a destra e sinistra per girarla, su e giù per la mira fine · tieni premuto TIRA e lascia per tirare</p>`
+         : `<p class="muted help">← → gira la stecca (un tocco per spostarla di poco) · ↑ ↓ mira fine · clic o trascina sul tavolo per mirare lì · tieni premuto SPAZIO e lascia per tirare · P pausa</p>`}
        ${modeHTML()}
        ${difficultyHTML()}
        <button class="start" data-start>SI GIOCA!</button>`
@@ -533,23 +533,37 @@
   stickEl.addEventListener("pointermove", (e) => { if (e.pointerId === stickId) stickAt(e); });
   for (const ev of ["pointerup", "pointercancel", "lostpointercapture"]) stickEl.addEventListener(ev, stickEnd);
   window.addEventListener("pointerdown", (e) => { if (e.pointerType === "touch" && !touchMode) { touchMode = true; syncControls(); if (menu) menu(); } }, true);
-  // touching or clicking the table points the cue there
+  // touching or clicking the table points the cue there, and dragging keeps it pointing at the finger;
+  // a touch on a ball aims at its centre exactly
+  let tableId = null;
+  function aimAtPointer(e) {
+    const r = canvas.getBoundingClientRect(), x = (e.clientX - r.left) / r.width * W, y = (e.clientY - r.top) / r.height * H;
+    const c = cue();
+    if (Math.hypot(x - c.x, y - c.y) < 12) return false;
+    let tx = x, ty = y;
+    for (const b of live()) if (b.n && Math.hypot(b.x - x, b.y - y) < BR * 1.6) { tx = b.x; ty = b.y; break; }
+    aim = Math.atan2(ty - c.y, tx - c.x);
+    return true;
+  }
   canvas.addEventListener("pointerdown", (e) => {
     if (state !== "aim" || charging) return;
     const r = canvas.getBoundingClientRect(), x = (e.clientX - r.left) / r.width * W, y = (e.clientY - r.top) / r.height * H;
-    const c = cue();
-    if (x < L - 30 || x > R + 30 || y < T - 30 || y > B + 30 || Math.hypot(x - c.x, y - c.y) < 12) return;
+    if (x < L - 30 || x > R + 30 || y < T - 30 || y > B + 30) return;
     e.preventDefault();
-    aim = Math.atan2(y - c.y, x - c.x);
+    if (aimAtPointer(e)) { tableId = e.pointerId; try { canvas.setPointerCapture(e.pointerId); } catch { /* ignore */ } }
   });
+  canvas.addEventListener("pointermove", (e) => { if (e.pointerId === tableId && state === "aim" && !charging) aimAtPointer(e); });
+  for (const ev of ["pointerup", "pointercancel", "lostpointercapture"]) canvas.addEventListener(ev, (e) => { if (e.pointerId === tableId) tableId = null; });
 
   // ---------- Update ----------
   function updateAim(dt) {
-    // big turns with a full push, very fine ones with a light touch
-    const s = stick.x;
-    aim += sign(s) * Math.pow(Math.abs(s), 2.6) * 2.4 * dt;
-    aim += ((keys.right ? 1 : 0) - (keys.left ? 1 : 0)) * 1.1 * dt;
-    aim += ((keys.down ? 1 : 0) - (keys.up ? 1 : 0)) * 0.12 * dt;
+    // left/right turns the cue: slowly at first, faster the longer it's held (a tap is a nudge);
+    // up/down is the fine aim, always slow
+    const coarse = clamp(stick.x + (keys.right ? 1 : 0) - (keys.left ? 1 : 0), -1, 1);
+    const fine = clamp((Math.abs(stick.y) > Math.abs(stick.x) ? stick.y : 0) + (keys.down ? 1 : 0) - (keys.up ? 1 : 0), -1, 1);
+    if (Math.abs(coarse) > 0.05 && Math.abs(fine) < 0.05) { turnT += dt; aim += sign(coarse) * Math.pow(Math.abs(coarse), 1.6) * (0.18 + Math.min(1.1, turnT * turnT * 0.9)) * dt; }
+    else turnT = 0;
+    if (Math.abs(fine) > 0.05) aim += sign(fine) * Math.pow(Math.abs(fine), 1.5) * 0.09 * dt;
     if (chargePressed) { chargePressed = false; charging = true; chargeT = 0; chargeReleased = false; }
     if (charging) {
       // the power swings up and down while the button is held

@@ -10,6 +10,8 @@ Apri `index.html` nella cartella principale per la pagina di raccolta: mostra tu
 
 **Menu di pausa:** in ogni gioco la pausa offre, oltre a «Continua», anche «Termina partita» (chiude la partita come un normale game over, quindi il punteggio viene conteggiato e, se è un nuovo record, ti chiede le iniziali) ed «Esci alla Sala Giochi» (termina la partita, fa inserire le iniziali se hai battuto un record e poi torna alla raccolta). Anche il pulsante «← Sala Giochi» premuto durante la pausa salva il record prima di uscire.
 
+**Comandi touch: levetta o frecce:** in cima alla Sala Giochi e nel menu di pausa di ogni gioco con la levetta si sceglie se usare la levetta analogica o una croce di frecce. Con le frecce il tocco viene agganciato a una delle otto direzioni (le quattro principali hanno la zona più larga, così le diagonali si prendono solo di proposito) e spinto fino in fondo; la scelta vale per tutti i giochi e resta memorizzata. Funziona anche nei giochi con due levette (la sfida a due di *Pugni di Fuoco*, muovi e spara di *Assalto Robotico*).
+
 ## Giochi
 
 ### 🚀 Space Defender — `games/space-defender/index.html`
@@ -1496,8 +1498,8 @@ Biliardo a buche da sala giochi, in stile *Side Pocket*. Sul tavolo ci sono nove
 - **Mira:** la traiettoria tratteggiata mostra dove va la bianca. A Facile si vedono anche la bilia fantasma nel punto d'impatto, dove andrà la bilia colpita e dove scivolerà la bianca; a Normale la traiettoria arriva fino all'impatto; a Difficile se ne vede solo un pezzetto
 - **Difficoltà:** Facile (10 colpi), Normale (7), Difficile (6); record separati per ogni difficoltà
 - **2 giocatori:** sfida a turno sullo stesso dispositivo, su 3 tavoli. Chi manda in buca una bilia tira ancora; una steccata a vuoto o la bianca in buca passano la stecca all'altro (in alto si vede chi è di turno, e la stecca prende il suo colore). I punti delle bilie sono gli stessi, chi pulisce un tavolo prende 1.000 punti e la spaccata si alterna. Prima di iniziare scegli come si vince: **più punti** (vince chi ne ha di più dopo i 3 tavoli, a parità contano i tavoli) oppure **più tavoli** (al meglio dei 3: chi ne pulisce 2 ha vinto, a parità contano i punti); la scelta resta memorizzata e in basso durante la partita si vede quale regola vale. La difficoltà sceglie solo l'aiuto alla mira, e in 2 giocatori non si registrano record
-- **Comandi:** `←` `→` gira la stecca · `↑` `↓` mira fine · clic sul tavolo per mirare lì · tieni premuto `Spazio` (la potenza va su e giù) e lascialo per tirare · `P` pausa
-- **Touch:** levetta per girare la stecca (una spinta leggera per la mira fine), oppure tocca il tavolo per mirare lì; tieni premuto TIRA e lascialo per tirare
+- **Comandi:** `←` `→` gira la stecca (un tocco breve la sposta di circa un grado, tenendo premuto gira sempre più svelta) · `↑` `↓` mira fine · clic o trascina sul tavolo per puntare lì (cliccando su una bilia la stecca punta esattamente al suo centro) · tieni premuto `Spazio` (la potenza va su e giù) e lascialo per tirare · `P` pausa
+- **Touch:** tocca il tavolo e trascina il dito: la stecca segue il dito (toccando una bilia punta al suo centro); levetta a destra e sinistra per girarla, su e giù per la mira fine (anche con le frecce); tieni premuto TIRA e lascialo per tirare
 
 Per giocare apri `games/colpo-di-stecca/index.html` nel browser.
 
