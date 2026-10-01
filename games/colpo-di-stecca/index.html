@@ -123,7 +123,9 @@
     difficile: { label: "DIFFICILE", color: "#ff5a5a", desc: "6 colpi · solo un pezzetto di traiettoria", shots: 6, guide: "short", every: 3 },
   };
   const DIFF_IDS = Object.keys(DIFFICULTIES);
-  const DIFF_KEY = "stecca-difficulty";
+  const DIFF_KEY = "stecca-difficulty", MODE_KEY = "stecca-mode";
+  // two players on the same device take turns at the table: three racks, the higher score wins
+  const RACKS_2P = 3, PCOL = ["#3db8ff", "#ff4f6a"], PNAME = ["GIOCATORE 1", "GIOCATORE 2"];
   const bestKey = (id) => `stecca-best-${id}`;
   function store(k, v) { try { localStorage.setItem(k, v); } catch { /* ignore */ } }
   function load(k) { try { return localStorage.getItem(k); } catch { return null; } }
@@ -205,6 +207,7 @@
   let score = 0, shotsLeft = 3, rack = 1, bestCache = 0, streak = 0, breakShot = true;
   let balls = [], aim = 0, power = 0, charging = false, chargeT = 0, pocketedNow = [], firstHit = null, lowestAtShot = 0, parts = [], popups = [], message = null;
   let chargePressed = false, chargeReleased = false;
+  let twoPlayers = load(MODE_KEY) === "2", turn = 0, breaker = 0, scores = [0, 0], racksWon = [0, 0];
   const keys = { left: false, right: false, up: false, down: false, fire: false };
   const stick = { x: 0, y: 0 };
 
@@ -287,6 +290,7 @@
     if (!audioCtx) { try { audioCtx = new (window.AudioContext || window.webkitAudioContext)(); } catch { audioCtx = null; } }
     if (audioCtx && audioCtx.state === "suspended") audioCtx.resume();
     score = 0; shotsLeft = diff.shots; rack = 1; streak = 0;
+    scores = [0, 0]; racksWon = [0, 0]; turn = 0; breaker = 0;
     bestCache = parseInt(load(bestKey(difficulty)), 10) || 0;
     newRack();
     menu = null;
@@ -296,7 +300,8 @@
   }
   function newRack() {
     rackBalls(); breakShot = true; aim = 0; power = 0; charging = false;
-    message = { text: `SERIE ${rack}`, sub: "spacca il triangolo: la prima steccata non costa colpi", t: 0 };
+    if (twoPlayers) { turn = breaker; streak = 0; message = { text: `TAVOLO ${rack} DI ${RACKS_2P}`, sub: `spacca il ${PNAME[turn]}`, t: 0, c: PCOL[turn] }; }
+    else message = { text: `SERIE ${rack}`, sub: "spacca il triangolo: la prima steccata non costa colpi", t: 0 };
     state = "aim";
   }
   function shoot() {
@@ -308,11 +313,12 @@
     state = "roll";
   }
   function addScore(n, x, y, color = "#f4f6ee", text) {
-    score += n;
+    if (twoPlayers) scores[turn] += n; else score += n;
     if (x !== undefined) popups.push({ x, y, text: text || String(n), color, t: 0 });
   }
   // after the balls stop: what went in, and what it costs
   function judge() {
+    if (twoPlayers) { judgeTwo(); return; }
     const pots = pocketedNow.filter((n) => n > 0), scratch = pocketedNow.includes(0);
     let msg = null;
     if (pots.length) {
@@ -347,7 +353,41 @@
     if (shotsLeft <= 0) { state = "result"; stateT = 1.6; return; }
     state = "aim";
   }
+  // two players: pot something and you shoot again, otherwise the other one takes the cue
+  function judgeTwo() {
+    const pots = pocketedNow.filter((n) => n > 0), scratch = pocketedNow.includes(0), who = turn;
+    let msg = null;
+    if (pots.length) {
+      let pts = 0;
+      for (const n of pots) pts += 50 * n;
+      const inOrder = pots.includes(lowestAtShot);
+      if (inOrder) pts *= 2;
+      if (pots.length > 1) pts += 500 * (pots.length - 1);
+      if (!scratch) streak++;
+      pts += Math.max(0, streak - 1) * 100;
+      addScore(pts, W / 2, 200, PCOL[who], `+${pts.toLocaleString("it-IT")}`);
+      msg = [inOrder ? "IN ORDINE ×2!" : "IN BUCA!", scratch ? "" : `tira ancora il ${PNAME[who]}`];
+      if (!scratch) sfx.good();
+    }
+    if (live().every((b) => b.n === 0)) {
+      // the table goes to whoever cleared it
+      if (scratch) placeCue();
+      racksWon[who]++; addScore(1000);
+      message = { text: `TAVOLO AL ${PNAME[who]}!`, sub: "bonus 1.000", t: 0, c: PCOL[who] };
+      rack++; breaker = 1 - breaker; sfx.rack();
+      state = "result"; stateT = 2.4; return;
+    }
+    if (scratch || !pots.length) {
+      if (scratch) { placeCue(); sfx.scratch(); } else sfx.miss();
+      turn = 1 - turn; streak = 0;
+      msg = [scratch ? "BIANCA IN BUCA!" : firstHit === null ? "NESSUNA BILIA TOCCATA" : "NIENTE IN BUCA", `tocca al ${PNAME[turn]}`];
+    }
+    breakShot = false;
+    if (msg) message = { text: msg[0], sub: msg[1], t: 0, c: PCOL[turn] };
+    state = "aim";
+  }
   function gameOver() {
+    if (twoPlayers) { matchOver(); return; }
     state = "over";
     const prev = parseInt(load(bestKey(difficulty)), 10) || 0;
     const record = score > prev;
@@ -357,8 +397,24 @@
       `<h2 class="lose">${shotsLeft <= 0 ? "COLPI FINITI!" : "PARTITA FINITA"}</h2>
        <p>Punteggio: <b>${score.toLocaleString("it-IT")}</b> · serie ${rack} · ${diff.label}</p>
        ${record ? "<p style='color:var(--yellow)'>★ NUOVO RECORD! ★</p>" : ""}
+       ${modeHTML()}
        ${difficultyHTML()}
        <button class="start" data-start>GIOCA ANCORA</button>`
+    );
+    menu();
+    syncControls();
+  }
+  function matchOver() {
+    state = "over";
+    const w = scores[0] === scores[1] ? -1 : scores[0] > scores[1] ? 0 : 1;
+    sfx.rack();
+    menu = () => showOverlay(
+      `<h2 style="color:${w < 0 ? "var(--fg)" : PCOL[w]}">${w < 0 ? "PAREGGIO!" : `VINCE IL ${PNAME[w]}!`}</h2>
+       <p><b style="color:${PCOL[0]}">${PNAME[0]}</b>: ${scores[0].toLocaleString("it-IT")} punti · ${racksWon[0]} ${racksWon[0] === 1 ? "tavolo" : "tavoli"}<br>
+          <b style="color:${PCOL[1]}">${PNAME[1]}</b>: ${scores[1].toLocaleString("it-IT")} punti · ${racksWon[1]} ${racksWon[1] === 1 ? "tavolo" : "tavoli"}</p>
+       ${modeHTML()}
+       ${difficultyHTML()}
+       <button class="start" data-start>RIVINCITA</button>`
     );
     menu();
     syncControls();
@@ -380,12 +436,20 @@
   }
   pauseBtn.addEventListener("click", () => togglePause());
   function showOverlay(html) { overlay.innerHTML = html; overlay.classList.remove("hidden"); }
+  function modeHTML() {
+    return `<div class="diff">
+        <button type="button" data-mode="1" class="${twoPlayers ? "" : "on"}" style="--c:#3ad07a">1 GIOCATORE</button>
+        <button type="button" data-mode="2" class="${twoPlayers ? "on" : ""}" style="--c:#ff4f6a">2 GIOCATORI</button>
+      </div>`;
+  }
   function difficultyHTML() {
     const buttons = DIFF_IDS.map((id) => {
       const d = DIFFICULTIES[id];
       return `<button type="button" data-diff="${id}" class="${id === difficulty ? "on" : ""}" style="--c:${d.color}">${d.label}</button>`;
     }).join("");
     const best = parseInt(load(bestKey(difficulty)), 10);
+    // in two-player games the difficulty only sets how much of the aim line you see
+    if (twoPlayers) return `<div class="diff">${buttons}</div><p class="muted">aiuto alla mira: ${diff.desc.split(" · ").slice(1).join(" · ")}</p>`;
     return `<div class="diff">${buttons}</div><p class="muted">${diff.desc}${best ? ` · Record: ${best.toLocaleString("it-IT")}` : ""}</p>`;
   }
   function setDifficulty(id) { if (!DIFFICULTIES[id]) return; difficulty = id; diff = DIFFICULTIES[id]; store(DIFF_KEY, id); if (menu) menu(); }
@@ -393,16 +457,19 @@
     menu = showTitle;
     showOverlay(
       `<h1>COLPO DI STECCA</h1>
-       <p>Biliardo a buche da sala giochi: manda in buca le nove bilie e pulisci il tavolo! Ogni steccata a vuoto, o la bianca in buca, ti costa un colpo. Quando i colpi finiscono, la partita è chiusa.</p>
+       <p>${twoPlayers
+         ? `Sfida a due sullo stesso dispositivo, su ${RACKS_2P} tavoli: tirate a turno, e chi manda in buca una bilia tira ancora. Una steccata a vuoto o la bianca in buca passano la stecca all'altro. Chi pulisce un tavolo prende 1.000 punti; alla fine vince chi ha più punti.`
+         : "Biliardo a buche da sala giochi: manda in buca le nove bilie e pulisci il tavolo! Ogni steccata a vuoto, o la bianca in buca, ti costa un colpo. Quando i colpi finiscono, la partita è chiusa."}</p>
        <div class="pts">
          <span><b>Bilia</b></span><span>50 × il suo numero</span>
          <span><b>In ordine</b></span><span>imbuca la bilia col numero più basso: punti ×2</span>
          <span><b>Più bilie</b></span><span>500 per ogni bilia in più nello stesso colpo · serie di colpi buoni: +100 a colpo</span>
-         <span><b>Colpi extra</b></span><span>uno ogni ${diff.every} colpi buoni di fila · tre a ogni tavolo pulito</span>
+         ${twoPlayers ? `<span><b>Tavolo pulito</b></span><span>1.000 a chi manda in buca l'ultima bilia · la spaccata si alterna</span>` : `<span><b>Colpi extra</b></span><span>uno ogni ${diff.every} colpi buoni di fila · tre a ogni tavolo pulito</span>`}
        </div>
        ${touchMode
          ? `<p class="muted help">Levetta a destra e sinistra per girare la stecca (poco per la mira fine) · oppure tocca il tavolo per mirare lì · tieni premuto TIRA e lascia per tirare</p>`
          : `<p class="muted help">← → gira la stecca · ↑ ↓ mira fine · clic sul tavolo per mirare lì · tieni premuto SPAZIO e lascia per tirare · P pausa</p>`}
+       ${modeHTML()}
        ${difficultyHTML()}
        <button class="start" data-start>SI GIOCA!</button>`
     );
@@ -410,6 +477,8 @@
   overlay.addEventListener("click", (e) => {
     const d = e.target.closest("[data-diff]");
     if (d) { setDifficulty(d.dataset.diff); return; }
+    const m = e.target.closest("[data-mode]");
+    if (m) { twoPlayers = m.dataset.mode === "2"; store(MODE_KEY, twoPlayers ? "2" : "1"); if (menu) menu(); return; }
     if (e.target.closest("[data-start]")) startGame();
     if (e.target.closest("[data-resume]")) togglePause();
   });
@@ -488,7 +557,7 @@
       if (!moving()) judge();
       return;
     }
-    if (state === "result") { stateT -= dt; if (stateT <= 0) { if (shotsLeft <= 0) gameOver(); else newRack(); } }
+    if (state === "result") { stateT -= dt; if (stateT <= 0) { if (twoPlayers ? rack > RACKS_2P : shotsLeft <= 0) gameOver(); else newRack(); } }
   }
 
   // ---------- Aim guide ----------
@@ -561,13 +630,14 @@
     const x0 = c.x - dx * back, y0 = c.y - dy * back, x1 = x0 - dx * 190, y1 = y0 - dy * 190;
     ctx.lineCap = "round";
     ctx.strokeStyle = "#c89a5a"; ctx.lineWidth = 5; ctx.beginPath(); ctx.moveTo(x0, y0); ctx.lineTo(x1, y1); ctx.stroke();
-    ctx.strokeStyle = "#3a2410"; ctx.lineWidth = 6; ctx.beginPath(); ctx.moveTo(x0 - dx * 120, y0 - dy * 120); ctx.lineTo(x1, y1); ctx.stroke();
+    ctx.strokeStyle = twoPlayers ? PCOL[turn] : "#3a2410"; ctx.lineWidth = 6; ctx.beginPath(); ctx.moveTo(x0 - dx * 120, y0 - dy * 120); ctx.lineTo(x1, y1); ctx.stroke();
     ctx.strokeStyle = "#e8e8f0"; ctx.lineWidth = 4; ctx.beginPath(); ctx.moveTo(x0, y0); ctx.lineTo(x0 - dx * 4, y0 - dy * 4); ctx.stroke();
     ctx.lineCap = "butt";
   }
   function drawHud() {
     ctx.textBaseline = "middle"; ctx.textAlign = "left";
     const x0 = touchMode ? 130 : 12;
+    if (twoPlayers) { drawHud2(x0); return; }
     ctx.fillStyle = "#f4f6ee"; ctx.font = "900 16px system-ui"; ctx.fillText(score.toLocaleString("it-IT"), x0, 18);
     ctx.fillStyle = "#a8b89a"; ctx.font = "700 9px system-ui"; ctx.fillText(`REC ${Math.max(bestCache, score).toLocaleString("it-IT")}`, x0 + 88, 12);
     ctx.fillStyle = "#3ad07a"; ctx.font = "900 10px system-ui"; ctx.fillText(`SERIE ${rack}`, x0 + 88, 25);
@@ -585,6 +655,28 @@
       const g = ctx.createLinearGradient(W / 2 - 80, 0, W / 2 + 80, 0); g.addColorStop(0, "#3ad07a"); g.addColorStop(0.6, "#ffd23a"); g.addColorStop(1, "#ff4a3a");
       ctx.fillStyle = g; ctx.fillRect(W / 2 - 80, B + 24, 160 * power, 10);
       ctx.strokeStyle = "#f4f6ee"; ctx.lineWidth = 1; ctx.strokeRect(W / 2 - 80, B + 24, 160, 10);
+    }
+    ctx.textBaseline = "alphabetic";
+  }
+  // two players: both scores, the one at the table lit up
+  function drawHud2(x0) {
+    for (const i of [0, 1]) {
+      const x = x0 + i * 150, on = turn === i && state !== "over";
+      if (on) { ctx.fillStyle = "rgba(255,255,255,0.08)"; ctx.fillRect(x - 6, 4, 140, 30); ctx.fillStyle = PCOL[i]; ctx.fillRect(x - 6, 32, 140, 2); }
+      ctx.fillStyle = PCOL[i]; ctx.font = "900 9px system-ui"; ctx.fillText(`${on ? "▶ " : ""}${PNAME[i]}${racksWon[i] ? " · " + "●".repeat(racksWon[i]) : ""}`, x, 12);
+      ctx.fillStyle = "#f4f6ee"; ctx.font = "900 15px system-ui"; ctx.fillText(scores[i].toLocaleString("it-IT"), x, 25);
+    }
+    ctx.fillStyle = "#3ad07a"; ctx.font = "900 10px system-ui"; ctx.fillText(`TAVOLO ${Math.min(rack, RACKS_2P)}/${RACKS_2P}`, L - 20, B + 29);
+    const left = live().filter((b) => b.n).map((b) => b.n).sort((a, b) => a - b);
+    const bx = touchMode ? W - 70 - left.length * 13 : W - 14 - left.length * 13;
+    left.forEach((n, i) => { const k = BALLS[n]; ctx.fillStyle = k.c; ctx.beginPath(); ctx.arc(bx + i * 13, 18, 5, 0, TAU); ctx.fill(); if (i === 0) { ctx.strokeStyle = "#ffd23a"; ctx.lineWidth = 1.5; ctx.stroke(); } });
+    if (charging) {
+      ctx.fillStyle = "rgba(0,0,0,0.5)"; ctx.fillRect(W / 2 - 80, B + 24, 160, 10);
+      const g = ctx.createLinearGradient(W / 2 - 80, 0, W / 2 + 80, 0); g.addColorStop(0, "#3ad07a"); g.addColorStop(0.6, "#ffd23a"); g.addColorStop(1, "#ff4a3a");
+      ctx.fillStyle = g; ctx.fillRect(W / 2 - 80, B + 24, 160 * power, 10);
+      ctx.strokeStyle = "#f4f6ee"; ctx.lineWidth = 1; ctx.strokeRect(W / 2 - 80, B + 24, 160, 10);
+    } else if (state === "aim") {
+      ctx.textAlign = "center"; ctx.fillStyle = PCOL[turn]; ctx.font = "900 11px system-ui"; ctx.fillText(`TOCCA AL ${PNAME[turn]}`, W / 2, B + 29);
     }
     ctx.textBaseline = "alphabetic";
   }
@@ -606,7 +698,7 @@
     drawHud();
     if (message) {
       ctx.globalAlpha = Math.min(1, (2.2 - message.t) * 2);
-      ctx.textAlign = "center"; ctx.font = "italic 900 22px system-ui"; ctx.fillStyle = "#3ad07a";
+      ctx.textAlign = "center"; ctx.font = "italic 900 22px system-ui"; ctx.fillStyle = message.c || "#3ad07a";
       ctx.lineWidth = 5; ctx.strokeStyle = "#10180f"; ctx.strokeText(message.text, W / 2, 150); ctx.fillText(message.text, W / 2, 150);
       if (message.sub) { ctx.font = "800 12px system-ui"; ctx.fillStyle = "#f4f6ee"; ctx.lineWidth = 4; ctx.strokeText(message.sub, W / 2, 170); ctx.fillText(message.sub, W / 2, 170); }
       ctx.globalAlpha = 1;

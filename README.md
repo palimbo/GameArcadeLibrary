@@ -1495,6 +1495,7 @@ Biliardo a buche da sala giochi, in stile *Side Pocket*. Sul tavolo ci sono nove
 - **Colpi extra:** uno ogni 2 colpi buoni di fila (3 a Difficile), e tre a ogni tavolo pulito, che vale anche 1.000 × tavolo + 300 per ogni colpo rimasto
 - **Mira:** la traiettoria tratteggiata mostra dove va la bianca. A Facile si vedono anche la bilia fantasma nel punto d'impatto, dove andrà la bilia colpita e dove scivolerà la bianca; a Normale la traiettoria arriva fino all'impatto; a Difficile se ne vede solo un pezzetto
 - **Difficoltà:** Facile (10 colpi), Normale (7), Difficile (6); record separati per ogni difficoltà
+- **2 giocatori:** sfida a turno sullo stesso dispositivo, su 3 tavoli. Chi manda in buca una bilia tira ancora; una steccata a vuoto o la bianca in buca passano la stecca all'altro (in alto si vede chi è di turno, e la stecca prende il suo colore). I punti delle bilie sono gli stessi, chi pulisce un tavolo prende 1.000 punti e la spaccata si alterna; alla fine vince chi ha più punti. La difficoltà sceglie solo l'aiuto alla mira, e in 2 giocatori non si registrano record
 - **Comandi:** `←` `→` gira la stecca · `↑` `↓` mira fine · clic sul tavolo per mirare lì · tieni premuto `Spazio` (la potenza va su e giù) e lascialo per tirare · `P` pausa
 - **Touch:** levetta per girare la stecca (una spinta leggera per la mira fine), oppure tocca il tavolo per mirare lì; tieni premuto TIRA e lascialo per tirare
 
