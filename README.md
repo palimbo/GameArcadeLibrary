@@ -4,7 +4,7 @@ Raccolta di giochi arcade per il browser. Ogni gioco è un singolo file HTML sen
 
 ## 🕹️ Sala Giochi — `index.html`
 
-Apri `index.html` nella cartella principale per la pagina di raccolta: mostra tutti i 111 giochi con copertina, genere, comandi e i tuoi record per ogni difficoltà (Facile, Normale, Difficile). Tocca «Gioca» per avviare un gioco; in ogni gioco il pulsante «← Sala Giochi» in alto a sinistra (visibile nei menu) riporta alla raccolta.
+Apri `index.html` nella cartella principale per la pagina di raccolta: mostra tutti i 112 giochi con copertina, genere, comandi e i tuoi record per ogni difficoltà (Facile, Normale, Difficile). Tocca «Gioca» per avviare un gioco; in ogni gioco il pulsante «← Sala Giochi» in alto a sinistra (visibile nei menu) riporta alla raccolta.
 
 **Iniziali del record:** quando batti un record compare la schermata da sala giochi per inserire le tue tre iniziali (frecce ↑ ↓ per cambiare lettera, ← → per spostarti, oppure scrivile direttamente; su telefono i tasti ▲ ▼ e OK). Le iniziali vengono salvate insieme al record e compaiono nei menu del gioco e nella Sala Giochi. Il codice è condiviso da tutti i giochi in `shared/iniziali.js`.
 
@@ -1718,3 +1718,17 @@ Difesa in grafica vettoriale in stile *Rip Off*. Al centro del deserto ci sono l
 - **Touch:** levetta per guidare, pulsante FUOCO
 
 Per giocare apri `games/ladri-di-carburante/index.html` nel browser.
+
+### 🤡 Monociclo Matto — `games/monociclo-matto/index.html`
+
+Arcade in stile *Kickman*. Sotto il tendone del circo un clown pedala avanti e indietro sul monociclo, mentre dall'alto scendono palloncini da prendere sulla testa e impilare uno sull'altro.
+
+- **La pila:** ogni palloncino preso vale 10 × l'altezza della pila (fino a 11; oltre, 100 a palloncino). Più è alta più vale, ma ondeggia quando acceleri, e il punto dove atterra il prossimo (la lineetta sopra la pila) si sposta
+- **Il calcio:** un palloncino che ti sfugge si può rilanciare in alto con un calcio quando è basso vicino ai piedi (30 punti); poi ricade e puoi prenderlo. Se tocca terra scoppia e perdi una vita
+- **Gli spilli:** dal secondo numero cadono spilli (con una linea che mostra dove arriveranno): se colpiscono la pila bucano il palloncino in cima, se ti cadono in testa perdi una vita
+- **Il numero:** a ogni numero i palloncini sono di più, più veloci e ne cadono di più insieme. A fine numero ogni palloncino in pila vale 100 × il numero
+- **Difficoltà:** Facile (5 vite, palloncini lenti e pochi insieme, spilli rari), Normale (3 vite), Difficile (3 vite, palloncini svelti e numerosi, tanti spilli); record separati per ogni difficoltà. Vita extra ogni 20.000 punti
+- **Comandi:** frecce o `A` `D` per pedalare · `Spazio`, `J`, `Z` o `↑` per il calcio · `P` pausa
+- **Touch:** levetta a destra e sinistra per pedalare, pulsante CALCIO
+
+Per giocare apri `games/monociclo-matto/index.html` nel browser.
