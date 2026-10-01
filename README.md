@@ -4,7 +4,7 @@ Raccolta di giochi arcade per il browser. Ogni gioco è un singolo file HTML sen
 
 ## 🕹️ Sala Giochi — `index.html`
 
-Apri `index.html` nella cartella principale per la pagina di raccolta: mostra tutti i 113 giochi con copertina, genere, comandi e i tuoi record per ogni difficoltà (Facile, Normale, Difficile). Tocca «Gioca» per avviare un gioco; in ogni gioco il pulsante «← Sala Giochi» in alto a sinistra (visibile nei menu) riporta alla raccolta.
+Apri `index.html` nella cartella principale per la pagina di raccolta: mostra tutti i 114 giochi con copertina, genere, comandi e i tuoi record per ogni difficoltà (Facile, Normale, Difficile). Tocca «Gioca» per avviare un gioco; in ogni gioco il pulsante «← Sala Giochi» in alto a sinistra (visibile nei menu) riporta alla raccolta.
 
 **Iniziali del record:** quando batti un record compare la schermata da sala giochi per inserire le tue tre iniziali (frecce ↑ ↓ per cambiare lettera, ← → per spostarti, oppure scrivile direttamente; su telefono i tasti ▲ ▼ e OK). Le iniziali vengono salvate insieme al record e compaiono nei menu del gioco e nella Sala Giochi. Il codice è condiviso da tutti i giochi in `shared/iniziali.js`.
 
@@ -1746,3 +1746,17 @@ Avventura in stile *Venture*. Ogni sotterraneo ha quattro stanze (la sala dei se
 - **Touch:** levetta per camminare, pulsante FRECCIA
 
 Per giocare apri `games/stanze-del-tesoro/index.html` nel browser.
+
+### 🪂 Biplano Ribelle — `games/biplano-ribelle/index.html`
+
+Sparatutto a scorrimento orizzontale in stile *Sky Kid*. Un piccolo biplano attraversa campagne, colline e villaggi nemici; la mitragliatrice spara da sola in avanti e il compito del pilota è schivare, scegliere la quota e portare a termine la missione.
+
+- **La gran volta:** il pulsante GIRO fa compiere al biplano un giro della morte: durante la volta i colpi nemici non lo toccano (gli scontri sì) e non spara. Toccare terra è fatale
+- **I nemici:** caccia che arrivano a ondate ondeggiando (100), bombardieri che scendono in picchiata verso di te (150) e, a terra, la contraerea che lampeggia prima di sparare (200: si abbatte volando basso davanti a lei)
+- **La missione:** a metà percorso c'è una bomba su una piazzola: passaci sopra volando basso per caricarla. Da quel momento il pulsante GIRO la sgancia; la bomba cade in avanti, e se centra la fabbrica nemica (l'obiettivo vicino alla fine) vale 2.000 + 500 per missione. Se perdi una vita con la bomba a bordo, la ritrovi al rientro
+- **Le missioni:** ogni missione è più lunga e con più nemici, più veloci e che sparano più spesso; la barra in alto mostra dove sono la bomba e l'obiettivo
+- **Difficoltà:** Facile (5 vite, nemici lenti che sparano poco), Normale (3 vite), Difficile (3 vite, nemici svelti e numerosi, contraerea più precisa); record separati per ogni difficoltà. Vita extra a 20.000 punti e poi ogni 25.000
+- **Comandi:** frecce o `WASD` per volare · `Spazio`, `J` o `Z` per la gran volta o per sganciare · `P` pausa
+- **Touch:** levetta per volare, pulsante GIRO
+
+Per giocare apri `games/biplano-ribelle/index.html` nel browser.

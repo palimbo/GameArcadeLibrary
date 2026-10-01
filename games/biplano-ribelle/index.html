@@ -1,0 +1,618 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no, viewport-fit=cover">
+<title>Biplano Ribelle</title>
+<style>
+  :root {
+    --bg: #0a1a2e;
+    --fg: #f4f6ee;
+    --muted: #b8d0e8;
+    --pink: #ff6a3a;
+    --yellow: #ffd23a;
+    --red: #ff4a3a;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  html, body {
+    height: 100%;
+    background: var(--bg);
+    color: var(--fg);
+    font-family: system-ui, -apple-system, "Segoe UI", sans-serif;
+    overflow: hidden;
+    user-select: none;
+    -webkit-user-select: none;
+    touch-action: none;
+  }
+  #wrap { position: fixed; inset: 0; display: flex; align-items: center; justify-content: center; }
+  canvas { display: block; touch-action: none; border-radius: 6px; box-shadow: 0 0 0 2px #2a4a6a, 0 10px 40px rgba(0,0,0,0.6); }
+  #pauseBtn {
+    position: fixed; z-index: 3; display: none; right: 10px; top: calc(10px + env(safe-area-inset-top, 0px));
+    font: 700 13px system-ui, sans-serif; color: var(--fg);
+    background: rgba(0, 0, 0, 0.6); border: 1px solid rgba(244, 246, 238, 0.35);
+    border-radius: 8px; padding: 6px 10px; cursor: pointer;
+  }
+  #touch {
+    position: fixed; z-index: 2; display: none; left: 12px; right: 12px;
+    bottom: calc(14px + env(safe-area-inset-bottom, 0px));
+    justify-content: space-between; align-items: flex-end; pointer-events: none;
+  }
+  /* thumb stick: fly with the stick (the guns fire on their own); GIRO loops, or drops the bomb */
+  #touch .stick { position: relative; width: 136px; height: 136px; border-radius: 50%; pointer-events: auto; touch-action: none;
+    border: 2px solid rgba(255, 106, 58, 0.6); background: radial-gradient(circle, rgba(255,106,58,0.14), rgba(255,106,58,0.04)); }
+  #touch .stick .knob { position: absolute; left: 50%; top: 50%; width: 58px; height: 58px; margin: -29px 0 0 -29px; border-radius: 50%;
+    background: rgba(255, 106, 58, 0.45); border: 2px solid rgba(255,255,255,0.7); box-shadow: 0 4px 10px rgba(0,0,0,0.4); pointer-events: none; }
+  #touch .stick .ring { position: absolute; inset: 10px; border-radius: 50%; border: 1px dashed rgba(244,246,238,0.25); pointer-events: none; }
+  #touch .jump { width: 96px; height: 96px; border-radius: 50%; pointer-events: auto; touch-action: none; color: var(--fg);
+    font: 800 13px system-ui, sans-serif; letter-spacing: 1px; border: 2px solid rgba(255, 176, 58, 0.9); background: rgba(255, 176, 58, 0.22); }
+  #touch .jump.on { background: rgba(255, 176, 58, 0.55); }
+  #touch.small .stick { width: 112px; height: 112px; }
+  #touch.small .stick .knob { width: 48px; height: 48px; margin: -24px 0 0 -24px; }
+  #touch.small .jump { width: 80px; height: 80px; font-size: 11px; }
+  #overlay {
+    position: fixed; inset: 0; z-index: 5;
+    display: flex; flex-direction: column; align-items: center; justify-content: flex-start;
+    gap: 14px; padding: 16px; text-align: center; overflow-y: auto;
+    background: rgba(10, 26, 46, 0.93);
+  }
+  #overlay > :first-child { margin-top: auto; }
+  #overlay > :last-child { margin-bottom: auto; }
+  #overlay.hidden { display: none; }
+  #homeLink {
+    position: fixed; top: calc(10px + env(safe-area-inset-top, 0px)); left: 10px; z-index: 6;
+    font: 600 13px/1 system-ui, sans-serif; color: #fff; text-decoration: none;
+    padding: 8px 12px; border-radius: 999px; background: rgba(0,0,0,.55);
+    border: 1px solid rgba(255,255,255,.25);
+  }
+  #homeLink:hover { background: rgba(0,0,0,.8); }
+  #overlay.hidden ~ #homeLink { display: none; }
+  @media (max-width: 700px) { #overlay { padding-top: calc(52px + env(safe-area-inset-top, 0px)); } }
+  #overlay h1 { font-size: clamp(32px, 10vw, 58px); font-weight: 900; font-style: italic; letter-spacing: 1px; color: var(--pink);
+    text-shadow: 3px 3px 0 #6a2a0a, 0 0 22px rgba(255,106,58,0.35); }
+  #overlay h2 { font-size: clamp(26px, 7vw, 42px); font-weight: 900; letter-spacing: 2px; color: var(--pink); }
+  #overlay h2.lose { color: var(--red); }
+  #overlay p { max-width: 540px; font-size: clamp(13px, 3.4vw, 16px); line-height: 1.55; }
+  #overlay p.muted { color: var(--muted); }
+  #overlay .pts { display: grid; grid-template-columns: repeat(2, auto); gap: 4px 18px; font-size: 13px; color: var(--muted); text-align: left; max-width: 560px; }
+  #overlay .pts b { color: var(--fg); }
+  #overlay .diff { display: flex; gap: 10px; flex-wrap: wrap; justify-content: center; }
+  #overlay button {
+    font: 800 15px system-ui, sans-serif; letter-spacing: 1.5px; color: var(--fg);
+    background: transparent; cursor: pointer;
+    border: 2px solid rgba(244,246,238,0.3); border-radius: 10px; padding: 9px 16px;
+  }
+  #overlay .diff button.on { border-color: var(--c); color: var(--c); box-shadow: 0 0 12px var(--c); }
+  #overlay button.start { border-color: var(--pink); color: #2a0a02; background: var(--pink); padding: 11px 30px; box-shadow: 0 4px 0 #b8401a; }
+  @media (max-height: 560px) {
+    #overlay { gap: 8px; }
+    #overlay h1 { font-size: 30px; }
+    #overlay p { font-size: 13px; line-height: 1.4; }
+    #overlay .help, #overlay .pts { display: none; }
+  }
+</style>
+</head>
+<body>
+<div id="wrap"><canvas id="game"></canvas></div>
+<div id="touch">
+  <div class="stick" aria-label="Levetta"><div class="ring"></div><div class="knob"></div></div>
+  <button type="button" class="jump" aria-label="Giro">GIRO</button>
+</div>
+<button id="pauseBtn" type="button" aria-label="Pausa">❚❚</button>
+<div id="overlay"></div>
+<a id="homeLink" href="../../index.html">← Sala Giochi</a>
+
+
+<script>
+(() => {
+  "use strict";
+
+  const W = 640, H = 360, TAU = Math.PI * 2, TOP = 28;
+  const GY = 326, SCROLL = 62, PSPEED = 150, PR = 8, ER = 10;
+  const LOOP_T = 0.9, LOOP_R = 26, LOOP_CD = 0.6, FIRE_T = 0.16, BSPEED = 420;
+
+  const DIFFICULTIES = {
+    facile:    { label: "FACILE",    color: "#7ed87a", desc: "5 vite · nemici lenti che sparano poco", lives: 5, speed: 0.8, fire: 0.55, dens: 0.75 },
+    normale:   { label: "NORMALE",   color: "#ff6a3a", desc: "3 vite", lives: 3, speed: 1, fire: 1, dens: 1 },
+    difficile: { label: "DIFFICILE", color: "#ff5a5a", desc: "3 vite · nemici svelti e numerosi, contraerea più precisa", lives: 3, speed: 1.2, fire: 1.4, dens: 1.3 },
+  };
+  const DIFF_IDS = Object.keys(DIFFICULTIES);
+  const DIFF_KEY = "biplano-difficulty";
+  const bestKey = (id) => `biplano-best-${id}`;
+  function store(k, v) { try { localStorage.setItem(k, v); } catch { /* ignore */ } }
+  function load(k) { try { return localStorage.getItem(k); } catch { return null; } }
+  const rnd = (a, b) => a + Math.random() * (b - a);
+  const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
+  const pick = (arr) => arr[Math.floor(Math.random() * arr.length)];
+  const dist = (a, b) => Math.hypot(a.x - b.x, a.y - b.y);
+
+  // ---------- Canvas ----------
+  const canvas = document.getElementById("game");
+  const ctx = canvas.getContext("2d");
+  const wrapEl = document.getElementById("wrap");
+  const overlay = document.getElementById("overlay");
+  const touchEl = document.getElementById("touch");
+  const pauseBtn = document.getElementById("pauseBtn");
+  let pxRatio = 1, touchMode = !!(window.matchMedia && matchMedia("(pointer: coarse)").matches);
+  function resize() {
+    const portrait = window.innerHeight > window.innerWidth;
+    const showTouch = touchMode && isPlaying();
+    touchEl.style.display = showTouch ? "flex" : "none";
+    touchEl.classList.toggle("small", !portrait && window.innerHeight < 480);
+    wrapEl.style.paddingBottom = showTouch && portrait ? "calc(170px + env(safe-area-inset-bottom, 0px))" : "0";
+    let availW = window.innerWidth - 8, availH = window.innerHeight - 8;
+    if (showTouch && portrait) availH -= 170;
+    if (showTouch && !portrait) {
+      const side = Math.max(...[...touchEl.children].map((el) => el.offsetWidth)) + 20;
+      if (window.innerWidth - 2 * side > 200) availW = window.innerWidth - 2 * side;
+    }
+    const s = Math.max(0.2, Math.min(availW / W, availH / H));
+    pxRatio = Math.min(3, s * (window.devicePixelRatio || 1));
+    canvas.style.width = W * s + "px";
+    canvas.style.height = H * s + "px";
+    canvas.width = Math.round(W * pxRatio);
+    canvas.height = Math.round(H * pxRatio);
+  }
+  window.addEventListener("resize", () => syncControls());
+
+  // ---------- Audio ----------
+  let audioCtx = null;
+  function beep(freq, dur, type = "square", vol = 0.04, slide = 0, delay = 0) {
+    if (!audioCtx) return;
+    const t = audioCtx.currentTime + delay;
+    const osc = audioCtx.createOscillator(), gain = audioCtx.createGain();
+    osc.type = type;
+    osc.frequency.setValueAtTime(freq, t);
+    if (slide) osc.frequency.exponentialRampToValueAtTime(Math.max(20, freq + slide), t + dur);
+    gain.gain.setValueAtTime(vol, t);
+    gain.gain.exponentialRampToValueAtTime(0.0001, t + dur);
+    osc.connect(gain).connect(audioCtx.destination);
+    osc.start(t); osc.stop(t + dur + 0.02);
+  }
+  function noise(dur, vol, freq) {
+    if (!audioCtx) return;
+    const len = Math.floor(audioCtx.sampleRate * dur), buf = audioCtx.createBuffer(1, len, audioCtx.sampleRate), d = buf.getChannelData(0);
+    for (let i = 0; i < len; i++) d[i] = (Math.random() * 2 - 1) * (1 - i / len);
+    const src = audioCtx.createBufferSource(), f = audioCtx.createBiquadFilter(), g = audioCtx.createGain();
+    src.buffer = buf; f.type = "bandpass"; f.frequency.value = freq; g.gain.value = vol;
+    src.connect(f).connect(g).connect(audioCtx.destination); src.start();
+  }
+  const arp = (notes, gap, d, type = "square", vol = 0.04) => notes.forEach((f, i) => beep(f, d, type, vol, 0, i * gap));
+  let sfxN = 0;
+  const lim = (fn) => (...a) => { if (sfxN++ < 6) fn(...a); };
+  const sfx = {
+    gun: lim(() => noise(0.03, 0.03, 2500)),
+    boom: lim(() => { noise(0.3, 0.14, 500); beep(140, 0.25, "triangle", 0.04, -70); }),
+    flak: lim(() => { noise(0.12, 0.06, 900); }),
+    loop: lim(() => beep(400, 0.5, "sine", 0.04, 500)),
+    grab: () => arp([523, 659, 784], 0.06, 0.1, "square", 0.045),
+    drop: lim(() => beep(1200, 0.6, "sine", 0.035, -900)),
+    big: () => { noise(0.8, 0.22, 300); arp([392, 523, 659, 784, 1047], 0.08, 0.16, "square", 0.045); },
+    die: () => { noise(0.5, 0.18, 400); for (let i = 0; i < 8; i++) beep(700 - i * 70, 0.1, "sawtooth", 0.03, 0, i * 0.06); },
+    land: () => arp([523, 659, 784, 1047, 784, 1047, 1319], 0.08, 0.14, "square", 0.045),
+    over: () => arp([523, 466, 415, 392, 330, 262], 0.15, 0.24, "triangle", 0.05),
+  };
+
+  // ---------- State ----------
+  let difficulty = DIFFICULTIES[load(DIFF_KEY)] ? load(DIFF_KEY) : "normale";
+  let diff = DIFFICULTIES[difficulty];
+  let state = "menu", menu = null, pausedFrom = null, stateT = 0, clock = 0;
+  let score = 0, lives = 3, level = 1, bestCache = 0, nextLife = 20000;
+  let P = null, wx = 0, LEN = 3600, foes = [], guns = [], shots = [], bombs = [], parts = [], popups = [], message = null;
+  let pickup = null, target = null, lastBy = "", spawnT = 0, fireT = 0, decor = [], hit = false;
+  let btnPressed = false;
+  const keys = { left: false, right: false, up: false, down: false };
+  const stick = { x: 0, y: 0 };
+  const clouds = Array.from({ length: 9 }, (_, i) => ({ x: i * 90 + rnd(0, 60), y: TOP + 20 + (i * 37) % 120, s: 0.6 + (i % 3) * 0.3 }));
+
+  // ---------- Flow ----------
+  const isPlaying = () => ["intro", "play", "dead", "clear"].includes(state);
+  function startGame() {
+    if (!audioCtx) { try { audioCtx = new (window.AudioContext || window.webkitAudioContext)(); } catch { audioCtx = null; } }
+    if (audioCtx && audioCtx.state === "suspended") audioCtx.resume();
+    score = 0; lives = diff.lives; level = 1; nextLife = 20000;
+    bestCache = parseInt(load(bestKey(difficulty)), 10) || 0;
+    beginLevel();
+    menu = null;
+    overlay.classList.add("hidden");
+    syncControls();
+    last = performance.now();
+  }
+  function beginLevel() {
+    LEN = 3200 + level * 300;
+    wx = 0; foes = []; shots = []; bombs = []; hit = false;
+    // the bomb waits on a pad halfway, the target stands near the end
+    pickup = { x: LEN * 0.42, taken: false };
+    target = { x: LEN - 420, w: 70, h: 54, alive: true };
+    guns = [];
+    for (let x = 700; x < LEN - 300; x += rnd(380, 620) / diff.dens) if (Math.abs(x - pickup.x) > 90 && Math.abs(x - target.x) > 110) guns.push({ x, cd: rnd(1, 3), alive: true, flash: 0 });
+    decor = [];
+    for (let x = 0; x < LEN + 800; x += rnd(40, 110)) decor.push({ x, k: pick(["albero", "albero", "casa", "collina"]), s: rnd(0.8, 1.2) });
+    spawnPlane(); P = null; spawnPlayer();
+    message = { text: `MISSIONE ${level}`, sub: "prendi la bomba a metà strada e sganciala sull'obiettivo", t: 0 };
+    state = "intro"; stateT = 1.8; spawnT = 2;
+  }
+  function spawnPlayer() { P = { x: 120, y: 150, loop: 0, loopCd: 0, safe: 2, bomb: P ? P.bomb : false, prop: 0, lx: 0, ly: 0 }; }
+  function spawnPlane() {
+    // a few enemy fighters from the right
+    const n = 1 + Math.floor(Math.random() * Math.min(4, 1 + level * 0.6 * diff.dens));
+    const kind = Math.random() < Math.min(0.45, 0.1 + level * 0.07) ? "tuffo" : "caccia";
+    const y0 = rnd(TOP + 40, GY - 90);
+    for (let i = 0; i < n; i++) foes.push({ x: W + 20 + i * 34, y: y0 + (kind === "caccia" ? Math.sin(i) * 20 : -i * 10), kind, t: rnd(0, TAU), cd: rnd(1, 2.5) / diff.fire, gun: Math.random() < Math.min(0.7, 0.25 + level * 0.1) * diff.fire, hp: 1 });
+  }
+  function addScore(n, x, y, color = "#ffffff", text) {
+    score += n;
+    if (score >= nextLife) { lives++; nextLife += 25000; arp([523, 659, 784, 1047, 1319], 0.07, 0.12); popups.push({ x: W / 2, y: 80, text: "VITA EXTRA!", color: "#7ae05a", t: 0 }); }
+    if (x !== undefined) popups.push({ x, y, text: text || String(n), color, t: 0 });
+  }
+  function burst(x, y, c, n = 14, sp = 120, life = 0.6) {
+    for (let k = 0; k < n; k++) { const a = Math.random() * TAU, s = sp * rnd(0.3, 1); parts.push({ x, y, vx: Math.cos(a) * s, vy: Math.sin(a) * s, t: 0, life: life * rnd(0.6, 1.2), c }); }
+  }
+  function die(by) {
+    if (state !== "play" || P.safe > 0 || (P.loop > 0 && by === "UN COLPO NEMICO")) return;
+    if (window.__deaths) window.__deaths.push([level, by, Math.round(wx)]);
+    if (window.__god) return;
+    lives--; lastBy = by; sfx.die(); burst(P.x, P.y, "#ff8a3a", 26, 140, 0.8);
+    state = "dead"; stateT = 2;
+  }
+  function gameOver() {
+    state = "over";
+    const prev = parseInt(load(bestKey(difficulty)), 10) || 0;
+    const record = score > prev;
+    if (record) store(bestKey(difficulty), String(score));
+    sfx.over();
+    menu = () => showOverlay(
+      `<h2 class="lose">${lives <= 0 ? "VITE FINITE!" : "PARTITA FINITA"}</h2>
+       <p>Punteggio: <b>${score.toLocaleString("it-IT")}</b> · missione ${level} · ${diff.label}</p>
+       ${record ? "<p style='color:var(--pink)'>★ NUOVO RECORD! ★</p>" : ""}
+       ${difficultyHTML()}
+       <button class="start" data-start>GIOCA ANCORA</button>`
+    );
+    menu();
+    syncControls();
+  }
+  function togglePause() {
+    if (isPlaying()) {
+      pausedFrom = state; state = "paused";
+      showOverlay(`<h2>PAUSA</h2><button class="start" data-resume>CONTINUA</button><p class="muted">Premi P per continuare</p>`);
+    } else if (state === "paused") {
+      state = pausedFrom; overlay.classList.add("hidden"); last = performance.now();
+    }
+    syncControls();
+  }
+  // the pause menu can end the game (shared/iniziali.js): it ends here the usual way, saving the record
+  window.addEventListener("sala:termina", () => { if (state !== "paused") return; state = pausedFrom; overlay.classList.add("hidden"); gameOver(); syncControls(); });
+  function syncControls() {
+    pauseBtn.style.display = isPlaying() && touchMode ? "block" : "none";
+    resize();
+  }
+  pauseBtn.addEventListener("click", () => togglePause());
+  function showOverlay(html) { overlay.innerHTML = html; overlay.classList.remove("hidden"); }
+  function difficultyHTML() {
+    const buttons = DIFF_IDS.map((id) => {
+      const d = DIFFICULTIES[id];
+      return `<button type="button" data-diff="${id}" class="${id === difficulty ? "on" : ""}" style="--c:${d.color}">${d.label}</button>`;
+    }).join("");
+    const best = parseInt(load(bestKey(difficulty)), 10);
+    return `<div class="diff">${buttons}</div><p class="muted">${diff.desc}${best ? ` · Record: ${best.toLocaleString("it-IT")}` : ""}</p>`;
+  }
+  function setDifficulty(id) { if (!DIFFICULTIES[id]) return; difficulty = id; diff = DIFFICULTIES[id]; store(DIFF_KEY, id); if (menu) menu(); }
+  function showTitle() {
+    menu = showTitle;
+    showOverlay(
+      `<h1>BIPLANO RIBELLE</h1>
+       <p>Ai comandi di un piccolo biplano attraversi il cielo nemico: la mitragliatrice spara da sola, tu schiva caccia e contraerea. Con la gran volta i colpi non ti toccano! A metà percorso c'è una bomba da raccogliere volando basso: sganciala sull'obiettivo prima della fine.</p>
+       <div class="pts">
+         <span><b>Nemici</b></span><span>caccia 100 · bombardiere in picchiata 150 · contraerea 200</span>
+         <span><b>Bomba</b></span><span>obiettivo colpito: 2.000 + 500 per missione · senza bomba nessun bonus</span>
+         <span><b>Attento</b></span><span>non toccare terra · la gran volta ti protegge dai colpi, non dagli scontri</span>
+       </div>
+       ${touchMode
+         ? `<p class="muted help">Levetta per volare · GIRO per la gran volta (con la bomba a bordo: sgancia)</p>`
+         : `<p class="muted help">Frecce o WASD per volare · SPAZIO, J o Z per la gran volta o per sganciare · P pausa</p>`}
+       ${difficultyHTML()}
+       <button class="start" data-start>IN VOLO!</button>`
+    );
+  }
+  overlay.addEventListener("click", (e) => {
+    const d = e.target.closest("[data-diff]");
+    if (d) { setDifficulty(d.dataset.diff); return; }
+    if (e.target.closest("[data-start]")) startGame();
+    if (e.target.closest("[data-resume]")) togglePause();
+  });
+
+  // ---------- Input ----------
+  const KEYMAP = { arrowleft: "left", a: "left", arrowright: "right", d: "right", arrowup: "up", w: "up", arrowdown: "down", s: "down" };
+  const BTNKEYS = [" ", "j", "z", "x"];
+  window.addEventListener("keydown", (e) => {
+    const k = e.key.toLowerCase();
+    if ([" ", "arrowup", "arrowdown", "arrowleft", "arrowright"].includes(k)) e.preventDefault();
+    if (state === "menu" || state === "over") {
+      if (e.key === "Enter") startGame();
+      else if (["1", "2", "3"].includes(k)) setDifficulty(DIFF_IDS[+k - 1]);
+      return;
+    }
+    if (k === "p" || k === "escape") { if (!e.repeat) togglePause(); return; }
+    if (state === "paused") { if (e.key === "Enter") togglePause(); return; }
+    if (BTNKEYS.includes(k) && !e.repeat) btnPressed = true;
+    if (KEYMAP[k]) keys[KEYMAP[k]] = true;
+  });
+  window.addEventListener("keyup", (e) => { const m = KEYMAP[e.key.toLowerCase()]; if (m) keys[m] = false; });
+  window.addEventListener("blur", () => { for (const k in keys) keys[k] = false; stick.x = stick.y = 0; if (isPlaying()) togglePause(); });
+  const actBtn = touchEl.querySelector(".jump");
+  actBtn.addEventListener("pointerdown", (e) => { e.preventDefault(); btnPressed = true; actBtn.classList.add("on"); });
+  for (const ev of ["pointerup", "pointercancel", "pointerleave"]) actBtn.addEventListener(ev, () => actBtn.classList.remove("on"));
+  const stickEl = touchEl.querySelector(".stick"), knob = stickEl.querySelector(".knob");
+  let stickId = null;
+  function stickAt(e) {
+    const r = stickEl.getBoundingClientRect(), max = r.width / 2 - 14;
+    let dx = e.clientX - (r.left + r.width / 2), dy = e.clientY - (r.top + r.height / 2);
+    const len = Math.hypot(dx, dy);
+    if (len > max) { dx *= max / len; dy *= max / len; }
+    knob.style.transform = `translate(${dx}px, ${dy}px)`;
+    const m = Math.hypot(dx, dy) / max, s = m < 0.15 ? 0 : Math.min(1, (m - 0.15) / 0.6) / m;
+    stick.x = dx / max * s; stick.y = dy / max * s;
+  }
+  const stickEnd = (e) => { if (e.pointerId !== stickId) return; stickId = null; knob.style.transform = ""; stick.x = stick.y = 0; };
+  stickEl.addEventListener("pointerdown", (e) => { e.preventDefault(); stickId = e.pointerId; try { stickEl.setPointerCapture(e.pointerId); } catch { /* ignore */ } stickAt(e); });
+  stickEl.addEventListener("pointermove", (e) => { if (e.pointerId === stickId) stickAt(e); });
+  for (const ev of ["pointerup", "pointercancel", "lostpointercapture"]) stickEl.addEventListener(ev, stickEnd);
+  window.addEventListener("pointerdown", (e) => { if (e.pointerType === "touch" && !touchMode) { touchMode = true; syncControls(); if (menu) menu(); } }, true);
+
+  // ---------- Update ----------
+  const sx = (x) => x - wx;  // world to screen
+  // where the plane really is, loop included
+  const planePos = () => {
+    if (P.loop <= 0) return { x: P.x, y: P.y };
+    const a = (1 - P.loop / LOOP_T) * TAU;
+    return { x: P.x + Math.sin(a) * LOOP_R, y: P.y - (1 - Math.cos(a)) * LOOP_R };
+  };
+  function updatePlayer(dt) {
+    P.safe = Math.max(0, P.safe - dt); P.loopCd = Math.max(0, P.loopCd - dt); P.prop += dt * 40;
+    let ix = clamp(stick.x + (keys.right ? 1 : 0) - (keys.left ? 1 : 0), -1, 1), iy = clamp(stick.y + (keys.down ? 1 : 0) - (keys.up ? 1 : 0), -1, 1);
+    const m = Math.hypot(ix, iy); if (m > 1) { ix /= m; iy /= m; }
+    if (P.loop > 0) {
+      P.loop -= dt;
+      if (P.loop <= 0) { P.loop = 0; P.loopCd = LOOP_CD; }
+    } else {
+      P.x = clamp(P.x + ix * PSPEED * dt, 24, 420); P.y = clamp(P.y + iy * PSPEED * dt, TOP + 14 + LOOP_R * 0, GY - 4);
+    }
+    if (btnPressed) {
+      if (P.bomb) {
+        // let the bomb go: it keeps the plane's forward speed
+        const pp = planePos(); bombs.push({ x: wx + pp.x, y: pp.y + 6, vx: SCROLL + 70, vy: 20 }); P.bomb = false; sfx.drop();
+      } else if (P.loop <= 0 && P.loopCd <= 0) { P.loop = LOOP_T; sfx.loop(); }
+    }
+    btnPressed = false;
+    const pp = planePos();
+    // guns fire forward on their own (not mid-loop)
+    fireT -= dt;
+    if (fireT <= 0 && P.loop <= 0) { shots.push({ x: pp.x + 14, y: pp.y + 2, vx: BSPEED, vy: 0, by: "P" }); fireT = FIRE_T; sfx.gun(); }
+    // too low: into the ground
+    if (pp.y > GY - 6) die("IL TERRENO");
+    // the bomb pad: fly low over it to pick the bomb up
+    if (!pickup.taken && Math.abs(sx(pickup.x) - pp.x) < 22 && pp.y > GY - 46) { pickup.taken = true; P.bomb = true; sfx.grab(); popups.push({ x: pp.x, y: pp.y - 20, text: "BOMBA A BORDO!", color: "#ffd23a", t: 0 }); }
+  }
+  function enemyFire(x, y, speed) {
+    const pp = planePos(), a = Math.atan2(pp.y - y, pp.x - x) + rnd(-0.08, 0.08) / diff.fire;
+    shots.push({ x, y, vx: Math.cos(a) * speed, vy: Math.sin(a) * speed, by: "E" });
+  }
+  function updateFoes(dt) {
+    const sp = diff.speed * Math.min(1.5, 1 + 0.06 * (level - 1));
+    spawnT -= dt;
+    if (spawnT <= 0 && wx < LEN - 500) { spawnPlane(); spawnT = rnd(1.8, 3.2) / diff.dens / Math.min(1.6, 1 + 0.07 * (level - 1)); }
+    const pp = planePos();
+    for (const f of foes) {
+      f.t += dt; f.cd -= dt;
+      if (f.kind === "caccia") { f.x -= (120 * sp) * dt; f.y += Math.cos(f.t * 2.2) * 50 * dt; }
+      else {
+        // dive bombers swoop towards the plane, then pull away
+        f.x -= 95 * sp * dt;
+        if (f.x < pp.x + 260 && f.x > pp.x) f.y += clamp(pp.y - f.y, -1, 1) * 110 * sp * dt;
+      }
+      f.y = clamp(f.y, TOP + 14, GY - 20);
+      if (f.gun && f.cd <= 0 && f.x < W - 30 && f.x > pp.x + 60) { enemyFire(f.x - 10, f.y, 170 * diff.fire ** 0.5); f.cd = rnd(1.8, 3) / diff.fire; }
+      if (f.x < -40) f.gone = true;
+      if (dist(f, pp) < PR + ER - 2 && P.safe <= 0) { f.gone = true; burst(f.x, f.y, "#ff8a3a"); sfx.boom(); die("UN CACCIA"); }
+    }
+    for (const g of guns) {
+      if (!g.alive) continue;
+      const gx = sx(g.x); if (gx < -20 || gx > W + 20) continue;
+      g.cd -= dt; g.flash = Math.max(0, g.flash - dt);
+      if (g.cd <= 0.4 && g.flash <= 0 && g.cd > 0 && gx < W - 20 && gx > 30) g.flash = 0.4;
+      if (g.cd <= 0) { if (gx < W - 20 && gx > 30) { enemyFire(gx, GY - 14, 150 * diff.fire ** 0.5); sfx.flak(); } g.cd = rnd(2.2, 3.4) / diff.fire; }
+    }
+    foes = foes.filter((f) => !f.gone);
+  }
+  function updateShots(dt) {
+    const pp = planePos();
+    for (const s of shots) {
+      s.x += s.vx * dt; s.y += s.vy * dt;
+      if (s.x < -10 || s.x > W + 10 || s.y < TOP || s.y > GY) { s.gone = true; continue; }
+      if (s.by === "P") {
+        for (const f of foes) if (!f.gone && Math.hypot(f.x - s.x, f.y - s.y) < ER + 3) { f.gone = true; s.gone = true; const pts = f.kind === "tuffo" ? 150 : 100; addScore(pts, f.x, f.y - 12, "#ffffff"); burst(f.x, f.y, "#ffb03a", 14, 110, 0.5); sfx.boom(); break; }
+        // low bullets reach the guns on the ground
+        if (!s.gone && s.y > GY - 24) for (const g of guns) if (g.alive && Math.abs(sx(g.x) - s.x) < 12) { g.alive = false; s.gone = true; addScore(200, sx(g.x), GY - 30, "#ffd23a"); burst(sx(g.x), GY - 10, "#8a8a8a", 16, 100, 0.6); sfx.boom(); break; }
+      } else if (Math.hypot(pp.x - s.x, pp.y - s.y) < PR) { s.gone = true; die("UN COLPO NEMICO"); }
+    }
+    shots = shots.filter((s) => !s.gone);
+    for (const b of bombs) {
+      b.vy += 300 * dt; b.x += b.vx * dt; b.y += b.vy * dt;
+      if (b.y >= GY - 4) {
+        b.gone = true;
+        const onTarget = target.alive && b.x > target.x - 10 && b.x < target.x + target.w + 10;
+        if (onTarget) {
+          target.alive = false; hit = true; const pts = 2000 + 500 * level;
+          addScore(pts, sx(target.x + target.w / 2), GY - 80, "#ffd23a", `OBIETTIVO DISTRUTTO! ${pts.toLocaleString("it-IT")}`);
+          for (let i = 0; i < 4; i++) burst(sx(target.x) + rnd(0, target.w), GY - rnd(10, 50), pick(["#ff8a3a", "#ffd23a", "#8a8a8a"]), 18, 160, 0.9);
+          sfx.big();
+        } else { burst(sx(b.x), GY - 6, "#8a6a4a", 14, 100, 0.5); sfx.boom(); popups.push({ x: sx(b.x), y: GY - 30, text: "MANCATO!", color: "#ff5a5a", t: 0 }); }
+      }
+    }
+    bombs = bombs.filter((b) => !b.gone);
+  }
+  function update(dt) {
+    clock += dt; sfxN = 0;
+    if (message) { message.t += dt; if (message.t > 2.4) message = null; }
+    for (const p of parts) { p.t += dt; p.x += p.vx * dt - (state === "play" ? SCROLL * dt : 0); p.y += p.vy * dt; p.vy += 80 * dt; }
+    parts = parts.filter((p) => p.t < p.life);
+    for (const p of popups) { p.t += dt; p.y -= 18 * dt; }
+    popups = popups.filter((p) => p.t < 1.4);
+    if (!isPlaying()) return;
+    if (state === "intro") { stateT -= dt; if (stateT <= 0) state = "play"; return; }
+    if (state === "dead") {
+      stateT -= dt;
+      if (stateT <= 0) {
+        if (lives <= 0) { gameOver(); return; }
+        // back a little, the bomb (if picked up) comes back with you
+        const hadBomb = P.bomb;
+        spawnPlayer(); P.bomb = hadBomb && target.alive; foes = []; shots = []; bombs = []; spawnT = 2; state = "play";
+      }
+      return;
+    }
+    if (state === "clear") { stateT -= dt; wx += SCROLL * dt; if (stateT <= 0) { level++; beginLevel(); } return; }
+    if (window.__bot) window.__bot(dt);
+    wx += SCROLL * dt;
+    for (const c of clouds) { c.x -= SCROLL * 0.3 * c.s * dt; if (c.x < -60) { c.x = W + 40; c.y = TOP + 20 + Math.random() * 120; } }
+    updatePlayer(dt);
+    if (state !== "play") return;
+    updateFoes(dt);
+    if (state !== "play") return;
+    updateShots(dt);
+    if (state === "play" && wx >= LEN - W + 120) {
+      // the end of the run: bonus if the target went up
+      message = { text: hit ? "MISSIONE COMPIUTA!" : "FINE PERCORSO", sub: hit ? "l'obiettivo è distrutto" : "l'obiettivo è rimasto in piedi: niente bonus", t: 0 };
+      sfx.land(); state = "clear"; stateT = 2.6; foes = []; shots = [];
+    }
+  }
+
+  // ---------- Drawing ----------
+  function drawPlane(x, y, rot, col, wing, enemy, propA) {
+    ctx.save(); ctx.translate(x, y); ctx.rotate(rot); if (enemy) ctx.scale(-1, 1);
+    ctx.fillStyle = col; ctx.beginPath(); ctx.ellipse(0, 0, 13, 4.5, 0, 0, TAU); ctx.fill();
+    ctx.fillStyle = wing; ctx.fillRect(-4, -8, 9, 3); ctx.fillRect(-4, 4, 9, 3);
+    ctx.strokeStyle = "#3a2a1a"; ctx.lineWidth = 1; ctx.beginPath(); ctx.moveTo(-2, -5); ctx.lineTo(-2, 4); ctx.moveTo(3, -5); ctx.lineTo(3, 4); ctx.stroke();
+    ctx.fillStyle = wing; ctx.beginPath(); ctx.moveTo(-12, 0); ctx.lineTo(-16, -6); ctx.lineTo(-10, -1); ctx.closePath(); ctx.fill();
+    ctx.fillStyle = "#3a2a1a"; ctx.beginPath(); ctx.arc(1, -3, 2.5, Math.PI, TAU); ctx.fill();
+    // propeller
+    ctx.strokeStyle = "rgba(220,220,220,0.8)"; ctx.lineWidth = 1.5; const pl = Math.abs(Math.sin(propA)) * 7; ctx.beginPath(); ctx.moveTo(14, -pl); ctx.lineTo(14, pl); ctx.stroke();
+    ctx.restore();
+  }
+  function drawWorld() {
+    const g = ctx.createLinearGradient(0, TOP, 0, GY);
+    g.addColorStop(0, "#3a8ad8"); g.addColorStop(1, "#a8d8f0");
+    ctx.fillStyle = g; ctx.fillRect(0, TOP, W, GY - TOP);
+    for (const c of clouds) { ctx.fillStyle = "rgba(255,255,255,0.75)"; ctx.beginPath(); ctx.arc(c.x, c.y, 14 * c.s, 0, TAU); ctx.arc(c.x + 16 * c.s, c.y - 6 * c.s, 16 * c.s, 0, TAU); ctx.arc(c.x + 34 * c.s, c.y, 12 * c.s, 0, TAU); ctx.fill(); }
+    // far hills (parallax)
+    ctx.fillStyle = "#7ab06a"; ctx.beginPath(); ctx.moveTo(0, GY); for (let x = 0; x <= W; x += 20) ctx.lineTo(x, GY - 30 - Math.sin((x + wx * 0.4) * 0.012) * 16); ctx.lineTo(W, GY); ctx.fill();
+    for (const d of decor) {
+      const x = sx(d.x); if (x < -60 || x > W + 60) continue;
+      if (d.k === "albero") { ctx.fillStyle = "#6a4a2a"; ctx.fillRect(x - 2, GY - 14 * d.s, 4, 14 * d.s); ctx.fillStyle = "#3a8a3a"; ctx.beginPath(); ctx.arc(x, GY - 18 * d.s, 9 * d.s, 0, TAU); ctx.fill(); }
+      else if (d.k === "casa") { ctx.fillStyle = "#e8d8b8"; ctx.fillRect(x - 10, GY - 16, 20, 16); ctx.fillStyle = "#c84a3a"; ctx.beginPath(); ctx.moveTo(x - 13, GY - 16); ctx.lineTo(x, GY - 26); ctx.lineTo(x + 13, GY - 16); ctx.fill(); ctx.fillStyle = "#5a8ab8"; ctx.fillRect(x - 4, GY - 12, 6, 5); }
+      else { ctx.fillStyle = "#5a9a4a"; ctx.beginPath(); ctx.ellipse(x, GY, 30 * d.s, 12 * d.s, 0, Math.PI, TAU); ctx.fill(); }
+    }
+    // the bomb pad
+    const bx = sx(pickup.x);
+    if (bx > -40 && bx < W + 40) {
+      ctx.fillStyle = "#8a8a8a"; ctx.fillRect(bx - 18, GY - 8, 36, 8); ctx.fillStyle = "#ffd23a"; ctx.fillRect(bx - 18, GY - 8, 36, 2);
+      if (!pickup.taken) { ctx.fillStyle = "#2a2a2a"; ctx.beginPath(); ctx.ellipse(bx, GY - 14, 10, 5, 0, 0, TAU); ctx.fill(); ctx.fillRect(bx - 14, GY - 17, 4, 6); ctx.fillStyle = "#ffd23a"; ctx.font = "900 9px system-ui"; ctx.textAlign = "center"; ctx.fillText("BOMBA ↓", bx, GY - 30 + Math.sin(clock * 5) * 2); }
+    }
+    // the target: a factory with a big chimney
+    const tx = sx(target.x);
+    if (tx > -100 && tx < W + 40) {
+      if (target.alive) {
+        ctx.fillStyle = "#6a6a72"; ctx.fillRect(tx, GY - target.h, target.w, target.h); ctx.fillStyle = "#4a4a52"; ctx.fillRect(tx + target.w - 16, GY - target.h - 26, 12, 26);
+        ctx.fillStyle = "#3a3a42"; for (let i = 0; i < 3; i++) { ctx.beginPath(); ctx.moveTo(tx + i * 18, GY - target.h); ctx.lineTo(tx + i * 18 + 9, GY - target.h - 10); ctx.lineTo(tx + i * 18 + 18, GY - target.h); ctx.fill(); }
+        ctx.fillStyle = "#ffd23a"; for (let i = 0; i < 3; i++) ctx.fillRect(tx + 8 + i * 20, GY - 30, 8, 8);
+        ctx.strokeStyle = `rgba(255,60,60,${0.5 + 0.5 * Math.sin(clock * 6)})`; ctx.lineWidth = 2; ctx.strokeRect(tx - 6, GY - target.h - 32, target.w + 12, target.h + 32);
+        ctx.fillStyle = "#ff3a3a"; ctx.font = "900 9px system-ui"; ctx.textAlign = "center"; ctx.fillText("OBIETTIVO", tx + target.w / 2, GY - target.h - 38);
+      } else { ctx.fillStyle = "#4a4a4a"; ctx.fillRect(tx, GY - 12, target.w, 12); ctx.fillStyle = "rgba(80,80,80,0.5)"; ctx.beginPath(); ctx.arc(tx + 30, GY - 30 - Math.sin(clock) * 4, 16, 0, TAU); ctx.fill(); }
+    }
+    for (const gn of guns) {
+      const x = sx(gn.x); if (x < -30 || x > W + 30) continue;
+      if (!gn.alive) { ctx.fillStyle = "#3a3a3a"; ctx.fillRect(x - 9, GY - 4, 18, 4); continue; }
+      ctx.fillStyle = "#5a6a3a"; ctx.fillRect(x - 10, GY - 9, 20, 9); ctx.beginPath(); ctx.arc(x, GY - 9, 7, Math.PI, TAU); ctx.fill();
+      const pp = planePos(), a = Math.atan2(pp.y - (GY - 12), pp.x - x);
+      ctx.strokeStyle = "#3a4a2a"; ctx.lineWidth = 3; ctx.beginPath(); ctx.moveTo(x, GY - 12); ctx.lineTo(x + Math.cos(a) * 13, GY - 12 + Math.sin(a) * 13); ctx.stroke();
+      if (gn.flash > 0) { ctx.fillStyle = "#ffd23a"; ctx.beginPath(); ctx.arc(x + Math.cos(a) * 15, GY - 12 + Math.sin(a) * 15, 3 + Math.sin(clock * 40) * 1.5, 0, TAU); ctx.fill(); }
+    }
+    ctx.fillStyle = "#6a8a3a"; ctx.fillRect(0, GY, W, H - GY); ctx.fillStyle = "#4a6a2a"; for (let x = -((wx * 1) % 24); x < W; x += 24) ctx.fillRect(x, GY + 4, 12, 3);
+  }
+  function drawHud() {
+    ctx.fillStyle = "rgba(10,20,40,0.92)"; ctx.fillRect(0, 0, W, TOP);
+    ctx.textBaseline = "middle"; ctx.textAlign = "left";
+    const x0 = touchMode ? 130 : 10;
+    ctx.fillStyle = "#ffffff"; ctx.font = "900 15px system-ui"; ctx.fillText(score.toLocaleString("it-IT"), x0, 14);
+    ctx.fillStyle = "#b8d0e8"; ctx.font = "700 9px system-ui"; ctx.fillText(`REC ${Math.max(bestCache, score).toLocaleString("it-IT")}`, x0 + 80, 9);
+    ctx.fillStyle = "#ff6a3a"; ctx.font = "900 10px system-ui"; ctx.fillText(`MISSIONE ${level}`, x0 + 80, 21);
+    // progress: the bomb pad and the target along the way
+    const bx = x0 + 170, bw = 150, k = clamp(wx / (LEN - W + 120), 0, 1);
+    ctx.fillStyle = "#2a3a5a"; ctx.fillRect(bx, 12, bw, 4);
+    ctx.fillStyle = pickup.taken ? "#5a5a5a" : "#ffd23a"; ctx.fillRect(bx + bw * clamp((pickup.x - 120) / (LEN - W + 120), 0, 1) - 2, 9, 4, 10);
+    ctx.fillStyle = target.alive ? "#ff3a3a" : "#5a5a5a"; ctx.fillRect(bx + bw * clamp((target.x - 120) / (LEN - W + 120), 0, 1) - 2, 9, 4, 10);
+    ctx.fillStyle = "#ffffff"; ctx.beginPath(); ctx.arc(bx + bw * k, 14, 3.5, 0, TAU); ctx.fill();
+    ctx.fillStyle = P && P.bomb ? "#ffd23a" : "#6a7a9a"; ctx.font = "800 9px system-ui"; ctx.fillText(P && P.bomb ? "BOMBA A BORDO" : hit ? "OBIETTIVO ✓" : "", bx + bw + 8, 14);
+    const lx = touchMode ? W - 60 : W - 12;
+    for (let i = 0; i < Math.min(lives - (state === "dead" ? 0 : 1), 6); i++) drawPlane(lx - i * 22, 14, 0, "#ff6a3a", "#ffd23a", false, 0);
+    ctx.textBaseline = "alphabetic";
+  }
+  function draw() {
+    ctx.setTransform(pxRatio, 0, 0, pxRatio, 0, 0);
+    if (!P) { beginLevel(); state = "menu"; message = null; foes = [{ x: 470, y: 120, kind: "caccia", t: 0 }, { x: 520, y: 150, kind: "caccia", t: 1 }]; }
+    drawWorld();
+    for (const f of foes) drawPlane(f.x, f.y, f.kind === "tuffo" ? -0.2 : 0, f.kind === "tuffo" ? "#5a6aaa" : "#4a8a4a", f.kind === "tuffo" ? "#3a4a8a" : "#2a6a2a", true, clock * 40);
+    for (const b of bombs) { const x = sx(b.x); ctx.save(); ctx.translate(x, b.y); ctx.rotate(Math.atan2(b.vy, b.vx)); ctx.fillStyle = "#2a2a2a"; ctx.beginPath(); ctx.ellipse(0, 0, 7, 3.5, 0, 0, TAU); ctx.fill(); ctx.fillRect(-9, -3, 3, 6); ctx.restore(); }
+    if (state !== "menu" && (state !== "dead" || false)) {
+      const pp = planePos();
+      if (!(P.safe > 0 && Math.floor(clock * 10) % 2)) {
+        const rot = P.loop > 0 ? -(1 - P.loop / LOOP_T) * TAU : clamp((stick.y + (keys.down ? 1 : 0) - (keys.up ? 1 : 0)) * 0.25, -0.3, 0.3);
+        drawPlane(pp.x, pp.y, rot, "#ff6a3a", "#ffd23a", false, P.prop);
+        if (P.bomb) { ctx.fillStyle = "#2a2a2a"; ctx.beginPath(); ctx.ellipse(pp.x, pp.y + 8, 6, 3, 0, 0, TAU); ctx.fill(); }
+        if (P.loop > 0) { ctx.strokeStyle = "rgba(255,255,255,0.5)"; ctx.lineWidth = 2; ctx.beginPath(); ctx.arc(P.x, P.y - LOOP_R, LOOP_R, 0, TAU); ctx.stroke(); }
+      }
+    }
+    for (const s of shots) { ctx.fillStyle = s.by === "P" ? "#fff6a0" : "#ff3a3a"; if (s.by === "P") ctx.fillRect(s.x - 4, s.y - 1, 8, 2); else { ctx.beginPath(); ctx.arc(s.x, s.y, 3, 0, TAU); ctx.fill(); } }
+    for (const p of parts) { ctx.globalAlpha = Math.max(0, 1 - p.t / p.life); ctx.fillStyle = p.c; ctx.fillRect(p.x - 1.5, p.y - 1.5, 3, 3); }
+    ctx.globalAlpha = 1;
+    for (const p of popups) {
+      ctx.globalAlpha = Math.max(0, 1 - p.t / 1.4);
+      ctx.textAlign = "center"; ctx.font = "900 11px system-ui";
+      ctx.lineWidth = 3; ctx.strokeStyle = "#0a1a2e"; ctx.strokeText(p.text, p.x, p.y); ctx.fillStyle = p.color; ctx.fillText(p.text, p.x, p.y);
+    }
+    ctx.globalAlpha = 1;
+    if (state === "menu") return;
+    drawHud();
+    if (message) {
+      ctx.globalAlpha = Math.min(1, (2.4 - message.t) * 2);
+      ctx.textAlign = "center"; ctx.font = "italic 900 24px system-ui"; ctx.fillStyle = "#ff6a3a";
+      ctx.lineWidth = 5; ctx.strokeStyle = "#0a1a2e"; ctx.strokeText(message.text, W / 2, 90); ctx.fillText(message.text, W / 2, 90);
+      if (message.sub) { ctx.font = "800 12px system-ui"; ctx.fillStyle = "#ffffff"; ctx.strokeText(message.sub, W / 2, 109); ctx.fillText(message.sub, W / 2, 109); }
+      ctx.globalAlpha = 1;
+    }
+    if (state === "dead") {
+      ctx.textAlign = "center"; ctx.font = "900 17px system-ui"; ctx.fillStyle = "#ff3a3a"; ctx.lineWidth = 4; ctx.strokeStyle = "#ffffff";
+      const t = lastBy === "IL TERRENO" ? "SCHIANTATO AL SUOLO!" : `ABBATTUTO DA ${lastBy}!`;
+      ctx.strokeText(t, W / 2, 180); ctx.fillText(t, W / 2, 180);
+    }
+  }
+
+  // ---------- Loop ----------
+  const STEP = 1 / 120;
+  let last = performance.now(), acc = 0;
+  function frame(now) {
+    const dt = Math.min(0.1, (now - last) / 1000);
+    last = now;
+    if (isPlaying()) {
+      acc += dt;
+      while (acc >= STEP && isPlaying()) { update(STEP); acc -= STEP; }
+    } else { acc = 0; update(dt); }
+    draw();
+    requestAnimationFrame(frame);
+  }
+  syncControls();
+  showTitle();
+  requestAnimationFrame(frame);
+})();
+</script>
+<script src="../../shared/iniziali.js" data-record="biplano-best-" data-kind="score"></script>
+</body>
+</html>
