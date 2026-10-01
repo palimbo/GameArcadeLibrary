@@ -4,7 +4,7 @@ Raccolta di giochi arcade per il browser. Ogni gioco è un singolo file HTML sen
 
 ## 🕹️ Sala Giochi — `index.html`
 
-Apri `index.html` nella cartella principale per la pagina di raccolta: mostra tutti i 103 giochi con copertina, genere, comandi e i tuoi record per ogni difficoltà (Facile, Normale, Difficile). Tocca «Gioca» per avviare un gioco; in ogni gioco il pulsante «← Sala Giochi» in alto a sinistra (visibile nei menu) riporta alla raccolta.
+Apri `index.html` nella cartella principale per la pagina di raccolta: mostra tutti i 104 giochi con copertina, genere, comandi e i tuoi record per ogni difficoltà (Facile, Normale, Difficile). Tocca «Gioca» per avviare un gioco; in ogni gioco il pulsante «← Sala Giochi» in alto a sinistra (visibile nei menu) riporta alla raccolta.
 
 **Iniziali del record:** quando batti un record compare la schermata da sala giochi per inserire le tue tre iniziali (frecce ↑ ↓ per cambiare lettera, ← → per spostarti, oppure scrivile direttamente; su telefono i tasti ▲ ▼ e OK). Le iniziali vengono salvate insieme al record e compaiono nei menu del gioco e nella Sala Giochi. Il codice è condiviso da tutti i giochi in `shared/iniziali.js`.
 
@@ -1603,3 +1603,16 @@ Labirinto a scorrimento in stile *Tutankham*. Un esploratore entra in una tomba 
 - **Touch:** levetta per muoverti, pulsanti FUOCO e LAMPO
 
 Per giocare apri `games/tomba-del-faraone/index.html` nel browser.
+
+### 🌅 Orizzonte di Fuoco — `games/orizzonte-di-fuoco/index.html`
+
+Sparatutto in prospettiva in stile *Juno First*. La nave corre su una griglia luminosa che si perde all'orizzonte: le ondate nemiche arrivano dal fondo, piccole e lontane, e diventano sempre più grandi man mano che si avvicinano. Puoi spostarti di lato, accelerare, frenare e anche tornare indietro per guadagnare tempo.
+
+- **Nemici:** dischi che ondeggiano e, quando sono vicini, si lanciano nella tua corsia (100); falchi che restano sospesi davanti a te e poi si tuffano (150); torri corazzate che resistono a 4 colpi e sparano a ventaglio (500, dalla seconda ondata); mine ferme sul terreno (50). Chi ti supera torna di nuovo dall'orizzonte
+- **Astronauta:** ogni tanto ne compare uno sulla griglia; raccoglilo e per 6 secondi il tempo rallenta e ogni abbattimento vale il doppio del precedente (×2, ×4, ×8, fino a ×16)
+- **Ondate:** finisce quando hai abbattuto tutti i velivoli (1.000 × ondata). A ogni ondata i nemici sono più numerosi, più veloci e sparano di più. Vita extra a 30.000 punti e poi ogni 50.000
+- **Difficoltà:** Facile (5 vite, nemici lenti e meno colpi), Normale (3 vite), Difficile (3 vite, nemici svelti, molti più colpi); record separati per ogni difficoltà
+- **Comandi:** frecce o `WASD` (destra/sinistra per spostarti, su per accelerare, giù per tornare indietro) · tieni premuto `Spazio`, `J`, `Z` o `X` per sparare · `P` pausa
+- **Touch:** levetta per muoverti e regolare la velocità, tieni premuto FUOCO
+
+Per giocare apri `games/orizzonte-di-fuoco/index.html` nel browser.
