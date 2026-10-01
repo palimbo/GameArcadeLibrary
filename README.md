@@ -4,7 +4,7 @@ Raccolta di giochi arcade per il browser. Ogni gioco è un singolo file HTML sen
 
 ## 🕹️ Sala Giochi — `index.html`
 
-Apri `index.html` nella cartella principale per la pagina di raccolta: mostra tutti i 107 giochi con copertina, genere, comandi e i tuoi record per ogni difficoltà (Facile, Normale, Difficile). Tocca «Gioca» per avviare un gioco; in ogni gioco il pulsante «← Sala Giochi» in alto a sinistra (visibile nei menu) riporta alla raccolta.
+Apri `index.html` nella cartella principale per la pagina di raccolta: mostra tutti i 108 giochi con copertina, genere, comandi e i tuoi record per ogni difficoltà (Facile, Normale, Difficile). Tocca «Gioca» per avviare un gioco; in ogni gioco il pulsante «← Sala Giochi» in alto a sinistra (visibile nei menu) riporta alla raccolta.
 
 **Iniziali del record:** quando batti un record compare la schermata da sala giochi per inserire le tue tre iniziali (frecce ↑ ↓ per cambiare lettera, ← → per spostarti, oppure scrivile direttamente; su telefono i tasti ▲ ▼ e OK). Le iniziali vengono salvate insieme al record e compaiono nei menu del gioco e nella Sala Giochi. Il codice è condiviso da tutti i giochi in `shared/iniziali.js`.
 
@@ -1661,3 +1661,18 @@ Piattaforme in stile *Popeye*. Dal balcone di una casa sul porto una ragazza lan
 - **Touch:** levetta per camminare e salire, pulsante PUGNO
 
 Per giocare apri `games/cuori-dal-cielo/index.html` nel browser.
+
+### 🧼 Bolla Pulita — `games/bolla-pulita/index.html`
+
+Arcade in stile *Bubbles*. Sei una bolla di sapone che scivola in un lavandino visto dall'alto, con il vortice dello scarico che ti tira verso il centro. Mangiando lo sporco diventi più grande, e quando hai ripulito tutto lo scarico si apre: tuffati dentro per passare al lavandino successivo.
+
+- **Lo sporco:** briciole (10), macchie di grasso (20) e formiche che camminano (50). Ogni boccone ti fa crescere: la bolla passa da piccola a media, grande e gigante (i cerchi nell'HUD), e da grande le spuntano gli occhi
+- **Scarafaggi:** escono dallo scarico (prima si vede la testa) e ti inseguono finché sei piccola; da grande scappano loro e li schiacci (300)
+- **Spazzole e lamette:** la spazzola attraversa il lavandino pulendo lo sporco al posto tuo e ti scoppia finché non sei grande (200); la lametta gira impazzita e rimbalza sui bordi, e si schiaccia solo da gigante (500). Le spugne (dal terzo lavandino) ti respingono finché sei piccola, poi le schiacci (100)
+- **Scatto:** uno slancio veloce nella direzione della levetta, poi si ricarica (barra gialla nell'HUD)
+- **Lo scarico:** finché c'è sporco la grata è chiusa; ripulito il lavandino entri e prendi 1.000 × il numero del lavandino più 10 per boccone mangiato. Se scoppi rinasci lontano dai nemici, di una taglia più piccola
+- **Difficoltà:** Facile (5 vite, scarafaggi lenti e pochi, vortice debole), Normale (3 vite), Difficile (3 vite, scarafaggi più veloci e numerosi, lamette prima); record separati per ogni difficoltà. Vita extra ogni 30.000 punti
+- **Comandi:** frecce o `WASD` per scivolare · `Spazio`, `J` o `Z` per lo scatto · `P` pausa
+- **Touch:** levetta per scivolare, pulsante SCATTO
+
+Per giocare apri `games/bolla-pulita/index.html` nel browser.

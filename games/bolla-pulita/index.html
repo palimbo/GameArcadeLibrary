@@ -1,0 +1,707 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no, viewport-fit=cover">
+<title>Bolla Pulita</title>
+<style>
+  :root {
+    --bg: #10303e;
+    --fg: #f4f6ee;
+    --muted: #a8d0e0;
+    --pink: #5ac8ff;
+    --yellow: #ffd23a;
+    --red: #ff4a3a;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  html, body {
+    height: 100%;
+    background: var(--bg);
+    color: var(--fg);
+    font-family: system-ui, -apple-system, "Segoe UI", sans-serif;
+    overflow: hidden;
+    user-select: none;
+    -webkit-user-select: none;
+    touch-action: none;
+  }
+  #wrap { position: fixed; inset: 0; display: flex; align-items: center; justify-content: center; }
+  canvas { display: block; touch-action: none; border-radius: 6px; box-shadow: 0 0 0 2px #2a5a6a, 0 10px 40px rgba(0,0,0,0.6); }
+  #pauseBtn {
+    position: fixed; z-index: 3; display: none; right: 10px; top: calc(10px + env(safe-area-inset-top, 0px));
+    font: 700 13px system-ui, sans-serif; color: var(--fg);
+    background: rgba(0, 0, 0, 0.6); border: 1px solid rgba(244, 246, 238, 0.35);
+    border-radius: 8px; padding: 6px 10px; cursor: pointer;
+  }
+  #touch {
+    position: fixed; z-index: 2; display: none; left: 12px; right: 12px;
+    bottom: calc(14px + env(safe-area-inset-bottom, 0px));
+    justify-content: space-between; align-items: flex-end; pointer-events: none;
+  }
+  /* thumb stick: glide around the sink; SCATTO dashes */
+  #touch .stick { position: relative; width: 136px; height: 136px; border-radius: 50%; pointer-events: auto; touch-action: none;
+    border: 2px solid rgba(90, 200, 255, 0.6); background: radial-gradient(circle, rgba(90,200,255,0.14), rgba(90,200,255,0.04)); }
+  #touch .stick .knob { position: absolute; left: 50%; top: 50%; width: 58px; height: 58px; margin: -29px 0 0 -29px; border-radius: 50%;
+    background: rgba(90, 200, 255, 0.45); border: 2px solid rgba(255,255,255,0.7); box-shadow: 0 4px 10px rgba(0,0,0,0.4); pointer-events: none; }
+  #touch .stick .ring { position: absolute; inset: 10px; border-radius: 50%; border: 1px dashed rgba(244,246,238,0.25); pointer-events: none; }
+  #touch .jump { width: 96px; height: 96px; border-radius: 50%; pointer-events: auto; touch-action: none; color: var(--fg);
+    font: 800 13px system-ui, sans-serif; letter-spacing: 1px; border: 2px solid rgba(255, 176, 58, 0.9); background: rgba(255, 176, 58, 0.22); }
+  #touch .jump.on { background: rgba(255, 176, 58, 0.55); }
+  #touch.small .stick { width: 112px; height: 112px; }
+  #touch.small .stick .knob { width: 48px; height: 48px; margin: -24px 0 0 -24px; }
+  #touch.small .jump { width: 80px; height: 80px; font-size: 11px; }
+  #overlay {
+    position: fixed; inset: 0; z-index: 5;
+    display: flex; flex-direction: column; align-items: center; justify-content: flex-start;
+    gap: 14px; padding: 16px; text-align: center; overflow-y: auto;
+    background: rgba(16, 48, 62, 0.93);
+  }
+  #overlay > :first-child { margin-top: auto; }
+  #overlay > :last-child { margin-bottom: auto; }
+  #overlay.hidden { display: none; }
+  #homeLink {
+    position: fixed; top: calc(10px + env(safe-area-inset-top, 0px)); left: 10px; z-index: 6;
+    font: 600 13px/1 system-ui, sans-serif; color: #fff; text-decoration: none;
+    padding: 8px 12px; border-radius: 999px; background: rgba(0,0,0,.55);
+    border: 1px solid rgba(255,255,255,.25);
+  }
+  #homeLink:hover { background: rgba(0,0,0,.8); }
+  #overlay.hidden ~ #homeLink { display: none; }
+  @media (max-width: 700px) { #overlay { padding-top: calc(52px + env(safe-area-inset-top, 0px)); } }
+  #overlay h1 { font-size: clamp(32px, 10vw, 58px); font-weight: 900; font-style: italic; letter-spacing: 1px; color: var(--pink);
+    text-shadow: 3px 3px 0 #1a4a6a, 0 0 22px rgba(90,200,255,0.35); }
+  #overlay h2 { font-size: clamp(26px, 7vw, 42px); font-weight: 900; letter-spacing: 2px; color: var(--pink); }
+  #overlay h2.lose { color: var(--red); }
+  #overlay p { max-width: 540px; font-size: clamp(13px, 3.4vw, 16px); line-height: 1.55; }
+  #overlay p.muted { color: var(--muted); }
+  #overlay .pts { display: grid; grid-template-columns: repeat(2, auto); gap: 4px 18px; font-size: 13px; color: var(--muted); text-align: left; max-width: 560px; }
+  #overlay .pts b { color: var(--fg); }
+  #overlay .diff { display: flex; gap: 10px; flex-wrap: wrap; justify-content: center; }
+  #overlay button {
+    font: 800 15px system-ui, sans-serif; letter-spacing: 1.5px; color: var(--fg);
+    background: transparent; cursor: pointer;
+    border: 2px solid rgba(244,246,238,0.3); border-radius: 10px; padding: 9px 16px;
+  }
+  #overlay .diff button.on { border-color: var(--c); color: var(--c); box-shadow: 0 0 12px var(--c); }
+  #overlay button.start { border-color: var(--pink); color: #04202e; background: var(--pink); padding: 11px 30px; box-shadow: 0 4px 0 #2a7aa8; }
+  @media (max-height: 560px) {
+    #overlay { gap: 8px; }
+    #overlay h1 { font-size: 30px; }
+    #overlay p { font-size: 13px; line-height: 1.4; }
+    #overlay .help, #overlay .pts { display: none; }
+  }
+</style>
+</head>
+<body>
+<div id="wrap"><canvas id="game"></canvas></div>
+<div id="touch">
+  <div class="stick" aria-label="Levetta"><div class="ring"></div><div class="knob"></div></div>
+  <button type="button" class="jump" aria-label="Scatto">SCATTO</button>
+</div>
+<button id="pauseBtn" type="button" aria-label="Pausa">❚❚</button>
+<div id="overlay"></div>
+<a id="homeLink" href="../../index.html">← Sala Giochi</a>
+
+
+<script>
+(() => {
+  "use strict";
+
+  const W = 640, H = 360, TAU = Math.PI * 2, TOP = 28;
+  // the sink: an oval basin with the drain in the middle
+  const CX = 320, CY = 196, RX = 292, RY = 150, DRAIN = 22;
+  const ACC = 620, VMAX = 230, DRAG = 1.6, DASH_V = 420, DASH_CD = 2.2;
+  const SIZES = [9, 11.5, 14.5, 18];
+  // share of the sink's dirt to eat for each size
+  const GROW = [0, 0.15, 0.4, 0.65];
+  const DIRT = {
+    briciola: { pts: 10, r: 3.5, grow: 1 },
+    grasso: { pts: 20, r: 6, grow: 1.5 },
+    formica: { pts: 50, r: 4, grow: 2 },
+  };
+  const FOES = {
+    scarafaggio: { r: 9, pts: 300, need: 2, name: "UNO SCARAFAGGIO" },
+    spazzola: { r: 12, pts: 200, need: 2, name: "UNA SPAZZOLA" },
+    lametta: { r: 8, pts: 500, need: 3, name: "UNA LAMETTA" },
+    spugna: { r: 12, pts: 100, need: 1, name: "UNA SPUGNA" },
+  };
+
+  const DIFFICULTIES = {
+    facile:    { label: "FACILE",    color: "#7ed87a", desc: "5 vite · scarafaggi lenti e pochi · scarico che tira poco", lives: 5, speed: 0.7, spawn: 0.6, pull: 0.7 },
+    normale:   { label: "NORMALE",   color: "#5ac8ff", desc: "3 vite", lives: 3, speed: 1.12, spawn: 1.15, pull: 1 },
+    difficile: { label: "DIFFICILE", color: "#ff5a5a", desc: "3 vite · scarafaggi svelti e numerosi · lamette prima", lives: 3, speed: 1.35, spawn: 1.6, pull: 1.2 },
+  };
+  const DIFF_IDS = Object.keys(DIFFICULTIES);
+  const DIFF_KEY = "bolla-difficulty";
+  const bestKey = (id) => `bolla-best-${id}`;
+  function store(k, v) { try { localStorage.setItem(k, v); } catch { /* ignore */ } }
+  function load(k) { try { return localStorage.getItem(k); } catch { return null; } }
+  const rnd = (a, b) => a + Math.random() * (b - a);
+  const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
+  const pick = (arr) => arr[Math.floor(Math.random() * arr.length)];
+
+  // ---------- Canvas ----------
+  const canvas = document.getElementById("game");
+  const ctx = canvas.getContext("2d");
+  const wrapEl = document.getElementById("wrap");
+  const overlay = document.getElementById("overlay");
+  const touchEl = document.getElementById("touch");
+  const pauseBtn = document.getElementById("pauseBtn");
+  let pxRatio = 1, touchMode = !!(window.matchMedia && matchMedia("(pointer: coarse)").matches);
+  function resize() {
+    const portrait = window.innerHeight > window.innerWidth;
+    const showTouch = touchMode && isPlaying();
+    touchEl.style.display = showTouch ? "flex" : "none";
+    touchEl.classList.toggle("small", !portrait && window.innerHeight < 480);
+    wrapEl.style.paddingBottom = showTouch && portrait ? "calc(170px + env(safe-area-inset-bottom, 0px))" : "0";
+    let availW = window.innerWidth - 8, availH = window.innerHeight - 8;
+    if (showTouch && portrait) availH -= 170;
+    if (showTouch && !portrait) {
+      const side = Math.max(...[...touchEl.children].map((el) => el.offsetWidth)) + 20;
+      if (window.innerWidth - 2 * side > 200) availW = window.innerWidth - 2 * side;
+    }
+    const s = Math.max(0.2, Math.min(availW / W, availH / H));
+    pxRatio = Math.min(3, s * (window.devicePixelRatio || 1));
+    canvas.style.width = W * s + "px";
+    canvas.style.height = H * s + "px";
+    canvas.width = Math.round(W * pxRatio);
+    canvas.height = Math.round(H * pxRatio);
+  }
+  window.addEventListener("resize", () => syncControls());
+
+  // ---------- Audio ----------
+  let audioCtx = null;
+  function beep(freq, dur, type = "square", vol = 0.04, slide = 0, delay = 0) {
+    if (!audioCtx) return;
+    const t = audioCtx.currentTime + delay;
+    const osc = audioCtx.createOscillator(), gain = audioCtx.createGain();
+    osc.type = type;
+    osc.frequency.setValueAtTime(freq, t);
+    if (slide) osc.frequency.exponentialRampToValueAtTime(Math.max(20, freq + slide), t + dur);
+    gain.gain.setValueAtTime(vol, t);
+    gain.gain.exponentialRampToValueAtTime(0.0001, t + dur);
+    osc.connect(gain).connect(audioCtx.destination);
+    osc.start(t); osc.stop(t + dur + 0.02);
+  }
+  function noise(dur, vol, freq) {
+    if (!audioCtx) return;
+    const len = Math.floor(audioCtx.sampleRate * dur), buf = audioCtx.createBuffer(1, len, audioCtx.sampleRate), d = buf.getChannelData(0);
+    for (let i = 0; i < len; i++) d[i] = (Math.random() * 2 - 1) * (1 - i / len);
+    const src = audioCtx.createBufferSource(), f = audioCtx.createBiquadFilter(), g = audioCtx.createGain();
+    src.buffer = buf; f.type = "bandpass"; f.frequency.value = freq; g.gain.value = vol;
+    src.connect(f).connect(g).connect(audioCtx.destination); src.start();
+  }
+  const arp = (notes, gap, d, type = "square", vol = 0.04) => notes.forEach((f, i) => beep(f, d, type, vol, 0, i * gap));
+  let sfxN = 0, munchN = 0;
+  const lim = (fn) => (...a) => { if (sfxN++ < 6) fn(...a); };
+  const sfx = {
+    eat: lim(() => beep(900 + (munchN++ % 5) * 90, 0.04, "sine", 0.03, 200)),
+    grow: lim(() => arp([523, 659, 784, 1047], 0.05, 0.1, "sine", 0.05)),
+    squash: lim(() => { noise(0.15, 0.12, 700); beep(300, 0.12, "square", 0.03, -200); }),
+    bump: lim(() => beep(160, 0.1, "triangle", 0.04, -40)),
+    dash: lim(() => { noise(0.2, 0.06, 2500); beep(500, 0.15, "sine", 0.03, 400); }),
+    roach: lim(() => noise(0.08, 0.05, 3500)),
+    razor: lim(() => beep(2400, 0.12, "sawtooth", 0.015, -1200)),
+    open: () => { for (let i = 0; i < 6; i++) beep(300 + i * 80, 0.15, "sine", 0.04, 0, i * 0.06); },
+    pop: () => { noise(0.25, 0.2, 2000); arp([784, 523, 392, 262], 0.08, 0.14, "sine", 0.05); },
+    down: () => { for (let i = 0; i < 10; i++) beep(900 - i * 70, 0.1, "sine", 0.04, 0, i * 0.05); },
+    over: () => arp([523, 466, 415, 392, 330, 262], 0.15, 0.24, "triangle", 0.05),
+  };
+
+  // ---------- State ----------
+  let difficulty = DIFFICULTIES[load(DIFF_KEY)] ? load(DIFF_KEY) : "normale";
+  let diff = DIFFICULTIES[difficulty];
+  let state = "menu", menu = null, pausedFrom = null, stateT = 0, clock = 0;
+  let score = 0, lives = 3, level = 1, bestCache = 0, nextLife = 30000;
+  let P = null, dirt = [], foes = [], parts = [], popups = [], message = null;
+  let dirtTotal = 0, eatenByMe = 0, growth = 0, stage = 0, open = false, spawnT = 0, razorT = 0, brushT = 0, lastBy = "", sinkT = 0;
+  let dashPressed = false;
+  const keys = { left: false, right: false, up: false, down: false };
+  const stick = { x: 0, y: 0 };
+  const drops = Array.from({ length: 22 }, (_, i) => ({ a: i * 2.39, d: 0.3 + ((i * 37) % 60) / 100, s: 1 + (i % 3) }));
+
+  // ---------- The basin ----------
+  // how far out a point is: 1 on the rim of an oval shrunk by m
+  const ovalK = (x, y, m) => ((x - CX) / (RX - m)) ** 2 + ((y - CY) / (RY - m)) ** 2;
+  function keepIn(o, r, bounce) {
+    const k = ovalK(o.x, o.y, r);
+    if (k <= 1) return false;
+    const s = 1 / Math.sqrt(k);
+    o.x = CX + (o.x - CX) * s; o.y = CY + (o.y - CY) * s;
+    // the normal of the oval at that point
+    let nx = (o.x - CX) / ((RX - r) ** 2), ny = (o.y - CY) / ((RY - r) ** 2); const nl = Math.hypot(nx, ny) || 1; nx /= nl; ny /= nl;
+    const vn = o.vx * nx + o.vy * ny;
+    if (vn > 0) { o.vx -= (1 + bounce) * vn * nx; o.vy -= (1 + bounce) * vn * ny; }
+    return true;
+  }
+  function spot(minD, margin = 20) {
+    for (let i = 0; i < 60; i++) {
+      const a = rnd(0, TAU), d = Math.sqrt(Math.random()), x = CX + Math.cos(a) * (RX - margin) * d, y = CY + Math.sin(a) * (RY - margin) * d;
+      if (Math.hypot(x - CX, y - CY) < DRAIN + 30) continue;
+      if (P && Math.hypot(x - P.x, y - P.y) < minD) continue;
+      return { x, y };
+    }
+    return { x: CX + RX * 0.7, y: CY };
+  }
+  function scatterDirt() {
+    dirt = [];
+    const n = Math.min(70, 34 + level * 5);
+    for (let i = 0; i < n; i++) {
+      const r = Math.random(), kind = r < 0.55 ? "briciola" : r < 0.85 ? "grasso" : "formica";
+      const p = spot(0, 18);
+      dirt.push({ kind, x: p.x, y: p.y, a: rnd(0, TAU), t: rnd(0, 5) });
+    }
+    dirtTotal = dirt.reduce((s, d) => s + DIRT[d.kind].grow, 0);
+  }
+
+  // ---------- Flow ----------
+  const isPlaying = () => ["intro", "play", "dead", "clear"].includes(state);
+  function startGame() {
+    if (!audioCtx) { try { audioCtx = new (window.AudioContext || window.webkitAudioContext)(); } catch { audioCtx = null; } }
+    if (audioCtx && audioCtx.state === "suspended") audioCtx.resume();
+    score = 0; lives = diff.lives; level = 1; nextLife = 30000;
+    bestCache = parseInt(load(bestKey(difficulty)), 10) || 0;
+    beginLevel();
+    menu = null;
+    overlay.classList.add("hidden");
+    syncControls();
+    last = performance.now();
+  }
+  function beginLevel() {
+    foes = [];
+    spawnBubble();
+    scatterDirt();
+    open = false; eatenByMe = 0; growth = 0; stage = 0;
+    spawnT = 5; brushT = rnd(6, 10); razorT = level >= (diff.spawn < 0.9 ? 3 : 2) ? rnd(8, 13) : 1e9;
+    if (level >= 3) foes.push(makeFoe("spugna"));
+    message = { text: `LAVANDINO ${level}`, sub: "mangia lo sporco, cresci, e poi giù per lo scarico!", t: 0 };
+    state = "intro"; stateT = 1.5;
+  }
+  function spawnBubble() {
+    // the spot along the basin furthest from whatever is crawling about
+    let x = CX - RX * 0.6, y = CY, best = -1;
+    for (let i = 0; i < 8; i++) {
+      const a = i * TAU / 8, cx = CX + Math.cos(a) * RX * 0.6, cy = CY + Math.sin(a) * RY * 0.6;
+      const d = Math.min(1e9, ...foes.filter((f) => f.kind !== "spugna").map((f) => Math.hypot(f.x - cx, f.y - cy)));
+      if (d > best) { best = d; x = cx; y = cy; }
+    }
+    P = { x, y, vx: 0, vy: 0, safe: 2, dash: 0, dashT: 0, wob: 0 };
+  }
+  const radius = () => SIZES[stage];
+  function makeFoe(kind) {
+    const f = { kind, vx: 0, vy: 0, t: 0, hp: 1, a: rnd(0, TAU) };
+    if (kind === "scarafaggio") { f.x = CX + rnd(-6, 6); f.y = CY + rnd(-6, 6); f.pop = 0.8; f.turn = 0; }
+    else if (kind === "spazzola" || kind === "lametta") {
+      const a = rnd(0, TAU); f.x = CX + Math.cos(a) * (RX - 20); f.y = CY + Math.sin(a) * (RY - 20);
+      const b = a + Math.PI + rnd(-0.5, 0.5), v = kind === "lametta" ? 170 : 75;
+      f.vx = Math.cos(b) * v; f.vy = Math.sin(b) * v; f.life = kind === "lametta" ? rnd(8, 11) : rnd(9, 13);
+    } else { const p = spot(150); f.x = p.x; f.y = p.y; f.vx = rnd(-20, 20); f.vy = rnd(-15, 15); }
+    return f;
+  }
+  function addScore(n, x, y, color = "#ffffff", text) {
+    score += n;
+    if (score >= nextLife) { lives++; nextLife += 30000; arp([523, 659, 784, 1047, 1319], 0.07, 0.12); popups.push({ x: W / 2, y: 70, text: "VITA EXTRA!", color: "#5ac8ff", t: 0 }); }
+    if (x !== undefined) popups.push({ x, y, text: text || String(n), color, t: 0 });
+  }
+  function burst(x, y, c, n = 12, sp = 110, life = 0.6) {
+    for (let k = 0; k < n; k++) { const a = Math.random() * TAU, s = sp * rnd(0.3, 1); parts.push({ x, y, vx: Math.cos(a) * s, vy: Math.sin(a) * s, t: 0, life: life * rnd(0.6, 1.2), c }); }
+  }
+  function die(by) {
+    if (state !== "play" || P.safe > 0) return;
+    lives--; lastBy = by; sfx.pop();
+    burst(P.x, P.y, "#c8f0ff", 24, 140, 0.7);
+    state = "dead"; stateT = 1.8;
+  }
+  function levelDone() {
+    const b = 1000 * level + eatenByMe * 10;
+    addScore(b);
+    message = { text: "LAVANDINO PULITO!", sub: `bonus ${b.toLocaleString("it-IT")}`, t: 0 };
+    sfx.down(); state = "clear"; stateT = 2.6; sinkT = 0;
+  }
+  function gameOver() {
+    state = "over";
+    const prev = parseInt(load(bestKey(difficulty)), 10) || 0;
+    const record = score > prev;
+    if (record) store(bestKey(difficulty), String(score));
+    sfx.over();
+    menu = () => showOverlay(
+      `<h2 class="lose">${lives <= 0 ? "VITE FINITE!" : "PARTITA FINITA"}</h2>
+       <p>Punteggio: <b>${score.toLocaleString("it-IT")}</b> · lavandino ${level} · ${diff.label}</p>
+       ${record ? "<p style='color:var(--pink)'>★ NUOVO RECORD! ★</p>" : ""}
+       ${difficultyHTML()}
+       <button class="start" data-start>GIOCA ANCORA</button>`
+    );
+    menu();
+    syncControls();
+  }
+  function togglePause() {
+    if (isPlaying()) {
+      pausedFrom = state; state = "paused";
+      showOverlay(`<h2>PAUSA</h2><button class="start" data-resume>CONTINUA</button><p class="muted">Premi P per continuare</p>`);
+    } else if (state === "paused") {
+      state = pausedFrom; overlay.classList.add("hidden"); last = performance.now();
+    }
+    syncControls();
+  }
+  // the pause menu can end the game (shared/iniziali.js): it ends here the usual way, saving the record
+  window.addEventListener("sala:termina", () => { if (state !== "paused") return; state = pausedFrom; overlay.classList.add("hidden"); gameOver(); syncControls(); });
+  function syncControls() {
+    pauseBtn.style.display = isPlaying() && touchMode ? "block" : "none";
+    resize();
+  }
+  pauseBtn.addEventListener("click", () => togglePause());
+  function showOverlay(html) { overlay.innerHTML = html; overlay.classList.remove("hidden"); }
+  function difficultyHTML() {
+    const buttons = DIFF_IDS.map((id) => {
+      const d = DIFFICULTIES[id];
+      return `<button type="button" data-diff="${id}" class="${id === difficulty ? "on" : ""}" style="--c:${d.color}">${d.label}</button>`;
+    }).join("");
+    const best = parseInt(load(bestKey(difficulty)), 10);
+    return `<div class="diff">${buttons}</div><p class="muted">${diff.desc}${best ? ` · Record: ${best.toLocaleString("it-IT")}` : ""}</p>`;
+  }
+  function setDifficulty(id) { if (!DIFFICULTIES[id]) return; difficulty = id; diff = DIFFICULTIES[id]; store(DIFF_KEY, id); if (menu) menu(); }
+  function showTitle() {
+    menu = showTitle;
+    showOverlay(
+      `<h1>BOLLA PULITA</h1>
+       <p>Sei una bolla di sapone in un lavandino sporco: scivola, mangia briciole, macchie di grasso e formiche, e diventa sempre più grande. Attenta agli scarafaggi che escono dallo scarico e alle lamette! Quando sei grande abbastanza li schiacci. Pulito il lavandino, lo scarico si apre: tuffati dentro!</p>
+       <div class="pts">
+         <span><b>Sporco</b></span><span>briciola 10 · grasso 20 · formica 50 · ogni boccone ti fa crescere</span>
+         <span><b>Crescita</b></span><span>media: schiacci le spugne · grande: scarafaggi e spazzole · gigante: anche le lamette</span>
+         <span><b>Nemici</b></span><span>spugna 100 · spazzola 200 · scarafaggio 300 · lametta 500</span>
+         <span><b>Scarico</b></span><span>1.000 × lavandino + 10 per boccone · vita extra ogni 30.000</span>
+       </div>
+       ${touchMode
+         ? `<p class="muted help">Levetta per scivolare · SCATTO per uno slancio (poi si ricarica)</p>`
+         : `<p class="muted help">Frecce o WASD per scivolare · SPAZIO, J o Z per lo scatto · P pausa</p>`}
+       ${difficultyHTML()}
+       <button class="start" data-start>NEL LAVANDINO!</button>`
+    );
+  }
+  overlay.addEventListener("click", (e) => {
+    const d = e.target.closest("[data-diff]");
+    if (d) { setDifficulty(d.dataset.diff); return; }
+    if (e.target.closest("[data-start]")) startGame();
+    if (e.target.closest("[data-resume]")) togglePause();
+  });
+
+  // ---------- Input ----------
+  const KEYMAP = { arrowleft: "left", a: "left", arrowright: "right", d: "right", arrowup: "up", w: "up", arrowdown: "down", s: "down" };
+  window.addEventListener("keydown", (e) => {
+    const k = e.key.toLowerCase();
+    if ([" ", "arrowup", "arrowdown", "arrowleft", "arrowright"].includes(k)) e.preventDefault();
+    if (state === "menu" || state === "over") {
+      if (e.key === "Enter") startGame();
+      else if (["1", "2", "3"].includes(k)) setDifficulty(DIFF_IDS[+k - 1]);
+      return;
+    }
+    if (k === "p" || k === "escape") { if (!e.repeat) togglePause(); return; }
+    if (state === "paused") { if (e.key === "Enter") togglePause(); return; }
+    if ((k === " " || k === "j" || k === "z" || k === "x") && !e.repeat) dashPressed = true;
+    if (KEYMAP[k]) keys[KEYMAP[k]] = true;
+  });
+  window.addEventListener("keyup", (e) => { const m = KEYMAP[e.key.toLowerCase()]; if (m) keys[m] = false; });
+  window.addEventListener("blur", () => { for (const k in keys) keys[k] = false; stick.x = stick.y = 0; if (isPlaying()) togglePause(); });
+  const dashBtn = touchEl.querySelector(".jump");
+  dashBtn.addEventListener("pointerdown", (e) => { e.preventDefault(); dashPressed = true; dashBtn.classList.add("on"); });
+  for (const ev of ["pointerup", "pointercancel", "pointerleave"]) dashBtn.addEventListener(ev, () => dashBtn.classList.remove("on"));
+  const stickEl = touchEl.querySelector(".stick"), knob = stickEl.querySelector(".knob");
+  let stickId = null;
+  function stickAt(e) {
+    const r = stickEl.getBoundingClientRect(), max = r.width / 2 - 14;
+    let dx = e.clientX - (r.left + r.width / 2), dy = e.clientY - (r.top + r.height / 2);
+    const len = Math.hypot(dx, dy);
+    if (len > max) { dx *= max / len; dy *= max / len; }
+    knob.style.transform = `translate(${dx}px, ${dy}px)`;
+    const m = Math.hypot(dx, dy) / max, s = m < 0.15 ? 0 : Math.min(1, (m - 0.15) / 0.6) / m;
+    stick.x = dx / max * s; stick.y = dy / max * s;
+  }
+  const stickEnd = (e) => { if (e.pointerId !== stickId) return; stickId = null; knob.style.transform = ""; stick.x = stick.y = 0; };
+  stickEl.addEventListener("pointerdown", (e) => { e.preventDefault(); stickId = e.pointerId; try { stickEl.setPointerCapture(e.pointerId); } catch { /* ignore */ } stickAt(e); });
+  stickEl.addEventListener("pointermove", (e) => { if (e.pointerId === stickId) stickAt(e); });
+  for (const ev of ["pointerup", "pointercancel", "lostpointercapture"]) stickEl.addEventListener(ev, stickEnd);
+  window.addEventListener("pointerdown", (e) => { if (e.pointerType === "touch" && !touchMode) { touchMode = true; syncControls(); if (menu) menu(); } }, true);
+
+  // ---------- Update ----------
+  // the swirl of the drain: a pull towards the middle and a turn around it
+  function swirl(o, dt, k) {
+    const dx = CX - o.x, dy = CY - o.y, d = Math.hypot(dx, dy) || 1;
+    const f = Math.max(0, 1 - d / 170) * 140 * diff.pull * k;
+    o.vx += (dx / d * f + dy / d * f * 0.8) * dt; o.vy += (dy / d * f - dx / d * f * 0.8) * dt;
+  }
+  function updateBubble(dt) {
+    P.safe = Math.max(0, P.safe - dt); P.wob += dt;
+    let ux = clamp(stick.x + (keys.right ? 1 : 0) - (keys.left ? 1 : 0), -1, 1), uy = clamp(stick.y + (keys.down ? 1 : 0) - (keys.up ? 1 : 0), -1, 1);
+    const m = Math.hypot(ux, uy); if (m > 1) { ux /= m; uy /= m; }
+    // bigger bubbles are a bit slower
+    const acc = ACC * (1 - stage * 0.06), vmax = VMAX * (1 - stage * 0.05);
+    P.vx += ux * acc * dt; P.vy += uy * acc * dt;
+    P.dashT = Math.max(0, P.dashT - dt);
+    if (dashPressed && P.dashT <= 0) {
+      const dl = Math.hypot(ux, uy) > 0.2 ? [ux, uy] : [P.vx, P.vy], l = Math.hypot(dl[0], dl[1]) || 1;
+      P.vx = dl[0] / l * DASH_V; P.vy = dl[1] / l * DASH_V; P.dash = 0.25; P.dashT = DASH_CD; sfx.dash();
+    }
+    dashPressed = false;
+    if (!open) swirl(P, dt, 1);
+    const v = Math.hypot(P.vx, P.vy), cap = P.dash > 0 ? DASH_V : vmax;
+    if (v > cap) { P.vx *= cap / v; P.vy *= cap / v; }
+    P.dash = Math.max(0, P.dash - dt);
+    const dr = Math.pow(1 / (1 + DRAG), dt); P.vx *= dr; P.vy *= dr;
+    P.x += P.vx * dt; P.y += P.vy * dt;
+    if (keepIn(P, radius(), 0.6)) sfx.bump();
+    // the drain grate: closed until the sink is clean
+    const dd = Math.hypot(P.x - CX, P.y - CY);
+    if (!open && dd < DRAIN + radius() * 0.6) { const nx = (P.x - CX) / (dd || 1), ny = (P.y - CY) / (dd || 1); P.x = CX + nx * (DRAIN + radius() * 0.6); P.y = CY + ny * (DRAIN + radius() * 0.6); const vn = P.vx * nx + P.vy * ny; if (vn < 0) { P.vx -= 1.5 * vn * nx; P.vy -= 1.5 * vn * ny; } }
+    if (open && dd < DRAIN * 0.7) { levelDone(); return; }
+    // eat
+    const r = radius();
+    for (const d of dirt) {
+      if (d.gone || Math.hypot(d.x - P.x, d.y - P.y) > r + DIRT[d.kind].r * 0.6) continue;
+      d.gone = true; eatenByMe++;
+      addScore(DIRT[d.kind].pts, d.x, d.y - 10, "#c8f0ff"); sfx.eat();
+      growth += DIRT[d.kind].grow;
+      let ns = 0; while (ns < 3 && growth / dirtTotal >= GROW[ns + 1]) ns++;
+      if (ns > stage) { stage = ns; sfx.grow(); popups.push({ x: P.x, y: P.y - 26, text: ["", "CRESCI!", "GRANDE: SCHIACCIA GLI SCARAFAGGI!", "GIGANTE!"][ns], color: "#7ae4ff", t: 0 }); }
+    }
+    dirt = dirt.filter((d) => !d.gone);
+    if (!open && !dirt.length) { open = true; sfx.open(); message = { text: "SCARICO APERTO!", sub: "tuffati nello scarico", t: 0 }; }
+  }
+  function updateDirt(dt) {
+    for (const d of dirt) {
+      d.t += dt;
+      if (d.kind !== "formica") continue;
+      // ants wander about
+      d.a += rnd(-2, 2) * dt; d.x += Math.cos(d.a) * 18 * dt; d.y += Math.sin(d.a) * 18 * dt;
+      const o = { x: d.x, y: d.y, vx: 0, vy: 0 }; if (keepIn(o, 12, 0)) { d.a += Math.PI; d.x = o.x; d.y = o.y; }
+      if (Math.hypot(d.x - CX, d.y - CY) < DRAIN + 10) d.a += Math.PI;
+    }
+  }
+  function updateFoes(dt) {
+    const sm = diff.speed * Math.min(1.35, 1 + 0.04 * (level - 1));
+    spawnT -= dt; brushT -= dt; razorT -= dt;
+    const cap = Math.round(Math.min(6, 1.5 + level * 0.8) * diff.spawn);
+    if (spawnT <= 0 && !open) { spawnT = rnd(3.5, 6) / diff.spawn; if (foes.filter((f) => f.kind === "scarafaggio").length < cap) { foes.push(makeFoe("scarafaggio")); sfx.roach(); } }
+    if (brushT <= 0 && !open) { brushT = rnd(9, 14); if (!foes.some((f) => f.kind === "spazzola")) foes.push(makeFoe("spazzola")); }
+    if (razorT <= 0 && !open) { razorT = rnd(9, 14) / diff.spawn; foes.push(makeFoe("lametta")); sfx.razor(); }
+    for (const f of foes) {
+      f.t += dt;
+      if (f.pop > 0) { f.pop -= dt; continue; }
+      if (f.kind === "scarafaggio") {
+        // scuttles about, then rushes the bubble when it is small
+        const dx = P.x - f.x, dy = P.y - f.y, d = Math.hypot(dx, dy) || 1, scared = stage >= FOES.scarafaggio.need;
+        f.turn -= dt; if (f.turn <= 0) { f.turn = rnd(0.4, 1.2); f.a += rnd(-1.5, 1.5); }
+        let tx = Math.cos(f.a), ty = Math.sin(f.a);
+        if (d < 200) { const s = scared ? -1 : 1; tx = tx * 0.4 + dx / d * s; ty = ty * 0.4 + dy / d * s; }
+        const tl = Math.hypot(tx, ty) || 1, sp = (d < 90 && !scared ? 132 : 100) * sm;
+        f.vx += (tx / tl * sp - f.vx) * Math.min(1, dt * 4); f.vy += (ty / tl * sp - f.vy) * Math.min(1, dt * 4);
+        f.a = Math.atan2(f.vy, f.vx);
+      } else if (f.kind === "spazzola") {
+        // sweeps across and cleans whatever it passes over
+        for (const d of dirt) if (!d.gone && Math.hypot(d.x - f.x, d.y - f.y) < 14) { d.gone = true; burst(d.x, d.y, "#c8a86a", 3, 30, 0.3); }
+        f.life -= dt;
+      } else if (f.kind === "lametta") {
+        f.a += dt * 14; f.life -= dt;
+      } else {
+        // the sponge drifts and soaks up dirt slowly
+        f.vx += rnd(-20, 20) * dt; f.vy += rnd(-20, 20) * dt;
+        for (const d of dirt) if (!d.gone && Math.hypot(d.x - f.x, d.y - f.y) < 13 && Math.random() < dt * 0.6) d.gone = true;
+      }
+      if (f.kind === "scarafaggio" || f.kind === "spugna") swirl(f, dt, 0.4);
+      f.x += f.vx * dt; f.y += f.vy * dt;
+      const r = FOES[f.kind].r;
+      if (keepIn(f, r, f.kind === "lametta" ? 1 : 0.5)) { if (f.kind === "spazzola" && f.life <= 0) f.gone = true; else if (f.kind === "lametta") sfx.razor(); }
+      if (f.kind === "lametta" && f.life <= 0) { f.gone = true; burst(f.x, f.y, "#e8e8f0", 6, 60, 0.3); }
+      // touching the bubble
+      if (state !== "play" || f.gone) continue;
+      const d = Math.hypot(f.x - P.x, f.y - P.y);
+      if (d > r + radius() - 2) continue;
+      if (stage >= FOES[f.kind].need) {
+        f.gone = true; addScore(FOES[f.kind].pts, f.x, f.y - 14, "#ffd23a");
+        burst(f.x, f.y, f.kind === "scarafaggio" ? "#6a3a1a" : f.kind === "lametta" ? "#e8e8f0" : f.kind === "spazzola" ? "#c8a86a" : "#ffe85a", 14, 110, 0.5); sfx.squash();
+      } else if (f.kind === "spugna") {
+        // too small to squash it: it just pushes the bubble away
+        const nx = (P.x - f.x) / (d || 1), ny = (P.y - f.y) / (d || 1); P.vx += nx * 160; P.vy += ny * 160; sfx.bump();
+      } else if (P.safe <= 0) die(FOES[f.kind].name);
+    }
+    foes = foes.filter((f) => !f.gone);
+  }
+  function update(dt) {
+    clock += dt; sfxN = 0;
+    if (message) { message.t += dt; if (message.t > 2.4) message = null; }
+    for (const p of parts) { p.t += dt; p.x += p.vx * dt; p.y += p.vy * dt; p.vx *= 0.94; p.vy *= 0.94; }
+    parts = parts.filter((p) => p.t < p.life);
+    for (const p of popups) { p.t += dt; p.y -= 20 * dt; }
+    popups = popups.filter((p) => p.t < 1.1);
+    if (state === "menu") return;
+    if (!isPlaying()) return;
+    if (state === "intro") { stateT -= dt; if (stateT <= 0) state = "play"; return; }
+    if (state === "dead") {
+      stateT -= dt;
+      if (stateT <= 0) {
+        if (lives <= 0) { gameOver(); return; }
+        // a new bubble, one size smaller
+        spawnBubble(); stage = Math.max(0, stage - 1); growth = Math.min(growth, dirtTotal * GROW[stage]);
+        foes = foes.filter((f) => f.kind === "spugna" || Math.hypot(f.x - P.x, f.y - P.y) > 150);
+        state = "play";
+      }
+      return;
+    }
+    if (state === "clear") { stateT -= dt; sinkT += dt; if (stateT <= 0) { level++; beginLevel(); } return; }
+    if (window.__bot) window.__bot(dt);
+    updateBubble(dt);
+    if (state !== "play") return;
+    updateDirt(dt);
+    updateFoes(dt);
+  }
+
+  // ---------- Drawing ----------
+  function drawSink() {
+    ctx.fillStyle = "#3a5a6a"; ctx.fillRect(0, 0, W, H);
+    // tiles behind
+    ctx.strokeStyle = "rgba(255,255,255,0.08)"; ctx.lineWidth = 1;
+    for (let x = 0; x < W; x += 32) { ctx.beginPath(); ctx.moveTo(x, TOP); ctx.lineTo(x, H); ctx.stroke(); }
+    for (let y = TOP; y < H; y += 32) { ctx.beginPath(); ctx.moveTo(0, y); ctx.lineTo(W, y); ctx.stroke(); }
+    // the counter and the basin
+    ctx.fillStyle = "#e8eef2"; ctx.beginPath(); ctx.ellipse(CX, CY, RX + 14, RY + 14, 0, 0, TAU); ctx.fill();
+    const g = ctx.createRadialGradient(CX - 60, CY - 50, 30, CX, CY, RX);
+    g.addColorStop(0, "#ffffff"); g.addColorStop(0.7, "#dce8ee"); g.addColorStop(1, "#a8c0cc");
+    ctx.fillStyle = g; ctx.beginPath(); ctx.ellipse(CX, CY, RX, RY, 0, 0, TAU); ctx.fill();
+    ctx.strokeStyle = "#8aa8b8"; ctx.lineWidth = 2; ctx.stroke();
+    for (const d of drops) { const x = CX + Math.cos(d.a) * RX * d.d, y = CY + Math.sin(d.a) * RY * d.d; ctx.fillStyle = "rgba(160,210,240,0.35)"; ctx.beginPath(); ctx.ellipse(x, y, d.s * 2, d.s * 1.4, 0, 0, TAU); ctx.fill(); }
+    // the swirl lines around the drain
+    ctx.strokeStyle = "rgba(90,160,200,0.18)"; ctx.lineWidth = 2;
+    for (let i = 0; i < 3; i++) { ctx.beginPath(); ctx.arc(CX, CY, 40 + i * 28, clock * (0.8 - i * 0.2) + i, clock * (0.8 - i * 0.2) + i + 2); ctx.stroke(); }
+    // the drain
+    ctx.fillStyle = open ? "#1a1a24" : "#8a9aa8"; ctx.beginPath(); ctx.arc(CX, CY, DRAIN, 0, TAU); ctx.fill();
+    ctx.strokeStyle = "#c8d8e0"; ctx.lineWidth = 3; ctx.stroke();
+    if (!open) { ctx.strokeStyle = "#5a6a78"; ctx.lineWidth = 2; for (let i = -2; i <= 2; i++) { ctx.beginPath(); ctx.moveTo(CX + i * 7, CY - Math.sqrt(DRAIN ** 2 - (i * 7) ** 2) + 2); ctx.lineTo(CX + i * 7, CY + Math.sqrt(DRAIN ** 2 - (i * 7) ** 2) - 2); ctx.stroke(); } }
+    else { ctx.strokeStyle = `rgba(122,228,255,${0.5 + 0.5 * Math.sin(clock * 8)})`; ctx.lineWidth = 3; ctx.beginPath(); ctx.arc(CX, CY, DRAIN + 6, 0, TAU); ctx.stroke(); }
+    // the tap
+    ctx.fillStyle = "#c8d0d8"; ctx.fillRect(CX - 10, TOP, 20, 18); ctx.fillStyle = "#a8b0b8"; ctx.beginPath(); ctx.ellipse(CX, TOP + 20, 14, 6, 0, 0, TAU); ctx.fill();
+  }
+  function drawDirt(d) {
+    if (d.kind === "briciola") { ctx.fillStyle = "#c8945a"; ctx.save(); ctx.translate(d.x, d.y); ctx.rotate(d.a); ctx.fillRect(-3, -2, 6, 4); ctx.fillStyle = "#e8b878"; ctx.fillRect(-2, -2, 3, 2); ctx.restore(); }
+    else if (d.kind === "grasso") { ctx.fillStyle = "rgba(170,130,40,0.75)"; ctx.beginPath(); ctx.ellipse(d.x, d.y, 7, 5, d.a, 0, TAU); ctx.fill(); ctx.fillStyle = "rgba(255,240,180,0.6)"; ctx.beginPath(); ctx.arc(d.x - 2, d.y - 1, 1.5, 0, TAU); ctx.fill(); }
+    else { ctx.save(); ctx.translate(d.x, d.y); ctx.rotate(d.a); ctx.fillStyle = "#1a1a1a"; ctx.beginPath(); ctx.arc(-3, 0, 2, 0, TAU); ctx.arc(0, 0, 1.6, 0, TAU); ctx.arc(3, 0, 2.2, 0, TAU); ctx.fill(); ctx.strokeStyle = "#1a1a1a"; ctx.lineWidth = 0.8; const l = Math.sin(d.t * 20) * 1.5; for (let i = -1; i <= 1; i++) { ctx.beginPath(); ctx.moveTo(i * 2, 0); ctx.lineTo(i * 2 + l, -3.5); ctx.moveTo(i * 2, 0); ctx.lineTo(i * 2 - l, 3.5); ctx.stroke(); } ctx.restore(); }
+  }
+  function drawFoe(f) {
+    const sc = f.pop > 0 ? 1 - f.pop / 0.8 : 1;
+    ctx.save(); ctx.translate(f.x, f.y); ctx.scale(sc, sc);
+    if (f.kind === "scarafaggio") {
+      ctx.rotate(f.a);
+      ctx.strokeStyle = "#3a1a0a"; ctx.lineWidth = 1.2; const l = Math.sin(f.t * 25) * 2;
+      for (const s of [-1, 1]) for (let i = -1; i <= 1; i++) { ctx.beginPath(); ctx.moveTo(i * 4, 0); ctx.lineTo(i * 4 + l * s, s * 9); ctx.stroke(); }
+      ctx.beginPath(); ctx.moveTo(8, -2); ctx.lineTo(16, -7); ctx.moveTo(8, 2); ctx.lineTo(16, 7); ctx.stroke();
+      ctx.fillStyle = "#6a3a1a"; ctx.beginPath(); ctx.ellipse(0, 0, 10, 6, 0, 0, TAU); ctx.fill();
+      ctx.fillStyle = "#4a2a0a"; ctx.beginPath(); ctx.ellipse(7, 0, 3.5, 4, 0, 0, TAU); ctx.fill();
+      ctx.strokeStyle = "rgba(255,255,255,0.25)"; ctx.beginPath(); ctx.moveTo(-8, 0); ctx.lineTo(4, 0); ctx.stroke();
+    } else if (f.kind === "spazzola") {
+      ctx.rotate(Math.atan2(f.vy, f.vx));
+      ctx.fillStyle = "#a8743a"; ctx.fillRect(-14, -6, 28, 12);
+      ctx.fillStyle = "#e8d8a8"; for (let i = -12; i <= 12; i += 3) ctx.fillRect(i, -9 + (i % 2), 2, 4), ctx.fillRect(i, 5, 2, 4);
+      ctx.fillStyle = "#8a5a2a"; ctx.fillRect(-14, -2, 28, 4);
+    } else if (f.kind === "lametta") {
+      ctx.rotate(f.a);
+      ctx.fillStyle = "#d8dce8"; ctx.fillRect(-10, -5, 20, 10);
+      ctx.fillStyle = "#8a90a0"; ctx.fillRect(-6, -1.5, 12, 3); ctx.beginPath(); ctx.arc(-6, 0, 2, 0, TAU); ctx.arc(6, 0, 2, 0, TAU); ctx.fill();
+      ctx.strokeStyle = "#ffffff"; ctx.lineWidth = 1; ctx.strokeRect(-10, -5, 20, 10);
+    } else {
+      ctx.fillStyle = "#ffe85a"; ctx.beginPath(); ctx.roundRect(-13, -9, 26, 18, 4); ctx.fill();
+      ctx.fillStyle = "#3aa85a"; ctx.fillRect(-13, -9, 26, 5);
+      ctx.fillStyle = "rgba(200,160,30,0.5)"; for (const [x, y] of [[-6, 2], [4, 4], [0, -1], [8, 0]]) { ctx.beginPath(); ctx.arc(x, y, 1.6, 0, TAU); ctx.fill(); }
+    }
+    ctx.restore();
+  }
+  function drawBubble() {
+    if (P.safe > 0 && Math.floor(clock * 10) % 2) return;
+    const r = radius(), w = Math.sin(P.wob * 6) * 0.06;
+    ctx.save(); ctx.translate(P.x, P.y); ctx.scale(1 + w, 1 - w);
+    const g = ctx.createRadialGradient(-r * 0.3, -r * 0.3, r * 0.1, 0, 0, r);
+    g.addColorStop(0, "rgba(255,255,255,0.9)"); g.addColorStop(0.5, "rgba(170,225,255,0.45)"); g.addColorStop(0.85, "rgba(220,170,255,0.55)"); g.addColorStop(1, "rgba(120,200,255,0.9)");
+    ctx.fillStyle = g; ctx.beginPath(); ctx.arc(0, 0, r, 0, TAU); ctx.fill();
+    ctx.strokeStyle = "#2a7ab8"; ctx.lineWidth = 2; ctx.beginPath(); ctx.arc(0, 0, r, 0, TAU); ctx.stroke();
+    ctx.strokeStyle = `hsla(${(clock * 120) % 360},90%,62%,0.9)`; ctx.lineWidth = 1.5; ctx.beginPath(); ctx.arc(0, 0, r - 1.5, 0, TAU); ctx.stroke();
+    ctx.fillStyle = "#ffffff"; ctx.beginPath(); ctx.ellipse(-r * 0.4, -r * 0.45, r * 0.22, r * 0.13, -0.6, 0, TAU); ctx.fill();
+    // grown big enough, it gets a face
+    if (stage >= 2) {
+      const lx = clamp(P.vx / 80, -2, 2), ly = clamp(P.vy / 80, -2, 2);
+      ctx.fillStyle = "#1a3a5a"; ctx.beginPath(); ctx.arc(-r * 0.28 + lx, -r * 0.1 + ly, r * 0.1, 0, TAU); ctx.arc(r * 0.28 + lx, -r * 0.1 + ly, r * 0.1, 0, TAU); ctx.fill();
+      ctx.strokeStyle = "#1a3a5a"; ctx.lineWidth = 1.5; ctx.beginPath(); ctx.arc(lx, r * 0.15 + ly, r * 0.3, 0.2, Math.PI - 0.2); ctx.stroke();
+    }
+    ctx.restore();
+  }
+  function drawHud() {
+    ctx.fillStyle = "rgba(20,40,52,0.9)"; ctx.fillRect(0, 0, W, TOP);
+    ctx.textBaseline = "middle"; ctx.textAlign = "left";
+    const x0 = touchMode ? 130 : 10;
+    ctx.fillStyle = "#ffffff"; ctx.font = "900 15px system-ui"; ctx.fillText(score.toLocaleString("it-IT"), x0, 14);
+    ctx.fillStyle = "#a8c8d8"; ctx.font = "700 9px system-ui"; ctx.fillText(`REC ${Math.max(bestCache, score).toLocaleString("it-IT")}`, x0 + 80, 9);
+    ctx.fillStyle = "#5ac8ff"; ctx.font = "900 10px system-ui"; ctx.fillText(`LAVANDINO ${level}`, x0 + 80, 21);
+    // dirt still in the sink
+    const bx = x0 + 175, bw = 100, total = Math.max(1, dirtTotal), left = dirt.reduce((s, d) => s + DIRT[d.kind].grow, 0);
+    ctx.fillStyle = "#2a4a5a"; ctx.fillRect(bx, 10, bw, 8); ctx.fillStyle = open ? "#7ae4ff" : "#c8945a"; ctx.fillRect(bx, 10, bw * (open ? 1 : left / total), 8);
+    ctx.fillStyle = "#ffffff"; ctx.font = "800 9px system-ui"; ctx.fillText(open ? "SCARICO!" : "sporco", bx + bw + 6, 14);
+    // size: four bubbles, one per stage
+    for (let i = 0; i < 4; i++) { ctx.strokeStyle = i <= stage ? "#7ae4ff" : "#4a6a7a"; ctx.lineWidth = 1.5; ctx.beginPath(); ctx.arc(bx + bw + 62 + i * 14, 14, 3 + i, 0, TAU); ctx.stroke(); }
+    // the dash
+    const dx = bx + bw + 128; ctx.fillStyle = "#2a4a5a"; ctx.fillRect(dx, 10, 30, 8); ctx.fillStyle = P.dashT <= 0 ? "#ffd23a" : "#8a8a6a"; ctx.fillRect(dx, 10, 30 * (1 - P.dashT / DASH_CD), 8);
+    const lx = touchMode ? W - 60 : W - 12;
+    for (let i = 0; i < Math.min(lives - (state === "dead" ? 0 : 1), 6); i++) { const cx = lx - i * 14; ctx.strokeStyle = "#a8e0ff"; ctx.lineWidth = 1.5; ctx.beginPath(); ctx.arc(cx, 14, 5, 0, TAU); ctx.stroke(); ctx.fillStyle = "#ffffff"; ctx.fillRect(cx - 2.5, 11, 2, 2); }
+    ctx.textBaseline = "alphabetic";
+  }
+  function draw() {
+    ctx.setTransform(pxRatio, 0, 0, pxRatio, 0, 0);
+    if (!dirt.length && state === "menu") { level = 2; P = null; scatterDirt(); level = 1; spawnBubble(); P.x = CX + 120; P.y = CY - 40; foes = [makeFoe("scarafaggio"), makeFoe("spugna")]; foes[0].pop = 0; foes[0].x = CX - 140; foes[0].y = CY + 60; }
+    drawSink();
+    for (const d of dirt) drawDirt(d);
+    for (const f of foes) drawFoe(f);
+    if (state === "clear") {
+      // swirling down the drain
+      const k = Math.max(0, 1 - sinkT / 1.2), a = sinkT * 10;
+      if (k > 0) { ctx.save(); ctx.translate(CX + Math.cos(a) * 10 * k, CY + Math.sin(a) * 10 * k); ctx.scale(k, k); ctx.translate(-P.x, -P.y); drawBubble(); ctx.restore(); }
+    } else if (state !== "dead" || Math.floor(clock * 6) % 2) { if (state !== "menu" && state !== "dead") drawBubble(); }
+    for (const p of parts) { ctx.globalAlpha = Math.max(0, 1 - p.t / p.life); ctx.fillStyle = p.c; ctx.fillRect(p.x - 1.5, p.y - 1.5, 3, 3); }
+    ctx.globalAlpha = 1;
+    for (const p of popups) {
+      ctx.globalAlpha = Math.max(0, 1 - p.t / 1.1);
+      ctx.textAlign = "center"; ctx.font = "900 11px system-ui";
+      ctx.lineWidth = 3; ctx.strokeStyle = "#14303e"; ctx.strokeText(p.text, p.x, p.y); ctx.fillStyle = p.color; ctx.fillText(p.text, p.x, p.y);
+    }
+    ctx.globalAlpha = 1;
+    if (state === "menu") return;
+    drawHud();
+    if (message) {
+      ctx.globalAlpha = Math.min(1, (2.4 - message.t) * 2);
+      ctx.fillStyle = "rgba(10,30,40,0.55)"; ctx.fillRect(0, 120, W, 56);
+      ctx.textAlign = "center"; ctx.font = "italic 900 24px system-ui"; ctx.fillStyle = "#5ac8ff";
+      ctx.lineWidth = 5; ctx.strokeStyle = "#14303e"; ctx.strokeText(message.text, W / 2, 147); ctx.fillText(message.text, W / 2, 147);
+      if (message.sub) { ctx.font = "800 12px system-ui"; ctx.fillStyle = "#ffffff"; ctx.fillText(message.sub, W / 2, 166); }
+      ctx.globalAlpha = 1;
+    }
+    if (state === "dead") {
+      ctx.textAlign = "center"; ctx.font = "900 17px system-ui"; ctx.fillStyle = "#ff3a3a"; ctx.lineWidth = 4; ctx.strokeStyle = "#ffffff";
+      const t = `SCOPPIATA DA ${lastBy}!`;
+      ctx.strokeText(t, W / 2, 250); ctx.fillText(t, W / 2, 250);
+    }
+  }
+
+  // ---------- Loop ----------
+  const STEP = 1 / 120;
+  let last = performance.now(), acc = 0;
+  function frame(now) {
+    const dt = Math.min(0.1, (now - last) / 1000);
+    last = now;
+    if (isPlaying()) {
+      acc += dt;
+      while (acc >= STEP && isPlaying()) { update(STEP); acc -= STEP; }
+    } else { acc = 0; update(dt); }
+    draw();
+    requestAnimationFrame(frame);
+  }
+  syncControls();
+  showTitle();
+  requestAnimationFrame(frame);
+})();
+</script>
+<script src="../../shared/iniziali.js" data-record="bolla-best-" data-kind="score"></script>
+</body>
+</html>
