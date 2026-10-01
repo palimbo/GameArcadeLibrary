@@ -4,7 +4,7 @@ Raccolta di giochi arcade per il browser. Ogni gioco è un singolo file HTML sen
 
 ## 🕹️ Sala Giochi — `index.html`
 
-Apri `index.html` nella cartella principale per la pagina di raccolta: mostra tutti i 105 giochi con copertina, genere, comandi e i tuoi record per ogni difficoltà (Facile, Normale, Difficile). Tocca «Gioca» per avviare un gioco; in ogni gioco il pulsante «← Sala Giochi» in alto a sinistra (visibile nei menu) riporta alla raccolta.
+Apri `index.html` nella cartella principale per la pagina di raccolta: mostra tutti i 106 giochi con copertina, genere, comandi e i tuoi record per ogni difficoltà (Facile, Normale, Difficile). Tocca «Gioca» per avviare un gioco; in ogni gioco il pulsante «← Sala Giochi» in alto a sinistra (visibile nei menu) riporta alla raccolta.
 
 **Iniziali del record:** quando batti un record compare la schermata da sala giochi per inserire le tue tre iniziali (frecce ↑ ↓ per cambiare lettera, ← → per spostarti, oppure scrivile direttamente; su telefono i tasti ▲ ▼ e OK). Le iniziali vengono salvate insieme al record e compaiono nei menu del gioco e nella Sala Giochi. Il codice è condiviso da tutti i giochi in `shared/iniziali.js`.
 
@@ -1631,3 +1631,18 @@ Corsa a piattaforme in stile *Wonder Boy*. Un ragazzino attraversa di corsa un'i
 - **Touch:** levetta per correre, pulsanti SALTA e ASCIA
 
 Per giocare apri `games/isola-della-frutta/index.html` nel browser.
+
+### 🧙 Sotterranei del Mago — `games/sotterranei-del-mago/index.html`
+
+Caccia nel labirinto in stile *Wizard of Wor*. Un guerriero entra nei sotterranei del Mago, un labirinto simmetrico di 11 × 6 celle diverso a ogni livello, e deve abbattere tutti i mostri. Spara nelle quattro direzioni, ma un solo colpo alla volta, come nel cabinato originale.
+
+- **Mostri:** sei Burwor blu (100) all'inizio; mentre cadono escono Garwor gialli (200) e Thorwor rossi (500), più veloci e decisi a darti la caccia. Garwor e Thorwor diventano invisibili a tratti (si rivedono solo quando sono vicinissimi); i mostri si illuminano un attimo prima di sparare lungo il corridoio
+- **Radar:** sotto il labirinto mostra sempre la posizione di tutti i mostri, anche di quelli invisibili
+- **Porte laterali:** a metà altezza, a sinistra e a destra; passando da una si esce dall'altra parte, e per qualche secondo si chiudono dietro di te
+- **Worluk e Mago:** ripulito il sotterraneo arriva il Worluk, veloce, che cerca di scappare da una porta (1.000 se lo prendi). Dal terzo sotterraneo a volte compare il Mago, che sparisce e riappare in giro per il labirinto e spara (2.500)
+- **Punti:** ogni sotterraneo ripulito vale 1.000 × sotterraneo; più resti dentro, più i mostri accelerano (si sente dal battito di sottofondo). Vita extra ogni 20.000 punti
+- **Difficoltà:** Facile (5 vite, mostri lenti che sparano poco), Normale (3 vite), Difficile (3 vite, mostri svelti e più spari); record separati per ogni difficoltà
+- **Comandi:** frecce o `WASD` per muoverti · `Spazio`, `J`, `Z` o `X` spara nella direzione in cui guardi · `P` pausa
+- **Touch:** levetta per muoverti e pulsante FUOCO
+
+Per giocare apri `games/sotterranei-del-mago/index.html` nel browser.
