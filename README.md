@@ -4,7 +4,7 @@ Raccolta di giochi arcade per il browser. Ogni gioco è un singolo file HTML sen
 
 ## 🕹️ Sala Giochi — `index.html`
 
-Apri `index.html` nella cartella principale per la pagina di raccolta: mostra tutti i 112 giochi con copertina, genere, comandi e i tuoi record per ogni difficoltà (Facile, Normale, Difficile). Tocca «Gioca» per avviare un gioco; in ogni gioco il pulsante «← Sala Giochi» in alto a sinistra (visibile nei menu) riporta alla raccolta.
+Apri `index.html` nella cartella principale per la pagina di raccolta: mostra tutti i 113 giochi con copertina, genere, comandi e i tuoi record per ogni difficoltà (Facile, Normale, Difficile). Tocca «Gioca» per avviare un gioco; in ogni gioco il pulsante «← Sala Giochi» in alto a sinistra (visibile nei menu) riporta alla raccolta.
 
 **Iniziali del record:** quando batti un record compare la schermata da sala giochi per inserire le tue tre iniziali (frecce ↑ ↓ per cambiare lettera, ← → per spostarti, oppure scrivile direttamente; su telefono i tasti ▲ ▼ e OK). Le iniziali vengono salvate insieme al record e compaiono nei menu del gioco e nella Sala Giochi. Il codice è condiviso da tutti i giochi in `shared/iniziali.js`.
 
@@ -1732,3 +1732,17 @@ Arcade in stile *Kickman*. Sotto il tendone del circo un clown pedala avanti e i
 - **Touch:** levetta a destra e sinistra per pedalare, pulsante CALCIO
 
 Per giocare apri `games/monociclo-matto/index.html` nel browser.
+
+### 🏹 Stanze del Tesoro — `games/stanze-del-tesoro/index.html`
+
+Avventura in stile *Venture*. Ogni sotterraneo ha quattro stanze (la sala dei serpenti, la cripta degli scheletri, la tana dei ragni e il covo dei goblin), ognuna con un tesoro. Dalla mappa del sotterraneo si entra nelle stanze dalle porte; dentro la visuale si ingrandisce.
+
+- **I corridoi:** sulla mappa girano i guardiani, verdi e voraci: non si possono abbattere, ti inseguono se ti avvicini e ti toccano per una vita. Entra in una stanza camminando nella sua porta
+- **Le stanze:** prendi il tesoro (300 + 100 per sotterraneo) e abbatti i mostri con l'arco: una sola freccia alla volta, tirata nella direzione in cui guardi. Un mostro vale 100, 200 se l'abbatti dopo aver preso il tesoro; ripulire tutta la stanza vale 500. I mostri abbattuti restano a terra per qualche secondo e scottano: non toccarli
+- **Il guardiano:** se resti troppo in una stanza (la barra in alto) un guardiano entra passando attraverso i muri e ti dà la caccia: esci dalla porta
+- **Il sotterraneo:** con tutti e quattro i tesori si scende al sotterraneo successivo (bonus 1.000 × sotterraneo), con mostri più numerosi e veloci; le mappe si alternano. I tesori presi restano presi anche se perdi una vita
+- **Difficoltà:** Facile (5 vite, mostri lenti e meno numerosi, il guardiano arriva tardi), Normale (3 vite), Difficile (3 vite, mostri svelti e numerosi, il guardiano arriva presto); record separati per ogni difficoltà. Vita extra a 20.000 punti e poi ogni 40.000
+- **Comandi:** frecce o `WASD` per camminare · `Spazio`, `J` o `Z` per tirare · `P` pausa
+- **Touch:** levetta per camminare, pulsante FRECCIA
+
+Per giocare apri `games/stanze-del-tesoro/index.html` nel browser.

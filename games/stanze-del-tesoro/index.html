@@ -1,0 +1,691 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no, viewport-fit=cover">
+<title>Stanze del Tesoro</title>
+<style>
+  :root {
+    --bg: #0e0a1a;
+    --fg: #f4f6ee;
+    --muted: #c8b8a0;
+    --pink: #ffc83a;
+    --yellow: #5ad0ff;
+    --red: #ff4a3a;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  html, body {
+    height: 100%;
+    background: var(--bg);
+    color: var(--fg);
+    font-family: system-ui, -apple-system, "Segoe UI", sans-serif;
+    overflow: hidden;
+    user-select: none;
+    -webkit-user-select: none;
+    touch-action: none;
+  }
+  #wrap { position: fixed; inset: 0; display: flex; align-items: center; justify-content: center; }
+  canvas { display: block; touch-action: none; border-radius: 6px; box-shadow: 0 0 0 2px #4a3a2a, 0 10px 40px rgba(0,0,0,0.6); }
+  #pauseBtn {
+    position: fixed; z-index: 3; display: none; right: 10px; top: calc(10px + env(safe-area-inset-top, 0px));
+    font: 700 13px system-ui, sans-serif; color: var(--fg);
+    background: rgba(0, 0, 0, 0.6); border: 1px solid rgba(244, 246, 238, 0.35);
+    border-radius: 8px; padding: 6px 10px; cursor: pointer;
+  }
+  #touch {
+    position: fixed; z-index: 2; display: none; left: 12px; right: 12px;
+    bottom: calc(14px + env(safe-area-inset-bottom, 0px));
+    justify-content: space-between; align-items: flex-end; pointer-events: none;
+  }
+  /* thumb stick: walk the corridors and rooms; FRECCIA shoots an arrow */
+  #touch .stick { position: relative; width: 136px; height: 136px; border-radius: 50%; pointer-events: auto; touch-action: none;
+    border: 2px solid rgba(255, 200, 58, 0.6); background: radial-gradient(circle, rgba(255,200,58,0.14), rgba(255,200,58,0.04)); }
+  #touch .stick .knob { position: absolute; left: 50%; top: 50%; width: 58px; height: 58px; margin: -29px 0 0 -29px; border-radius: 50%;
+    background: rgba(255, 200, 58, 0.45); border: 2px solid rgba(255,255,255,0.7); box-shadow: 0 4px 10px rgba(0,0,0,0.4); pointer-events: none; }
+  #touch .stick .ring { position: absolute; inset: 10px; border-radius: 50%; border: 1px dashed rgba(244,246,238,0.25); pointer-events: none; }
+  #touch .jump { width: 96px; height: 96px; border-radius: 50%; pointer-events: auto; touch-action: none; color: var(--fg);
+    font: 800 13px system-ui, sans-serif; letter-spacing: 1px; border: 2px solid rgba(255, 176, 58, 0.9); background: rgba(255, 176, 58, 0.22); }
+  #touch .jump.on { background: rgba(255, 176, 58, 0.55); }
+  #touch.small .stick { width: 112px; height: 112px; }
+  #touch.small .stick .knob { width: 48px; height: 48px; margin: -24px 0 0 -24px; }
+  #touch.small .jump { width: 80px; height: 80px; font-size: 11px; }
+  #overlay {
+    position: fixed; inset: 0; z-index: 5;
+    display: flex; flex-direction: column; align-items: center; justify-content: flex-start;
+    gap: 14px; padding: 16px; text-align: center; overflow-y: auto;
+    background: rgba(14, 10, 26, 0.93);
+  }
+  #overlay > :first-child { margin-top: auto; }
+  #overlay > :last-child { margin-bottom: auto; }
+  #overlay.hidden { display: none; }
+  #homeLink {
+    position: fixed; top: calc(10px + env(safe-area-inset-top, 0px)); left: 10px; z-index: 6;
+    font: 600 13px/1 system-ui, sans-serif; color: #fff; text-decoration: none;
+    padding: 8px 12px; border-radius: 999px; background: rgba(0,0,0,.55);
+    border: 1px solid rgba(255,255,255,.25);
+  }
+  #homeLink:hover { background: rgba(0,0,0,.8); }
+  #overlay.hidden ~ #homeLink { display: none; }
+  @media (max-width: 700px) { #overlay { padding-top: calc(52px + env(safe-area-inset-top, 0px)); } }
+  #overlay h1 { font-size: clamp(32px, 10vw, 58px); font-weight: 900; font-style: italic; letter-spacing: 1px; color: var(--pink);
+    text-shadow: 3px 3px 0 #6a4a0a, 0 0 22px rgba(255,200,58,0.35); }
+  #overlay h2 { font-size: clamp(26px, 7vw, 42px); font-weight: 900; letter-spacing: 2px; color: var(--pink); }
+  #overlay h2.lose { color: var(--red); }
+  #overlay p { max-width: 540px; font-size: clamp(13px, 3.4vw, 16px); line-height: 1.55; }
+  #overlay p.muted { color: var(--muted); }
+  #overlay .pts { display: grid; grid-template-columns: repeat(2, auto); gap: 4px 18px; font-size: 13px; color: var(--muted); text-align: left; max-width: 560px; }
+  #overlay .pts b { color: var(--fg); }
+  #overlay .diff { display: flex; gap: 10px; flex-wrap: wrap; justify-content: center; }
+  #overlay button {
+    font: 800 15px system-ui, sans-serif; letter-spacing: 1.5px; color: var(--fg);
+    background: transparent; cursor: pointer;
+    border: 2px solid rgba(244,246,238,0.3); border-radius: 10px; padding: 9px 16px;
+  }
+  #overlay .diff button.on { border-color: var(--c); color: var(--c); box-shadow: 0 0 12px var(--c); }
+  #overlay button.start { border-color: var(--pink); color: #2a1a02; background: var(--pink); padding: 11px 30px; box-shadow: 0 4px 0 #b8881a; }
+  @media (max-height: 560px) {
+    #overlay { gap: 8px; }
+    #overlay h1 { font-size: 30px; }
+    #overlay p { font-size: 13px; line-height: 1.4; }
+    #overlay .help, #overlay .pts { display: none; }
+  }
+</style>
+</head>
+<body>
+<div id="wrap"><canvas id="game"></canvas></div>
+<div id="touch">
+  <div class="stick" aria-label="Levetta"><div class="ring"></div><div class="knob"></div></div>
+  <button type="button" class="jump" aria-label="Freccia">FRECCIA</button>
+</div>
+<button id="pauseBtn" type="button" aria-label="Pausa">❚❚</button>
+<div id="overlay"></div>
+<a id="homeLink" href="../../index.html">← Sala Giochi</a>
+
+
+<script>
+(() => {
+  "use strict";
+
+  const W = 640, H = 360, TAU = Math.PI * 2, TOP = 28;
+  // inside a room: the walls run round this box, with a door in the middle of one side
+  const AX0 = 20, AX1 = 620, AY0 = 40, AY1 = 350, AMX = (AX0 + AX1) / 2, AMY = (AY0 + AY1) / 2;
+  const PR = 7, MR = 8, ASPEED = 330, HALL_R = 4;
+  const DOORS = { L: { x: AX0, y: AMY }, R: { x: AX1, y: AMY }, T: { x: AMX, y: AY0 }, B: { x: AMX, y: AY1 } };
+  const DOOR_W = 46;
+  // two dungeon floors, each with four rooms and a door on one side of each
+  const MAPS = [
+    [{ x: 50, y: 50, w: 170, h: 95, door: "B" }, { x: 420, y: 50, w: 170, h: 95, door: "B" }, { x: 50, y: 235, w: 170, h: 95, door: "T" }, { x: 420, y: 235, w: 170, h: 95, door: "T" }],
+    [{ x: 235, y: 45, w: 170, h: 80, door: "B" }, { x: 30, y: 145, w: 140, h: 120, door: "R" }, { x: 470, y: 145, w: 140, h: 120, door: "L" }, { x: 235, y: 262, w: 170, h: 80, door: "T" }],
+  ];
+  const ROOMS = [
+    { name: "SALA DEI SERPENTI", kind: "serpente", col: "#5ae05a", walls: [[140, 100, 60, 40], [440, 100, 60, 40], [140, 250, 60, 40], [440, 250, 60, 40]], gold: [320, 195], floor: "#2a1e14" },
+    { name: "CRIPTA DEGLI SCHELETRI", kind: "scheletro", col: "#e8e8f0", walls: [[60, 128, 220, 14], [360, 128, 220, 14], [60, 260, 220, 14], [360, 260, 220, 14]], gold: [530, 200], floor: "#1a1a26" },
+    { name: "TANA DEI RAGNI", kind: "ragno", col: "#c87aff", walls: [[250, 140, 14, 110], [376, 140, 14, 110], [250, 236, 140, 14]], gold: [320, 195], floor: "#1e1426" },
+    { name: "COVO DEI GOBLIN", kind: "goblin", col: "#ff8a3a", walls: [[100, 80, 100, 40], [260, 160, 120, 30], [440, 240, 100, 40], [120, 262, 90, 30], [430, 88, 90, 30]], gold: [560, 318], floor: "#261a10" },
+  ];
+
+  const DIFFICULTIES = {
+    facile:    { label: "FACILE",    color: "#7ed87a", desc: "5 vite · mostri lenti e meno numerosi · il guardiano arriva tardi", lives: 5, speed: 0.75, linger: 30, extra: 0, hall: 0.8 },
+    normale:   { label: "NORMALE",   color: "#ffc83a", desc: "3 vite", lives: 3, speed: 1.15, linger: 18, extra: 1, hall: 1 },
+    difficile: { label: "DIFFICILE", color: "#ff5a5a", desc: "3 vite · mostri svelti e numerosi · il guardiano arriva presto", lives: 3, speed: 1.3, linger: 13, extra: 2, hall: 1.2 },
+  };
+  const DIFF_IDS = Object.keys(DIFFICULTIES);
+  const DIFF_KEY = "stanze-difficulty";
+  const bestKey = (id) => `stanze-best-${id}`;
+  function store(k, v) { try { localStorage.setItem(k, v); } catch { /* ignore */ } }
+  function load(k) { try { return localStorage.getItem(k); } catch { return null; } }
+  const rnd = (a, b) => a + Math.random() * (b - a);
+  const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
+  const pick = (arr) => arr[Math.floor(Math.random() * arr.length)];
+  const dist = (a, b) => Math.hypot(a.x - b.x, a.y - b.y);
+
+  // ---------- Canvas ----------
+  const canvas = document.getElementById("game");
+  const ctx = canvas.getContext("2d");
+  const wrapEl = document.getElementById("wrap");
+  const overlay = document.getElementById("overlay");
+  const touchEl = document.getElementById("touch");
+  const pauseBtn = document.getElementById("pauseBtn");
+  let pxRatio = 1, touchMode = !!(window.matchMedia && matchMedia("(pointer: coarse)").matches);
+  function resize() {
+    const portrait = window.innerHeight > window.innerWidth;
+    const showTouch = touchMode && isPlaying();
+    touchEl.style.display = showTouch ? "flex" : "none";
+    touchEl.classList.toggle("small", !portrait && window.innerHeight < 480);
+    wrapEl.style.paddingBottom = showTouch && portrait ? "calc(170px + env(safe-area-inset-bottom, 0px))" : "0";
+    let availW = window.innerWidth - 8, availH = window.innerHeight - 8;
+    if (showTouch && portrait) availH -= 170;
+    if (showTouch && !portrait) {
+      const side = Math.max(...[...touchEl.children].map((el) => el.offsetWidth)) + 20;
+      if (window.innerWidth - 2 * side > 200) availW = window.innerWidth - 2 * side;
+    }
+    const s = Math.max(0.2, Math.min(availW / W, availH / H));
+    pxRatio = Math.min(3, s * (window.devicePixelRatio || 1));
+    canvas.style.width = W * s + "px";
+    canvas.style.height = H * s + "px";
+    canvas.width = Math.round(W * pxRatio);
+    canvas.height = Math.round(H * pxRatio);
+  }
+  window.addEventListener("resize", () => syncControls());
+
+  // ---------- Audio ----------
+  let audioCtx = null;
+  function beep(freq, dur, type = "square", vol = 0.04, slide = 0, delay = 0) {
+    if (!audioCtx) return;
+    const t = audioCtx.currentTime + delay;
+    const osc = audioCtx.createOscillator(), gain = audioCtx.createGain();
+    osc.type = type;
+    osc.frequency.setValueAtTime(freq, t);
+    if (slide) osc.frequency.exponentialRampToValueAtTime(Math.max(20, freq + slide), t + dur);
+    gain.gain.setValueAtTime(vol, t);
+    gain.gain.exponentialRampToValueAtTime(0.0001, t + dur);
+    osc.connect(gain).connect(audioCtx.destination);
+    osc.start(t); osc.stop(t + dur + 0.02);
+  }
+  function noise(dur, vol, freq) {
+    if (!audioCtx) return;
+    const len = Math.floor(audioCtx.sampleRate * dur), buf = audioCtx.createBuffer(1, len, audioCtx.sampleRate), d = buf.getChannelData(0);
+    for (let i = 0; i < len; i++) d[i] = (Math.random() * 2 - 1) * (1 - i / len);
+    const src = audioCtx.createBufferSource(), f = audioCtx.createBiquadFilter(), g = audioCtx.createGain();
+    src.buffer = buf; f.type = "bandpass"; f.frequency.value = freq; g.gain.value = vol;
+    src.connect(f).connect(g).connect(audioCtx.destination); src.start();
+  }
+  const arp = (notes, gap, d, type = "square", vol = 0.04) => notes.forEach((f, i) => beep(f, d, type, vol, 0, i * gap));
+  let sfxN = 0;
+  const lim = (fn) => (...a) => { if (sfxN++ < 6) fn(...a); };
+  const sfx = {
+    arrow: lim(() => { noise(0.08, 0.05, 3000); beep(900, 0.08, "triangle", 0.03, -400); }),
+    hit: lim(() => { noise(0.15, 0.12, 800); beep(200, 0.15, "square", 0.04, -100); }),
+    gold: () => arp([784, 988, 1175, 1568, 1976], 0.06, 0.12, "square", 0.045),
+    door: lim(() => arp([330, 440], 0.06, 0.1, "triangle", 0.04)),
+    warn: lim(() => arp([220, 207, 196], 0.12, 0.2, "sawtooth", 0.035)),
+    die: () => { noise(0.4, 0.16, 500); arp([392, 330, 262, 196], 0.1, 0.18, "triangle", 0.05); },
+    level: () => arp([523, 659, 784, 1047, 784, 1047, 1319], 0.08, 0.14, "square", 0.045),
+    over: () => arp([523, 466, 415, 392, 330, 262], 0.15, 0.24, "triangle", 0.05),
+  };
+
+  // ---------- State ----------
+  let difficulty = DIFFICULTIES[load(DIFF_KEY)] ? load(DIFF_KEY) : "normale";
+  let diff = DIFFICULTIES[difficulty];
+  let state = "menu", menu = null, pausedFrom = null, stateT = 0, clock = 0;
+  let score = 0, lives = 3, level = 1, bestCache = 0, nextLife = 20000;
+  let view = "map", map = null, done = [], roomOf = [], cur = -1, room = null;
+  let P = null, mons = [], halls = [], arrow = null, guard = null, lingerT = 0, gold = null, lastBy = "";
+  let parts = [], popups = [], message = null, firePressed = false;
+  const keys = { left: false, right: false, up: false, down: false };
+  const stick = { x: 0, y: 0 };
+
+  // ---------- Geometry ----------
+  const inRect = (x, y, r, m = 0) => x > r[0] - m && x < r[0] + r[2] + m && y > r[1] - m && y < r[1] + r[3] + m;
+  function blockedRoom(x, y, r) {
+    for (const w of room.walls) if (inRect(x, y, w, r)) return true;
+    return false;
+  }
+  // the gap in the room's outer wall
+  function doorGap(side) {
+    const d = DOORS[side];
+    return side === "L" || side === "R" ? { a: d.y - DOOR_W / 2, b: d.y + DOOR_W / 2 } : { a: d.x - DOOR_W / 2, b: d.x + DOOR_W / 2 };
+  }
+  function moveInRoom(o, dx, dy, r, ghost) {
+    const side = map[cur].door, g = doorGap(side);
+    const can = (x, y) => {
+      if (!ghost && blockedRoom(x, y, r)) return false;
+      // the outer wall, open only at the door
+      const outL = x < AX0 + r, outR = x > AX1 - r, outT = y < AY0 + r, outB = y > AY1 - r;
+      if (outL && !(side === "L" && y > g.a + r && y < g.b - r && o === P)) return false;
+      if (outR && !(side === "R" && y > g.a + r && y < g.b - r && o === P)) return false;
+      if (outT && !(side === "T" && x > g.a + r && x < g.b - r && o === P)) return false;
+      if (outB && !(side === "B" && x > g.a + r && x < g.b - r && o === P)) return false;
+      return true;
+    };
+    let moved = false;
+    if (can(o.x + dx, o.y)) { o.x += dx; moved = true; }
+    if (can(o.x, o.y + dy)) { o.y += dy; moved = true; }
+    return moved;
+  }
+  function blockedMap(x, y, r) {
+    if (x < 8 + r || x > W - 8 - r || y < TOP + 8 + r || y > H - 8 - r) return true;
+    for (const rm of map) if (inRect(x, y, [rm.x, rm.y, rm.w, rm.h], r)) return true;
+    return false;
+  }
+  // where a map room's door is, just outside the wall
+  function mapDoor(rm) {
+    const s = rm.door;
+    return s === "B" ? { x: rm.x + rm.w / 2, y: rm.y + rm.h + 7 } : s === "T" ? { x: rm.x + rm.w / 2, y: rm.y - 7 } : s === "L" ? { x: rm.x - 7, y: rm.y + rm.h / 2 } : { x: rm.x + rm.w + 7, y: rm.y + rm.h / 2 };
+  }
+
+  // ---------- Flow ----------
+  const isPlaying = () => ["intro", "play", "dead", "clear"].includes(state);
+  function startGame() {
+    if (!audioCtx) { try { audioCtx = new (window.AudioContext || window.webkitAudioContext)(); } catch { audioCtx = null; } }
+    if (audioCtx && audioCtx.state === "suspended") audioCtx.resume();
+    score = 0; lives = diff.lives; level = 1; nextLife = 20000;
+    bestCache = parseInt(load(bestKey(difficulty)), 10) || 0;
+    beginLevel();
+    menu = null;
+    overlay.classList.add("hidden");
+    syncControls();
+    last = performance.now();
+  }
+  function beginLevel() {
+    map = MAPS[(level - 1) % MAPS.length];
+    done = [false, false, false, false];
+    roomOf = [0, 1, 2, 3].sort(() => Math.random() - 0.5);
+    toMap(null);
+    message = { text: `SOTTERRANEO ${level}`, sub: "entra nelle quattro stanze e prendi i tesori", t: 0 };
+    state = "intro"; stateT = 1.5;
+  }
+  function makeHalls() {
+    const n = Math.min(4, 2 + Math.floor((level - 1) / 2));
+    halls = [];
+    const spots = [[320, 195], [30, 45], [610, 45], [30, 345], [610, 345]];
+    for (let i = 0; i < n; i++) { const [x, y] = spots[(i + 1) % spots.length]; halls.push({ x, y, a: rnd(0, TAU), t: 0 }); }
+  }
+  function toMap(fromRoom) {
+    view = "map"; cur = -1; room = null; arrow = null; guard = null; mons = [];
+    if (fromRoom !== null) {
+      const rm = map[fromRoom], d = mapDoor(rm), o = { B: [0, 12], T: [0, -12], L: [-12, 0], R: [12, 0] }[rm.door];
+      P = { x: d.x + o[0], y: d.y + o[1], fx: 0, fy: 1, safe: 1.2, walk: 0 }; nudgeOut(P);
+    }
+    else { P = { x: 320, y: 195, fx: 0, fy: 1, safe: 2, walk: 0 }; makeHalls(); }
+    // keep the corridor guards away from where the hero comes out
+    for (const h of halls) if (dist(h, P) < 120) { h.x = h.x < 320 ? 30 : 610; h.y = h.y < 195 ? 45 : 345; }
+  }
+  function nudgeOut(o) { for (let k = 0; k < 20 && blockedMap(o.x, o.y, HALL_R); k++) { o.x += Math.sign(320 - o.x) * 2; o.y += Math.sign(195 - o.y) * 2; } }
+  function enterRoom(i) {
+    view = "room"; cur = i; room = ROOMS[roomOf[i]];
+    const side = map[i].door, d = DOORS[side];
+    const ix = side === "L" ? AX0 + 14 : side === "R" ? AX1 - 14 : d.x, iy = side === "T" ? AY0 + 14 : side === "B" ? AY1 - 14 : d.y;
+    P = { x: ix, y: iy, fx: side === "L" ? 1 : side === "R" ? -1 : 0, fy: side === "T" ? 1 : side === "B" ? -1 : 0, safe: 1.2, walk: 0 };
+    arrow = null; guard = null; lingerT = diff.linger;
+    gold = done[i] ? null : { x: room.gold[0], y: room.gold[1] };
+    mons = [];
+    if (!done[i]) {
+      const n = Math.min(7, 3 + diff.extra + Math.floor(level / 2));
+      for (let k = 0; k < n; k++) {
+        let x, y, tries = 0;
+        do { x = rnd(AX0 + 30, AX1 - 30); y = rnd(AY0 + 30, AY1 - 30); tries++; } while (tries < 200 && (blockedRoom(x, y, MR + 4) || Math.hypot(x - P.x, y - P.y) < 200));
+        mons.push({ x, y, vx: 0, vy: 0, a: rnd(0, TAU), t: rnd(0, 2), dead: 0, wob: rnd(0, TAU), stuck: 0 });
+      }
+    }
+    sfx.door();
+    message = { text: room.name, sub: done[i] ? "qui il tesoro l'hai già preso" : "prendi il tesoro ed esci dalla porta", t: 0.8 };
+  }
+  function addScore(n, x, y, color = "#ffffff", text) {
+    score += n;
+    if (score >= nextLife) { lives++; nextLife += 40000; arp([523, 659, 784, 1047, 1319], 0.07, 0.12); popups.push({ x: W / 2, y: 70, text: "VITA EXTRA!", color: "#7ae05a", t: 0 }); }
+    if (x !== undefined) popups.push({ x, y, text: text || String(n), color, t: 0 });
+  }
+  function burst(x, y, c, n = 12, sp = 110, life = 0.6) {
+    for (let k = 0; k < n; k++) { const a = Math.random() * TAU, s = sp * rnd(0.3, 1); parts.push({ x, y, vx: Math.cos(a) * s, vy: Math.sin(a) * s, t: 0, life: life * rnd(0.6, 1.2), c }); }
+  }
+  function die(by) {
+    if (state !== "play" || P.safe > 0) return;
+    if (window.__deaths) window.__deaths.push([level, by, view]);
+    if (window.__god) return;
+    lives--; lastBy = by; sfx.die(); burst(P.x, P.y, "#ffc83a", 20, 120, 0.7);
+    state = "dead"; stateT = 2;
+  }
+  function gameOver() {
+    state = "over";
+    const prev = parseInt(load(bestKey(difficulty)), 10) || 0;
+    const record = score > prev;
+    if (record) store(bestKey(difficulty), String(score));
+    sfx.over();
+    menu = () => showOverlay(
+      `<h2 class="lose">${lives <= 0 ? "VITE FINITE!" : "PARTITA FINITA"}</h2>
+       <p>Punteggio: <b>${score.toLocaleString("it-IT")}</b> · sotterraneo ${level} · ${diff.label}</p>
+       ${record ? "<p style='color:var(--pink)'>★ NUOVO RECORD! ★</p>" : ""}
+       ${difficultyHTML()}
+       <button class="start" data-start>GIOCA ANCORA</button>`
+    );
+    menu();
+    syncControls();
+  }
+  function togglePause() {
+    if (isPlaying()) {
+      pausedFrom = state; state = "paused";
+      showOverlay(`<h2>PAUSA</h2><button class="start" data-resume>CONTINUA</button><p class="muted">Premi P per continuare</p>`);
+    } else if (state === "paused") {
+      state = pausedFrom; overlay.classList.add("hidden"); last = performance.now();
+    }
+    syncControls();
+  }
+  // the pause menu can end the game (shared/iniziali.js): it ends here the usual way, saving the record
+  window.addEventListener("sala:termina", () => { if (state !== "paused") return; state = pausedFrom; overlay.classList.add("hidden"); gameOver(); syncControls(); });
+  function syncControls() {
+    pauseBtn.style.display = isPlaying() && touchMode ? "block" : "none";
+    resize();
+  }
+  pauseBtn.addEventListener("click", () => togglePause());
+  function showOverlay(html) { overlay.innerHTML = html; overlay.classList.remove("hidden"); }
+  function difficultyHTML() {
+    const buttons = DIFF_IDS.map((id) => {
+      const d = DIFFICULTIES[id];
+      return `<button type="button" data-diff="${id}" class="${id === difficulty ? "on" : ""}" style="--c:${d.color}">${d.label}</button>`;
+    }).join("");
+    const best = parseInt(load(bestKey(difficulty)), 10);
+    return `<div class="diff">${buttons}</div><p class="muted">${diff.desc}${best ? ` · Record: ${best.toLocaleString("it-IT")}` : ""}</p>`;
+  }
+  function setDifficulty(id) { if (!DIFFICULTIES[id]) return; difficulty = id; diff = DIFFICULTIES[id]; store(DIFF_KEY, id); if (menu) menu(); }
+  function showTitle() {
+    menu = showTitle;
+    showOverlay(
+      `<h1>STANZE DEL TESORO</h1>
+       <p>Nel sotterraneo ci sono quattro stanze, ognuna con un tesoro e i suoi mostri. Nei corridoi vagano i guardiani: non si possono abbattere, evitali ed entra dalle porte. Nelle stanze usa l'arco, prendi il tesoro ed esci prima che un guardiano venga a cercarti!</p>
+       <div class="pts">
+         <span><b>Tesoro</b></span><span>300 + 100 per sotterraneo</span>
+         <span><b>Mostri</b></span><span>100 · 200 dopo aver preso il tesoro · stanza ripulita: 500</span>
+         <span><b>Attento</b></span><span>i mostri abbattuti restano a terra per un po' e scottano · un'unica freccia alla volta</span>
+       </div>
+       ${touchMode
+         ? `<p class="muted help">Levetta per camminare · FRECCIA per tirare nella direzione in cui guardi</p>`
+         : `<p class="muted help">Frecce o WASD per camminare · SPAZIO, J o Z per tirare una freccia · P pausa</p>`}
+       ${difficultyHTML()}
+       <button class="start" data-start>NEL SOTTERRANEO!</button>`
+    );
+  }
+  overlay.addEventListener("click", (e) => {
+    const d = e.target.closest("[data-diff]");
+    if (d) { setDifficulty(d.dataset.diff); return; }
+    if (e.target.closest("[data-start]")) startGame();
+    if (e.target.closest("[data-resume]")) togglePause();
+  });
+
+  // ---------- Input ----------
+  const KEYMAP = { arrowleft: "left", a: "left", arrowright: "right", d: "right", arrowup: "up", w: "up", arrowdown: "down", s: "down" };
+  const FIREKEYS = [" ", "j", "z", "x"];
+  window.addEventListener("keydown", (e) => {
+    const k = e.key.toLowerCase();
+    if ([" ", "arrowup", "arrowdown", "arrowleft", "arrowright"].includes(k)) e.preventDefault();
+    if (state === "menu" || state === "over") {
+      if (e.key === "Enter") startGame();
+      else if (["1", "2", "3"].includes(k)) setDifficulty(DIFF_IDS[+k - 1]);
+      return;
+    }
+    if (k === "p" || k === "escape") { if (!e.repeat) togglePause(); return; }
+    if (state === "paused") { if (e.key === "Enter") togglePause(); return; }
+    if (FIREKEYS.includes(k) && !e.repeat) firePressed = true;
+    if (KEYMAP[k]) keys[KEYMAP[k]] = true;
+  });
+  window.addEventListener("keyup", (e) => { const m = KEYMAP[e.key.toLowerCase()]; if (m) keys[m] = false; });
+  window.addEventListener("blur", () => { for (const k in keys) keys[k] = false; stick.x = stick.y = 0; if (isPlaying()) togglePause(); });
+  const fireBtn = touchEl.querySelector(".jump");
+  fireBtn.addEventListener("pointerdown", (e) => { e.preventDefault(); firePressed = true; fireBtn.classList.add("on"); });
+  for (const ev of ["pointerup", "pointercancel", "pointerleave"]) fireBtn.addEventListener(ev, () => fireBtn.classList.remove("on"));
+  const stickEl = touchEl.querySelector(".stick"), knob = stickEl.querySelector(".knob");
+  let stickId = null;
+  function stickAt(e) {
+    const r = stickEl.getBoundingClientRect(), max = r.width / 2 - 14;
+    let dx = e.clientX - (r.left + r.width / 2), dy = e.clientY - (r.top + r.height / 2);
+    const len = Math.hypot(dx, dy);
+    if (len > max) { dx *= max / len; dy *= max / len; }
+    knob.style.transform = `translate(${dx}px, ${dy}px)`;
+    const m = Math.hypot(dx, dy) / max, s = m < 0.15 ? 0 : Math.min(1, (m - 0.15) / 0.6) / m;
+    stick.x = dx / max * s; stick.y = dy / max * s;
+  }
+  const stickEnd = (e) => { if (e.pointerId !== stickId) return; stickId = null; knob.style.transform = ""; stick.x = stick.y = 0; };
+  stickEl.addEventListener("pointerdown", (e) => { e.preventDefault(); stickId = e.pointerId; try { stickEl.setPointerCapture(e.pointerId); } catch { /* ignore */ } stickAt(e); });
+  stickEl.addEventListener("pointermove", (e) => { if (e.pointerId === stickId) stickAt(e); });
+  for (const ev of ["pointerup", "pointercancel", "lostpointercapture"]) stickEl.addEventListener(ev, stickEnd);
+  window.addEventListener("pointerdown", (e) => { if (e.pointerType === "touch" && !touchMode) { touchMode = true; syncControls(); if (menu) menu(); } }, true);
+
+  // ---------- Update ----------
+  function input() {
+    let ix = clamp(stick.x + (keys.right ? 1 : 0) - (keys.left ? 1 : 0), -1, 1), iy = clamp(stick.y + (keys.down ? 1 : 0) - (keys.up ? 1 : 0), -1, 1);
+    const m = Math.hypot(ix, iy); if (m > 1) { ix /= m; iy /= m; }
+    return { ix, iy, m: Math.min(1, m) };
+  }
+  function updateMap(dt) {
+    const { ix, iy, m } = input();
+    P.safe = Math.max(0, P.safe - dt);
+    // all four treasures taken (even if the hero fell on the way out): next floor
+    if (done.every(Boolean)) { levelDone(); return; }
+    if (m > 0.1) {
+      const sp = 95;
+      const nx = P.x + ix * sp * dt, ny = P.y + iy * sp * dt;
+      // a room's door: walk into it to go in
+      for (let i = 0; i < map.length; i++) { const d = mapDoor(map[i]); if (Math.hypot(nx - d.x, ny - d.y) < 9) { enterRoom(i); return; } }
+      if (!blockedMap(nx, P.y, HALL_R)) P.x = nx;
+      if (!blockedMap(P.x, ny, HALL_R)) P.y = ny;
+      P.walk += dt * 10;
+    }
+    firePressed = false;
+    // the corridor guards: unbeatable, they drift towards the hero when near
+    const hs = 42 * diff.hall * Math.min(1.4, 1 + 0.05 * (level - 1));
+    for (const h of halls) {
+      h.t -= dt;
+      const d = dist(h, P);
+      if (d < 150 && P.safe <= 0) h.a = Math.atan2(P.y - h.y, P.x - h.x) + Math.sin(clock * 2 + h.x) * 0.3;
+      else if (h.t <= 0) { h.a = rnd(0, TAU); h.t = rnd(1, 3); }
+      const nx = h.x + Math.cos(h.a) * hs * dt, ny = h.y + Math.sin(h.a) * hs * dt;
+      let ok = false;
+      if (!blockedMap(nx, h.y, 7)) { h.x = nx; ok = true; }
+      if (!blockedMap(h.x, ny, 7)) { h.y = ny; ok = true; }
+      if (!ok) { h.a += Math.PI * rnd(0.5, 1.5); h.t = rnd(0.5, 1.5); }
+      if (d < HALL_R + 7) die("UN GUARDIANO");
+    }
+  }
+  function updateRoom(dt) {
+    const { ix, iy, m } = input();
+    P.safe = Math.max(0, P.safe - dt);
+    if (m > 0.1) {
+      const sp = 115 * m;
+      moveInRoom(P, ix * sp * dt, iy * sp * dt, PR);
+      const l = Math.hypot(ix, iy); P.fx = ix / l; P.fy = iy / l; P.walk += dt * 12;
+    }
+    // out through the door
+    if (P.x < AX0 - 4 || P.x > AX1 + 4 || P.y < AY0 - 4 || P.y > AY1 + 4) { sfx.door(); toMap(cur); return; }
+    if (firePressed && !arrow) { arrow = { x: P.x, y: P.y, vx: P.fx * ASPEED, vy: P.fy * ASPEED, life: 1.4 }; sfx.arrow(); }
+    firePressed = false;
+    // the treasure
+    if (gold && Math.hypot(P.x - gold.x, P.y - gold.y) < 14) {
+      const pts = 300 + 100 * level; addScore(pts, gold.x, gold.y - 16, "#ffc83a"); burst(gold.x, gold.y, "#ffc83a", 22, 120, 0.7);
+      gold = null; done[cur] = true; sfx.gold();
+      if (done.every(Boolean)) message = { text: "TUTTI I TESORI!", sub: "esci dalla porta per scendere più giù", t: 0 };
+    }
+    if (arrow) {
+      arrow.life -= dt;
+      const steps = 3;
+      for (let k = 0; k < steps && arrow; k++) {
+        arrow.x += arrow.vx * dt / steps; arrow.y += arrow.vy * dt / steps;
+        if (arrow.life <= 0 || arrow.x < AX0 || arrow.x > AX1 || arrow.y < AY0 || arrow.y > AY1 || blockedRoom(arrow.x, arrow.y, 1)) { arrow = null; break; }
+        for (const mo of mons) if (!mo.dead && Math.hypot(mo.x - arrow.x, mo.y - arrow.y) < MR + 3) {
+          mo.dead = 3.5; arrow = null; sfx.hit(); burst(mo.x, mo.y, room.col, 14, 100, 0.5);
+          addScore(gold ? 100 : 200, mo.x, mo.y - 14, "#ffffff");
+          if (mons.every((o) => o.dead)) { addScore(500, W / 2, 80, "#7ae05a", "STANZA RIPULITA +500"); }
+          break;
+        }
+      }
+    }
+    // the monsters: they hunt the hero round the walls
+    const ms = 60 * diff.speed * Math.min(1.6, 1 + 0.08 * (level - 1));
+    for (const mo of mons) {
+      if (mo.dead) { mo.dead = Math.max(0, mo.dead - dt); if (mo.dead > 0 && dist(mo, P) < PR + MR - 2) die("UN MOSTRO ABBATTUTO"); else if (mo.dead <= 0) mo.gone = true; continue; }
+      mo.t -= dt; mo.wob += dt * 8;
+      if (mo.t <= 0) {
+        const toP = Math.atan2(P.y - mo.y, P.x - mo.x);
+        mo.a = mo.stuck > 0.4 ? toP + (Math.random() < 0.5 ? 1 : -1) * rnd(1.2, 2) : toP + rnd(-0.6, 0.6);
+        mo.t = mo.stuck > 0.4 ? rnd(0.6, 1.2) : rnd(0.3, 0.8); mo.stuck = 0;
+      }
+      const sp = room.kind === "ragno" ? ms * (0.6 + 0.9 * Math.abs(Math.sin(mo.wob * 0.4))) : room.kind === "goblin" ? ms * 1.1 : ms;
+      const ok = moveInRoom(mo, Math.cos(mo.a) * sp * dt, Math.sin(mo.a) * sp * dt, MR);
+      if (!ok) mo.stuck += dt * 3; else mo.stuck = Math.max(0, mo.stuck - dt);
+      if (dist(mo, P) < PR + MR - 2) die(`UN ${room.kind.toUpperCase()}`);
+    }
+    mons = mons.filter((mo) => !mo.gone);
+    // stay too long and a corridor guard comes in after you, through the walls
+    lingerT -= dt;
+    if (lingerT <= 0 && !guard) {
+      const a = rnd(0, TAU); guard = { x: clamp(AMX + Math.cos(a) * 400, AX0, AX1), y: clamp(AMY + Math.sin(a) * 300, AY0, AY1) };
+      if (Math.hypot(guard.x - P.x, guard.y - P.y) < 200) { guard.x = P.x < AMX ? AX1 : AX0; }
+      sfx.warn(); message = { text: "ARRIVA IL GUARDIANO!", sub: "scappa dalla porta!", t: 0.6 };
+    }
+    if (guard) {
+      const gs = 62 * diff.hall, a = Math.atan2(P.y - guard.y, P.x - guard.x);
+      guard.x += Math.cos(a) * gs * dt; guard.y += Math.sin(a) * gs * dt;
+      if (dist(guard, P) < PR + 9) die("UN GUARDIANO");
+    }
+  }
+  function levelDone() {
+    const b = 1000 * level; addScore(b);
+    message = { text: "SOTTERRANEO SVUOTATO!", sub: `bonus ${b.toLocaleString("it-IT")}`, t: 0 };
+    sfx.level(); state = "clear"; stateT = 2.4;
+  }
+  function update(dt) {
+    clock += dt; sfxN = 0;
+    if (message) { message.t += dt; if (message.t > 2.4) message = null; }
+    for (const p of parts) { p.t += dt; p.x += p.vx * dt; p.y += p.vy * dt; p.vx *= 0.94; p.vy *= 0.94; }
+    parts = parts.filter((p) => p.t < p.life);
+    for (const p of popups) { p.t += dt; p.y -= 20 * dt; }
+    popups = popups.filter((p) => p.t < 1.2);
+    if (!isPlaying()) return;
+    if (state === "intro") { stateT -= dt; if (stateT <= 0) state = "play"; return; }
+    if (state === "dead") {
+      stateT -= dt;
+      // back out in the corridors; the treasures taken stay taken
+      if (stateT <= 0) { if (lives <= 0) { gameOver(); return; } toMap(null); state = "play"; }
+      return;
+    }
+    if (state === "clear") { stateT -= dt; if (stateT <= 0) { level++; beginLevel(); } return; }
+    if (window.__bot) window.__bot(dt);
+    if (view === "map") updateMap(dt); else updateRoom(dt);
+  }
+
+  // ---------- Drawing ----------
+  function drawHero(x, y, s, fx, fy) {
+    if (P.safe > 0 && Math.floor(clock * 10) % 2) return;
+    ctx.save(); ctx.translate(x, y); ctx.scale(s, s);
+    const b = Math.sin(P.walk) * 1.2;
+    ctx.fillStyle = "#3a6aff"; ctx.beginPath(); ctx.arc(0, 2 + b * 0.3, 6, 0, TAU); ctx.fill();
+    ctx.fillStyle = "#ffd8a8"; ctx.beginPath(); ctx.arc(0, -4, 4.5, 0, TAU); ctx.fill();
+    ctx.fillStyle = "#3aa83a"; ctx.beginPath(); ctx.moveTo(-5, -5); ctx.lineTo(5, -5); ctx.lineTo(0, -12); ctx.closePath(); ctx.fill();
+    ctx.fillStyle = "#1a1a1a"; ctx.fillRect(fx * 2 - 2, -5 + fy, 1.5, 1.5); ctx.fillRect(fx * 2 + 1, -5 + fy, 1.5, 1.5);
+    // the bow
+    ctx.strokeStyle = "#c8945a"; ctx.lineWidth = 1.6; const a = Math.atan2(fy, fx);
+    ctx.beginPath(); ctx.arc(Math.cos(a) * 6, Math.sin(a) * 6 + 2, 5, a - 1.2, a + 1.2); ctx.stroke();
+    ctx.restore();
+  }
+  function drawMonster(mo) {
+    const x = mo.x, y = mo.y, c = room.col, k = room.kind;
+    if (mo.dead) {
+      // a fallen monster: hot to the touch until it fades
+      ctx.globalAlpha = Math.min(1, mo.dead); ctx.fillStyle = "#6a6a6a";
+      ctx.beginPath(); ctx.ellipse(x, y + 3, 9, 4, 0, 0, TAU); ctx.fill();
+      ctx.strokeStyle = `rgba(255,90,40,${0.5 + 0.5 * Math.sin(clock * 12)})`; ctx.lineWidth = 1.5; ctx.stroke(); ctx.globalAlpha = 1; return;
+    }
+    const w = Math.sin(mo.wob);
+    ctx.fillStyle = c; ctx.strokeStyle = c; ctx.lineWidth = 2;
+    if (k === "serpente") { ctx.beginPath(); for (let i = 0; i < 5; i++) { const px = x - Math.cos(mo.a) * i * 4 + Math.sin(mo.wob + i) * 2 * -Math.sin(mo.a), py = y - Math.sin(mo.a) * i * 4 + Math.sin(mo.wob + i) * 2 * Math.cos(mo.a); ctx.arc(px, py, 4.5 - i * 0.6, 0, TAU); } ctx.fill(); ctx.fillStyle = "#ff3a3a"; ctx.fillRect(x + Math.cos(mo.a) * 5 - 1, y + Math.sin(mo.a) * 5 - 1, 2, 2); }
+    else if (k === "scheletro") { ctx.beginPath(); ctx.arc(x, y - 5, 5, 0, TAU); ctx.fill(); ctx.fillRect(x - 1, y - 1, 2, 9); ctx.beginPath(); ctx.moveTo(x - 6, y + 2 + w); ctx.lineTo(x + 6, y + 2 - w); ctx.moveTo(x - 4, y + 11); ctx.lineTo(x, y + 7); ctx.lineTo(x + 4, y + 11); ctx.stroke(); ctx.fillStyle = "#1a1a26"; ctx.fillRect(x - 3, y - 6, 2, 2); ctx.fillRect(x + 1, y - 6, 2, 2); }
+    else if (k === "ragno") { ctx.beginPath(); ctx.arc(x, y, 6, 0, TAU); ctx.fill(); ctx.lineWidth = 1.3; for (const s of [-1, 1]) for (let i = 0; i < 4; i++) { const yy = y - 4 + i * 2.6; ctx.beginPath(); ctx.moveTo(x, yy); ctx.lineTo(x + s * 9, yy - 3 + (i % 2 ? w : -w) * 2); ctx.lineTo(x + s * 11, yy + 3); ctx.stroke(); } ctx.fillStyle = "#ff3a3a"; ctx.fillRect(x - 3, y - 3, 2, 2); ctx.fillRect(x + 1, y - 3, 2, 2); }
+    else { ctx.beginPath(); ctx.ellipse(x, y + 1, 7, 8, 0, 0, TAU); ctx.fill(); ctx.beginPath(); ctx.moveTo(x - 7, y - 4); ctx.lineTo(x - 12, y - 9); ctx.lineTo(x - 5, y - 7); ctx.moveTo(x + 7, y - 4); ctx.lineTo(x + 12, y - 9); ctx.lineTo(x + 5, y - 7); ctx.fill(); ctx.fillStyle = "#ffe85a"; ctx.fillRect(x - 4, y - 3, 3, 3); ctx.fillRect(x + 1, y - 3, 3, 3); ctx.fillStyle = "#ffffff"; ctx.fillRect(x - 3, y + 4, 6, 2); }
+  }
+  function drawGuard(x, y, s = 1) {
+    // a corridor guard: a hungry green blob with a big mouth
+    ctx.save(); ctx.translate(x, y); ctx.scale(s, s);
+    const m = Math.abs(Math.sin(clock * 6)) * 0.6 + 0.15;
+    ctx.fillStyle = "#3ae08a"; ctx.beginPath(); ctx.arc(0, 0, 8, m, TAU - m); ctx.lineTo(0, 0); ctx.closePath(); ctx.fill();
+    ctx.fillStyle = "#0e0a1a"; ctx.beginPath(); ctx.arc(1, -4, 1.6, 0, TAU); ctx.fill();
+    ctx.restore();
+  }
+  function drawMap() {
+    ctx.fillStyle = "#0e0a1a"; ctx.fillRect(0, TOP, W, H - TOP);
+    ctx.strokeStyle = "#3a2a5a"; ctx.lineWidth = 3; ctx.strokeRect(8, TOP + 8, W - 16, H - TOP - 16);
+    ctx.fillStyle = "rgba(90,70,140,0.08)"; for (let x = 20; x < W; x += 30) for (let y = TOP + 20; y < H; y += 30) ctx.fillRect(x, y, 2, 2);
+    map.forEach((rm, i) => {
+      const r = ROOMS[roomOf[i]];
+      ctx.fillStyle = done[i] ? "#1a1a24" : r.floor; ctx.fillRect(rm.x, rm.y, rm.w, rm.h);
+      ctx.strokeStyle = done[i] ? "#4a4a5a" : r.col; ctx.lineWidth = 3; ctx.strokeRect(rm.x, rm.y, rm.w, rm.h);
+      // the door
+      const d = mapDoor(rm), horiz = rm.door === "T" || rm.door === "B";
+      ctx.fillStyle = "#0e0a1a"; ctx.fillRect(horiz ? d.x - 10 : d.x - 9, horiz ? d.y - 9 : d.y - 10, horiz ? 20 : 18, horiz ? 18 : 20);
+      ctx.fillStyle = done[i] ? "#4a4a5a" : "#ffc83a"; ctx.font = "800 9px system-ui"; ctx.textAlign = "center";
+      ctx.fillText(done[i] ? "✓ PRESO" : r.name, rm.x + rm.w / 2, rm.y + rm.h / 2 - 4);
+      if (!done[i]) { ctx.fillStyle = "#ffc83a"; ctx.beginPath(); ctx.arc(rm.x + rm.w / 2, rm.y + rm.h / 2 + 12, 5 + Math.sin(clock * 4) * 1, 0, TAU); ctx.fill(); }
+    });
+    for (const h of halls) drawGuard(h.x, h.y, 1);
+    if (!(P.safe > 0 && Math.floor(clock * 10) % 2)) { ctx.fillStyle = "#ffc83a"; ctx.beginPath(); ctx.arc(P.x, P.y, HALL_R + 1, 0, TAU); ctx.fill(); ctx.strokeStyle = "#ffffff"; ctx.lineWidth = 1; ctx.stroke(); }
+  }
+  function drawRoom() {
+    ctx.fillStyle = "#0e0a1a"; ctx.fillRect(0, TOP, W, H - TOP);
+    ctx.fillStyle = room.floor; ctx.fillRect(AX0, AY0, AX1 - AX0, AY1 - AY0);
+    ctx.fillStyle = "rgba(255,255,255,0.03)"; for (let x = AX0; x < AX1; x += 30) for (let y = AY0 + ((x / 30) % 2) * 15; y < AY1; y += 30) ctx.fillRect(x, y, 30, 15);
+    ctx.strokeStyle = room.col; ctx.lineWidth = 4; ctx.strokeRect(AX0, AY0, AX1 - AX0, AY1 - AY0);
+    // the door gap
+    const side = map[cur].door, d = DOORS[side], h = side === "T" || side === "B";
+    ctx.fillStyle = "#0e0a1a"; ctx.fillRect(h ? d.x - DOOR_W / 2 : d.x - 4, h ? d.y - 4 : d.y - DOOR_W / 2, h ? DOOR_W : 8, h ? 8 : DOOR_W);
+    ctx.strokeStyle = "rgba(255,200,58,0.5)"; ctx.setLineDash([3, 3]); ctx.lineWidth = 1.5; ctx.strokeRect(h ? d.x - DOOR_W / 2 : d.x - 4, h ? d.y - 4 : d.y - DOOR_W / 2, h ? DOOR_W : 8, h ? 8 : DOOR_W); ctx.setLineDash([]);
+    for (const w of room.walls) { ctx.fillStyle = "#4a3a2a"; ctx.fillRect(w[0], w[1], w[2], w[3]); ctx.strokeStyle = room.col; ctx.lineWidth = 2; ctx.strokeRect(w[0], w[1], w[2], w[3]); }
+    if (gold) {
+      const g = gold; ctx.fillStyle = "#8a5a2a"; ctx.fillRect(g.x - 9, g.y - 3, 18, 10); ctx.fillStyle = "#ffc83a"; ctx.beginPath(); ctx.ellipse(g.x, g.y - 3, 9, 5, 0, Math.PI, TAU); ctx.fill();
+      ctx.fillStyle = "#ffe85a"; for (let i = 0; i < 3; i++) { const a = clock * 3 + i * 2.1; ctx.fillRect(g.x + Math.cos(a) * 12 - 1, g.y - 6 + Math.sin(a) * 6 - 1, 2, 2); }
+    }
+    for (const mo of mons) drawMonster(mo);
+    if (arrow) { const a = Math.atan2(arrow.vy, arrow.vx); ctx.strokeStyle = "#e8d8b8"; ctx.lineWidth = 2; ctx.beginPath(); ctx.moveTo(arrow.x, arrow.y); ctx.lineTo(arrow.x - Math.cos(a) * 10, arrow.y - Math.sin(a) * 10); ctx.stroke(); ctx.fillStyle = "#c8c8d8"; ctx.beginPath(); ctx.arc(arrow.x, arrow.y, 2, 0, TAU); ctx.fill(); }
+    if (state !== "dead" || Math.floor(clock * 6) % 2) drawHero(P.x, P.y, 1.2, P.fx, P.fy);
+    if (guard) drawGuard(guard.x, guard.y, 1.6);
+  }
+  function drawHud() {
+    ctx.fillStyle = "rgba(10,6,20,0.95)"; ctx.fillRect(0, 0, W, TOP);
+    ctx.textBaseline = "middle"; ctx.textAlign = "left";
+    const x0 = touchMode ? 130 : 10;
+    ctx.fillStyle = "#ffffff"; ctx.font = "900 15px system-ui"; ctx.fillText(score.toLocaleString("it-IT"), x0, 14);
+    ctx.fillStyle = "#c8b8a0"; ctx.font = "700 9px system-ui"; ctx.fillText(`REC ${Math.max(bestCache, score).toLocaleString("it-IT")}`, x0 + 80, 9);
+    ctx.fillStyle = "#ffc83a"; ctx.font = "900 10px system-ui"; ctx.fillText(`SOTTERRANEO ${level}`, x0 + 80, 21);
+    ctx.fillStyle = "#ffc83a"; ctx.font = "800 9px system-ui"; ctx.fillText("TESORI", x0 + 200, 14);
+    for (let i = 0; i < 4; i++) { ctx.fillStyle = done[i] ? "#ffc83a" : "#3a2a1a"; ctx.beginPath(); ctx.arc(x0 + 244 + i * 13, 14, 4.5, 0, TAU); ctx.fill(); }
+    if (view === "room" && !guard) { const k = clamp(lingerT / diff.linger, 0, 1); ctx.fillStyle = "#3a2a1a"; ctx.fillRect(x0 + 310, 9, 70, 8); ctx.fillStyle = k < 0.3 ? "#ff4a4a" : "#3ae08a"; ctx.fillRect(x0 + 310, 9, 70 * k, 8); ctx.fillStyle = "#c8b8a0"; ctx.fillText("guardiano", x0 + 385, 14); }
+    const lx = touchMode ? W - 60 : W - 12;
+    for (let i = 0; i < Math.min(lives - (state === "dead" ? 0 : 1), 6); i++) { const cx = lx - i * 14; ctx.fillStyle = "#3aa83a"; ctx.beginPath(); ctx.moveTo(cx - 4, 16); ctx.lineTo(cx + 4, 16); ctx.lineTo(cx, 7); ctx.closePath(); ctx.fill(); ctx.fillStyle = "#ffd8a8"; ctx.beginPath(); ctx.arc(cx, 18, 3, 0, TAU); ctx.fill(); }
+    ctx.textBaseline = "alphabetic";
+  }
+  function draw() {
+    ctx.setTransform(pxRatio, 0, 0, pxRatio, 0, 0);
+    if (!map) { map = MAPS[0]; roomOf = [0, 1, 2, 3]; done = [false, true, false, false]; toMap(null); }
+    if (view === "map") drawMap(); else drawRoom();
+    for (const p of parts) { ctx.globalAlpha = Math.max(0, 1 - p.t / p.life); ctx.fillStyle = p.c; ctx.fillRect(p.x - 1.5, p.y - 1.5, 3, 3); }
+    ctx.globalAlpha = 1;
+    for (const p of popups) {
+      ctx.globalAlpha = Math.max(0, 1 - p.t / 1.2);
+      ctx.textAlign = "center"; ctx.font = "900 11px system-ui";
+      ctx.lineWidth = 3; ctx.strokeStyle = "#0e0a1a"; ctx.strokeText(p.text, p.x, p.y); ctx.fillStyle = p.color; ctx.fillText(p.text, p.x, p.y);
+    }
+    ctx.globalAlpha = 1;
+    if (state === "menu") return;
+    drawHud();
+    if (message) {
+      ctx.globalAlpha = Math.min(1, (2.4 - message.t) * 2);
+      ctx.textAlign = "center"; ctx.font = "italic 900 22px system-ui"; ctx.fillStyle = "#ffc83a";
+      ctx.lineWidth = 5; ctx.strokeStyle = "#0e0a1a"; ctx.strokeText(message.text, W / 2, 70); ctx.fillText(message.text, W / 2, 70);
+      if (message.sub) { ctx.font = "800 12px system-ui"; ctx.fillStyle = "#ffffff"; ctx.strokeText(message.sub, W / 2, 89); ctx.fillText(message.sub, W / 2, 89); }
+      ctx.globalAlpha = 1;
+    }
+    if (state === "dead") {
+      ctx.textAlign = "center"; ctx.font = "900 17px system-ui"; ctx.fillStyle = "#ff3a3a"; ctx.lineWidth = 4; ctx.strokeStyle = "#ffffff";
+      const t = `PRESO DA ${lastBy}!`;
+      ctx.strokeText(t, W / 2, 200); ctx.fillText(t, W / 2, 200);
+    }
+  }
+
+  // ---------- Loop ----------
+  const STEP = 1 / 120;
+  let last = performance.now(), acc = 0;
+  function frame(now) {
+    const dt = Math.min(0.1, (now - last) / 1000);
+    last = now;
+    if (isPlaying()) {
+      acc += dt;
+      while (acc >= STEP && isPlaying()) { update(STEP); acc -= STEP; }
+    } else { acc = 0; update(dt); }
+    draw();
+    requestAnimationFrame(frame);
+  }
+  syncControls();
+  showTitle();
+  requestAnimationFrame(frame);
+})();
+</script>
+<script src="../../shared/iniziali.js" data-record="stanze-best-" data-kind="score"></script>
+</body>
+</html>
