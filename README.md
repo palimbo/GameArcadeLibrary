@@ -4,7 +4,7 @@ Raccolta di giochi arcade per il browser. Ogni gioco è un singolo file HTML sen
 
 ## 🕹️ Sala Giochi — `index.html`
 
-Apri `index.html` nella cartella principale per la pagina di raccolta: mostra tutti i 120 giochi con copertina, genere, comandi e i tuoi record per ogni difficoltà (Facile, Normale, Difficile). Tocca «Gioca» per avviare un gioco; in ogni gioco il pulsante «← Sala Giochi» in alto a sinistra (visibile nei menu) riporta alla raccolta.
+Apri `index.html` nella cartella principale per la pagina di raccolta: mostra tutti i 121 giochi con copertina, genere, comandi e i tuoi record per ogni difficoltà (Facile, Normale, Difficile). Tocca «Gioca» per avviare un gioco; in ogni gioco il pulsante «← Sala Giochi» in alto a sinistra (visibile nei menu) riporta alla raccolta.
 
 **Iniziali del record:** quando batti un record compare la schermata da sala giochi per inserire le tue tre iniziali (frecce ↑ ↓ per cambiare lettera, ← → per spostarti, oppure scrivile direttamente; su telefono i tasti ▲ ▼ e OK). Le iniziali vengono salvate insieme al record e compaiono nei menu del gioco e nella Sala Giochi. Il codice è condiviso da tutti i giochi in `shared/iniziali.js`.
 
@@ -12,9 +12,9 @@ Apri `index.html` nella cartella principale per la pagina di raccolta: mostra tu
 
 **Comandi touch: levetta o frecce:** in cima alla Sala Giochi e nel menu di pausa di ogni gioco con la levetta si sceglie se usare la levetta analogica o una croce di frecce. Con le frecce il tocco viene agganciato a una delle otto direzioni (le quattro principali hanno la zona più larga, così le diagonali si prendono solo di proposito) e spinto fino in fondo; la scelta vale per tutti i giochi e resta memorizzata. Funziona anche nei giochi con due levette (la sfida a due di *Pugni di Fuoco*, muovi e spara di *Assalto Robotico*).
 
-**Trofei:** ogni gioco ha tre trofei a punteggio: 🥉 **Bronzo** (la soglia in qualsiasi difficoltà), 🥈 **Argento** (a Normale o Difficile) e 🥇 **Oro** (a Difficile); nei giochi a tempo (*Corsa al Tramonto*, *Crystal Wars*) conta finire entro un certo tempo. I trofei si calcolano dai record salvati, quindi quelli già fatti si sbloccano da soli; quando un record nuovo ne conquista uno compare un avviso in alto. Le soglie sono nella schermata iniziale, in pausa e a fine partita di ogni gioco; in Sala Giochi ogni cabinato mostra i suoi trofei, in cima c'è il totale (su 360) con il numero di giochi giocati e il filtro **Già giocati** mostra solo i giochi con almeno un record. Le soglie vengono dalle partite di prova di un bot per circa un terzo dei giochi e sono stimate sulle regole di punteggio per gli altri (`shared/trofei.js`).
+**Trofei:** ogni gioco ha tre trofei a punteggio: 🥉 **Bronzo** (la soglia in qualsiasi difficoltà), 🥈 **Argento** (a Normale o Difficile) e 🥇 **Oro** (a Difficile); nei giochi a tempo (*Corsa al Tramonto*, *Crystal Wars*) conta finire entro un certo tempo. I trofei si calcolano dai record salvati, quindi quelli già fatti si sbloccano da soli; quando un record nuovo ne conquista uno compare un avviso in alto. Le soglie sono nella schermata iniziale, in pausa e a fine partita di ogni gioco; in Sala Giochi ogni cabinato mostra i suoi trofei, in cima c'è il totale (su 363) con il numero di giochi giocati e il filtro **Già giocati** mostra solo i giochi con almeno un record. Le soglie vengono dalle partite di prova di un bot per circa un terzo dei giochi e sono stimate sulle regole di punteggio per gli altri (`shared/trofei.js`).
 
-**Generi:** ogni gioco appartiene a una o più famiglie di generi (🚀 Sparatutto, 🪜 Piattaforme, 🎯 Azione e riflessi, 🌀 Labirinti, ⚽ Sport, 🧩 Rompicapo, 🏁 Corse e veicoli, 🏰 Strategia e difesa, 🥊 Picchiaduro, 🗝️ Avventura): per esempio *Cripta degli Eroi* è avventura, sparatutto e labirinto. Le famiglie sono le etichette colorate di ogni cabinato. Sotto la ricerca una fila di pulsanti, con il numero di giochi di ciascuna famiglia, mostra solo quel genere (toccandolo di nuovo si torna a *Tutti i generi*); anche toccare un'etichetta su un cabinato filtra per quella famiglia. Un gioco con più famiglie compare in ognuna. La scelta resta memorizzata e si combina con la ricerca e con *Già giocati*. Su telefono la fila scorre di lato.
+**Generi:** ogni gioco appartiene a una o più famiglie di generi (🚀 Sparatutto, 🪜 Piattaforme, 🎯 Azione e riflessi, 🌀 Labirinti, ⚽ Sport, 🧩 Rompicapo, 🏁 Corse e veicoli, 🏰 Strategia e difesa, 🥊 Picchiaduro, 🗝️ Avventura, 🎵 Ritmo e musica): per esempio *Cripta degli Eroi* è avventura, sparatutto e labirinto. Le famiglie sono le etichette colorate di ogni cabinato. Sotto la ricerca una fila di pulsanti, con il numero di giochi di ciascuna famiglia, mostra solo quel genere (toccandolo di nuovo si torna a *Tutti i generi*); anche toccare un'etichetta su un cabinato filtra per quella famiglia. Un gioco con più famiglie compare in ognuna. La scelta resta memorizzata e si combina con la ricerca e con *Già giocati*. Su telefono la fila scorre di lato.
 
 **Cerca:** sotto i trofei c'è una casella per trovare subito un gioco scrivendo parte del nome o del genere (maiuscole e accenti non contano, più parole restringono la ricerca); con Invio si apre il primo gioco trovato, con Esc si svuota. Funziona insieme al filtro *Già giocati*.
 
@@ -1858,3 +1858,18 @@ Pesca in stile *Fishing Derby*. Due pescatori, uno per pontile, si sfidano a chi
 - **Touch:** levetta (o frecce) per muovere l'amo, tieni premuto MULINELLO
 
 Per giocare apri `games/gara-di-pesca/index.html` nel browser.
+
+### 🕺 Pista da Ballo — `games/pista-da-ballo/index.html`
+
+Gioco di ritmo in stile *Dance Dance Revolution*. Le frecce salgono lungo quattro corsie (← ↓ ↑ →) a tempo di musica: va premuta la direzione giusta quando ogni freccia arriva sulla sagoma in alto.
+
+- **La musica:** tutte le canzoni sono suonate dal gioco stesso (batteria, basso, accordi) e la melodia suona esattamente sulle frecce, così si sente quando premere. Sei canzoni a serata (*Luci al Neon*, *Febbre del Sabato*, *Pioggia di Stelle*, *Ritmo Vulcano*, *Galassia Disco*, *Mezzanotte a Mille*) da 112 a 152 battiti al minuto; poi tornano, ancora più veloci. Le frecce cambiano a ogni partita
+- **Le frecce:** rosse sul battito, blu a metà battito, gialle sui quarti; dalla seconda canzone arrivano anche due frecce insieme (sempre una coppia che si preme con una diagonale)
+- **Precisione:** PERFETTO 300, OTTIMO 200, BENE 100; ogni freccia presa di fila aggiunge l'1% (fino al doppio), e dalla seconda canzone tutto vale di più
+- **Energia:** ogni freccia mancata svuota la barra (sempre di più a ogni canzone), quelle prese bene la ricaricano; se si svuota la serata finisce. A fine canzone: voto da D a S, bonus, e 1.500 in più per la combo perfetta senza errori
+- **Pausa:** la canzone riparte un attimo prima del punto in cui si era fermata
+- **Difficoltà:** Facile (canzoni più lente, meno frecce, un errore costa poco), Normale, Difficile (canzoni più veloci, più frecce e salti, un errore costa caro); record separati per ogni difficoltà
+- **Comandi:** frecce o `W` `A` `S` `D` · `P` pausa
+- **Touch:** si spinge la levetta verso la freccia e si torna al centro tra una e l'altra; in diagonale si premono due frecce insieme. Con l'impostazione *frecce* della Sala Giochi la levetta diventa una croce, ancora più comoda per questo gioco
+
+Per giocare apri `games/pista-da-ballo/index.html` nel browser.
