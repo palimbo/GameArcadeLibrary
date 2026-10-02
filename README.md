@@ -4,7 +4,7 @@ Raccolta di giochi arcade per il browser. Ogni gioco è un singolo file HTML sen
 
 ## 🕹️ Sala Giochi — `index.html`
 
-Apri `index.html` nella cartella principale per la pagina di raccolta: mostra tutti i 125 giochi con copertina, genere, comandi e i tuoi record per ogni difficoltà (Facile, Normale, Difficile). Tocca «Gioca» per avviare un gioco; in ogni gioco il pulsante «← Sala Giochi» in alto a sinistra (visibile nei menu) riporta alla raccolta.
+Apri `index.html` nella cartella principale per la pagina di raccolta: mostra tutti i 126 giochi con copertina, genere, comandi e i tuoi record per ogni difficoltà (Facile, Normale, Difficile). Tocca «Gioca» per avviare un gioco; in ogni gioco il pulsante «← Sala Giochi» in alto a sinistra (visibile nei menu) riporta alla raccolta.
 
 **Iniziali del record:** quando batti un record compare la schermata da sala giochi per inserire le tue tre iniziali (frecce ↑ ↓ per cambiare lettera, ← → per spostarti, oppure scrivile direttamente; su telefono i tasti ▲ ▼ e OK). Le iniziali vengono salvate insieme al record e compaiono nei menu del gioco e nella Sala Giochi. Il codice è condiviso da tutti i giochi in `shared/iniziali.js`.
 
@@ -12,7 +12,7 @@ Apri `index.html` nella cartella principale per la pagina di raccolta: mostra tu
 
 **Comandi touch: levetta o frecce:** in cima alla Sala Giochi e nel menu di pausa di ogni gioco con la levetta si sceglie se usare la levetta analogica o una croce di frecce. Con le frecce il tocco viene agganciato a una delle otto direzioni (le quattro principali hanno la zona più larga, così le diagonali si prendono solo di proposito) e spinto fino in fondo; la scelta vale per tutti i giochi e resta memorizzata. Funziona anche nei giochi con due levette (la sfida a due di *Pugni di Fuoco*, muovi e spara di *Assalto Robotico*).
 
-**Trofei:** ogni gioco ha tre trofei a punteggio: 🥉 **Bronzo** (la soglia in qualsiasi difficoltà), 🥈 **Argento** (a Normale o Difficile) e 🥇 **Oro** (a Difficile); nei giochi a tempo (*Corsa al Tramonto*, *Crystal Wars*) conta finire entro un certo tempo. I trofei si calcolano dai record salvati, quindi quelli già fatti si sbloccano da soli; quando un record nuovo ne conquista uno compare un avviso in alto. Le soglie sono nella schermata iniziale, in pausa e a fine partita di ogni gioco; in Sala Giochi ogni cabinato mostra i suoi trofei, in cima c'è il totale (su 375) con il numero di giochi giocati e il filtro **Già giocati** mostra solo i giochi con almeno un record. Le soglie vengono dalle partite di prova di un bot per circa un terzo dei giochi e sono stimate sulle regole di punteggio per gli altri (`shared/trofei.js`).
+**Trofei:** ogni gioco ha tre trofei a punteggio: 🥉 **Bronzo** (la soglia in qualsiasi difficoltà), 🥈 **Argento** (a Normale o Difficile) e 🥇 **Oro** (a Difficile); nei giochi a tempo (*Corsa al Tramonto*, *Crystal Wars*) conta finire entro un certo tempo. I trofei si calcolano dai record salvati, quindi quelli già fatti si sbloccano da soli; quando un record nuovo ne conquista uno compare un avviso in alto. Le soglie sono nella schermata iniziale, in pausa e a fine partita di ogni gioco; in Sala Giochi ogni cabinato mostra i suoi trofei, in cima c'è il totale (su 378) con il numero di giochi giocati e il filtro **Già giocati** mostra solo i giochi con almeno un record. Le soglie vengono dalle partite di prova di un bot per circa un terzo dei giochi e sono stimate sulle regole di punteggio per gli altri (`shared/trofei.js`).
 
 **Generi:** ogni gioco appartiene a una o più famiglie di generi (🚀 Sparatutto, 🪜 Piattaforme, 🎯 Azione e riflessi, 🌀 Labirinti, ⚽ Sport, 🧩 Rompicapo, 🏁 Corse e veicoli, 🏰 Strategia e difesa, 🥊 Picchiaduro, 🗝️ Avventura, 🎵 Ritmo e musica): per esempio *Cripta degli Eroi* è avventura, sparatutto e labirinto. Le famiglie sono le etichette colorate di ogni cabinato. Sotto la ricerca una fila di pulsanti, con il numero di giochi di ciascuna famiglia, mostra solo quel genere (toccandolo di nuovo si torna a *Tutti i generi*); anche toccare un'etichetta su un cabinato filtra per quella famiglia. Un gioco con più famiglie compare in ognuna. La scelta resta memorizzata e si combina con la ricerca e con *Già giocati*. Su telefono la fila scorre di lato.
 
@@ -1939,3 +1939,19 @@ Tennis elettronico in stile *Pong* (1972), il gioco da cui sono nate le sale gio
 - **Touch:** levetta (o frecce) su e giù
 
 Per giocare apri `games/ping-elettronico/index.html` nel browser.
+
+### 🍒 Ciliegie e Mele — `games/ciliegie-e-mele/index.html`
+
+Azione nel sottosuolo in stile *Mr. Do!*. Un clown scava gallerie nella terra di un frutteto per raccogliere le ciliegie, mentre i mostri escono uno alla volta dalla tana al centro e lo inseguono lungo le gallerie.
+
+- **Scavare:** il clown si muove a passi di una casella e lascia dietro di sé una galleria; nella terra va un po' più piano. I mostri camminano solo nelle gallerie, ma se non riescono a raggiungerti alcuni diventano *scavatori* blu e ti vengono incontro attraverso la terra
+- **Le ciliegie:** quattro grappoli da otto; 50 punti l'una e 500 in più per otto di fila dallo stesso grappolo senza fermarsi. Raccoglierle tutte chiude il frutteto
+- **Le mele:** scavando sotto una mela, appena ti sposti traballa e cade, schiacciando i mostri che incontra (1.000, 2.000, 4.000…) ma anche il clown, se è sotto. Se cade da più di un piano si rompe. Lungo una galleria si può spingere di lato
+- **La palla magica:** lanciata nella direzione in cui guardi, rimbalza lungo le gallerie e abbatte il primo mostro che tocca (500); poi ricompare in mano dopo una pausa che si allunga a ogni mostro colpito (la barra PALLA in alto). Se non colpisce nessuno torna da sola
+- **Il dolcetto:** quando dalla tana sono usciti tutti i mostri, al centro compare un dolcetto: mangiarlo vale 1.000 e blocca i mostri per qualche secondo
+- **Fine del frutteto:** quando hai raccolto tutte le ciliegie o eliminato tutti i mostri; ogni frutteto ha un terreno di colore diverso, più mele e più mostri. Vita extra a 10.000 punti e poi ogni 20.000
+- **Difficoltà:** Facile (5 vite, mostri più lenti e uno in meno, la palla torna prima), Normale (3 vite), Difficile (mostri più svelti e uno in più, scavatori più frequenti); record separati per ogni difficoltà
+- **Comandi:** frecce o `W` `A` `S` `D` per scavare · `Spazio`, `J` o `X` per lanciare la palla · `P` pausa
+- **Touch:** levetta (o frecce) nelle quattro direzioni, pulsante PALLA
+
+Per giocare apri `games/ciliegie-e-mele/index.html` nel browser.
