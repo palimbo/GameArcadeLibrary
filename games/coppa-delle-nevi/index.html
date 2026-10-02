@@ -1,0 +1,863 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no, viewport-fit=cover">
+<title>Coppa delle Nevi</title>
+<style>
+  :root {
+    --bg: #0b1730;
+    --fg: #f4f8ff;
+    --muted: #b8cce8;
+    --pink: #ff3b4a;
+    --yellow: #ffd23a;
+    --red: #ff5a3a;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  html, body {
+    height: 100%;
+    background: var(--bg);
+    color: var(--fg);
+    font-family: system-ui, -apple-system, "Segoe UI", sans-serif;
+    overflow: hidden;
+    user-select: none;
+    -webkit-user-select: none;
+    touch-action: none;
+  }
+  #wrap { position: fixed; inset: 0; display: flex; align-items: center; justify-content: center; }
+  canvas { display: block; touch-action: none; border-radius: 6px; box-shadow: 0 0 0 2px #2a4a7a, 0 10px 40px rgba(0,0,0,0.6); }
+  #pauseBtn {
+    position: fixed; z-index: 3; display: none; right: 10px; top: calc(10px + env(safe-area-inset-top, 0px));
+    font: 700 13px system-ui, sans-serif; color: var(--fg);
+    background: rgba(0, 0, 0, 0.6); border: 1px solid rgba(244, 246, 238, 0.35);
+    border-radius: 8px; padding: 6px 10px; cursor: pointer;
+  }
+  #touch {
+    position: fixed; z-index: 2; display: none; left: 12px; right: 12px;
+    bottom: calc(14px + env(safe-area-inset-bottom, 0px));
+    justify-content: space-between; align-items: flex-end; pointer-events: none;
+  }
+  /* thumb stick: steer (down to tuck, up to brake); SALTA hops, takes off and lands the ski jump */
+  #touch .stick { position: relative; width: 136px; height: 136px; border-radius: 50%; pointer-events: auto; touch-action: none;
+    border: 2px solid rgba(255, 255, 255, 0.6); background: radial-gradient(circle, rgba(255,255,255,0.14), rgba(255,255,255,0.04)); }
+  #touch .stick .knob { position: absolute; left: 50%; top: 50%; width: 58px; height: 58px; margin: -29px 0 0 -29px; border-radius: 50%;
+    background: rgba(255, 255, 255, 0.45); border: 2px solid rgba(255,255,255,0.7); box-shadow: 0 4px 10px rgba(0,0,0,0.4); pointer-events: none; }
+  #touch .stick .ring { position: absolute; inset: 10px; border-radius: 50%; border: 1px dashed rgba(244,246,238,0.25); pointer-events: none; }
+  #touch .jump { width: 96px; height: 96px; border-radius: 50%; pointer-events: auto; touch-action: none; color: var(--fg);
+    font: 800 13px system-ui, sans-serif; letter-spacing: 1px; border: 2px solid rgba(255, 59, 74, 0.9); background: rgba(255, 59, 74, 0.22); }
+  #touch .jump.on { background: rgba(255, 59, 74, 0.55); }
+  #touch.small .stick { width: 112px; height: 112px; }
+  #touch.small .stick .knob { width: 48px; height: 48px; margin: -24px 0 0 -24px; }
+  #touch.small .jump { width: 80px; height: 80px; font-size: 11px; }
+  #overlay {
+    position: fixed; inset: 0; z-index: 5;
+    display: flex; flex-direction: column; align-items: center; justify-content: flex-start;
+    gap: 14px; padding: 16px; text-align: center; overflow-y: auto;
+    background: rgba(11, 23, 48, 0.93);
+  }
+  #overlay > :first-child { margin-top: auto; }
+  #overlay > :last-child { margin-bottom: auto; }
+  #overlay.hidden { display: none; }
+  #homeLink {
+    position: fixed; top: calc(10px + env(safe-area-inset-top, 0px)); left: 10px; z-index: 6;
+    font: 600 13px/1 system-ui, sans-serif; color: #fff; text-decoration: none;
+    padding: 8px 12px; border-radius: 999px; background: rgba(0,0,0,.55);
+    border: 1px solid rgba(255,255,255,.25);
+  }
+  #homeLink:hover { background: rgba(0,0,0,.8); }
+  #overlay.hidden ~ #homeLink { display: none; }
+  @media (max-width: 700px) { #overlay { padding-top: calc(52px + env(safe-area-inset-top, 0px)); } }
+  #overlay h1 { font-size: clamp(32px, 10vw, 58px); font-weight: 900; font-style: italic; letter-spacing: 1px; color: var(--pink);
+    text-shadow: 3px 3px 0 #6a0a1a, 0 0 22px rgba(255,59,74,0.35); }
+  #overlay h2 { font-size: clamp(26px, 7vw, 42px); font-weight: 900; letter-spacing: 2px; color: var(--pink); }
+  #overlay h2.lose { color: var(--red); }
+  #overlay p { max-width: 540px; font-size: clamp(13px, 3.4vw, 16px); line-height: 1.55; }
+  #overlay p.muted { color: var(--muted); }
+  #overlay .pts { display: grid; grid-template-columns: repeat(2, auto); gap: 4px 18px; font-size: 13px; color: var(--muted); text-align: left; max-width: 560px; }
+  #overlay .pts b { color: var(--fg); }
+  #overlay .diff { display: flex; gap: 10px; flex-wrap: wrap; justify-content: center; }
+  #overlay button {
+    font: 800 15px system-ui, sans-serif; letter-spacing: 1.5px; color: var(--fg);
+    background: transparent; cursor: pointer;
+    border: 2px solid rgba(244,246,238,0.3); border-radius: 10px; padding: 9px 16px;
+  }
+  #overlay .diff button.on { border-color: var(--c); color: var(--c); box-shadow: 0 0 12px var(--c); }
+  #overlay button.start { border-color: var(--pink); color: #fff; background: var(--pink); padding: 11px 30px; box-shadow: 0 4px 0 #a81a2a; }
+  @media (max-height: 560px) {
+    #overlay { gap: 8px; }
+    #overlay h1 { font-size: 30px; }
+    #overlay p { font-size: 13px; line-height: 1.4; }
+    #overlay .help, #overlay .pts { display: none; }
+  }
+</style>
+</head>
+<body>
+<div id="wrap"><canvas id="game"></canvas></div>
+<div id="touch">
+  <div class="stick" aria-label="Levetta"><div class="ring"></div><div class="knob"></div></div>
+  <button type="button" class="jump" aria-label="Salta">SALTA</button>
+</div>
+<button id="pauseBtn" type="button" aria-label="Pausa">❚❚</button>
+<div id="overlay"></div>
+<a id="homeLink" href="../../index.html">← Sala Giochi</a>
+
+
+<script>
+(() => {
+  "use strict";
+
+  const W = 640, H = 360, TAU = Math.PI * 2, TOP = 28, PY = 100, SEG = 20, PXM = 10;
+  const MAXA = 1.15, GRAV = 230, DRAG = 0.0052;
+  // the ski jump, seen from the side: the in-run ends at the lip, then the landing hill
+  const RS = { x: 60, y: 80 }, LIP = { x: 520, y: 320 }, RUN = Math.hypot(LIP.x - RS.x, LIP.y - RS.y);
+  const RU = { x: (LIP.x - RS.x) / RUN, y: (LIP.y - RS.y) / RUN }, JPM = 8.5, KPT = 110, HS = 130, WIN = 70;
+  const EVENTS = [
+    { id: "discesa", name: "DISCESA LIBERA", sub: "scendi fino all'arrivo prima che scada il tempo" },
+    { id: "slalom", name: "SLALOM GIGANTE", sub: "passa tra i paletti di ogni porta" },
+    { id: "salto", name: "SALTO DAL TRAMPOLINO", sub: "stacca sul dente, stai in equilibrio, atterra in telemark" },
+  ];
+
+  const DIFFICULTIES = {
+    facile:    { label: "FACILE",    color: "#7ed87a", desc: "più tempo · porte larghe · meno ostacoli e vento leggero", time: 1.3, dens: 0.6, gap: 84, pen: 2, skier: 0.8, half: 1.12, wind: 0.6 },
+    normale:   { label: "NORMALE",   color: "#5ad0ff", desc: "il tempo giusto · porta mancata: 3 secondi", time: 1.0, dens: 1, gap: 70, pen: 3, skier: 1, half: 1, wind: 1 },
+    difficile: { label: "DIFFICILE", color: "#ff5a5a", desc: "tempo stretto · porte strette · più ostacoli e più vento · porta mancata: 4 secondi", time: 0.86, dens: 1.3, gap: 58, pen: 4, skier: 1.25, half: 0.9, wind: 1.35 },
+  };
+  const DIFF_IDS = Object.keys(DIFFICULTIES);
+  const DIFF_KEY = "coppa-difficulty";
+  const bestKey = (id) => `coppa-best-${id}`;
+  function store(k, v) { try { localStorage.setItem(k, v); } catch { /* ignore */ } }
+  function load(k) { try { return localStorage.getItem(k); } catch { return null; } }
+  const rnd = (a, b) => a + Math.random() * (b - a);
+  const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
+  const fmtT = (t) => Math.max(0, t).toFixed(1).replace(".", ",");
+
+  // ---------- Canvas ----------
+  const canvas = document.getElementById("game");
+  const ctx = canvas.getContext("2d");
+  const wrapEl = document.getElementById("wrap");
+  const overlay = document.getElementById("overlay");
+  const touchEl = document.getElementById("touch");
+  const pauseBtn = document.getElementById("pauseBtn");
+  let pxRatio = 1, touchMode = !!(window.matchMedia && matchMedia("(pointer: coarse)").matches);
+  function resize() {
+    const portrait = window.innerHeight > window.innerWidth;
+    const showTouch = touchMode && isPlaying();
+    touchEl.style.display = showTouch ? "flex" : "none";
+    touchEl.classList.toggle("small", !portrait && window.innerHeight < 480);
+    wrapEl.style.paddingBottom = showTouch && portrait ? "calc(170px + env(safe-area-inset-bottom, 0px))" : "0";
+    let availW = window.innerWidth - 8, availH = window.innerHeight - 8;
+    if (showTouch && portrait) availH -= 170;
+    if (showTouch && !portrait) {
+      const side = Math.max(...[...touchEl.children].map((el) => el.offsetWidth)) + 20;
+      if (window.innerWidth - 2 * side > 200) availW = window.innerWidth - 2 * side;
+    }
+    const s = Math.max(0.2, Math.min(availW / W, availH / H));
+    pxRatio = Math.min(3, s * (window.devicePixelRatio || 1));
+    canvas.style.width = W * s + "px";
+    canvas.style.height = H * s + "px";
+    canvas.width = Math.round(W * pxRatio);
+    canvas.height = Math.round(H * pxRatio);
+  }
+  window.addEventListener("resize", () => syncControls());
+
+  // ---------- Audio ----------
+  let audioCtx = null;
+  function beep(freq, dur, type = "square", vol = 0.04, slide = 0, delay = 0) {
+    if (!audioCtx) return;
+    const t = audioCtx.currentTime + delay;
+    const osc = audioCtx.createOscillator(), gain = audioCtx.createGain();
+    osc.type = type;
+    osc.frequency.setValueAtTime(freq, t);
+    if (slide) osc.frequency.exponentialRampToValueAtTime(Math.max(20, freq + slide), t + dur);
+    gain.gain.setValueAtTime(vol, t);
+    gain.gain.exponentialRampToValueAtTime(0.0001, t + dur);
+    osc.connect(gain).connect(audioCtx.destination);
+    osc.start(t); osc.stop(t + dur + 0.02);
+  }
+  function noise(dur, vol, freq) {
+    if (!audioCtx) return;
+    const len = Math.floor(audioCtx.sampleRate * dur), buf = audioCtx.createBuffer(1, len, audioCtx.sampleRate), d = buf.getChannelData(0);
+    for (let i = 0; i < len; i++) d[i] = (Math.random() * 2 - 1) * (1 - i / len);
+    const src = audioCtx.createBufferSource(), f = audioCtx.createBiquadFilter(), g = audioCtx.createGain();
+    src.buffer = buf; f.type = "bandpass"; f.frequency.value = freq; g.gain.value = vol;
+    src.connect(f).connect(g).connect(audioCtx.destination); src.start();
+  }
+  const arp = (notes, gap, d, type = "square", vol = 0.04) => notes.forEach((f, i) => beep(f, d, type, vol, 0, i * gap));
+  let sfxN = 0;
+  const lim = (fn) => (...a) => { if (sfxN++ < 6) fn(...a); };
+  const sfx = {
+    carve: lim(() => noise(0.12, 0.035, 2400)),
+    hop: lim(() => beep(300, 0.1, "square", 0.025, 300)),
+    land: lim(() => noise(0.08, 0.06, 900)),
+    crash: () => { noise(0.35, 0.14, 700); for (let i = 0; i < 6; i++) beep(600 - i * 70, 0.09, "triangle", 0.04, 0, i * 0.06); },
+    flag: lim(() => arp([988, 1319], 0.05, 0.08, "square", 0.04)),
+    gate: lim((n) => beep(660 + Math.min(6, n) * 80, 0.09, "sine", 0.05, 120)),
+    miss: lim(() => beep(180, 0.25, "sawtooth", 0.04, -60)),
+    pole: lim(() => beep(1200, 0.05, "square", 0.03, -400)),
+    bump: lim(() => beep(140, 0.08, "triangle", 0.04)),
+    tick: lim(() => beep(880, 0.06, "square", 0.03)),
+    whoosh: lim(() => noise(0.5, 0.07, 1500)),
+    tele: () => arp([784, 988, 1175, 1568], 0.07, 0.12, "square", 0.045),
+    finish: () => arp([523, 659, 784, 1047, 784, 1047, 1319], 0.08, 0.14, "square", 0.045),
+    over: () => arp([523, 466, 415, 392, 330, 262], 0.15, 0.24, "triangle", 0.05),
+  };
+
+  // ---------- State ----------
+  let difficulty = DIFFICULTIES[load(DIFF_KEY)] ? load(DIFF_KEY) : "normale";
+  let diff = DIFFICULTIES[difficulty];
+  let state = "menu", menu = null, pausedFrom = null, stateT = 0, clock = 0;
+  let score = 0, tappa = 1, evI = 0, bestCache = 0, timeLeft = 0, timeMax = 0, endWhy = "";
+  let P = null, J = null, course = null, obs = [], gates = [], skiers = [], parts = [], popups = [], trail = [], message = null;
+  let camY = 0, lastTick = 0, gateStreak = 0, missedGates = 0, carveT = 0;
+  let jumpPressed = false;
+  const keys = { left: false, right: false, up: false, down: false };
+  const stick = { x: 0, y: 0 };
+  const ev = () => EVENTS[evI].id;
+  const mult = () => 1 + 0.5 * (tappa - 1);
+
+  // ---------- Course ----------
+  // the piste: a centre line and a half-width, sampled every SEG pixels down the mountain
+  function buildCourse(kind) {
+    const lvl = tappa - 1, slalom = kind === "slalom";
+    const nGates = slalom ? 18 + 2 * lvl : 0, space = Math.max(170, 212 - 7 * lvl);
+    const len = slalom ? 480 + nGates * space + 260 : 6200 + lvl * 500;
+    const n = Math.ceil(len / SEG) + 60, cs = [], hs = [];
+    let cx = W / 2, target = W / 2;
+    for (let i = 0; i < n; i++) {
+      const y = i * SEG;
+      const base = slalom ? 252 : clamp(170 * diff.half * (1 - 0.05 * lvl), 118, 210);
+      const h = y < 360 ? Math.max(base, 260) : slalom ? base : base + 30 * Math.sin(i * 0.05) * Math.sin(i * 0.013);
+      if (!slalom && i % 24 === 0 && y > 300) target = rnd(h + 24, W - h - 24);
+      if (slalom) target = W / 2 + 40 * Math.sin(i * 0.02);
+      cx += clamp((target - cx) * 0.05, -6, 6);
+      cs.push(clamp(cx, h + 10, W - h - 10)); hs.push(h);
+    }
+    course = { kind, len, cs, hs };
+    obs = []; gates = []; skiers = [];
+    const dens = diff.dens * (1 + 0.14 * lvl);
+    if (slalom) {
+      let side = Math.random() < 0.5 ? -1 : 1;
+      const gap = Math.max(46, diff.gap - 2 * lvl);
+      for (let i = 0; i < nGates; i++) {
+        const y = 480 + i * space, c = centerAt(y);
+        gates.push({ y, x: c + side * rnd(50, Math.min(115, 75 + 6 * lvl)), gap, red: i % 2 === 0, done: false, hit: false });
+        side = -side;
+        // later on, a few bumps between the gates
+        if (lvl >= 1 && Math.random() < 0.2 * dens) obs.push({ t: "mogul", x: c + rnd(-150, 150), y: y + space / 2, r: 14 });
+      }
+    } else {
+      let y = 520, lastHard = -999, lastX = 0;
+      while (y < len - 320) {
+        const c = centerAt(y), h = halfAt(y);
+        const roll = Math.random();
+        let t = roll < 0.4 ? "tree" : roll < 0.62 ? "rock" : roll < 0.76 ? "mogul" : roll < 0.9 ? "flag" : "kicker";
+        let x = c + rnd(-0.78, 0.78) * h;
+        const hard = t === "tree" || t === "rock";
+        // two hard obstacles close together stay in the same lane or well apart, so there's always a way through
+        if (hard && y - lastHard < 120 && Math.abs(x - lastX) > 24 && Math.abs(x - lastX) < 140) x = lastX + (x > lastX ? 140 : -140);
+        if (hard && Math.abs(x - c) > h - 30) x = c + Math.sign(x - c) * (h - 30);
+        if (hard) { lastHard = y; lastX = x; }
+        obs.push({ t, x, y, r: { tree: 11, rock: 9, mogul: 14, flag: 9, kicker: 14 }[t] });
+        y += clamp(rnd(85, 140) / dens, 60, 240);
+      }
+      const nSk = Math.round((2 + lvl) * diff.skier * Math.min(1.3, dens));
+      const cols = ["#3a7aff", "#ffd23a", "#3ad07a", "#c87aff", "#ff8a2a"];
+      for (let i = 0; i < nSk; i++) {
+        const sy = 900 + (i + rnd(0.1, 0.9)) * (len - 1600) / nSk;
+        skiers.push({ x: centerAt(sy), y: sy, v: rnd(70, 105) * diff.skier, ph: rnd(0, TAU), w: rnd(0.6, 1.0), amp: rnd(0.3, 0.55), col: cols[i % cols.length], a: 0, jumped: false });
+      }
+    }
+  }
+  function sample(arr, y) { const f = clamp(y / SEG, 0, arr.length - 1.001), i = Math.floor(f); return arr[i] + (arr[i + 1] - arr[i]) * (f - i); }
+  const centerAt = (y) => sample(course.cs, y), halfAt = (y) => sample(course.hs, y);
+  // the landing hill of the ski jump
+  function hillY(x) {
+    if (x < LIP.x) return LIP.y + 34 + (x - LIP.x) * 0.2;
+    const d = Math.min(x - LIP.x, 1435);
+    return LIP.y + 34 + 0.66 * d - 0.00023 * d * d;
+  }
+
+  // ---------- Flow ----------
+  const isPlaying = () => ["intro", "play", "finish"].includes(state);
+  function startGame() {
+    if (!audioCtx) { try { audioCtx = new (window.AudioContext || window.webkitAudioContext)(); } catch { audioCtx = null; } }
+    if (audioCtx && audioCtx.state === "suspended") audioCtx.resume();
+    score = 0; tappa = 1; evI = 0;
+    bestCache = parseInt(load(bestKey(difficulty)), 10) || 0;
+    beginEvent();
+    menu = null;
+    overlay.classList.add("hidden");
+    syncControls();
+    last = performance.now();
+  }
+  function beginEvent() {
+    parts = []; popups = []; trail = []; gateStreak = 0; missedGates = 0; lastTick = 0;
+    const E = EVENTS[evI];
+    if (E.id === "salto") {
+      course = null; obs = []; gates = []; skiers = [];
+      J = { phase: "inrun", s: 0, v: 40, x: RS.x, y: RS.y, vx: 0, vy: 0, b: 0, gust: 0, q: 0, early: false, tele: false, teleEarly: false, dist: 0, fell: false, t: 0, top: 0, kmh: 0 };
+      timeLeft = timeMax = 0;
+    } else {
+      J = null;
+      buildCourse(E.id);
+      P = { x: centerAt(0), y: 0, a: 0, v: 30, air: false, airT: 0, airMax: 0, fall: 0, safe: 0, tuck: false, brake: false, lastY: 0, poleHit: null };
+      const lvlT = Math.max(0.75, Math.pow(E.id === "slalom" ? 0.97 : 0.95, tappa - 1));
+      timeMax = timeLeft = Math.round((E.id === "slalom" ? course.len / 146 : course.len / 196) * diff.time * lvlT + 2);
+    }
+    camY = -PY;
+    message = { text: `TAPPA ${tappa} · ${E.name}`, sub: E.id === "salto" ? E.sub : `${E.sub} · ${timeMax} secondi`, t: 0 };
+    state = "intro"; stateT = 1.8;
+  }
+  function nextEvent() {
+    evI++;
+    if (evI >= EVENTS.length) { evI = 0; tappa++; }
+    beginEvent();
+  }
+  function addScore(n, x, y, color = "#1a2a4a", text) {
+    score += n;
+    if (x !== undefined) popups.push({ x, y, text: text || String(n), color, t: 0 });
+  }
+  function burst(x, y, c, n = 12, sp = 110, life = 0.6) {
+    for (let k = 0; k < n; k++) { const a = Math.random() * TAU, s = sp * rnd(0.3, 1); parts.push({ x, y, vx: Math.cos(a) * s, vy: Math.sin(a) * s - 30, t: 0, life: life * rnd(0.6, 1.2), c }); }
+  }
+  function crash(why) {
+    if (P.fall > 0 || P.safe > 0) return;
+    if (window.__crashes) window.__crashes.push([tappa, ev(), why]);
+    P.fall = 1.3; P.v = 0; P.air = false;
+    sfx.crash(); burst(P.x, P.y, "#ffffff", 22, 120, 0.7);
+    popups.push({ x: P.x, y: P.y - 18, text: `CADUTA! ${why}`, color: "#ff3b4a", t: 0 });
+  }
+  function finishEvent(text, sub) {
+    message = { text, sub, t: 0 };
+    sfx.finish();
+    state = "finish"; stateT = 2.8;
+  }
+  function gameOver() {
+    state = "over";
+    const prev = parseInt(load(bestKey(difficulty)), 10) || 0;
+    const record = score > prev;
+    if (record) store(bestKey(difficulty), String(score));
+    sfx.over();
+    menu = () => showOverlay(
+      `<h2 class="lose">${endWhy === "tempo" ? "TEMPO SCADUTO!" : "GARA FINITA"}</h2>
+       <p>Punteggio: <b>${score.toLocaleString("it-IT")}</b> · tappa ${tappa}, ${EVENTS[evI].name.toLowerCase()} · ${diff.label}</p>
+       ${record ? "<p style='color:var(--pink)'>★ NUOVO RECORD! ★</p>" : ""}
+       ${difficultyHTML()}
+       <button class="start" data-start>GAREGGIA ANCORA</button>`
+    );
+    menu();
+    syncControls();
+  }
+  function togglePause() {
+    if (isPlaying()) {
+      pausedFrom = state; state = "paused";
+      showOverlay(`<h2>PAUSA</h2><button class="start" data-resume>CONTINUA</button><p class="muted">Premi P per continuare</p>`);
+    } else if (state === "paused") {
+      state = pausedFrom; overlay.classList.add("hidden"); last = performance.now();
+    }
+    syncControls();
+  }
+  // the pause menu can end the game (shared/iniziali.js): it ends here the usual way, saving the record
+  window.addEventListener("sala:termina", () => { if (state !== "paused") return; state = pausedFrom; overlay.classList.add("hidden"); endWhy = ""; gameOver(); syncControls(); });
+  function syncControls() {
+    pauseBtn.style.display = isPlaying() && touchMode ? "block" : "none";
+    resize();
+  }
+  pauseBtn.addEventListener("click", () => togglePause());
+  function showOverlay(html) { overlay.innerHTML = html; overlay.classList.remove("hidden"); }
+  function difficultyHTML() {
+    const buttons = DIFF_IDS.map((id) => {
+      const d = DIFFICULTIES[id];
+      return `<button type="button" data-diff="${id}" class="${id === difficulty ? "on" : ""}" style="--c:${d.color}">${d.label}</button>`;
+    }).join("");
+    const best = parseInt(load(bestKey(difficulty)), 10);
+    return `<div class="diff">${buttons}</div><p class="muted">${diff.desc}${best ? ` · Record: ${best.toLocaleString("it-IT")}` : ""}</p>`;
+  }
+  function setDifficulty(id) { if (!DIFFICULTIES[id]) return; difficulty = id; diff = DIFFICULTIES[id]; store(DIFF_KEY, id); if (menu) menu(); }
+  function showTitle() {
+    menu = showTitle;
+    showOverlay(
+      `<h1>COPPA DELLE NEVI</h1>
+       <p>La coppa del mondo di sci in tre prove che si ripetono a ogni tappa: la discesa libera tra alberi, rocce e altri sciatori, lo slalom gigante tra le porte e il salto dal trampolino. Arriva in fondo prima che scada il tempo: il tempo avanzato vale punti, e a ogni tappa le piste si fanno più strette e veloci.</p>
+       <div class="pts">
+         <span><b>Discesa</b></span><span>5 punti al metro · bandierine 200 · salto su una gobba o un trampolino 250 · scavalcare uno sciatore 300</span>
+         <span><b>Slalom</b></span><span>porta 100 e sempre di più se le prendi tutte di fila · porta mancata: secondi di penalità</span>
+         <span><b>Salto</b></span><span>10 punti al metro · stile fino a 200 · telemark 300</span>
+         <span><b>Arrivo</b></span><span>100 punti per ogni secondo avanzato · dalla 2ª tappa tutto vale di più</span>
+       </div>
+       ${touchMode
+         ? `<p class="muted help">Levetta per curvare (giù per accucciarti e andare più forte, su per frenare) · SALTA per saltare · nel trampolino SALTA per staccare e per il telemark, levetta per stare in equilibrio</p>`
+         : `<p class="muted help">← → o A D per curvare · ↓ per accucciarti, ↑ per frenare · SPAZIO o J per saltare · nel trampolino SPAZIO per staccare e per il telemark, ← → per l'equilibrio · P pausa</p>`}
+       ${difficultyHTML()}
+       <button class="start" data-start>VIA!</button>`
+    );
+  }
+  overlay.addEventListener("click", (e) => {
+    const d = e.target.closest("[data-diff]");
+    if (d) { setDifficulty(d.dataset.diff); return; }
+    if (e.target.closest("[data-start]")) startGame();
+    if (e.target.closest("[data-resume]")) togglePause();
+  });
+
+  // ---------- Input ----------
+  const KEYMAP = { arrowleft: "left", a: "left", arrowright: "right", d: "right", arrowdown: "down", s: "down", arrowup: "up", w: "up" };
+  const JUMPKEYS = [" ", "j", "k", "x"];
+  window.addEventListener("keydown", (e) => {
+    const k = e.key.toLowerCase();
+    if ([" ", "arrowup", "arrowdown", "arrowleft", "arrowright"].includes(k)) e.preventDefault();
+    if (state === "menu" || state === "over") {
+      if (e.key === "Enter") startGame();
+      else if (["1", "2", "3"].includes(k)) setDifficulty(DIFF_IDS[+k - 1]);
+      return;
+    }
+    if (k === "p" || k === "escape") { if (!e.repeat) togglePause(); return; }
+    if (state === "paused") { if (e.key === "Enter") togglePause(); return; }
+    if (JUMPKEYS.includes(k) && !e.repeat) jumpPressed = true;
+    if (KEYMAP[k]) keys[KEYMAP[k]] = true;
+  });
+  window.addEventListener("keyup", (e) => { const m = KEYMAP[e.key.toLowerCase()]; if (m) keys[m] = false; });
+  window.addEventListener("blur", () => { for (const k in keys) keys[k] = false; stick.x = stick.y = 0; if (isPlaying()) togglePause(); });
+  const jumpBtn = touchEl.querySelector(".jump");
+  jumpBtn.addEventListener("pointerdown", (e) => { e.preventDefault(); jumpPressed = true; jumpBtn.classList.add("on"); });
+  for (const ev2 of ["pointerup", "pointercancel", "pointerleave"]) jumpBtn.addEventListener(ev2, () => jumpBtn.classList.remove("on"));
+  const stickEl = touchEl.querySelector(".stick"), knob = stickEl.querySelector(".knob");
+  let stickId = null;
+  function stickAt(e) {
+    const r = stickEl.getBoundingClientRect(), max = r.width / 2 - 14;
+    let dx = e.clientX - (r.left + r.width / 2), dy = e.clientY - (r.top + r.height / 2);
+    const len = Math.hypot(dx, dy);
+    if (len > max) { dx *= max / len; dy *= max / len; }
+    knob.style.transform = `translate(${dx}px, ${dy}px)`;
+    const f = (v) => { const a = Math.abs(v) / max; return a < 0.18 ? 0 : Math.sign(v) * Math.min(1, (a - 0.18) / 0.55); };
+    stick.x = f(dx); stick.y = f(dy);
+  }
+  const stickEnd = (e) => { if (e.pointerId !== stickId) return; stickId = null; knob.style.transform = ""; stick.x = stick.y = 0; };
+  stickEl.addEventListener("pointerdown", (e) => { e.preventDefault(); stickId = e.pointerId; try { stickEl.setPointerCapture(e.pointerId); } catch { /* ignore */ } stickAt(e); });
+  stickEl.addEventListener("pointermove", (e) => { if (e.pointerId === stickId) stickAt(e); });
+  for (const ev2 of ["pointerup", "pointercancel", "lostpointercapture"]) stickEl.addEventListener(ev2, stickEnd);
+  window.addEventListener("pointerdown", (e) => { if (e.pointerType === "touch" && !touchMode) { touchMode = true; syncControls(); if (menu) menu(); } }, true);
+  const steerIn = () => clamp((keys.right ? 1 : 0) - (keys.left ? 1 : 0) + stick.x, -1, 1);
+
+  // ---------- Update ----------
+  function updateSkier(dt) {
+    if (P.fall > 0) {
+      P.fall -= dt; P.v = 0;
+      if (P.fall <= 0) { P.safe = 1.1; P.v = 40; P.a = 0; }
+      return;
+    }
+    if (P.safe > 0) P.safe -= dt;
+    const steer = steerIn();
+    P.tuck = keys.down || stick.y > 0.5; P.brake = keys.up || stick.y < -0.5;
+    if (!P.air) {
+      const prevA = P.a;
+      P.a += clamp(steer * MAXA - P.a, -3.4 * dt, 3.4 * dt);
+      const A = GRAV * Math.cos(P.a) * (P.tuck ? 1.12 : 1), c = DRAG * (P.tuck ? 0.66 : 1) * (P.brake ? 1.6 : 1);
+      P.v += (A - c * P.v * P.v) * dt;
+      if (P.brake) P.v = Math.max(0, P.v - 260 * dt);
+      P.v = Math.max(0, P.v);
+      carveT -= dt;
+      if (Math.abs(P.a - prevA) > 2.5 * dt && P.v > 120 && carveT <= 0) { sfx.carve(); carveT = 0.35; }
+      if (jumpPressed) { P.air = true; P.airT = P.airMax = 0.5; sfx.hop(); }
+    } else {
+      P.airT -= dt;
+      if (P.airT <= 0) { P.air = false; sfx.land(); burst(P.x, P.y, "#ffffff", 6, 50, 0.3); }
+    }
+    const py0 = P.y;
+    P.x += P.v * Math.sin(P.a) * dt; P.y += P.v * Math.cos(P.a) * dt;
+    P.x = clamp(P.x, 4, W - 4);
+    // 5 points a metre on the way down
+    const m0 = Math.floor(py0 / PXM), m1 = Math.floor(P.y / PXM);
+    if (m1 > m0) score += 5 * (m1 - m0) * mult();
+    // the trees along the piste
+    const c = centerAt(P.y), h = halfAt(P.y);
+    if (Math.abs(P.x - c) > h - 6) { crash("ALBERI!"); if (P.fall > 0) P.x = c + Math.sign(P.x - c) * (h - 36); else P.x = c + Math.sign(P.x - c) * (h - 7); }
+    for (const o of obs) {
+      if (o.used || Math.abs(o.y - P.y) > 24) continue;
+      const d = Math.hypot(o.x - P.x, (o.y - P.y) * 1.2);
+      if (d > o.r + 6) continue;
+      if (o.t === "flag") { o.used = true; addScore(200 * mult(), o.x, o.y - 14, "#d08a00", `+${200 * mult()}`); sfx.flag(); }
+      else if (o.t === "tree") { if (P.fall <= 0 && P.safe <= 0) { crash("ALBERO!"); P.x += P.x < o.x ? -10 : 10; } }
+      else if (o.t === "rock") { if (!P.air) crash("ROCCIA!"); }
+      else if (o.t === "mogul" && !P.air && P.fall <= 0) { o.used = true; P.v *= 0.78; P.air = true; P.airT = P.airMax = 0.28; sfx.bump(); }
+      else if (o.t === "kicker" && !P.air && P.fall <= 0 && P.v > 60) { o.used = true; P.air = true; P.airT = P.airMax = 0.85; addScore(250 * mult(), o.x, o.y - 16, "#3a7aff", "SALTONE!"); sfx.whoosh(); }
+    }
+    for (const s of skiers) {
+      if (Math.abs(s.y - P.y) > 14 || Math.abs(s.x - P.x) > 15) continue;
+      if (P.air && !s.jumped) { s.jumped = true; addScore(300 * mult(), s.x, s.y - 18, "#3a7aff", "SCAVALCATO!"); sfx.flag(); }
+      else if (!P.air && P.fall <= 0 && P.safe <= 0) { crash("SCONTRO!"); P.x += P.x < s.x ? -14 : 14; }
+    }
+    // slalom gates: between the poles or a time penalty
+    for (const g of gates) {
+      if (g.done) continue;
+      if (!P.air && P.fall <= 0 && !g.hit && Math.abs(P.y - g.y) < 6 && (Math.abs(P.x - (g.x - g.gap / 2)) < 6 || Math.abs(P.x - (g.x + g.gap / 2)) < 6)) { g.hit = true; P.v *= 0.55; sfx.pole(); popups.push({ x: P.x, y: P.y - 16, text: "PALETTO!", color: "#ff3b4a", t: 0 }); }
+      if (py0 < g.y && P.y >= g.y) {
+        g.done = true;
+        if (Math.abs(P.x - g.x) < g.gap / 2) {
+          gateStreak++; const pts = (100 + 25 * Math.min(8, gateStreak - 1)) * mult();
+          g.ok = true; addScore(pts, g.x, g.y - 22, g.red ? "#ff3b4a" : "#3a7aff", `+${pts}`); sfx.gate(gateStreak);
+        } else {
+          gateStreak = 0; missedGates++; timeLeft -= diff.pen; sfx.miss();
+          popups.push({ x: g.x, y: g.y - 22, text: `PORTA MANCATA −${diff.pen}s`, color: "#ff3b4a", t: 0 });
+        }
+      } else if (P.y > g.y + 40) g.done = true;
+    }
+    if (P.y >= course.len) {
+      const bonus = Math.round(timeLeft * 10) * 10 * mult();
+      score += bonus;
+      finishEvent("ARRIVO!", `tempo avanzato ${fmtT(timeLeft)} s · bonus ${bonus.toLocaleString("it-IT")}${course.kind === "slalom" ? ` · porte mancate ${missedGates}` : ""}`);
+    }
+  }
+  function updateOthers(dt) {
+    for (const s of skiers) {
+      if (s.y - camY > H + 260 || s.y - camY < -200) continue;
+      s.ph += dt * s.w;
+      const c = centerAt(s.y), h = halfAt(s.y), tx = c + Math.sin(s.ph) * h * s.amp;
+      const vx = clamp((tx - s.x) * 1.6, -80, 80);
+      s.x += vx * dt; s.y += s.v * dt; s.a = Math.atan2(vx, s.v);
+      if (s.y > course.len - 120) s.y = course.len - 120;
+    }
+  }
+  function updateJump(dt) {
+    J.t += dt;
+    const bal = steerIn();
+    if (J.phase === "inrun") {
+      const tuck = keys.down || stick.y > 0.5;
+      J.tuck = tuck;
+      J.v += (130 + (tuck ? 55 : 0)) * dt;
+      J.s += J.v * dt;
+      if (jumpPressed) {
+        if (J.s < RUN - WIN) { J.early = true; popups.push({ x: J.x, y: J.y - 20, text: "TROPPO PRESTO!", color: "#ff3b4a", t: 0 }); }
+        else J.q = 0.35 + 0.65 * clamp(1 - (RUN - J.s) / WIN, 0, 1);
+      }
+      if (J.q && J.phase === "inrun") takeoff();
+      else if (J.s >= RUN) { J.s = RUN; if (!J.q) { J.q = J.early ? 0.25 : 0.1; popups.push({ x: LIP.x, y: LIP.y - 24, text: J.early ? "STACCO DEBOLE" : "NIENTE STACCO!", color: "#ff3b4a", t: 0 }); } takeoff(); }
+      if (J.phase === "inrun") { J.x = RS.x + RU.x * J.s; J.y = RS.y + RU.y * J.s; }
+    } else if (J.phase === "flight") {
+      J.gust = clamp(J.gust + rnd(-1, 1) * dt * 4, -1, 1);
+      J.b += (J.b * 1.1 + J.gust * 0.7 * diff.wind - bal * 2.4) * dt;
+      J.b = clamp(J.b, -1.6, 1.6);
+      const lift = 0.46 * (0.4 + 0.6 * J.q) * clamp(1 - Math.abs(J.b), 0, 1);
+      J.vy += 300 * (1 - lift) * dt; J.vx -= J.vx * 0.02 * dt;
+      J.x += J.vx * dt; J.y += J.vy * dt;
+      const hgt = hillY(J.x) - J.y;
+      if (jumpPressed) { if (hgt < 45 && J.vy > 0) J.tele = !J.teleEarly; else J.teleEarly = true; }
+      if (hgt <= 0) {
+        J.y = hillY(J.x); J.dist = Math.max(0, (J.x - LIP.x) / JPM);
+        J.fell = Math.abs(J.b) > 0.8;
+        const m = mult();
+        const pts = Math.round(J.dist * 10), style = J.fell ? 0 : Math.round((1 - Math.min(1, Math.abs(J.b))) * 200), tele = J.tele && !J.fell ? 300 : 0;
+        const tot = Math.round((J.fell ? pts / 2 : pts + style + tele) * m);
+        score += tot;
+        J.phase = "out"; J.t = 0; J.vx = Math.min(J.vx, 300);
+        if (J.fell) { sfx.crash(); burst(J.x, J.y, "#ffffff", 26, 130, 0.8); }
+        else if (tele) sfx.tele(); else sfx.land();
+        J.result = { tot, pts, style, tele };
+      }
+    } else if (J.phase === "out") {
+      J.vx = Math.max(0, J.vx - (J.fell ? 260 : 120) * dt);
+      J.x += J.vx * dt; J.y = hillY(J.x);
+      if (J.t > 1.6 && state === "play") {
+        const r = J.result, d = J.dist.toFixed(1).replace(".", ",");
+        finishEvent(J.fell ? `${d} m · CADUTA!` : `${d} m${r.tele ? " · TELEMARK!" : ""}`,
+          J.fell ? `metà dei punti · ${r.tot.toLocaleString("it-IT")}` : `distanza ${r.pts} · stile ${r.style}${r.tele ? " · telemark 300" : ""}${mult() > 1 ? ` · ×${mult()}` : ""} = ${r.tot.toLocaleString("it-IT")}`);
+      }
+    }
+  }
+  function takeoff() {
+    J.phase = "flight"; J.t = 0; J.kmh = Math.round(J.v * 0.25);
+    J.x = RS.x + RU.x * J.s; J.y = RS.y + RU.y * J.s;
+    J.vx = J.v * 0.93; J.vy = J.v * 0.05 - 70 * J.q - 10;
+    J.b = rnd(-0.15, 0.15); J.gust = rnd(-0.5, 0.5);
+    sfx.whoosh();
+    if (J.q > 0.85) popups.push({ x: J.x, y: J.y - 26, text: "STACCO PERFETTO!", color: "#3ad07a", t: 0 });
+  }
+  function update(dt) {
+    clock += dt; sfxN = 0;
+    if (window.__bot) window.__bot(dt);
+    for (const p of parts) { p.t += dt; p.x += p.vx * dt; p.y += p.vy * dt; p.vy += 200 * dt; }
+    parts = parts.filter((p) => p.t < p.life);
+    for (const p of popups) { p.t += dt; p.y -= 22 * dt; }
+    popups = popups.filter((p) => p.t < 1.2);
+    if (message) { message.t += dt; if (message.t > 2.4) message = null; }
+    if (state === "intro") { stateT -= dt; jumpPressed = false; if (stateT <= 0) state = "play"; return; }
+    if (state === "finish") {
+      stateT -= dt;
+      if (J) { if (J.phase === "out") { J.t += dt; J.vx = Math.max(0, J.vx - 160 * dt); J.x += J.vx * dt; J.y = hillY(J.x); } }
+      else if (P) { P.v = Math.max(0, P.v - 200 * dt); P.y += P.v * dt; P.x += P.v * Math.sin(P.a) * dt * 0.3; camY = P.y - PY; }
+      jumpPressed = false;
+      if (stateT <= 0) nextEvent();
+      return;
+    }
+    if (state !== "play") { jumpPressed = false; return; }
+    if (J) { updateJump(dt); jumpPressed = false; return; }
+    timeLeft -= dt;
+    if (timeLeft < 5.5 && Math.ceil(timeLeft) !== lastTick && timeLeft > 0) { lastTick = Math.ceil(timeLeft); sfx.tick(); }
+    updateSkier(dt);
+    updateOthers(dt);
+    jumpPressed = false;
+    if (state !== "play") return;
+    camY = P.y - PY;
+    if (P.fall <= 0 && !P.air && P.v > 40 && Math.random() < dt * 30) trail.push({ x: P.x, y: P.y, a: P.a });
+    if (trail.length > 160) trail.shift();
+    if (timeLeft <= 0) { timeLeft = 0; endWhy = "tempo"; gameOver(); }
+  }
+
+  // ---------- Drawing ----------
+  function hash(i) { const s = Math.sin(i * 127.1 + 311.7) * 43758.5453; return s - Math.floor(s); }
+  function drawTree(x, y, s = 1) {
+    ctx.fillStyle = "rgba(60,90,140,0.18)"; ctx.beginPath(); ctx.ellipse(x + 4 * s, y + 8 * s, 11 * s, 5 * s, 0, 0, TAU); ctx.fill();
+    ctx.fillStyle = "#1f5a3a"; ctx.beginPath();
+    for (let k = 0; k < 16; k++) { const a = k / 16 * TAU, r = (k % 2 ? 7 : 12) * s; ctx.lineTo(x + Math.cos(a) * r, y + Math.sin(a) * r); }
+    ctx.fill();
+    ctx.fillStyle = "#2f7a4a"; ctx.beginPath(); ctx.arc(x - 1.5 * s, y - 1.5 * s, 6 * s, 0, TAU); ctx.fill();
+    ctx.fillStyle = "rgba(255,255,255,0.85)"; ctx.beginPath(); ctx.arc(x - 4 * s, y - 4 * s, 2.6 * s, 0, TAU); ctx.arc(x + 3 * s, y - 6 * s, 1.8 * s, 0, TAU); ctx.fill();
+  }
+  function drawSkierTop(x, y, a, col, o = {}) {
+    ctx.save(); ctx.translate(x, y);
+    if (o.fall) {
+      ctx.rotate(o.fall * 9);
+      ctx.strokeStyle = "#1a2a4a"; ctx.lineWidth = 2.5; ctx.beginPath(); ctx.moveTo(-14, -4); ctx.lineTo(6, -9); ctx.moveTo(-6, 8); ctx.lineTo(14, 3); ctx.stroke();
+      ctx.fillStyle = col; ctx.beginPath(); ctx.ellipse(0, 0, 8, 6, 0.4, 0, TAU); ctx.fill();
+      ctx.fillStyle = "#ffe0c0"; ctx.beginPath(); ctx.arc(7, -3, 3.5, 0, TAU); ctx.fill();
+      ctx.restore(); return;
+    }
+    const lift = o.air ? Math.sin(Math.PI * (1 - o.air)) * 7 : 0;
+    if (lift) { ctx.fillStyle = "rgba(60,90,140,0.25)"; ctx.beginPath(); ctx.ellipse(lift * 0.6, lift, 8, 4, 0, 0, TAU); ctx.fill(); ctx.translate(-lift * 0.3, -lift); ctx.scale(1 + lift * 0.02, 1 + lift * 0.02); }
+    ctx.rotate(-a);
+    // skis: parallel when carving, a V when braking
+    ctx.strokeStyle = "#1a2a4a"; ctx.lineWidth = 2.6; ctx.lineCap = "round";
+    const v = o.brake ? 0.32 : 0;
+    for (const sd of [-1, 1]) { ctx.save(); ctx.translate(sd * 3.5, 0); ctx.rotate(sd * v); ctx.beginPath(); ctx.moveTo(0, -10); ctx.lineTo(0, 12); ctx.stroke(); ctx.restore(); }
+    ctx.strokeStyle = "#8a9ab8"; ctx.lineWidth = 1.2; ctx.beginPath(); ctx.moveTo(-8, -2); ctx.lineTo(-10, o.tuck ? -10 : 6); ctx.moveTo(8, -2); ctx.lineTo(10, o.tuck ? -10 : 6); ctx.stroke();
+    ctx.fillStyle = col; ctx.beginPath(); ctx.ellipse(0, 0, o.tuck ? 6 : 7, o.tuck ? 5 : 6, 0, 0, TAU); ctx.fill();
+    ctx.fillStyle = "rgba(255,255,255,0.35)"; ctx.fillRect(-6, -1, 12, 2);
+    ctx.fillStyle = "#f4f8ff"; ctx.beginPath(); ctx.arc(0, o.tuck ? 4 : 3, 3.8, 0, TAU); ctx.fill();
+    ctx.fillStyle = col; ctx.beginPath(); ctx.arc(0, o.tuck ? 4 : 3, 3.8, Math.PI, TAU); ctx.fill();
+    ctx.restore();
+  }
+  function drawSlope() {
+    ctx.fillStyle = "#dfe9f7"; ctx.fillRect(0, TOP, W, H - TOP);
+    const y0 = Math.floor((camY + TOP - 40) / SEG), y1 = Math.ceil((camY + H + 40) / SEG);
+    // the groomed piste
+    ctx.fillStyle = "#f6f9ff"; ctx.beginPath();
+    for (let i = y0; i <= y1; i++) { const y = i * SEG; ctx.lineTo(centerAt(y) - halfAt(y), y - camY); }
+    for (let i = y1; i >= y0; i--) { const y = i * SEG; ctx.lineTo(centerAt(y) + halfAt(y), y - camY); }
+    ctx.fill();
+    // corduroy from the snow groomer
+    ctx.strokeStyle = "rgba(170,195,230,0.35)"; ctx.lineWidth = 1;
+    for (let k = Math.floor(camY / 46); k < (camY + H) / 46; k++) { const y = k * 46 - camY + 23, c = centerAt(k * 46), h = halfAt(k * 46); ctx.beginPath(); ctx.moveTo(c - h + 10, y); ctx.lineTo(c + h - 10, y + 6); ctx.stroke(); }
+    // ski tracks
+    ctx.strokeStyle = "rgba(150,175,215,0.55)"; ctx.lineWidth = 1;
+    for (const sd of [-3.5, 3.5]) { ctx.beginPath(); let pen = false; for (const t of trail) { const x = t.x + sd * Math.cos(t.a), y = t.y - sd * Math.sin(t.a) - camY; if (y < TOP - 10) { pen = false; continue; } if (!pen) { ctx.moveTo(x, y); pen = true; } else ctx.lineTo(x, y); } ctx.stroke(); }
+    // the edge markers and the forest
+    for (let i = Math.floor((camY - 20) / 34); i < (camY + H + 20) / 34; i++) {
+      const y = i * 34, c = centerAt(y), h = halfAt(y), sy = y - camY;
+      if (i % 4 === 0) for (const sd of [-1, 1]) { const x = c + sd * (h - 2); ctx.fillStyle = "#ff8a2a"; ctx.fillRect(x - 1.5, sy - 8, 3, 8); ctx.fillStyle = "#1a2a4a"; ctx.fillRect(x - 1.5, sy - 4, 3, 2); }
+      for (const sd of [-1, 1]) {
+        let x = c + sd * (h + 12 + hash(i * 2 + sd) * 10);
+        while (x > -20 && x < W + 20) { drawTree(x, sy + hash(i + x) * 10 - 5, 0.85 + hash(i * 3 + x) * 0.35); x += sd * (26 + hash(i * 7 + x) * 20); }
+      }
+    }
+    // start and finish
+    const start = -camY;
+    if (start > TOP - 30 && start < H + 30) {
+      const c = centerAt(0);
+      ctx.fillStyle = "#3a5a8a"; ctx.fillRect(c - 70, start - 26, 140, 10);
+      ctx.fillStyle = "#ffffff"; ctx.font = "900 8px system-ui"; ctx.textAlign = "center"; ctx.fillText("PARTENZA", c, start - 18);
+      ctx.fillStyle = "#1a2a4a"; ctx.fillRect(c - 72, start - 26, 3, 30); ctx.fillRect(c + 69, start - 26, 3, 30);
+    }
+    const fin = course.len - camY;
+    if (fin > TOP - 40 && fin < H + 40) {
+      const c = centerAt(course.len), h = halfAt(course.len);
+      for (let x = c - h; x < c + h; x += 8) { ctx.fillStyle = Math.floor((x - c + h) / 8) % 2 ? "#1a2a4a" : "#ffffff"; ctx.fillRect(x, fin - 3, 8, 3); ctx.fillStyle = Math.floor((x - c + h) / 8) % 2 ? "#ffffff" : "#1a2a4a"; ctx.fillRect(x, fin, 8, 3); }
+      ctx.fillStyle = "#ff3b4a"; ctx.fillRect(c - 90, fin - 34, 180, 16);
+      ctx.fillStyle = "#ffffff"; ctx.font = "italic 900 12px system-ui"; ctx.textAlign = "center"; ctx.fillText("ARRIVO", c, fin - 22);
+      ctx.fillStyle = "#1a2a4a"; ctx.fillRect(c - 92, fin - 34, 3, 34); ctx.fillRect(c + 89, fin - 34, 3, 34);
+    }
+  }
+  function drawObstacles() {
+    const list = obs.filter((o) => o.y - camY > TOP - 30 && o.y - camY < H + 30).sort((a, b) => a.y - b.y);
+    for (const o of list) {
+      const x = o.x, y = o.y - camY;
+      if (o.t === "tree") drawTree(x, y, 1.1);
+      else if (o.t === "rock") {
+        ctx.fillStyle = "rgba(60,90,140,0.2)"; ctx.beginPath(); ctx.ellipse(x + 3, y + 5, 11, 4, 0, 0, TAU); ctx.fill();
+        ctx.fillStyle = "#6a7488"; ctx.beginPath(); ctx.moveTo(x - 10, y + 4); ctx.lineTo(x - 7, y - 5); ctx.lineTo(x, y - 8); ctx.lineTo(x + 8, y - 4); ctx.lineTo(x + 10, y + 4); ctx.fill();
+        ctx.fillStyle = "#ffffff"; ctx.beginPath(); ctx.moveTo(x - 6, y - 5); ctx.lineTo(x, y - 8); ctx.lineTo(x + 6, y - 5); ctx.lineTo(x, y - 4); ctx.fill();
+      } else if (o.t === "mogul") {
+        ctx.fillStyle = "rgba(150,175,215,0.5)"; ctx.beginPath(); ctx.ellipse(x + 2, y + 3, 15, 8, 0, 0, TAU); ctx.fill();
+        ctx.fillStyle = "#ffffff"; ctx.beginPath(); ctx.ellipse(x - 1, y, 14, 7, 0, 0, TAU); ctx.fill();
+      } else if (o.t === "kicker") {
+        ctx.fillStyle = "#b8cce8"; ctx.beginPath(); ctx.moveTo(x - 15, y - 8); ctx.lineTo(x + 15, y - 8); ctx.lineTo(x + 13, y + 7); ctx.lineTo(x - 13, y + 7); ctx.fill();
+        ctx.fillStyle = "#ffffff"; ctx.fillRect(x - 15, y - 8, 30, 9);
+        ctx.fillStyle = "#3a7aff"; ctx.fillRect(x - 15, y + 5, 30, 2);
+      } else if (o.t === "flag" && !o.used) {
+        ctx.strokeStyle = "#1a2a4a"; ctx.lineWidth = 1.5; ctx.beginPath(); ctx.moveTo(x, y + 6); ctx.lineTo(x, y - 12); ctx.stroke();
+        ctx.fillStyle = "#ffd23a"; ctx.beginPath(); ctx.moveTo(x, y - 12); ctx.lineTo(x + 10 + Math.sin(clock * 8) * 1.5, y - 8); ctx.lineTo(x, y - 4); ctx.fill();
+      }
+    }
+    for (const g of gates) {
+      const y = g.y - camY; if (y < TOP - 30 || y > H + 30) continue;
+      const col = g.red ? "#ff3b4a" : "#3a7aff";
+      for (const sd of [-1, 1]) {
+        const x = g.x + sd * g.gap / 2;
+        ctx.strokeStyle = "#1a2a4a"; ctx.lineWidth = 2; ctx.beginPath(); ctx.moveTo(x, y + 3); ctx.lineTo(x, y - 18); ctx.stroke();
+        ctx.fillStyle = g.done && !g.ok ? "#8a9ab8" : col; ctx.fillRect(x - (sd < 0 ? 0 : 12), y - 18, 12, 9);
+      }
+      if (g.done) { ctx.fillStyle = g.ok ? "#3ad07a" : "#ff3b4a"; ctx.font = "900 10px system-ui"; ctx.textAlign = "center"; ctx.fillText(g.ok ? "✓" : "✗", g.x, y - 6); }
+    }
+  }
+  function drawDownhill() {
+    drawSlope();
+    drawObstacles();
+    for (const s of skiers) { const y = s.y - camY; if (y > TOP - 20 && y < H + 20) drawSkierTop(s.x, y, s.a, s.col); }
+    if (P && !(P.safe > 0 && Math.floor(clock * 12) % 2)) drawSkierTop(P.x, P.y - camY, P.a, "#ff3b4a", { tuck: P.tuck, brake: P.brake, air: P.air ? P.airT / P.airMax : 0, fall: P.fall > 0 ? 1.3 - P.fall : 0 });
+  }
+  function drawJump() {
+    const cx = clamp(J.x - 210, -40, 2200), cy = clamp(J.y - 130, -20, 760);
+    const sky = ctx.createLinearGradient(0, TOP, 0, H);
+    sky.addColorStop(0, "#5a9ae8"); sky.addColorStop(1, "#c8e0ff");
+    ctx.fillStyle = sky; ctx.fillRect(0, TOP, W, H - TOP);
+    // far mountains
+    ctx.fillStyle = "#9ab8e0";
+    ctx.beginPath(); ctx.moveTo(0, H);
+    for (let x = 0; x <= W; x += 20) { const wx = x + cx * 0.15; ctx.lineTo(x, 190 - cy * 0.08 + Math.sin(wx * 0.011) * 40 + Math.sin(wx * 0.031) * 14); }
+    ctx.lineTo(W, H); ctx.fill();
+    ctx.fillStyle = "#b8d0f0";
+    ctx.beginPath(); ctx.moveTo(0, H);
+    for (let x = 0; x <= W; x += 20) { const wx = x + cx * 0.3; ctx.lineTo(x, 250 - cy * 0.16 + Math.sin(wx * 0.017 + 2) * 26 + Math.sin(wx * 0.043) * 8); }
+    ctx.lineTo(W, H); ctx.fill();
+    ctx.save(); ctx.translate(-cx, -cy);
+    // the landing hill
+    ctx.fillStyle = "#f4f8ff"; ctx.beginPath(); ctx.moveTo(LIP.x - 260, hillY(LIP.x - 260));
+    for (let x = LIP.x - 260; x <= LIP.x + 2400; x += 20) ctx.lineTo(x, hillY(x));
+    ctx.lineTo(LIP.x + 2400, 1400); ctx.lineTo(LIP.x - 260, 1400); ctx.fill();
+    ctx.strokeStyle = "#b8cce8"; ctx.lineWidth = 2; ctx.beginPath();
+    for (let x = LIP.x - 260; x <= LIP.x + 2400; x += 20) ctx.lineTo(x, hillY(x));
+    ctx.stroke();
+    // distance lines every 10 metres, the K point and the hill size
+    ctx.font = "800 11px system-ui"; ctx.textAlign = "center";
+    for (let m = 40; m <= 150; m += 10) {
+      const x = LIP.x + m * JPM, y = hillY(x);
+      ctx.strokeStyle = m === KPT ? "#ff3b4a" : m === HS ? "#1a2a4a" : "rgba(58,122,255,0.45)"; ctx.lineWidth = m === KPT || m === HS ? 3 : 1.5;
+      ctx.beginPath(); ctx.moveTo(x - 6, y - 4); ctx.lineTo(x + 6, y + 4); ctx.stroke();
+      ctx.fillStyle = m === KPT ? "#ff3b4a" : "#3a5a8a"; ctx.fillText(m === KPT ? `K ${m}` : m === HS ? `HS ${m}` : String(m), x + 14, y - 8);
+    }
+    // the crowd at the bottom
+    for (let i = 0; i < 70; i++) { const x = LIP.x + 1435 + 40 + (i % 35) * 14, y = hillY(x) - 10 - Math.floor(i / 35) * 10; ctx.fillStyle = ["#ff3b4a", "#3a7aff", "#ffd23a", "#3ad07a"][i % 4]; ctx.beginPath(); ctx.arc(x, y + Math.sin(clock * 6 + i) * (J.phase !== "inrun" ? 1.5 : 0), 3.5, 0, TAU); ctx.fill(); }
+    // the in-run tower
+    ctx.fillStyle = "#6a7488";
+    ctx.beginPath(); ctx.moveTo(RS.x - 10, RS.y); ctx.lineTo(LIP.x, LIP.y); ctx.lineTo(LIP.x, LIP.y + 12); ctx.lineTo(RS.x + 30, H + 600); ctx.lineTo(RS.x - 30, H + 600); ctx.fill();
+    ctx.strokeStyle = "#4a5468"; ctx.lineWidth = 2;
+    for (let k = 1; k < 8; k++) { const x = RS.x + (LIP.x - RS.x) * k / 8, y = RS.y + (LIP.y - RS.y) * k / 8; ctx.beginPath(); ctx.moveTo(x, y + 4); ctx.lineTo(x - 10, y + 400); ctx.stroke(); }
+    ctx.strokeStyle = "#ffffff"; ctx.lineWidth = 5; ctx.beginPath(); ctx.moveTo(RS.x - 10, RS.y - 2); ctx.lineTo(LIP.x, LIP.y - 2); ctx.stroke();
+    // the take-off zone, greener towards the lip
+    if (J.phase === "inrun") for (let k = 0; k < 7; k++) {
+      const s0 = RUN - WIN + k * WIN / 7; ctx.strokeStyle = `rgba(58,208,122,${0.25 + k * 0.1})`; ctx.lineWidth = 5;
+      ctx.beginPath(); ctx.moveTo(RS.x + RU.x * s0, RS.y + RU.y * s0 - 2); ctx.lineTo(RS.x + RU.x * (s0 + WIN / 7), RS.y + RU.y * (s0 + WIN / 7) - 2); ctx.stroke();
+    }
+    ctx.fillStyle = "#ff3b4a"; ctx.fillRect(LIP.x - 3, LIP.y - 10, 3, 10);
+    drawJumper();
+    ctx.restore();
+  }
+  function drawJumper() {
+    const x = J.x, y = J.y;
+    ctx.save(); ctx.translate(x, y);
+    let ang = Math.atan2(RU.y, RU.x), crouch = 1;
+    if (J.phase === "flight") { ang = 0.42 + J.b * 0.55; crouch = 0; }
+    else if (J.phase === "out") { const d = 4; ang = Math.atan2(hillY(x + d) - hillY(x - d), 2 * d); crouch = J.fell ? 2 : 0.5; }
+    ctx.rotate(ang);
+    if (crouch === 2) {
+      ctx.strokeStyle = "#1a2a4a"; ctx.lineWidth = 2.5; ctx.beginPath(); ctx.moveTo(-16, -2); ctx.lineTo(10, -6); ctx.moveTo(-4, -2); ctx.lineTo(18, 2); ctx.stroke();
+      ctx.fillStyle = "#ff3b4a"; ctx.beginPath(); ctx.ellipse(0, -5, 10, 4, 0, 0, TAU); ctx.fill();
+      ctx.restore(); return;
+    }
+    // skis
+    ctx.strokeStyle = "#1a2a4a"; ctx.lineWidth = 2.5; ctx.lineCap = "round";
+    if (J.phase === "flight") { ctx.beginPath(); ctx.moveTo(-6, 0); ctx.lineTo(22, -9); ctx.moveTo(-6, 0); ctx.lineTo(22, -3); ctx.stroke(); }
+    else { ctx.beginPath(); ctx.moveTo(-14, 0); ctx.lineTo(16, 0); ctx.stroke(); }
+    // body: crouched on the in-run, stretched out over the skis in flight
+    ctx.fillStyle = "#ff3b4a";
+    if (crouch === 1) { ctx.fillRect(-6, -9, 6, 9); ctx.beginPath(); ctx.ellipse(1, -11, 9, 4, 0.2, 0, TAU); ctx.fill(); ctx.fillStyle = "#f4f8ff"; ctx.beginPath(); ctx.arc(10, -12, 3.5, 0, TAU); ctx.fill(); }
+    else if (crouch === 0.5) { ctx.fillRect(-4, -14, 6, 14); ctx.fillStyle = "#f4f8ff"; ctx.beginPath(); ctx.arc(-1, -18, 3.5, 0, TAU); ctx.fill(); }
+    else { ctx.beginPath(); ctx.ellipse(6, -6, 13, 3.5, -0.32, 0, TAU); ctx.fill(); ctx.fillStyle = "#f4f8ff"; ctx.beginPath(); ctx.arc(19, -10, 3.5, 0, TAU); ctx.fill(); ctx.strokeStyle = "#ff3b4a"; ctx.lineWidth = 2; ctx.beginPath(); ctx.moveTo(4, -6); ctx.lineTo(-6, -4); ctx.stroke(); }
+    ctx.restore();
+  }
+  function drawHud() {
+    ctx.fillStyle = "rgba(11,23,48,0.95)"; ctx.fillRect(0, 0, W, TOP);
+    ctx.textBaseline = "middle"; ctx.textAlign = "left";
+    const x0 = touchMode ? 130 : 10;
+    ctx.fillStyle = "#ffffff"; ctx.font = "900 15px system-ui"; ctx.fillText(score.toLocaleString("it-IT"), x0, 14);
+    ctx.fillStyle = "#b8cce8"; ctx.font = "700 9px system-ui"; ctx.fillText(`REC ${Math.max(bestCache, score).toLocaleString("it-IT")}`, x0 + 80, 9);
+    ctx.fillStyle = "#ff3b4a"; ctx.font = "900 10px system-ui"; ctx.fillText(`TAPPA ${tappa} · ${EVENTS[evI].name.split(" ")[0]}`, x0 + 80, 21);
+    if (P && !J) {
+      ctx.fillStyle = "#b8cce8"; ctx.font = "800 9px system-ui"; ctx.fillText(`${Math.round(P.v * 0.36)} km/h`, x0 + 210, 14);
+      const k = clamp(P.y / course.len, 0, 1); ctx.fillStyle = "#2a4a7a"; ctx.fillRect(x0 + 260, 11, 70, 6); ctx.fillStyle = "#ffffff"; ctx.fillRect(x0 + 260, 11, 70 * k, 6);
+      const tx = touchMode ? W - 60 : W - 12;
+      ctx.textAlign = "right"; ctx.font = "900 16px system-ui";
+      ctx.fillStyle = timeLeft < 5 && Math.floor(clock * 4) % 2 ? "#ffffff" : timeLeft < 5 ? "#ff3b4a" : "#ffd23a";
+      ctx.fillText(`⏱ ${fmtT(timeLeft)}`, tx, 14);
+    }
+    if (J) {
+      ctx.fillStyle = "#b8cce8"; ctx.font = "800 9px system-ui";
+      ctx.fillText(J.phase === "inrun" ? `${Math.round(J.v * 0.25)} km/h` : J.phase === "flight" ? `${Math.max(0, (J.x - LIP.x) / JPM).toFixed(1).replace(".", ",")} m` : `${J.dist.toFixed(1).replace(".", ",")} m`, x0 + 210, 14);
+    }
+    ctx.textBaseline = "alphabetic";
+    // in flight: the balance gauge and the landing call
+    if (J && J.phase === "flight") {
+      const gx = W / 2, gy = H - 22;
+      ctx.fillStyle = "rgba(11,23,48,0.75)"; ctx.fillRect(gx - 90, gy - 9, 180, 18);
+      ctx.fillStyle = "rgba(58,208,122,0.6)"; ctx.fillRect(gx - 22, gy - 6, 44, 12);
+      ctx.fillStyle = "rgba(255,59,74,0.5)"; ctx.fillRect(gx - 86, gy - 6, 20, 12); ctx.fillRect(gx + 66, gy - 6, 20, 12);
+      ctx.fillStyle = Math.abs(J.b) > 0.8 ? "#ff3b4a" : "#ffffff"; ctx.fillRect(gx + clamp(J.b, -1.1, 1.1) * 78 - 2, gy - 8, 4, 16);
+      ctx.font = "800 9px system-ui"; ctx.textAlign = "center"; ctx.fillStyle = "#ffffff"; ctx.fillText("EQUILIBRIO", gx, gy - 12);
+      const hgt = hillY(J.x) - J.y;
+      if (hgt < 45 && J.vy > 0 && !J.tele && !J.teleEarly) { ctx.font = "italic 900 20px system-ui"; ctx.fillStyle = "#ffd23a"; ctx.lineWidth = 4; ctx.strokeStyle = "#1a2a4a"; ctx.strokeText("ATTERRA!", W / 2, 120); ctx.fillText("ATTERRA!", W / 2, 120); }
+    }
+    if (J && J.phase === "inrun" && state === "play" && J.s > RUN - WIN - 60) { ctx.font = "italic 900 20px system-ui"; ctx.textAlign = "center"; ctx.fillStyle = J.s > RUN - WIN ? "#3ad07a" : "#ffffff"; ctx.lineWidth = 4; ctx.strokeStyle = "#1a2a4a"; ctx.strokeText("STACCA!", W / 2, 120); ctx.fillText("STACCA!", W / 2, 120); }
+  }
+  function draw() {
+    ctx.setTransform(pxRatio, 0, 0, pxRatio, 0, 0);
+    if (state === "menu" && !course && !J) { tappa = 1; buildCourse("discesa"); camY = 900; P = null; }
+    if (J) drawJump(); else drawDownhill();
+    const ox = J ? -clamp(J.x - 210, -40, 2200) : 0, oy = J ? -clamp(J.y - 130, -20, 760) : -camY;
+    for (const p of parts) { ctx.globalAlpha = Math.max(0, 1 - p.t / p.life); ctx.fillStyle = p.c; ctx.fillRect(p.x + ox - 1.5, p.y + oy - 1.5, 3, 3); }
+    ctx.globalAlpha = 1;
+    for (const p of popups) {
+      ctx.globalAlpha = Math.max(0, 1 - p.t / 1.2);
+      ctx.textAlign = "center"; ctx.font = "900 11px system-ui";
+      ctx.lineWidth = 3; ctx.strokeStyle = "#ffffff"; ctx.strokeText(p.text, p.x + ox, p.y + oy); ctx.fillStyle = p.color; ctx.fillText(p.text, p.x + ox, p.y + oy);
+    }
+    ctx.globalAlpha = 1;
+    if (state === "menu") return;
+    drawHud();
+    if (message) {
+      ctx.globalAlpha = Math.min(1, (2.4 - message.t) * 2);
+      ctx.textAlign = "center"; ctx.font = "italic 900 22px system-ui"; ctx.fillStyle = "#ff3b4a";
+      ctx.lineWidth = 5; ctx.strokeStyle = "#ffffff"; ctx.strokeText(message.text, W / 2, 70); ctx.fillText(message.text, W / 2, 70);
+      if (message.sub) { ctx.font = "800 12px system-ui"; ctx.fillStyle = "#1a2a4a"; ctx.lineWidth = 4; ctx.strokeText(message.sub, W / 2, 89); ctx.fillText(message.sub, W / 2, 89); }
+      ctx.globalAlpha = 1;
+    }
+  }
+
+  // ---------- Loop ----------
+  const STEP = 1 / 120;
+  let last = performance.now(), acc = 0;
+  function frame(now) {
+    const dt = Math.min(0.1, (now - last) / 1000);
+    last = now;
+    if (isPlaying()) {
+      acc += dt;
+      while (acc >= STEP && isPlaying()) { update(STEP); acc -= STEP; }
+    } else { acc = 0; update(dt); }
+    draw();
+    requestAnimationFrame(frame);
+  }
+  syncControls();
+  showTitle();
+  requestAnimationFrame(frame);
+})();
+</script>
+<script src="../../shared/iniziali.js" data-record="coppa-best-" data-kind="score"></script>
+</body>
+</html>

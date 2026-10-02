@@ -4,7 +4,7 @@ Raccolta di giochi arcade per il browser. Ogni gioco è un singolo file HTML sen
 
 ## 🕹️ Sala Giochi — `index.html`
 
-Apri `index.html` nella cartella principale per la pagina di raccolta: mostra tutti i 117 giochi con copertina, genere, comandi e i tuoi record per ogni difficoltà (Facile, Normale, Difficile). Tocca «Gioca» per avviare un gioco; in ogni gioco il pulsante «← Sala Giochi» in alto a sinistra (visibile nei menu) riporta alla raccolta.
+Apri `index.html` nella cartella principale per la pagina di raccolta: mostra tutti i 118 giochi con copertina, genere, comandi e i tuoi record per ogni difficoltà (Facile, Normale, Difficile). Tocca «Gioca» per avviare un gioco; in ogni gioco il pulsante «← Sala Giochi» in alto a sinistra (visibile nei menu) riporta alla raccolta.
 
 **Iniziali del record:** quando batti un record compare la schermata da sala giochi per inserire le tue tre iniziali (frecce ↑ ↓ per cambiare lettera, ← → per spostarti, oppure scrivile direttamente; su telefono i tasti ▲ ▼ e OK). Le iniziali vengono salvate insieme al record e compaiono nei menu del gioco e nella Sala Giochi. Il codice è condiviso da tutti i giochi in `shared/iniziali.js`.
 
@@ -12,7 +12,7 @@ Apri `index.html` nella cartella principale per la pagina di raccolta: mostra tu
 
 **Comandi touch: levetta o frecce:** in cima alla Sala Giochi e nel menu di pausa di ogni gioco con la levetta si sceglie se usare la levetta analogica o una croce di frecce. Con le frecce il tocco viene agganciato a una delle otto direzioni (le quattro principali hanno la zona più larga, così le diagonali si prendono solo di proposito) e spinto fino in fondo; la scelta vale per tutti i giochi e resta memorizzata. Funziona anche nei giochi con due levette (la sfida a due di *Pugni di Fuoco*, muovi e spara di *Assalto Robotico*).
 
-**Trofei:** ogni gioco ha tre trofei a punteggio: 🥉 **Bronzo** (la soglia in qualsiasi difficoltà), 🥈 **Argento** (a Normale o Difficile) e 🥇 **Oro** (a Difficile); nei giochi a tempo (*Corsa al Tramonto*, *Crystal Wars*) conta finire entro un certo tempo. I trofei si calcolano dai record salvati, quindi quelli già fatti si sbloccano da soli; quando un record nuovo ne conquista uno compare un avviso in alto. Le soglie sono nella schermata iniziale, in pausa e a fine partita di ogni gioco; in Sala Giochi ogni cabinato mostra i suoi trofei, in cima c'è il totale (su 351) con il numero di giochi giocati e il filtro **Già giocati** mostra solo i giochi con almeno un record. Le soglie vengono dalle partite di prova di un bot per circa un terzo dei giochi e sono stimate sulle regole di punteggio per gli altri (`shared/trofei.js`).
+**Trofei:** ogni gioco ha tre trofei a punteggio: 🥉 **Bronzo** (la soglia in qualsiasi difficoltà), 🥈 **Argento** (a Normale o Difficile) e 🥇 **Oro** (a Difficile); nei giochi a tempo (*Corsa al Tramonto*, *Crystal Wars*) conta finire entro un certo tempo. I trofei si calcolano dai record salvati, quindi quelli già fatti si sbloccano da soli; quando un record nuovo ne conquista uno compare un avviso in alto. Le soglie sono nella schermata iniziale, in pausa e a fine partita di ogni gioco; in Sala Giochi ogni cabinato mostra i suoi trofei, in cima c'è il totale (su 354) con il numero di giochi giocati e il filtro **Già giocati** mostra solo i giochi con almeno un record. Le soglie vengono dalle partite di prova di un bot per circa un terzo dei giochi e sono stimate sulle regole di punteggio per gli altri (`shared/trofei.js`).
 
 **Cerca:** sotto i trofei c'è una casella per trovare subito un gioco scrivendo parte del nome o del genere (maiuscole e accenti non contano, più parole restringono la ricerca); con Invio si apre il primo gioco trovato, con Esc si svuota. Funziona insieme al filtro *Già giocati*.
 
@@ -1810,3 +1810,17 @@ Piattaforme a schermo fisso in stile *Snow Bros*. Un pupazzo di neve affronta i 
 - **Touch:** levetta (o frecce) per camminare, pulsanti SALTA e NEVE
 
 Per giocare apri `games/palle-di-neve/index.html` nel browser.
+
+### ⛷️ Coppa delle Nevi — `games/coppa-delle-nevi/index.html`
+
+Sci in stile *Alpine Ski*. Una coppa del mondo a tappe: ogni tappa ha tre prove, sempre nello stesso ordine, e la gara finisce quando in una prova scade il tempo.
+
+- **Discesa libera:** la pista scende serpeggiando tra i boschi; si guida verso destra e sinistra, accucciati si va più forte e frenando a spazzaneve si rallenta (la velocità è in km/h). Alberi e rocce fanno cadere, e anche gli altri sciatori che scendono più piano; con SALTA si scavalcano rocce e sciatori (300). Le bandierine valgono 200, le gobbe frenano e fanno saltare, i trampolini fanno volare (250). 5 punti per ogni metro di discesa
+- **Slalom gigante:** porte rosse e blu alternate da passare tra i due paletti: 100 punti la prima e 25 in più per ogni porta presa di fila (fino a 300). Una porta mancata toglie secondi al tempo, urtare un paletto fa perdere velocità
+- **Salto dal trampolino:** visto di lato. Si scende lungo la rincorsa (giù per accucciarsi e prendere velocità) e si stacca con SALTA nella zona verde vicino al dente: più vicino al bordo, più lungo il volo. In aria il vento sbilancia il saltatore e la levetta lo rimette dritto (barra EQUILIBRIO): più si sta dritti, più si plana. Vicino alla neve compare ATTERRA!: premendo SALTA in quel momento si atterra in telemark (300). 10 punti al metro e fino a 200 di stile; chi atterra storto cade e prende metà dei punti. Il punto K è a 110 metri. Il salto non ha tempo limite
+- **Tempo e tappe:** discesa e slalom hanno un tempo limite; all'arrivo ogni secondo avanzato vale 100 punti. A ogni tappa le piste si allungano e si stringono, ci sono più ostacoli, più porte e meno tempo, e tutti i punti valgono di più (×1,5 alla seconda tappa, ×2 alla terza…)
+- **Difficoltà:** Facile (più tempo, porte larghe, meno ostacoli, vento leggero, porta mancata 2 secondi), Normale (porta mancata 3 secondi), Difficile (tempo stretto, porte strette, più ostacoli, sciatori più svelti, vento forte, porta mancata 4 secondi); record separati per ogni difficoltà
+- **Comandi:** `←` `→` o `A` `D` per curvare · `↓` per accucciarsi, `↑` per frenare · `Spazio` o `J` per saltare (nel trampolino: staccare e atterrare in telemark; `←` `→` per l'equilibrio) · `P` pausa
+- **Touch:** levetta (o frecce) per curvare, accucciarsi e frenare, pulsante SALTA
+
+Per giocare apri `games/coppa-delle-nevi/index.html` nel browser.
