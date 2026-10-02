@@ -1,0 +1,584 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no, viewport-fit=cover">
+<title>Invasori dallo Spazio</title>
+<style>
+  :root {
+    --bg: #000000;
+    --fg: #f4f8ff;
+    --muted: #b8e8c0;
+    --pink: #3aff5a;
+    --yellow: #ffd23a;
+    --red: #ff5a3a;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  html, body {
+    height: 100%;
+    background: var(--bg);
+    color: var(--fg);
+    font-family: system-ui, -apple-system, "Segoe UI", sans-serif;
+    overflow: hidden;
+    user-select: none;
+    -webkit-user-select: none;
+    touch-action: none;
+  }
+  #wrap { position: fixed; inset: 0; display: flex; align-items: center; justify-content: center; }
+  canvas { display: block; touch-action: none; border-radius: 6px; box-shadow: 0 0 0 2px #2a4a7a, 0 10px 40px rgba(0,0,0,0.6); }
+  #pauseBtn {
+    position: fixed; z-index: 3; display: none; right: 10px; top: calc(10px + env(safe-area-inset-top, 0px));
+    font: 700 13px system-ui, sans-serif; color: var(--fg);
+    background: rgba(0, 0, 0, 0.6); border: 1px solid rgba(244, 246, 238, 0.35);
+    border-radius: 8px; padding: 6px 10px; cursor: pointer;
+  }
+  #touch {
+    position: fixed; z-index: 2; display: none; left: 12px; right: 12px;
+    bottom: calc(14px + env(safe-area-inset-bottom, 0px));
+    justify-content: space-between; align-items: flex-end; pointer-events: none;
+  }
+  /* thumb stick: move the cannon; FUOCO shoots */
+  #touch .stick { position: relative; width: 136px; height: 136px; border-radius: 50%; pointer-events: auto; touch-action: none;
+    border: 2px solid rgba(255, 255, 255, 0.6); background: radial-gradient(circle, rgba(255,255,255,0.14), rgba(255,255,255,0.04)); }
+  #touch .stick .knob { position: absolute; left: 50%; top: 50%; width: 58px; height: 58px; margin: -29px 0 0 -29px; border-radius: 50%;
+    background: rgba(255, 255, 255, 0.45); border: 2px solid rgba(255,255,255,0.7); box-shadow: 0 4px 10px rgba(0,0,0,0.4); pointer-events: none; }
+  #touch .stick .ring { position: absolute; inset: 10px; border-radius: 50%; border: 1px dashed rgba(244,246,238,0.25); pointer-events: none; }
+  #touch .jump { width: 96px; height: 96px; border-radius: 50%; pointer-events: auto; touch-action: none; color: var(--fg);
+    font: 800 13px system-ui, sans-serif; letter-spacing: 1px; border: 2px solid rgba(58, 255, 90, 0.9); background: rgba(58, 255, 90, 0.22); }
+  #touch .jump.on { background: rgba(58, 255, 90, 0.55); }
+  #touch.small .stick { width: 112px; height: 112px; }
+  #touch.small .stick .knob { width: 48px; height: 48px; margin: -24px 0 0 -24px; }
+  #touch.small .jump { width: 80px; height: 80px; font-size: 11px; }
+  #overlay {
+    position: fixed; inset: 0; z-index: 5;
+    display: flex; flex-direction: column; align-items: center; justify-content: flex-start;
+    gap: 14px; padding: 16px; text-align: center; overflow-y: auto;
+    background: rgba(0, 0, 0, 0.9);
+  }
+  #overlay > :first-child { margin-top: auto; }
+  #overlay > :last-child { margin-bottom: auto; }
+  #overlay.hidden { display: none; }
+  #homeLink {
+    position: fixed; top: calc(10px + env(safe-area-inset-top, 0px)); left: 10px; z-index: 6;
+    font: 600 13px/1 system-ui, sans-serif; color: #fff; text-decoration: none;
+    padding: 8px 12px; border-radius: 999px; background: rgba(0,0,0,.55);
+    border: 1px solid rgba(255,255,255,.25);
+  }
+  #homeLink:hover { background: rgba(0,0,0,.8); }
+  #overlay.hidden ~ #homeLink { display: none; }
+  @media (max-width: 700px) { #overlay { padding-top: calc(52px + env(safe-area-inset-top, 0px)); } }
+  #overlay h1 { font-size: clamp(32px, 10vw, 58px); font-weight: 900; font-style: italic; letter-spacing: 1px; color: var(--pink);
+    text-shadow: 3px 3px 0 #0a4a1a, 0 0 22px rgba(58,255,90,0.4); }
+  #overlay h2 { font-size: clamp(26px, 7vw, 42px); font-weight: 900; letter-spacing: 2px; color: var(--pink); }
+  #overlay h2.lose { color: var(--red); }
+  #overlay p { max-width: 540px; font-size: clamp(13px, 3.4vw, 16px); line-height: 1.55; }
+  #overlay p.muted { color: var(--muted); }
+  #overlay .pts { display: grid; grid-template-columns: repeat(2, auto); gap: 4px 18px; font-size: 13px; color: var(--muted); text-align: left; max-width: 560px; }
+  #overlay .pts b { color: var(--fg); }
+  #overlay .diff { display: flex; gap: 10px; flex-wrap: wrap; justify-content: center; }
+  #overlay button {
+    font: 800 15px system-ui, sans-serif; letter-spacing: 1.5px; color: var(--fg);
+    background: transparent; cursor: pointer;
+    border: 2px solid rgba(244,246,238,0.3); border-radius: 10px; padding: 9px 16px;
+  }
+  #overlay .diff button.on { border-color: var(--c); color: var(--c); box-shadow: 0 0 12px var(--c); }
+  #overlay button.start { border-color: var(--pink); color: #002a08; background: var(--pink); padding: 11px 30px; box-shadow: 0 4px 0 #1a9a2a; }
+  @media (max-height: 560px) {
+    #overlay { gap: 8px; }
+    #overlay h1 { font-size: 30px; }
+    #overlay p { font-size: 13px; line-height: 1.4; }
+    #overlay .help, #overlay .pts { display: none; }
+  }
+</style>
+</head>
+<body>
+<div id="wrap"><canvas id="game"></canvas></div>
+<div id="touch">
+  <div class="stick" aria-label="Levetta"><div class="ring"></div><div class="knob"></div></div>
+  <button type="button" class="jump" aria-label="Fuoco">FUOCO</button>
+</div>
+<button id="pauseBtn" type="button" aria-label="Pausa">❚❚</button>
+<div id="overlay"></div>
+<a id="homeLink" href="../../index.html">← Sala Giochi</a>
+
+
+<script>
+(() => {
+  "use strict";
+
+  const W = 640, H = 360, TOP = 28, PX = 2;
+  const FX0 = 64, FX1 = 576, PY = 334, UFOY = 52, BUNKY = 282, COLS = 11, ROWS = 5, CW = 32, RH = 24;
+  // the sprites, one character per pixel
+  const SPR = {
+    squid: [["...##...", "..####..", ".######.", "##.##.##", "########", "..#..#..", ".#.##.#.", "#.#..#.#"],
+            ["...##...", "..####..", ".######.", "##.##.##", "########", ".#.##.#.", "#......#", ".#....#."]],
+    crab: [["..#.....#..", "...#...#...", "..#######..", ".##.###.##.", "###########", "#.#######.#", "#.#.....#.#", "...##.##..."],
+           ["..#.....#..", "#..#...#..#", "#.#######.#", "###.###.###", "###########", ".#########.", "..#.....#..", ".#.......#."]],
+    octo: [["....####....", ".##########.", "############", "###..##..###", "############", "...##..##...", "..##.##.##..", "##........##"],
+           ["....####....", ".##########.", "############", "###..##..###", "############", "..###..###..", ".##..##..##.", "..##....##.."]],
+    cannon: [["......#......", ".....###.....", ".....###.....", ".###########.", "#############", "#############", "#############", "#############"]],
+    ufo: [[".....######.....", "...##########...", "..############..", ".##.##.##.##.##.", "################", "..###..##..###..", "...#........#..."]],
+    boom: [["#...#..#...#", ".#...##...#.", "..#......#..", "##........##", "..#......#..", ".#...##...#.", "#...#..#...#"]],
+    pboom: [["#..#..#..#..#..", "..#....#....#..", ".#.##.###.##.#.", "#.#############", ".##############"], [".#....#...#....", "...#..#..#...#.", "..##.###.##....", ".#############.", "###############"]],
+  };
+  const ROWKIND = ["squid", "crab", "crab", "octo", "octo"], ROWPTS = [30, 20, 20, 10, 10];
+  // the famous mystery ship scores: the 23rd shot and every 15th after it is worth 300
+  const UFOPTS = [100, 50, 50, 100, 150, 100, 100, 50, 300, 100, 100, 100, 50, 150, 100];
+
+  const DIFFICULTIES = {
+    facile:    { label: "FACILE",    color: "#7ed87a", desc: "5 cannoni · marcia più lenta · meno colpi alieni", lives: 5, march: 0.8, fire: 0.6, bullet: 0.85 },
+    normale:   { label: "NORMALE",   color: "#3aff5a", desc: "3 cannoni, come nel 1978", lives: 3, march: 1, fire: 1, bullet: 1 },
+    difficile: { label: "DIFFICILE", color: "#ff5a5a", desc: "3 cannoni · marcia più svelta · più colpi e più veloci", lives: 3, march: 1.2, fire: 1.45, bullet: 1.2 },
+  };
+  const DIFF_IDS = Object.keys(DIFFICULTIES);
+  const DIFF_KEY = "invasori-difficulty";
+  const bestKey = (id) => `invasori-best-${id}`;
+  function store(k, v) { try { localStorage.setItem(k, v); } catch { /* ignore */ } }
+  function load(k) { try { return localStorage.getItem(k); } catch { return null; } }
+  const rnd = (a, b) => a + Math.random() * (b - a);
+  const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
+
+  // ---------- Canvas ----------
+  const canvas = document.getElementById("game");
+  const ctx = canvas.getContext("2d");
+  const wrapEl = document.getElementById("wrap");
+  const overlay = document.getElementById("overlay");
+  const touchEl = document.getElementById("touch");
+  const pauseBtn = document.getElementById("pauseBtn");
+  let pxRatio = 1, touchMode = !!(window.matchMedia && matchMedia("(pointer: coarse)").matches);
+  function resize() {
+    const portrait = window.innerHeight > window.innerWidth;
+    const showTouch = touchMode && isPlaying();
+    touchEl.style.display = showTouch ? "flex" : "none";
+    touchEl.classList.toggle("small", !portrait && window.innerHeight < 480);
+    wrapEl.style.paddingBottom = showTouch && portrait ? "calc(170px + env(safe-area-inset-bottom, 0px))" : "0";
+    let availW = window.innerWidth - 8, availH = window.innerHeight - 8;
+    if (showTouch && portrait) availH -= 170;
+    if (showTouch && !portrait) {
+      const side = Math.max(...[...touchEl.children].map((el) => el.offsetWidth)) + 20;
+      if (window.innerWidth - 2 * side > 200) availW = window.innerWidth - 2 * side;
+    }
+    const s = Math.max(0.2, Math.min(availW / W, availH / H));
+    pxRatio = Math.min(3, s * (window.devicePixelRatio || 1));
+    canvas.style.width = W * s + "px";
+    canvas.style.height = H * s + "px";
+    canvas.width = Math.round(W * pxRatio);
+    canvas.height = Math.round(H * pxRatio);
+  }
+  window.addEventListener("resize", () => syncControls());
+
+  // ---------- Audio ----------
+  let audioCtx = null, ufoOsc = null, ufoGain = null;
+  function beep(freq, dur, type = "square", vol = 0.04, slide = 0, delay = 0) {
+    if (!audioCtx) return;
+    const t = audioCtx.currentTime + delay;
+    const osc = audioCtx.createOscillator(), gain = audioCtx.createGain();
+    osc.type = type;
+    osc.frequency.setValueAtTime(freq, t);
+    if (slide) osc.frequency.exponentialRampToValueAtTime(Math.max(20, freq + slide), t + dur);
+    gain.gain.setValueAtTime(vol, t);
+    gain.gain.exponentialRampToValueAtTime(0.0001, t + dur);
+    osc.connect(gain).connect(audioCtx.destination);
+    osc.start(t); osc.stop(t + dur + 0.02);
+  }
+  function noise(dur, vol, freq) {
+    if (!audioCtx) return;
+    const len = Math.floor(audioCtx.sampleRate * dur), buf = audioCtx.createBuffer(1, len, audioCtx.sampleRate), d = buf.getChannelData(0);
+    for (let i = 0; i < len; i++) d[i] = (Math.random() * 2 - 1) * (1 - i / len);
+    const src = audioCtx.createBufferSource(), f = audioCtx.createBiquadFilter(), g = audioCtx.createGain();
+    src.buffer = buf; f.type = "bandpass"; f.frequency.value = freq; g.gain.value = vol;
+    src.connect(f).connect(g).connect(audioCtx.destination); src.start();
+  }
+  // the four-note march, one note per step of the formation
+  const MARCH = [98, 87, 78, 73];
+  const sfx = {
+    step: (i) => beep(MARCH[i % 4], 0.09, "square", 0.07, -6),
+    shoot: () => { noise(0.18, 0.05, 3000); beep(1200, 0.12, "square", 0.02, -900); },
+    kill: () => { noise(0.18, 0.08, 1400); beep(700, 0.15, "sawtooth", 0.03, -500); },
+    die: () => { noise(0.9, 0.12, 500); },
+    ufoHit: () => { for (let i = 0; i < 8; i++) beep(1600 - i * 120, 0.06, "square", 0.04, 0, i * 0.05); },
+    life: () => [523, 659, 784, 1047].forEach((f, i) => beep(f, 0.1, "square", 0.04, 0, i * 0.08)),
+    wave: () => [392, 523, 659, 784, 1047].forEach((f, i) => beep(f, 0.12, "square", 0.04, 0, i * 0.09)),
+  };
+  function ufoSound(on) {
+    if (!audioCtx) return;
+    if (on && !ufoOsc) {
+      ufoOsc = audioCtx.createOscillator(); ufoGain = audioCtx.createGain(); const lfo = audioCtx.createOscillator(), lg = audioCtx.createGain();
+      ufoOsc.type = "square"; ufoOsc.frequency.value = 440; lfo.frequency.value = 9; lg.gain.value = 140;
+      lfo.connect(lg).connect(ufoOsc.frequency); ufoGain.gain.value = 0.018; ufoOsc.connect(ufoGain).connect(audioCtx.destination);
+      ufoOsc.start(); lfo.start(); ufoOsc._lfo = lfo;
+    } else if (!on && ufoOsc) { try { ufoOsc.stop(); ufoOsc._lfo.stop(); } catch { /* ignore */ } ufoOsc = null; }
+  }
+
+  // ---------- State ----------
+  let difficulty = DIFFICULTIES[load(DIFF_KEY)] ? load(DIFF_KEY) : "normale";
+  let diff = DIFFICULTIES[difficulty];
+  let state = "menu", menu = null, pausedFrom = null, stateT = 0, clock = 0;
+  let score = 0, lives = 3, wave = 1, bestCache = 0, nextLife = 1500;
+  let inv = [], fx = 0, fy = 0, fdir = 1, frame = 0, stepT = 0, stepN = 0, P = null, shot = null, bombs = [], ufo = null, ufoT = 0, shots = 0, booms = [], bunkers = [], message = null, bombT = 0, popups = [];
+  let firePressed = false;
+  const keys = { left: false, right: false };
+  const stick = { x: 0, y: 0 };
+
+  // ---------- The invaders and the bunkers ----------
+  function buildWave() {
+    inv = [];
+    for (let r = 0; r < ROWS; r++) for (let c = 0; c < COLS; c++) inv.push({ r, c, alive: true });
+    // every wave starts a little lower, then the cycle starts again
+    fx = (W - (COLS - 1) * CW) / 2 - 60; fy = 78 + [0, 12, 24, 30, 30, 36, 36, 36][Math.min(7, (wave - 1) % 9)];
+    fdir = 1; frame = 0; stepT = 0.5; bombs = []; shot = null; ufo = null; ufoT = rnd(18, 25);
+    makeBunkers();
+  }
+  function makeBunkers() {
+    bunkers = [];
+    for (let i = 0; i < 4; i++) {
+      const cx = FX0 + (FX1 - FX0) * (i + 0.5) / 4, cells = [];
+      for (let y = 0; y < 16; y++) for (let x = 0; x < 22; x++) {
+        let on = true;
+        if (y < 4 && (x < 4 - y || x > 17 + y)) on = false;
+        if (y >= 12 && x >= 6 && x <= 15 && y - 12 >= Math.abs(x - 10.5) - 4) on = false;
+        if (y >= 11 && x >= 7 && x <= 14) on = false;
+        cells.push(on);
+      }
+      bunkers.push({ x: Math.round(cx - 22), y: BUNKY, cells });
+    }
+  }
+  const invX = (c) => fx + c * CW, invY = (r) => fy + r * RH;
+  const invW = (r) => SPR[ROWKIND[r]][0][0].length * PX;
+  function aliveCount() { let n = 0; for (const v of inv) if (v.alive) n++; return n; }
+  // the fewer invaders left, the faster they march
+  function stepDelay() { const n = aliveCount(); return Math.max(0.032, (0.012 + 0.75 * Math.pow(n / 55, 1.15)) / (diff.march * Math.min(2, 1 + 0.1 * (wave - 1)))); }
+  // erodes the bunkers around a point; returns true if something solid was there
+  function bunkerHit(x, y, r = 3, chance = 0.75) {
+    for (const b of bunkers) {
+      const cx = Math.floor((x - b.x) / PX), cy = Math.floor((y - b.y) / PX);
+      if (cx < 0 || cx >= 22 || cy < 0 || cy >= 16 || !b.cells[cy * 22 + cx]) continue;
+      for (let dy = -r; dy <= r; dy++) for (let dx = -r; dx <= r; dx++) {
+        const nx = cx + dx, ny = cy + dy;
+        if (nx < 0 || nx >= 22 || ny < 0 || ny >= 16) continue;
+        if (dx * dx + dy * dy <= r * r && (Math.random() < chance || (dx === 0 && dy === 0))) b.cells[ny * 22 + nx] = false;
+      }
+      return true;
+    }
+    return false;
+  }
+  function bunkerClear(x0, y0, x1, y1) {
+    for (const b of bunkers) for (let cy = 0; cy < 16; cy++) for (let cx = 0; cx < 22; cx++) {
+      const x = b.x + cx * PX, y = b.y + cy * PX;
+      if (x + PX > x0 && x < x1 && y + PX > y0 && y < y1) b.cells[cy * 22 + cx] = false;
+    }
+  }
+
+  // ---------- Flow ----------
+  const isPlaying = () => ["intro", "play", "dead", "clear"].includes(state);
+  function startGame() {
+    if (!audioCtx) { try { audioCtx = new (window.AudioContext || window.webkitAudioContext)(); } catch { audioCtx = null; } }
+    if (audioCtx && audioCtx.state === "suspended") audioCtx.resume();
+    score = 0; lives = diff.lives; wave = 1; nextLife = 1500; shots = 0;
+    bestCache = parseInt(load(bestKey(difficulty)), 10) || 0;
+    bunkers = [];
+    beginWave();
+    menu = null;
+    overlay.classList.add("hidden");
+    syncControls();
+    last = performance.now();
+  }
+  function beginWave() {
+    buildWave();
+    P = { x: W / 2, alive: true };
+    booms = []; popups = [];
+    message = { text: `ONDATA ${wave}`, sub: wave === 1 ? "difendi la Terra!" : "arrivano ancora più in basso…", t: 0 };
+    state = "intro"; stateT = 1.6;
+  }
+  function addScore(n) {
+    score += n;
+    if (score >= nextLife) { lives++; nextLife = Infinity; sfx.life(); popups.push({ x: W / 2, y: 120, text: "CANNONE EXTRA!", color: "#3aff5a", t: 0 }); }
+  }
+  function playerHit(why) {
+    if (state !== "play" || !P.alive) return;
+    if (window.__deaths) window.__deaths.push([wave, why]);
+    if (window.__god) return;
+    P.alive = false; lives--; sfx.die(); ufoSound(false);
+    booms.push({ x: P.x, y: PY, kind: "pboom", t: 0, life: 1.4 });
+    state = "dead"; stateT = 1.8;
+  }
+  function gameOver() {
+    state = "over"; ufoSound(false);
+    const prev = parseInt(load(bestKey(difficulty)), 10) || 0;
+    const record = score > prev;
+    if (record) store(bestKey(difficulty), String(score));
+    menu = () => showOverlay(
+      `<h2 class="lose">GAME OVER</h2>
+       <p>Punteggio: <b>${score.toLocaleString("it-IT")}</b> · ondata ${wave} · ${diff.label}</p>
+       ${record ? "<p style='color:var(--pink)'>★ NUOVO RECORD! ★</p>" : ""}
+       ${difficultyHTML()}
+       <button class="start" data-start>INSERISCI GETTONE</button>`
+    );
+    menu();
+    syncControls();
+  }
+  function togglePause() {
+    if (isPlaying()) {
+      pausedFrom = state; state = "paused"; ufoSound(false);
+      showOverlay(`<h2>PAUSA</h2><button class="start" data-resume>CONTINUA</button><p class="muted">Premi P per continuare</p>`);
+    } else if (state === "paused") {
+      state = pausedFrom; overlay.classList.add("hidden"); last = performance.now();
+    }
+    syncControls();
+  }
+  // the pause menu can end the game (shared/iniziali.js): it ends here the usual way, saving the record
+  window.addEventListener("sala:termina", () => { if (state !== "paused") return; state = pausedFrom; overlay.classList.add("hidden"); gameOver(); syncControls(); });
+  function syncControls() {
+    pauseBtn.style.display = isPlaying() && touchMode ? "block" : "none";
+    resize();
+  }
+  pauseBtn.addEventListener("click", () => togglePause());
+  function showOverlay(html) { overlay.innerHTML = html; overlay.classList.remove("hidden"); }
+  function difficultyHTML() {
+    const buttons = DIFF_IDS.map((id) => {
+      const d = DIFFICULTIES[id];
+      return `<button type="button" data-diff="${id}" class="${id === difficulty ? "on" : ""}" style="--c:${d.color}">${d.label}</button>`;
+    }).join("");
+    const best = parseInt(load(bestKey(difficulty)), 10);
+    return `<div class="diff">${buttons}</div><p class="muted">${diff.desc}${best ? ` · Record: ${best.toLocaleString("it-IT")}` : ""}</p>`;
+  }
+  function setDifficulty(id) { if (!DIFFICULTIES[id]) return; difficulty = id; diff = DIFFICULTIES[id]; store(DIFF_KEY, id); if (menu) menu(); }
+  function showTitle() {
+    menu = showTitle;
+    showOverlay(
+      `<h1>INVASORI DALLO SPAZIO</h1>
+       <p>Cinquantacinque alieni marciano a scatti verso la Terra, sempre più in fretta man mano che ne abbatti. Hai un solo cannone e un colpo alla volta: riparati dietro i bunker, che però si sbriciolano, e non lasciarli arrivare in fondo! Ogni tanto in alto passa il disco volante misterioso.</p>
+       <div class="pts">
+         <span><b>Alieni</b></span><span>in alto 30 punti · in mezzo 20 · in basso 10</span>
+         <span><b>Disco volante</b></span><span>50, 100, 150 o 300 punti: chi conta i colpi sa quando vale di più…</span>
+         <span><b>Cannoni</b></span><span>uno solo in più, a 1.500 punti, come nell'originale · a ogni ondata gli alieni sparano più spesso e più forte</span>
+       </div>
+       ${touchMode
+         ? `<p class="muted help">Levetta per muovere il cannone · FUOCO per sparare</p>`
+         : `<p class="muted help">Frecce o A D per muovere il cannone · SPAZIO, J o X per sparare · P pausa</p>`}
+       ${difficultyHTML()}
+       <button class="start" data-start>INSERISCI GETTONE</button>`
+    );
+  }
+  overlay.addEventListener("click", (e) => {
+    const d = e.target.closest("[data-diff]");
+    if (d) { setDifficulty(d.dataset.diff); return; }
+    if (e.target.closest("[data-start]")) startGame();
+    if (e.target.closest("[data-resume]")) togglePause();
+  });
+
+  // ---------- Input ----------
+  const KEYMAP = { arrowleft: "left", a: "left", arrowright: "right", d: "right" };
+  const FIREKEYS = [" ", "j", "k", "x", "z", "arrowup", "w"];
+  window.addEventListener("keydown", (e) => {
+    const k = e.key.toLowerCase();
+    if ([" ", "arrowup", "arrowdown", "arrowleft", "arrowright"].includes(k)) e.preventDefault();
+    if (state === "menu" || state === "over") {
+      if (e.key === "Enter") startGame();
+      else if (["1", "2", "3"].includes(k)) setDifficulty(DIFF_IDS[+k - 1]);
+      return;
+    }
+    if (k === "p" || k === "escape") { if (!e.repeat) togglePause(); return; }
+    if (state === "paused") { if (e.key === "Enter") togglePause(); return; }
+    if (FIREKEYS.includes(k)) firePressed = true;
+    if (KEYMAP[k]) keys[KEYMAP[k]] = true;
+  });
+  window.addEventListener("keyup", (e) => { const m = KEYMAP[e.key.toLowerCase()]; if (m) keys[m] = false; });
+  window.addEventListener("blur", () => { for (const k in keys) keys[k] = false; stick.x = stick.y = 0; if (isPlaying()) togglePause(); });
+  const fireBtn = touchEl.querySelector(".jump");
+  let fireHeld = false;
+  fireBtn.addEventListener("pointerdown", (e) => { e.preventDefault(); firePressed = true; fireHeld = true; fireBtn.classList.add("on"); });
+  for (const ev of ["pointerup", "pointercancel", "pointerleave"]) fireBtn.addEventListener(ev, () => { fireHeld = false; fireBtn.classList.remove("on"); });
+  const stickEl = touchEl.querySelector(".stick"), knob = stickEl.querySelector(".knob");
+  let stickId = null;
+  function stickAt(e) {
+    const r = stickEl.getBoundingClientRect(), max = r.width / 2 - 14;
+    let dx = e.clientX - (r.left + r.width / 2), dy = e.clientY - (r.top + r.height / 2);
+    const len = Math.hypot(dx, dy);
+    if (len > max) { dx *= max / len; dy *= max / len; }
+    knob.style.transform = `translate(${dx}px, ${dy}px)`;
+    const f = (v) => { const a = Math.abs(v) / max; return a < 0.18 ? 0 : Math.sign(v) * Math.min(1, (a - 0.18) / 0.55); };
+    stick.x = f(dx); stick.y = f(dy);
+  }
+  const stickEnd = (e) => { if (e.pointerId !== stickId) return; stickId = null; knob.style.transform = ""; stick.x = stick.y = 0; };
+  stickEl.addEventListener("pointerdown", (e) => { e.preventDefault(); stickId = e.pointerId; try { stickEl.setPointerCapture(e.pointerId); } catch { /* ignore */ } stickAt(e); });
+  stickEl.addEventListener("pointermove", (e) => { if (e.pointerId === stickId) stickAt(e); });
+  for (const ev of ["pointerup", "pointercancel", "lostpointercapture"]) stickEl.addEventListener(ev, stickEnd);
+  window.addEventListener("pointerdown", (e) => { if (e.pointerType === "touch" && !touchMode) { touchMode = true; syncControls(); if (menu) menu(); } }, true);
+
+  // ---------- Update ----------
+  function marchStep() {
+    // the whole formation takes one step; at an edge it drops a row and turns round
+    let minX = Infinity, maxX = -Infinity, maxY = -Infinity;
+    for (const v of inv) if (v.alive) { const x = invX(v.c), w = invW(v.r); minX = Math.min(minX, x - w / 2); maxX = Math.max(maxX, x + w / 2); maxY = Math.max(maxY, invY(v.r) + 16); }
+    if ((fdir > 0 && maxX + 4 > FX1) || (fdir < 0 && minX - 4 < FX0)) { fy += 8; fdir = -fdir; maxY += 8; }
+    else fx += fdir * 4;
+    frame ^= 1; sfx.step(stepN++);
+    for (const v of inv) if (v.alive) { const x = invX(v.c), y = invY(v.r), w = invW(v.r); if (y + 16 >= BUNKY) bunkerClear(x - w / 2, y, x + w / 2, y + 16); }
+    if (maxY >= PY - 4) { if (window.__deaths) window.__deaths.push([wave, "invasione"]); lives = 0; P.alive = false; booms.push({ x: P.x, y: PY, kind: "pboom", t: 0, life: 1.4 }); sfx.die(); state = "dead"; stateT = 2.2; message = { text: "INVASIONE!", sub: "gli alieni sono arrivati a terra", t: 0, long: true }; }
+  }
+  function dropBomb() {
+    // a bomb from the bottom invader of a column: often the one above the cannon
+    const bottoms = {};
+    for (const v of inv) if (v.alive && (!bottoms[v.c] || v.r > bottoms[v.c].r)) bottoms[v.c] = v;
+    const cols = Object.values(bottoms); if (!cols.length) return;
+    let v;
+    if (Math.random() < 0.28) { v = cols.reduce((a, b) => (Math.abs(invX(b.c) - P.x) < Math.abs(invX(a.c) - P.x) ? b : a)); }
+    else v = cols[Math.floor(Math.random() * cols.length)];
+    const kind = Math.floor(Math.random() * 3);
+    bombs.push({ x: invX(v.c), y: invY(v.r) + 16, vy: (120 + kind * 25) * diff.bullet * Math.min(1.7, 1 + 0.07 * (wave - 1)), kind, t: 0 });
+  }
+  function update(dt) {
+    clock += dt;
+    if (window.__bot) window.__bot(dt);
+    for (const b of booms) b.t += dt;
+    booms = booms.filter((b) => b.t < b.life);
+    for (const p of popups) { p.t += dt; p.y -= 15 * dt; }
+    popups = popups.filter((p) => p.t < 1.4);
+    if (message) { message.t += dt; if (message.t > (message.long ? 3 : 2)) message = null; }
+    const fire = firePressed; firePressed = false;
+    if (state === "intro") { stateT -= dt; if (stateT <= 0) state = "play"; return; }
+    if (state === "dead") {
+      stateT -= dt;
+      if (stateT <= 0) { if (lives <= 0) gameOver(); else { P = { x: W / 2, alive: true }; bombs = []; state = "play"; } }
+      return;
+    }
+    if (state === "clear") { stateT -= dt; if (stateT <= 0) { wave++; beginWave(); } return; }
+    if (state !== "play") return;
+    // the cannon
+    const mx = clamp((keys.right ? 1 : 0) - (keys.left ? 1 : 0) + stick.x, -1, 1);
+    P.x = clamp(P.x + mx * 150 * dt, FX0 + 14, FX1 - 14);
+    if ((fire || (fireHeld && !shot)) && !shot) { shot = { x: P.x, y: PY - 10 }; shots++; sfx.shoot(); }
+    // the formation
+    stepT -= dt;
+    if (stepT <= 0) { stepT += stepDelay(); marchStep(); if (state !== "play") return; }
+    bombT -= dt * diff.fire * Math.min(3, 1 + 0.22 * (wave - 1));
+    if (bombT <= 0) { bombT = rnd(0.8, 1.5) * (0.6 + 0.4 * aliveCount() / 55); if (bombs.length < Math.min(5, 3 + Math.floor((wave - 1) / 3))) dropBomb(); }
+    // the cannon's shot
+    if (shot) {
+      shot.y -= 500 * dt;
+      if (shot.y < TOP + 6) { booms.push({ x: shot.x, y: TOP + 8, kind: "spark", t: 0, life: 0.25 }); shot = null; }
+      else if (bunkerHit(shot.x, shot.y, 2, 0.6)) { shot = null; }
+      else {
+        for (const v of inv) {
+          if (!v.alive) continue;
+          const x = invX(v.c), y = invY(v.r), w = invW(v.r);
+          if (shot.x > x - w / 2 && shot.x < x + w / 2 && shot.y > y && shot.y < y + 16) {
+            v.alive = false; shot = null; addScore(ROWPTS[v.r]); sfx.kill();
+            booms.push({ x, y: y + 8, kind: "boom", t: 0, life: 0.25 });
+            // killing one freezes the march for a blink, like the original
+            stepT = Math.max(stepT, 0.08);
+            break;
+          }
+        }
+        if (shot && ufo && Math.abs(shot.x - ufo.x) < 16 && shot.y < UFOY + 8 && shot.y > UFOY - 8) {
+          const pts = UFOPTS[(shots - 1) % 15];
+          addScore(pts); sfx.ufoHit(); ufoSound(false);
+          popups.push({ x: ufo.x, y: UFOY + 4, text: String(pts), color: "#ff4a4a", t: 0 });
+          booms.push({ x: ufo.x, y: UFOY, kind: "boom", t: 0, life: 0.4 });
+          ufo = null; shot = null;
+        }
+        // a shot can meet a bomb in mid air
+        if (shot) for (const b of bombs) if (Math.abs(b.x - shot.x) < 4 && Math.abs(b.y - shot.y) < 8 && Math.random() < 0.7) { b.dead = true; shot = null; booms.push({ x: b.x, y: b.y, kind: "spark", t: 0, life: 0.2 }); break; }
+      }
+    }
+    // the bombs
+    for (const b of bombs) {
+      if (b.dead) continue;
+      b.t += dt; b.y += b.vy * dt;
+      if (bunkerHit(b.x, b.y + 6, 3, 0.7)) { b.dead = true; continue; }
+      if (b.y > PY - 8 && Math.abs(b.x - P.x) < 13 && P.alive) { b.dead = true; playerHit("bomba"); return; }
+      if (b.y > H - 8) { b.dead = true; booms.push({ x: b.x, y: H - 10, kind: "spark", t: 0, life: 0.2 }); }
+    }
+    bombs = bombs.filter((b) => !b.dead);
+    // the mystery ship
+    ufoT -= dt;
+    if (!ufo && ufoT <= 0 && aliveCount() > 7) { const d = shots % 2 ? 1 : -1; ufo = { x: d > 0 ? FX0 - 20 : FX1 + 20, d }; ufoT = rnd(20, 28); ufoSound(true); }
+    if (ufo) { ufo.x += ufo.d * 70 * dt; if (ufo.x < FX0 - 30 || ufo.x > FX1 + 30) { ufo = null; ufoSound(false); } }
+    if (!aliveCount()) { ufoSound(false); ufo = null; sfx.wave(); state = "clear"; stateT = 2; message = { text: "ONDATA RESPINTA!", sub: "ma ne arrivano altri…", t: 0 }; }
+  }
+
+  // ---------- Drawing ----------
+  function sprite(rows, x, y, color) {
+    ctx.fillStyle = color;
+    const w = rows[0].length;
+    for (let r = 0; r < rows.length; r++) for (let c = 0; c < w; c++) if (rows[r][c] === "#") ctx.fillRect(Math.round(x - (w * PX) / 2 + c * PX), Math.round(y + r * PX), PX, PX);
+  }
+  // the cabinet's colour strips: red at the top for the mystery ship, green at the bottom
+  const band = (y) => (y < UFOY + 18 ? "#ff4a4a" : y > BUNKY - 8 ? "#3aff5a" : "#ffffff");
+  function draw() {
+    ctx.setTransform(pxRatio, 0, 0, pxRatio, 0, 0);
+    if (!inv.length) { buildWave(); P = { x: W / 2, alive: true }; }
+    ctx.fillStyle = "#000000"; ctx.fillRect(0, 0, W, H);
+    // a faint moon-lit backdrop beyond the screen glass
+    ctx.fillStyle = "#0a0a14"; ctx.fillRect(FX0 - 16, TOP, FX1 - FX0 + 32, H - TOP);
+    for (let i = 0; i < 40; i++) { ctx.fillStyle = `rgba(255,255,255,${0.15 + (i % 3) * 0.1})`; ctx.fillRect(FX0 - 10 + (i * 97) % (FX1 - FX0 + 20), TOP + 10 + (i * 53) % 240, 1, 1); }
+    for (const b of bunkers) { ctx.fillStyle = "#3aff5a"; for (let cy = 0; cy < 16; cy++) for (let cx = 0; cx < 22; cx++) if (b.cells[cy * 22 + cx]) ctx.fillRect(b.x + cx * PX, b.y + cy * PX, PX, PX); }
+    for (const v of inv) if (v.alive) { const y = invY(v.r); sprite(SPR[ROWKIND[v.r]][frame], invX(v.c), y, band(y)); }
+    if (ufo) sprite(SPR.ufo[0], ufo.x, UFOY - 7, "#ff4a4a");
+    if (P && P.alive && state !== "menu") sprite(SPR.cannon[0], P.x, PY - 10, "#3aff5a");
+    for (const b of booms) {
+      if (b.kind === "pboom") sprite(SPR.pboom[Math.floor(b.t * 10) % 2], b.x, b.y - 10, "#3aff5a");
+      else if (b.kind === "boom") sprite(SPR.boom[0], b.x, b.y - 7, band(b.y));
+      else { ctx.fillStyle = band(b.y); ctx.fillRect(b.x - 4, b.y - 3, 8, 6); }
+    }
+    if (shot) { ctx.fillStyle = band(shot.y); ctx.fillRect(shot.x - 1, shot.y - 6, 2, 8); }
+    for (const b of bombs) {
+      ctx.fillStyle = band(b.y);
+      const ph = Math.floor(b.t * 12) % 4;
+      for (let i = 0; i < 4; i++) {
+        const ox = b.kind === 0 ? ((i + ph) % 2 ? 2 : -2) : b.kind === 1 ? 0 : ((i + ph) % 4 === 0 ? 2 : (i + ph) % 4 === 2 ? -2 : 0);
+        ctx.fillRect(b.x - 1 + ox, b.y + i * 3 - 6, 2, 3);
+      }
+      if (b.kind === 1) ctx.fillRect(b.x - 3, b.y - 6 + ((ph % 2) ? 0 : 6), 6, 2);
+    }
+    // the ground line, chipped where bombs landed
+    ctx.fillStyle = "#3aff5a"; ctx.fillRect(FX0 - 16, H - 6, FX1 - FX0 + 32, 2);
+    for (const p of popups) { ctx.globalAlpha = Math.max(0, 1 - p.t / 1.4); ctx.textAlign = "center"; ctx.font = "800 11px monospace"; ctx.fillStyle = p.color; ctx.fillText(p.text, p.x, p.y); }
+    ctx.globalAlpha = 1;
+    if (state === "menu") return;
+    drawHud();
+    if (message) {
+      const life = message.long ? 3 : 2;
+      ctx.globalAlpha = Math.min(1, (life - message.t) * 2);
+      ctx.textAlign = "center"; ctx.font = "900 20px monospace"; ctx.fillStyle = "#ffffff";
+      ctx.fillText(message.text, W / 2, 230);
+      if (message.sub) { ctx.font = "700 12px monospace"; ctx.fillStyle = "#3aff5a"; ctx.fillText(message.sub, W / 2, 250); }
+      ctx.globalAlpha = 1;
+    }
+  }
+  function drawHud() {
+    ctx.fillStyle = "#000000"; ctx.fillRect(0, 0, W, TOP);
+    ctx.textBaseline = "middle"; ctx.textAlign = "left"; ctx.font = "700 11px monospace";
+    const x0 = touchMode ? 130 : FX0 - 10;
+    ctx.fillStyle = "#ffffff"; ctx.fillText("PUNTI", x0, 8); ctx.fillText(String(score).padStart(5, "0"), x0, 20);
+    ctx.fillText("RECORD", x0 + 110, 8); ctx.fillText(String(Math.max(bestCache, score)).padStart(5, "0"), x0 + 110, 20);
+    ctx.fillStyle = "#3aff5a"; ctx.fillText(`ONDATA ${wave}`, x0 + 220, 14);
+    // the spare cannons
+    const lx = touchMode ? W - 150 : FX1 - 80;
+    ctx.fillStyle = "#3aff5a"; ctx.fillText(String(Math.max(0, lives)), lx, 14);
+    for (let i = 0; i < Math.min(5, lives - (state === "dead" ? 0 : 1)); i++) { ctx.save(); ctx.translate(lx + 16 + i * 16, 9); ctx.scale(0.5, 0.5); sprite(SPR.cannon[0], 0, 0, "#3aff5a"); ctx.restore(); }
+    ctx.textBaseline = "alphabetic";
+  }
+
+  // ---------- Loop ----------
+  const STEP = 1 / 120;
+  let last = performance.now(), acc = 0;
+  function frameLoop(now) {
+    const dt = Math.min(0.1, (now - last) / 1000);
+    last = now;
+    if (isPlaying()) {
+      acc += dt;
+      while (acc >= STEP && isPlaying()) { update(STEP); acc -= STEP; }
+    } else { acc = 0; update(dt); }
+    draw();
+    requestAnimationFrame(frameLoop);
+  }
+  syncControls();
+  showTitle();
+  requestAnimationFrame(frameLoop);
+})();
+</script>
+<script src="../../shared/iniziali.js" data-record="invasori-best-" data-kind="score"></script>
+</body>
+</html>

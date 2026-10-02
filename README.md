@@ -4,7 +4,7 @@ Raccolta di giochi arcade per il browser. Ogni gioco è un singolo file HTML sen
 
 ## 🕹️ Sala Giochi — `index.html`
 
-Apri `index.html` nella cartella principale per la pagina di raccolta: mostra tutti i 123 giochi con copertina, genere, comandi e i tuoi record per ogni difficoltà (Facile, Normale, Difficile). Tocca «Gioca» per avviare un gioco; in ogni gioco il pulsante «← Sala Giochi» in alto a sinistra (visibile nei menu) riporta alla raccolta.
+Apri `index.html` nella cartella principale per la pagina di raccolta: mostra tutti i 124 giochi con copertina, genere, comandi e i tuoi record per ogni difficoltà (Facile, Normale, Difficile). Tocca «Gioca» per avviare un gioco; in ogni gioco il pulsante «← Sala Giochi» in alto a sinistra (visibile nei menu) riporta alla raccolta.
 
 **Iniziali del record:** quando batti un record compare la schermata da sala giochi per inserire le tue tre iniziali (frecce ↑ ↓ per cambiare lettera, ← → per spostarti, oppure scrivile direttamente; su telefono i tasti ▲ ▼ e OK). Le iniziali vengono salvate insieme al record e compaiono nei menu del gioco e nella Sala Giochi. Il codice è condiviso da tutti i giochi in `shared/iniziali.js`.
 
@@ -12,7 +12,7 @@ Apri `index.html` nella cartella principale per la pagina di raccolta: mostra tu
 
 **Comandi touch: levetta o frecce:** in cima alla Sala Giochi e nel menu di pausa di ogni gioco con la levetta si sceglie se usare la levetta analogica o una croce di frecce. Con le frecce il tocco viene agganciato a una delle otto direzioni (le quattro principali hanno la zona più larga, così le diagonali si prendono solo di proposito) e spinto fino in fondo; la scelta vale per tutti i giochi e resta memorizzata. Funziona anche nei giochi con due levette (la sfida a due di *Pugni di Fuoco*, muovi e spara di *Assalto Robotico*).
 
-**Trofei:** ogni gioco ha tre trofei a punteggio: 🥉 **Bronzo** (la soglia in qualsiasi difficoltà), 🥈 **Argento** (a Normale o Difficile) e 🥇 **Oro** (a Difficile); nei giochi a tempo (*Corsa al Tramonto*, *Crystal Wars*) conta finire entro un certo tempo. I trofei si calcolano dai record salvati, quindi quelli già fatti si sbloccano da soli; quando un record nuovo ne conquista uno compare un avviso in alto. Le soglie sono nella schermata iniziale, in pausa e a fine partita di ogni gioco; in Sala Giochi ogni cabinato mostra i suoi trofei, in cima c'è il totale (su 369) con il numero di giochi giocati e il filtro **Già giocati** mostra solo i giochi con almeno un record. Le soglie vengono dalle partite di prova di un bot per circa un terzo dei giochi e sono stimate sulle regole di punteggio per gli altri (`shared/trofei.js`).
+**Trofei:** ogni gioco ha tre trofei a punteggio: 🥉 **Bronzo** (la soglia in qualsiasi difficoltà), 🥈 **Argento** (a Normale o Difficile) e 🥇 **Oro** (a Difficile); nei giochi a tempo (*Corsa al Tramonto*, *Crystal Wars*) conta finire entro un certo tempo. I trofei si calcolano dai record salvati, quindi quelli già fatti si sbloccano da soli; quando un record nuovo ne conquista uno compare un avviso in alto. Le soglie sono nella schermata iniziale, in pausa e a fine partita di ogni gioco; in Sala Giochi ogni cabinato mostra i suoi trofei, in cima c'è il totale (su 372) con il numero di giochi giocati e il filtro **Già giocati** mostra solo i giochi con almeno un record. Le soglie vengono dalle partite di prova di un bot per circa un terzo dei giochi e sono stimate sulle regole di punteggio per gli altri (`shared/trofei.js`).
 
 **Generi:** ogni gioco appartiene a una o più famiglie di generi (🚀 Sparatutto, 🪜 Piattaforme, 🎯 Azione e riflessi, 🌀 Labirinti, ⚽ Sport, 🧩 Rompicapo, 🏁 Corse e veicoli, 🏰 Strategia e difesa, 🥊 Picchiaduro, 🗝️ Avventura, 🎵 Ritmo e musica): per esempio *Cripta degli Eroi* è avventura, sparatutto e labirinto. Le famiglie sono le etichette colorate di ogni cabinato. Sotto la ricerca una fila di pulsanti, con il numero di giochi di ciascuna famiglia, mostra solo quel genere (toccandolo di nuovo si torna a *Tutti i generi*); anche toccare un'etichetta su un cabinato filtra per quella famiglia. Un gioco con più famiglie compare in ognuna. La scelta resta memorizzata e si combina con la ricerca e con *Già giocati*. Su telefono la fila scorre di lato.
 
@@ -1907,3 +1907,21 @@ Avventura a piattaforme in stile *Wonder Boy in Monster Land*. Un giovane eroe c
 - **Touch:** levetta (o frecce) per camminare e per entrare e scegliere in bottega, pulsanti SALTA e SPADA
 
 Per giocare apri `games/terra-dei-mostri/index.html` nel browser.
+
+### 👾 Invasori dallo Spazio — `games/invasori-dallo-spazio/index.html`
+
+Sparatutto in stile *Space Invaders*, fedele all'originale del 1978. Cinquantacinque alieni in cinque file marciano a scatti da un lato all'altro dello schermo e scendono di un passo ogni volta che toccano il bordo.
+
+- **La marcia:** la formazione si muove al ritmo di quattro note gravi, che accelerano insieme a lei: meno alieni restano, più vanno veloci (l'ultimo corre da una parte all'altra). Se arrivano in fondo, la Terra è invasa e la partita finisce
+- **Il cannone:** si muove lungo il fondo e ha un solo colpo in volo alla volta; un colpo può anche scontrarsi con una bomba aliena e distruggerla
+- **I bunker:** quattro ripari che si sbriciolano pezzo per pezzo sotto le bombe, sotto i tuoi colpi e sotto gli alieni che ci passano sopra; si ricostruiscono a ogni ondata
+- **Le bombe:** tre tipi (a zig-zag, a pistone, rotanti), cadono dal fondo delle colonne e spesso proprio sopra il cannone
+- **Il disco volante:** ogni tanto attraversa la fascia rossa in alto; vale 50, 100, 150 o 300 punti a seconda del numero di colpi sparati (come nell'originale: il 23° colpo e poi ogni 15° valgono 300)
+- **Punti:** alieni in alto 30, in mezzo 20, in basso 10; un solo cannone in più, a 1.500 punti
+- **Le ondate:** ognuna parte un po' più in basso della precedente, con alieni più svelti e bombe più fitte e veloci
+- **Lo schermo:** nero con le fasce colorate delle pellicole trasparenti del cabinato originale (rossa in alto, verde in basso)
+- **Difficoltà:** Facile (5 cannoni, marcia più lenta, meno bombe), Normale (3 cannoni, come nel 1978), Difficile (marcia più svelta, più bombe e più veloci); record separati per ogni difficoltà
+- **Comandi:** frecce o `A` `D` per muovere il cannone · `Spazio`, `J`, `X` o `↑` per sparare · `P` pausa
+- **Touch:** levetta (o frecce) per muovere il cannone, pulsante FUOCO (tenendolo premuto spara appena può)
+
+Per giocare apri `games/invasori-dallo-spazio/index.html` nel browser.
