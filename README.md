@@ -4,7 +4,7 @@ Raccolta di giochi arcade per il browser. Ogni gioco è un singolo file HTML sen
 
 ## 🕹️ Sala Giochi — `index.html`
 
-Apri `index.html` nella cartella principale per la pagina di raccolta: mostra tutti i 128 giochi con copertina, genere, comandi e i tuoi record per ogni difficoltà (Facile, Normale, Difficile). Tocca «Gioca» per avviare un gioco; in ogni gioco il pulsante «← Sala Giochi» in alto a sinistra (visibile nei menu) riporta alla raccolta.
+Apri `index.html` nella cartella principale per la pagina di raccolta: mostra tutti i 129 giochi con copertina, genere, comandi e i tuoi record per ogni difficoltà (Facile, Normale, Difficile). Tocca «Gioca» per avviare un gioco; in ogni gioco il pulsante «← Sala Giochi» in alto a sinistra (visibile nei menu) riporta alla raccolta.
 
 **Iniziali del record:** quando batti un record compare la schermata da sala giochi per inserire le tue tre iniziali (frecce ↑ ↓ per cambiare lettera, ← → per spostarti, oppure scrivile direttamente; su telefono i tasti ▲ ▼ e OK). Le iniziali vengono salvate insieme al record e compaiono nei menu del gioco e nella Sala Giochi. Il codice è condiviso da tutti i giochi in `shared/iniziali.js`.
 
@@ -12,7 +12,7 @@ Apri `index.html` nella cartella principale per la pagina di raccolta: mostra tu
 
 **Comandi touch: levetta o frecce:** in cima alla Sala Giochi e nel menu di pausa di ogni gioco con la levetta si sceglie se usare la levetta analogica o una croce di frecce. Con le frecce il tocco viene agganciato a una delle otto direzioni (le quattro principali hanno la zona più larga, così le diagonali si prendono solo di proposito) e spinto fino in fondo; la scelta vale per tutti i giochi e resta memorizzata. Funziona anche nei giochi con due levette (la sfida a due di *Pugni di Fuoco*, muovi e spara di *Assalto Robotico*).
 
-**Trofei:** ogni gioco ha tre trofei a punteggio: 🥉 **Bronzo** (la soglia in qualsiasi difficoltà), 🥈 **Argento** (a Normale o Difficile) e 🥇 **Oro** (a Difficile); nei giochi a tempo (*Corsa al Tramonto*, *Crystal Wars*) conta finire entro un certo tempo. I trofei si calcolano dai record salvati, quindi quelli già fatti si sbloccano da soli; quando un record nuovo ne conquista uno compare un avviso in alto. Le soglie sono nella schermata iniziale, in pausa e a fine partita di ogni gioco; in Sala Giochi ogni cabinato mostra i suoi trofei, in cima c'è il totale (su 384) con il numero di giochi giocati e il filtro **Già giocati** mostra solo i giochi con almeno un record. Le soglie vengono dalle partite di prova di un bot per circa un terzo dei giochi e sono stimate sulle regole di punteggio per gli altri (`shared/trofei.js`).
+**Trofei:** ogni gioco ha tre trofei a punteggio: 🥉 **Bronzo** (la soglia in qualsiasi difficoltà), 🥈 **Argento** (a Normale o Difficile) e 🥇 **Oro** (a Difficile); nei giochi a tempo (*Corsa al Tramonto*, *Crystal Wars*) conta finire entro un certo tempo. I trofei si calcolano dai record salvati, quindi quelli già fatti si sbloccano da soli; quando un record nuovo ne conquista uno compare un avviso in alto. Le soglie sono nella schermata iniziale, in pausa e a fine partita di ogni gioco; in Sala Giochi ogni cabinato mostra i suoi trofei, in cima c'è il totale (su 387) con il numero di giochi giocati e il filtro **Già giocati** mostra solo i giochi con almeno un record. Le soglie vengono dalle partite di prova di un bot per circa un terzo dei giochi e sono stimate sulle regole di punteggio per gli altri (`shared/trofei.js`).
 
 **Generi:** ogni gioco appartiene a una o più famiglie di generi (🚀 Sparatutto, 🪜 Piattaforme, 🎯 Azione e riflessi, 🌀 Labirinti, ⚽ Sport, 🧩 Rompicapo, 🏁 Corse e veicoli, 🏰 Strategia e difesa, 🥊 Picchiaduro, 🗝️ Avventura, 🎵 Ritmo e musica): per esempio *Cripta degli Eroi* è avventura, sparatutto e labirinto. Le famiglie sono le etichette colorate di ogni cabinato. Sotto la ricerca una fila di pulsanti, con il numero di giochi di ciascuna famiglia, mostra solo quel genere (toccandolo di nuovo si torna a *Tutti i generi*); anche toccare un'etichetta su un cabinato filtra per quella famiglia. Un gioco con più famiglie compare in ognuna. La scelta resta memorizzata e si combina con la ricerca e con *Già giocati*. Su telefono la fila scorre di lato.
 
@@ -1989,3 +1989,19 @@ Piattaforme in verticale in stile *Rainbow Islands*: si sale una torre di sporge
 - **Touch:** levetta per camminare (giù su un arcobaleno per romperlo), pulsanti SALTA e ARCO
 
 Per giocare apri `games/torre-arcobaleno/index.html` nel browser.
+
+### 🕵️ Operazione Tuono — `games/operazione-tuono/index.html`
+
+Sparatutto a piedi in stile *Rolling Thunder*: un agente segreto attraversa il covo degli incappucciati, una lunga strada con i balconi sopra e tante porte, fino alla porta USCITA.
+
+- **Due piani:** con su + salto balzi sul balcone sopra di te, con giù + salto ne scendi. Il salto normale serve a scavalcare i colpi bassi e i nemici che corrono
+- **Schivare:** accucciato eviti i colpi alti; i colpi bassi (sparati da nemici accucciati) si saltano. Anche i nemici si accucciano: per colpirli spara da accucciato
+- **Le porte:** dalle porte escono i nemici, ma tenendo premuto su davanti a una porta ci entri e ti nascondi per un attimo. Quelle con la scritta COLPI danno 30 proiettili, quelle con MITRA una raffica di 60 colpi (tieni premuto per sparare). Finite le munizioni la pistola spara ancora, ma piano e lentamente
+- **I nemici:** incappucciati blu che sparano e ti seguono sui balconi (200), rossi che ti corrono addosso (300), gialli che lanciano bombe a mano (2 colpi, 500); le bombe si possono abbattere al volo (100)
+- **Energia e tempo:** ogni agente regge 2 colpi (uno solo a Difficile) e ogni missione ha 150 secondi
+- **Punti:** porta USCITA 1.000 per missione più 10 per ogni secondo rimasto; vita extra a 20.000 e poi ogni 30.000
+- **Difficoltà:** Facile (5 vite, nemici che sparano meno e più piano), Normale (3 vite), Difficile (3 vite, un colpo e sei fuori come nell'originale, nemici più numerosi e svelti); record separati per ogni difficoltà
+- **Comandi:** frecce o `W` `A` `S` `D` · `↓` accucciati · `↑` (tenuto) entra in una porta · `Spazio` o `K` salta (con `↑` sul balcone, con `↓` giù) · `J`, `X` o `Z` spara · `P` pausa
+- **Touch:** levetta (giù accucciati, su davanti a una porta per entrarci), pulsante piccolo SALTA e pulsante grande FUOCO
+
+Per giocare apri `games/operazione-tuono/index.html` nel browser.
