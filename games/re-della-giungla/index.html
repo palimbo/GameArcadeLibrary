@@ -1,0 +1,752 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no, viewport-fit=cover">
+<title>Re della Giungla</title>
+<style>
+  :root {
+    --bg: #0c1a0e;
+    --fg: #f4f6ee;
+    --muted: #c8e0b8;
+    --pink: #ffd23a;
+    --yellow: #8ae05a;
+    --red: #ff4a3a;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  html, body {
+    height: 100%;
+    background: var(--bg);
+    color: var(--fg);
+    font-family: system-ui, -apple-system, "Segoe UI", sans-serif;
+    overflow: hidden;
+    user-select: none;
+    -webkit-user-select: none;
+    touch-action: none;
+  }
+  #wrap { position: fixed; inset: 0; display: flex; align-items: center; justify-content: center; }
+  canvas { display: block; touch-action: none; border-radius: 6px; box-shadow: 0 0 0 2px #1a3a5a, 0 10px 40px rgba(0,0,0,0.6); }
+  #pauseBtn {
+    position: fixed; z-index: 3; display: none; right: 10px; top: calc(10px + env(safe-area-inset-top, 0px));
+    font: 700 13px system-ui, sans-serif; color: var(--fg);
+    background: rgba(0, 0, 0, 0.6); border: 1px solid rgba(244, 246, 238, 0.35);
+    border-radius: 8px; padding: 6px 10px; cursor: pointer;
+  }
+  #touch {
+    position: fixed; z-index: 2; display: none; left: 12px; right: 12px;
+    bottom: calc(14px + env(safe-area-inset-bottom, 0px));
+    justify-content: space-between; align-items: flex-end; pointer-events: none;
+  }
+  /* thumb stick: run, swim (all four ways) and duck; the big SALTA jumps and lets go of a vine, the small COLTELLO stabs in the river */
+  #touch .stick { position: relative; width: 136px; height: 136px; border-radius: 50%; pointer-events: auto; touch-action: none;
+    border: 2px solid rgba(255, 200, 58, 0.6); background: radial-gradient(circle, rgba(255,200,58,0.14), rgba(255,200,58,0.04)); }
+  #touch .stick .knob { position: absolute; left: 50%; top: 50%; width: 58px; height: 58px; margin: -29px 0 0 -29px; border-radius: 50%;
+    background: rgba(255, 200, 58, 0.45); border: 2px solid rgba(255,255,255,0.7); box-shadow: 0 4px 10px rgba(0,0,0,0.4); pointer-events: none; }
+  #touch .stick .ring { position: absolute; inset: 10px; border-radius: 50%; border: 1px dashed rgba(244,246,238,0.25); pointer-events: none; }
+  #touch .jump { width: 96px; height: 96px; border-radius: 50%; pointer-events: auto; touch-action: none; color: var(--fg);
+    font: 800 13px system-ui, sans-serif; letter-spacing: 1px; border: 2px solid rgba(120, 220, 110, 0.9); background: rgba(120, 220, 110, 0.22); }
+  #touch .jump.on { background: rgba(120, 220, 110, 0.55); }
+  #touch.small .stick { width: 112px; height: 112px; }
+  #touch.small .stick .knob { width: 48px; height: 48px; margin: -24px 0 0 -24px; }
+  #touch.small .jump { width: 80px; height: 80px; font-size: 11px; }
+  #touch .btns { display: flex; flex-direction: column; align-items: center; gap: 10px; pointer-events: none; }
+  #touch .jump.axe { width: 64px; height: 64px; font-size: 9px; letter-spacing: 0; border-color: rgba(255, 244, 200, 0.9); background: rgba(255, 244, 200, 0.16); }
+  #touch .jump.axe.on { background: rgba(255, 244, 200, 0.5); }
+  #touch.small .jump.axe { width: 54px; height: 54px; font-size: 8px; }
+  #overlay {
+    position: fixed; inset: 0; z-index: 5;
+    display: flex; flex-direction: column; align-items: center; justify-content: flex-start;
+    gap: 14px; padding: 16px; text-align: center; overflow-y: auto;
+    background: rgba(12, 26, 14, 0.93);
+  }
+  #overlay > :first-child { margin-top: auto; }
+  #overlay > :last-child { margin-bottom: auto; }
+  #overlay.hidden { display: none; }
+  #homeLink {
+    position: fixed; top: calc(10px + env(safe-area-inset-top, 0px)); left: 10px; z-index: 6;
+    font: 600 13px/1 system-ui, sans-serif; color: #fff; text-decoration: none;
+    padding: 8px 12px; border-radius: 999px; background: rgba(0,0,0,.55);
+    border: 1px solid rgba(255,255,255,.25);
+  }
+  #homeLink:hover { background: rgba(0,0,0,.8); }
+  #overlay.hidden ~ #homeLink { display: none; }
+  @media (max-width: 700px) { #overlay { padding-top: calc(52px + env(safe-area-inset-top, 0px)); } }
+  #overlay h1 { font-size: clamp(32px, 10vw, 58px); font-weight: 900; font-style: italic; letter-spacing: 1px; color: var(--pink);
+    text-shadow: 3px 3px 0 #6a1a4a, 0 0 22px rgba(255,122,184,0.35); }
+  #overlay h2 { font-size: clamp(26px, 7vw, 42px); font-weight: 900; letter-spacing: 2px; color: var(--pink); }
+  #overlay h2.lose { color: var(--red); }
+  #overlay p { max-width: 540px; font-size: clamp(13px, 3.4vw, 16px); line-height: 1.55; }
+  #overlay p.muted { color: var(--muted); }
+  #overlay .pts { display: grid; grid-template-columns: repeat(2, auto); gap: 4px 18px; font-size: 13px; color: var(--muted); text-align: left; max-width: 560px; }
+  #overlay .pts b { color: var(--fg); }
+  #overlay .diff { display: flex; gap: 10px; flex-wrap: wrap; justify-content: center; }
+  #overlay button {
+    font: 800 15px system-ui, sans-serif; letter-spacing: 1.5px; color: var(--fg);
+    background: transparent; cursor: pointer;
+    border: 2px solid rgba(244,246,238,0.3); border-radius: 10px; padding: 9px 16px;
+  }
+  #overlay .diff button.on { border-color: var(--c); color: var(--c); box-shadow: 0 0 12px var(--c); }
+  #overlay button.start { border-color: var(--pink); color: #2e2004; background: var(--pink); padding: 11px 30px; box-shadow: 0 4px 0 #a8881a; }
+  @media (max-height: 560px) {
+    #overlay { gap: 8px; }
+    #overlay h1 { font-size: 30px; }
+    #overlay p { font-size: 13px; line-height: 1.4; }
+    #overlay .help, #overlay .pts { display: none; }
+  }
+</style>
+</head>
+<body>
+<div id="wrap"><canvas id="game"></canvas></div>
+<div id="touch">
+  <div class="stick" aria-label="Levetta"><div class="ring"></div><div class="knob"></div></div>
+  <div class="btns"><button type="button" class="jump axe" aria-label="Coltello">COLTELLO</button><button type="button" class="jump hop" aria-label="Salta">SALTA</button></div>
+</div>
+<button id="pauseBtn" type="button" aria-label="Pausa">❚❚</button>
+<div id="overlay"></div>
+<a id="homeLink" href="../../index.html">← Sala Giochi</a>
+
+
+<script>
+(() => {
+  "use strict";
+
+  const W = 640, H = 360, TAU = Math.PI * 2, TOP = 28;
+  const G = 950;
+  const SCENES = ["liane", "fiume", "massi", "cannibali"];
+  const SCENE_NAMES = { liane: "LE LIANE", fiume: "IL FIUME", massi: "LA COLLINA DEI MASSI", cannibali: "IL VILLAGGIO" };
+  const SCENE_HINT = { liane: "salta da una liana all'altra", fiume: "colpisci i coccodrilli quando chiudono la bocca, e torna su a respirare", massi: "salta i massi grandi, accucciati sotto quelli che rimbalzano", cannibali: "salta i cannibali e libera l'esploratrice" };
+
+  const DIFFICULTIES = {
+    facile:    { label: "FACILE",    color: "#7ed87a", desc: "5 vite · tutto più lento · le liane si afferrano più facilmente", lives: 5, tempo: 0.85, grab: 1.3 },
+    normale:   { label: "NORMALE",   color: "#ffd23a", desc: "3 vite", lives: 3, tempo: 1, grab: 1 },
+    difficile: { label: "DIFFICILE", color: "#ff5a5a", desc: "3 vite · tutto più veloce · liane più lontane", lives: 3, tempo: 1.15, grab: 0.85 },
+  };
+  const DIFF_IDS = Object.keys(DIFFICULTIES);
+  const DIFF_KEY = "regiungla-difficulty";
+  const bestKey = (id) => `regiungla-best-${id}`;
+  function store(k, v) { try { localStorage.setItem(k, v); } catch { /* ignore */ } }
+  function load(k) { try { return localStorage.getItem(k); } catch { return null; } }
+  const rnd = (a, b) => a + Math.random() * (b - a);
+  const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
+
+  // ---------- Canvas ----------
+  const canvas = document.getElementById("game");
+  const ctx = canvas.getContext("2d");
+  const wrapEl = document.getElementById("wrap");
+  const overlay = document.getElementById("overlay");
+  const touchEl = document.getElementById("touch");
+  const pauseBtn = document.getElementById("pauseBtn");
+  let pxRatio = 1, touchMode = !!(window.matchMedia && matchMedia("(pointer: coarse)").matches);
+  function resize() {
+    const portrait = window.innerHeight > window.innerWidth;
+    const showTouch = touchMode && isPlaying();
+    touchEl.style.display = showTouch ? "flex" : "none";
+    touchEl.classList.toggle("small", !portrait && window.innerHeight < 480);
+    wrapEl.style.paddingBottom = showTouch && portrait ? "calc(170px + env(safe-area-inset-bottom, 0px))" : "0";
+    let availW = window.innerWidth - 8, availH = window.innerHeight - 8;
+    if (showTouch && portrait) availH -= 170;
+    if (showTouch && !portrait) {
+      const side = Math.max(...[...touchEl.children].map((el) => el.offsetWidth)) + 20;
+      if (window.innerWidth - 2 * side > 200) availW = window.innerWidth - 2 * side;
+    }
+    const s = Math.max(0.2, Math.min(availW / W, availH / H));
+    pxRatio = Math.min(3, s * (window.devicePixelRatio || 1));
+    canvas.style.width = W * s + "px";
+    canvas.style.height = H * s + "px";
+    canvas.width = Math.round(W * pxRatio);
+    canvas.height = Math.round(H * pxRatio);
+  }
+  window.addEventListener("resize", () => syncControls());
+
+  // ---------- Audio ----------
+  let audioCtx = null;
+  function beep(freq, dur, type = "square", vol = 0.04, slide = 0, delay = 0) {
+    if (!audioCtx) return;
+    const t = audioCtx.currentTime + delay;
+    const osc = audioCtx.createOscillator(), gain = audioCtx.createGain();
+    osc.type = type;
+    osc.frequency.setValueAtTime(freq, t);
+    if (slide) osc.frequency.exponentialRampToValueAtTime(Math.max(20, freq + slide), t + dur);
+    gain.gain.setValueAtTime(vol, t);
+    gain.gain.exponentialRampToValueAtTime(0.0001, t + dur);
+    osc.connect(gain).connect(audioCtx.destination);
+    osc.start(t); osc.stop(t + dur + 0.02);
+  }
+  function noise(dur, vol, freq) {
+    if (!audioCtx) return;
+    const len = Math.floor(audioCtx.sampleRate * dur), buf = audioCtx.createBuffer(1, len, audioCtx.sampleRate), d = buf.getChannelData(0);
+    for (let i = 0; i < len; i++) d[i] = (Math.random() * 2 - 1) * (1 - i / len);
+    const src = audioCtx.createBufferSource(), f = audioCtx.createBiquadFilter(), g = audioCtx.createGain();
+    src.buffer = buf; f.type = "bandpass"; f.frequency.value = freq; g.gain.value = vol;
+    src.connect(f).connect(g).connect(audioCtx.destination); src.start();
+  }
+  const arp = (notes, gap, d, type = "square", vol = 0.04) => notes.forEach((f, i) => beep(f, d, type, vol, 0, i * gap));
+  let sfxN = 0;
+  const lim = (fn) => (...a) => { if (sfxN++ < 6) fn(...a); };
+  const sfx = {
+    jump: lim(() => beep(300, 0.12, "square", 0.03, 300)),
+    grab: lim(() => arp([523, 784], 0.05, 0.08, "square", 0.035)),
+    yell: () => { beep(500, 0.3, "sawtooth", 0.04, 400); beep(900, 0.3, "sawtooth", 0.03, -300, 0.3); },
+    stab: lim(() => { noise(0.08, 0.08, 2000); beep(800, 0.06, "square", 0.03, -400); }),
+    kill: lim(() => arp([659, 523, 392], 0.05, 0.08, "square", 0.035)),
+    splash: lim(() => noise(0.25, 0.08, 900)),
+    breath: lim(() => beep(600, 0.15, "sine", 0.04, 300)),
+    roll: lim(() => noise(0.1, 0.05, 200)),
+    pass: lim(() => beep(988, 0.06, "square", 0.025)),
+    die: () => { noise(0.3, 0.1, 400); for (let i = 0; i < 6; i++) beep(600 - i * 70, 0.12, "triangle", 0.045, 0, i * 0.07); },
+    clear: () => arp([392, 523, 659, 784, 659, 784, 1047], 0.08, 0.14, "square", 0.045),
+    over: () => arp([523, 466, 415, 392, 330, 262], 0.15, 0.24, "triangle", 0.05),
+  };
+
+  // ---------- State ----------
+  let difficulty = DIFFICULTIES[load(DIFF_KEY)] ? load(DIFF_KEY) : "normale";
+  let diff = DIFFICULTIES[difficulty];
+  let state = "menu", menu = null, pausedFrom = null, stateT = 0, clock = 0, sceneT = 0;
+  let score = 0, lives = 3, round = 1, sceneIdx = 0, bestCache = 0, nextLife = 20000;
+  let P = null, camX = 0, vines = [], crocs = [], rocks = [], natives = [], parts = [], popups = [], message = null, END = 0, air = 100, spawnT = 0, bonus = 0;
+  let jumpPressed = false, stabPressed = false;
+  const keys = { left: false, right: false, up: false, down: false };
+  const stick = { x: 0, y: 0 };
+  const scene = () => SCENES[sceneIdx];
+  const tempo = () => diff.tempo * (1 + 0.12 * Math.min(6, round - 1));
+  const SURF = 110, RIVER_BOT = 336;
+  const groundAt = (x) => 330 - Math.max(0, x - 120) * 0.22;
+
+  // ---------- Scenes ----------
+  function buildScene() {
+    camX = 0; parts = []; popups = []; crocs = []; rocks = []; natives = []; vines = [];
+    const s = scene(), lvl = Math.min(6, round - 1);
+    if (s === "liane") {
+      // vines swinging from the canopy: the gaps grow, the swings get faster
+      let x = 150;
+      for (let i = 0; i < 8 + lvl; i++) {
+        const L = rnd(120, 165);
+        vines.push({ x, y: TOP + 6, L, A: rnd(0.55, 0.8), w: Math.sqrt(G / L) * rnd(0.9, 1.05), ph: rnd(0, TAU) });
+        x += rnd(118, 140) + lvl * 5 + (difficulty === "difficile" ? 8 : difficulty === "facile" ? -8 : 0);
+      }
+      END = x - 40;
+      // every vine must lead to the next one: if a swing never reaches it, its rhythm is reshuffled
+      const tp = diff.tempo * (1 + 0.12 * lvl);
+      for (let i = 0; i < vines.length; i++) {
+        for (let tries = 0; tries < 40 && reachable(vines[i], vines[i + 1] || null, tp) < 0.3; tries++) {
+          const o = vines[i + 1]; if (!o) { END -= 10; continue; }
+          o.ph = rnd(0, TAU); o.w = Math.sqrt(G / o.L) * rnd(0.9, 1.05);
+        }
+      }
+      const v = vines[0];
+      P = { mode: "vine", v, r: v.L, x: 0, y: 0, vx: 0, vy: 0, face: 1 };
+      setOnVine(P);
+    } else if (s === "fiume") {
+      END = 1600 + lvl * 150;
+      P = { mode: "swim", x: 60, y: SURF + 2, vx: 0, vy: 0, face: 1, stab: 0 };
+      air = 100; spawnT = 1.5;
+    } else if (s === "massi") {
+      END = 1500 + lvl * 120;
+      P = { mode: "run", x: 60, y: groundAt(60), vx: 0, vy: 0, face: 1, duck: false, air: false };
+      spawnT = 1.2;
+    } else {
+      END = 560;
+      P = { mode: "run", x: 50, y: 300, vx: 0, vy: 0, face: 1, duck: false, air: false };
+      for (const [i, x] of [[0, 260], [1, 420]]) natives.push({ x, y: 300, vy: 0, hop: 0.6 + i * 0.7, beat: rnd(1.5, 1.9), passed: false, dir: 1, home: x });
+    }
+    sceneT = 0;
+  }
+  // the share of release moments (over a few swings) from which vine v reaches vine o, or the far bank
+  function reachable(v, o, tp) {
+    let ok = 0, tot = 0;
+    for (let t0 = 0; t0 < 5; t0 += 0.05) {
+      tot++;
+      const w = v.w * tp, a = v.A * Math.sin(t0 * w + v.ph), da = v.A * w * Math.cos(t0 * w + v.ph), r = v.L - 10;
+      let x = v.x + Math.sin(a) * r, y = v.y + Math.cos(a) * r + 42, vx = Math.cos(a) * r * da + 90, vy = -Math.sin(a) * r * da - 190;
+      for (let k = 0; k < 160; k++) {
+        const h = 1 / 60; vy += G * h; x += vx * h; y += vy * h;
+        if (y > 350) break;
+        if (!o) { if (x > END && y < 300) { ok++; break; } continue; }
+        const tt = t0 + (k + 1) * h, oa = o.A * Math.sin(tt * o.w * tp + o.ph), ex = Math.sin(oa), ey = Math.cos(oa), hy = y - 42;
+        const proj = (x - o.x) * ex + (hy - o.y) * ey;
+        if (proj > 40 && proj < o.L && Math.abs((x - o.x) * ey - (hy - o.y) * ex) < 14) { ok++; break; }
+      }
+    }
+    return ok / tot;
+  }
+  const vineAngle = (v) => v.A * Math.sin(sceneT * v.w * tempo() + v.ph);
+  function setOnVine(p) {
+    const a = vineAngle(p.v);
+    p.x = p.v.x + Math.sin(a) * p.r; p.y = p.v.y + Math.cos(a) * p.r + 42;
+  }
+
+  // ---------- Flow ----------
+  const isPlaying = () => ["intro", "play", "dead", "clear"].includes(state);
+  function startGame() {
+    if (!audioCtx) { try { audioCtx = new (window.AudioContext || window.webkitAudioContext)(); } catch { audioCtx = null; } }
+    if (audioCtx && audioCtx.state === "suspended") audioCtx.resume();
+    score = 0; lives = diff.lives; round = 1; sceneIdx = 0; nextLife = 30000;
+    bestCache = parseInt(load(bestKey(difficulty)), 10) || 0;
+    beginScene();
+    menu = null;
+    overlay.classList.add("hidden");
+    syncControls();
+    last = performance.now();
+  }
+  function beginScene() {
+    buildScene();
+    bonus = 3000 * round;
+    message = { text: SCENE_NAMES[scene()], sub: SCENE_HINT[scene()], t: 0 };
+    state = "intro"; stateT = 1.8;
+  }
+  function addScore(n, x, y, color = "#ffffff", text) {
+    score += n;
+    if (score >= nextLife) { lives++; nextLife += 70000; arp([523, 659, 784, 1047, 1319], 0.07, 0.12); popups.push({ x: P.x, y: P.y - 50, text: "VITA EXTRA!", color: "#7ed87a", t: 0 }); }
+    if (x !== undefined) popups.push({ x, y, text: text || String(n), color, t: 0 });
+  }
+  function burst(x, y, c, n = 12, sp = 110, life = 0.6) {
+    for (let k = 0; k < n; k++) { const a = Math.random() * TAU, s = sp * rnd(0.3, 1); parts.push({ x, y, vx: Math.cos(a) * s, vy: Math.sin(a) * s, t: 0, life: life * rnd(0.6, 1.2), c }); }
+  }
+  function die(by) {
+    if (state !== "play") return;
+    if (window.__deaths) window.__deaths.push([round, scene(), by, Math.round(P.x)]);
+    if (window.__god) { if (by === "aria") air = 100; return; }
+    lives--; sfx.die(); burst(P.x, P.y - 10, "#ffffff", 18, 110, 0.6);
+    message = { text: { caduta: "GIÙ DALLA LIANA!", coccodrillo: "PRESO DAL COCCODRILLO!", aria: "SENZA FIATO!", masso: "TRAVOLTO DA UN MASSO!", cannibale: "CATTURATO!" }[by] || "AHIA!", t: 0 };
+    state = "dead"; stateT = 2;
+  }
+  function gameOver() {
+    state = "over";
+    const prev = parseInt(load(bestKey(difficulty)), 10) || 0;
+    const record = score > prev;
+    if (record) store(bestKey(difficulty), String(score));
+    sfx.over();
+    menu = () => showOverlay(
+      `<h2 class="lose">GAME OVER</h2>
+       <p>Punteggio: <b>${score.toLocaleString("it-IT")}</b> · giro ${round} · ${SCENE_NAMES[scene()].toLowerCase()} · ${diff.label}</p>
+       ${record ? "<p style='color:var(--pink)'>★ NUOVO RECORD! ★</p>" : ""}
+       ${difficultyHTML()}
+       <button class="start" data-start>TORNA NELLA GIUNGLA</button>`
+    );
+    menu();
+    syncControls();
+  }
+  function togglePause() {
+    if (isPlaying()) {
+      pausedFrom = state; state = "paused";
+      showOverlay(`<h2>PAUSA</h2><button class="start" data-resume>CONTINUA</button><p class="muted">Premi P per continuare</p>`);
+    } else if (state === "paused") {
+      state = pausedFrom; overlay.classList.add("hidden"); last = performance.now();
+    }
+    syncControls();
+  }
+  // the pause menu can end the game (shared/iniziali.js): it ends here the usual way, saving the record
+  window.addEventListener("sala:termina", () => { if (state !== "paused") return; state = pausedFrom; overlay.classList.add("hidden"); gameOver(); syncControls(); });
+  function syncControls() {
+    pauseBtn.style.display = isPlaying() && touchMode ? "block" : "none";
+    resize();
+  }
+  pauseBtn.addEventListener("click", () => togglePause());
+  function showOverlay(html) { overlay.innerHTML = html; overlay.classList.remove("hidden"); }
+  function difficultyHTML() {
+    const buttons = DIFF_IDS.map((id) => {
+      const d = DIFFICULTIES[id];
+      return `<button type="button" data-diff="${id}" class="${id === difficulty ? "on" : ""}" style="--c:${d.color}">${d.label}</button>`;
+    }).join("");
+    const best = parseInt(load(bestKey(difficulty)), 10);
+    return `<div class="diff">${buttons}</div><p class="muted">${diff.desc}${best ? ` · Record: ${best.toLocaleString("it-IT")}` : ""}</p>`;
+  }
+  function setDifficulty(id) { if (!DIFFICULTIES[id]) return; difficulty = id; diff = DIFFICULTIES[id]; store(DIFF_KEY, id); if (menu) menu(); }
+  function showTitle() {
+    menu = showTitle;
+    showOverlay(
+      `<h1>RE DELLA GIUNGLA</h1>
+       <p>I cannibali hanno rapito l'esploratrice! Attraversa la giungla in quattro prove: salta di liana in liana, nuota nel fiume tra i coccodrilli, risali la collina dei massi e salta i cannibali per tirarla fuori dal pentolone. Poi si ricomincia, tutto più veloce.</p>
+       <div class="pts">
+         <span><b>Prove</b></span><span>liana presa 100 · coccodrillo 200 · masso superato 100 · cannibale saltato 300 · ogni prova vale il bonus di tempo rimasto</span>
+         <span><b>Fiume</b></span><span>il coltello funziona solo se il coccodrillo ha la bocca chiusa · in superficie si riprende fiato</span>
+       </div>
+       ${touchMode
+         ? `<p class="muted help">Levetta per correre, nuotare e accucciarti · SALTA (anche per lasciare la liana) · COLTELLO nel fiume</p>`
+         : `<p class="muted help">Frecce o W A S D · SPAZIO o K per saltare e lasciare la liana · J o X per il coltello · P pausa</p>`}
+       ${difficultyHTML()}
+       <button class="start" data-start>NELLA GIUNGLA!</button>`
+    );
+  }
+  overlay.addEventListener("click", (e) => {
+    const d = e.target.closest("[data-diff]");
+    if (d) { setDifficulty(d.dataset.diff); return; }
+    if (e.target.closest("[data-start]")) startGame();
+    if (e.target.closest("[data-resume]")) togglePause();
+  });
+
+  // ---------- Input ----------
+  const KEYMAP = { arrowleft: "left", a: "left", arrowright: "right", d: "right", arrowup: "up", w: "up", arrowdown: "down", s: "down" };
+  window.addEventListener("keydown", (e) => {
+    const k = e.key.toLowerCase();
+    if ([" ", "arrowup", "arrowdown", "arrowleft", "arrowright"].includes(k)) e.preventDefault();
+    if (state === "menu" || state === "over") {
+      if (e.key === "Enter") startGame();
+      else if (["1", "2", "3"].includes(k)) setDifficulty(DIFF_IDS[+k - 1]);
+      return;
+    }
+    if (k === "p" || k === "escape") { if (!e.repeat) togglePause(); return; }
+    if (state === "paused") { if (e.key === "Enter") togglePause(); return; }
+    if (!e.repeat && (k === " " || k === "k")) jumpPressed = true;
+    if (!e.repeat && (k === "j" || k === "x" || k === "z")) stabPressed = true;
+    if (KEYMAP[k]) keys[KEYMAP[k]] = true;
+  });
+  window.addEventListener("keyup", (e) => { const m = KEYMAP[e.key.toLowerCase()]; if (m) keys[m] = false; });
+  window.addEventListener("blur", () => { for (const k in keys) keys[k] = false; stick.x = stick.y = 0; if (isPlaying()) togglePause(); });
+  for (const [sel, fn] of [[".hop", () => { jumpPressed = true; }], [".axe", () => { stabPressed = true; }]]) {
+    const b = touchEl.querySelector(sel);
+    b.addEventListener("pointerdown", (e) => { e.preventDefault(); fn(); b.classList.add("on"); });
+    for (const ev of ["pointerup", "pointercancel", "pointerleave"]) b.addEventListener(ev, () => b.classList.remove("on"));
+  }
+  const stickEl = touchEl.querySelector(".stick"), knob = stickEl.querySelector(".knob");
+  let stickId = null;
+  function stickAt(e) {
+    const r = stickEl.getBoundingClientRect(), max = r.width / 2 - 14;
+    let dx = e.clientX - (r.left + r.width / 2), dy = e.clientY - (r.top + r.height / 2);
+    const len = Math.hypot(dx, dy);
+    if (len > max) { dx *= max / len; dy *= max / len; }
+    knob.style.transform = `translate(${dx}px, ${dy}px)`;
+    const f = (v) => { const a = Math.abs(v) / max; return a < 0.18 ? 0 : Math.sign(v) * Math.min(1, (a - 0.18) / 0.55); };
+    stick.x = f(dx); stick.y = f(dy);
+  }
+  const stickEnd = (e) => { if (e.pointerId !== stickId) return; stickId = null; knob.style.transform = ""; stick.x = stick.y = 0; };
+  stickEl.addEventListener("pointerdown", (e) => { e.preventDefault(); stickId = e.pointerId; try { stickEl.setPointerCapture(e.pointerId); } catch { /* ignore */ } stickAt(e); });
+  stickEl.addEventListener("pointermove", (e) => { if (e.pointerId === stickId) stickAt(e); });
+  for (const ev of ["pointerup", "pointercancel", "lostpointercapture"]) stickEl.addEventListener(ev, stickEnd);
+  window.addEventListener("pointerdown", (e) => { if (e.pointerType === "touch" && !touchMode) { touchMode = true; syncControls(); if (menu) menu(); } }, true);
+
+  // ---------- Update: the vines ----------
+  function updateVines(dt) {
+    if (P.mode === "vine") {
+      // he slides down to the end of the vine, where the swing is widest
+      P.r = Math.min(P.v.L - 10, P.r + 120 * dt);
+      setOnVine(P);
+      if (jumpPressed) {
+        // let go: the swing's speed carries the hero, plus a little leap
+        const v = P.v, w = v.w * tempo(), t = sceneT, a = vineAngle(v), da = v.A * w * Math.cos(t * w + v.ph);
+        P.vx = Math.cos(a) * P.r * da + 90; P.vy = -Math.sin(a) * P.r * da - 190;
+        P.mode = "fly"; P.from = v; P.flyT = 0; sfx.yell();
+      }
+      return;
+    }
+    // flying: catch any other vine that passes close to the hands
+    P.flyT += dt;
+    P.vy += G * dt; P.x += P.vx * dt; P.y += P.vy * dt;
+    if (P.x > END && P.y < 300) {
+      P.mode = "land"; addScore(500 * round, P.x, P.y - 30, "#ffd23a", "SULLA RIVA!"); sceneClear(); return;
+    }
+    const reach = 24 * diff.grab;
+    for (const v of vines) {
+      if (v === P.from && P.flyT < 0.5) continue;
+      const a = vineAngle(v), ex = Math.sin(a), ey = Math.cos(a);
+      const hx = P.x, hy = P.y - 42;
+      const proj = (hx - v.x) * ex + (hy - v.y) * ey;
+      if (proj < 40 || proj > v.L) continue;
+      const d = Math.abs((hx - v.x) * ey - (hy - v.y) * ex);
+      if (d < reach) {
+        P.mode = "vine"; P.v = v; P.r = Math.min(proj, v.L); sfx.grab();
+        if (!v.caught) { v.caught = true; addScore(100 * round, P.x, P.y - 40); }
+        setOnVine(P);
+        return;
+      }
+    }
+    if (P.y > H - 10) die("caduta");
+  }
+  // ---------- Update: the river ----------
+  function updateRiver(dt) {
+    const mx = clamp((keys.right ? 1 : 0) - (keys.left ? 1 : 0) + stick.x, -1, 1), my = clamp((keys.down ? 1 : 0) - (keys.up ? 1 : 0) + stick.y, -1, 1);
+    if (Math.abs(mx) > 0.2) P.face = Math.sign(mx);
+    P.x = clamp(P.x + mx * 95 * dt, camX + 16, END + 40);
+    P.y = clamp(P.y + (my * 85 - 10) * dt, SURF, RIVER_BOT - 10);
+    if (P.stab > 0) P.stab -= dt;
+    if (stabPressed && P.stab <= 0) {
+      P.stab = 0.3; sfx.stab();
+      for (const c of crocs) {
+        if (c.dead) continue;
+        const hx = c.x - 34, dx = (hx - P.x) * P.face;
+        if (dx > -10 && dx < 36 && Math.abs(c.y - P.y) < 18 && !c.open) { c.dead = true; sfx.kill(); burst(c.x, c.y, "#3a8a3a", 14, 100, 0.5); addScore(200 * round, c.x, c.y - 20); }
+      }
+    }
+    // air: under the surface it drains, at the surface it comes back
+    if (P.y > SURF + 6) air -= dt * 6 * tempo(); else { if (air < 99) { air = Math.min(100, air + dt * 60); if (air > 98 && air < 100) sfx.breath(); } }
+    if (air <= 0) { air = 0; die("aria"); return; }
+    spawnT -= dt;
+    if (spawnT <= 0 && camX + W < END + 200) {
+      spawnT = rnd(2.5, 3.8) / tempo();
+      crocs.push({ x: camX + W + 40, y: Math.random() < 0.15 ? SURF + 6 : rnd(SURF + 20, RIVER_BOT - 24), vx: -rnd(35, 58) * tempo(), ph: rnd(0, TAU), open: false, t: 0 });
+    }
+    for (const c of crocs) {
+      c.t += dt; c.x += c.vx * dt; c.y = clamp(c.y + Math.sin(c.t * 1.5 + c.ph) * 10 * dt, SURF + 4, RIVER_BOT - 14);
+      // the jaws open and shut: open about two-fifths of the time
+      c.open = Math.sin(c.t * 3.2 * tempo() + c.ph) > 0.25;
+      if (c.x < camX - 80) c.gone = true;
+      // the body always hurts, the snout only when the jaws are open
+      if (!c.dead && Math.abs(P.y - c.y) < 13 && (Math.abs(P.x - (c.x + 10)) < 28 || (c.open && P.x > c.x - 44 && P.x < c.x - 14))) die("coccodrillo");
+    }
+    crocs = crocs.filter((c) => !c.gone && !c.dead);
+    if (P.x >= END) sceneClear();
+  }
+  // ---------- Update: running scenes ----------
+  function runner(dt, ground) {
+    const mx = clamp((keys.right ? 1 : 0) - (keys.left ? 1 : 0) + stick.x, -1, 1), my = clamp((keys.down ? 1 : 0) - (keys.up ? 1 : 0) + stick.y, -1, 1);
+    P.duck = !P.air && my > 0.5;
+    if (Math.abs(mx) > 0.2) P.face = Math.sign(mx);
+    const sp = P.duck ? 0 : P.air && scene() === "cannibali" ? 150 : 105;
+    P.x = clamp(P.x + mx * sp * dt, camX + 12, END + 30);
+    if (jumpPressed && !P.air) { P.air = true; P.vy = -400; sfx.jump(); }
+    if (P.air) {
+      P.vy += G * dt; P.y += P.vy * dt;
+      const g = ground(P.x);
+      if (P.y >= g) { P.y = g; P.air = false; P.vy = 0; }
+    } else P.y = ground(P.x);
+  }
+  function updateHill(dt) {
+    runner(dt, groundAt);
+    spawnT -= dt;
+    if (spawnT <= 0 && camX + W < END + 100) {
+      spawnT = rnd(1.3, 2.3) / tempo();
+      const big = Math.random() < 0.55, x = camX + W + 30;
+      rocks.push({ x, y: groundAt(x) - (big ? 20 : 60), r: big ? 20 : 11, big, vx: -(big ? rnd(90, 130) : rnd(110, 150)) * tempo(), vy: 0, rot: 0, passed: false });
+    }
+    for (const r of rocks) {
+      r.x += r.vx * dt; r.rot += r.vx * dt / r.r;
+      const g = groundAt(r.x) - r.r;
+      if (r.big) r.y = g;
+      else { r.vy += G * 0.8 * dt; r.y += r.vy * dt; if (r.y >= g) { r.y = g; r.vy = -rnd(330, 400); sfx.roll(); } }
+      if (r.x < camX - 60) r.gone = true;
+      // the hero's body: shorter when ducking
+      const top = P.y - (P.duck ? 20 : 36), cx = clamp(r.x, P.x - 7, P.x + 7), cy = clamp(r.y, top, P.y);
+      if (Math.hypot(r.x - cx, r.y - cy) < r.r - 2) die("masso");
+      if (!r.passed && r.x < P.x - 20) { r.passed = true; addScore(100 * round, P.x, P.y - 50); sfx.pass(); }
+    }
+    rocks = rocks.filter((r) => !r.gone);
+    if (P.x >= END) sceneClear();
+  }
+  function updateVillage(dt) {
+    runner(dt, () => 300);
+    for (const n of natives) {
+      // hopping up and down, now and then taking a step toward the hero
+      n.hop -= dt;
+      // each cannibal hops to a steady beat of his own, so the gap to jump over him can be learnt
+      if (n.y >= 300 && n.hop <= 0) { n.vy = -390 * Math.sqrt(tempo()); n.hop = n.beat / Math.sqrt(tempo()); n.step = Math.random() < 0.4 ? (P.x < n.x ? -1 : 1) * 30 : 0; }
+      n.vy += G * dt; n.y = Math.min(300, n.y + n.vy * dt); if (n.y >= 300) n.vy = 0;
+      if (n.y < 300) n.x = clamp(n.x + (n.step || 0) * dt, n.home - 60, n.home + 50);
+      if (!n.passed && P.x > n.x + 14) { n.passed = true; addScore(300 * round, n.x, n.y - 60); sfx.pass(); }
+      // bodies touching
+      if (Math.abs(n.x - P.x) < 12 && P.y > n.y - 42 && P.y - 34 < n.y) die("cannibale");
+    }
+    if (P.x >= END - 10) { addScore(2000 * round, 560, 210, "#ffd23a", "SALVATA!"); sceneClear(); }
+  }
+  function sceneClear() {
+    if (state !== "play") return;
+    const b = Math.max(0, Math.round(bonus / 10) * 10);
+    score += b;
+    message = { text: sceneIdx === 3 ? "L'ESPLORATRICE È SALVA!" : "PROVA SUPERATA!", sub: `bonus ${b.toLocaleString("it-IT")}`, t: 0, long: true };
+    sfx.clear(); state = "clear"; stateT = 2.4;
+  }
+  function update(dt) {
+    clock += dt; sfxN = 0;
+    if (window.__bot) window.__bot(dt);
+    for (const p of parts) { p.t += dt; p.x += p.vx * dt; p.y += p.vy * dt; p.vy += 160 * dt; }
+    parts = parts.filter((p) => p.t < p.life);
+    for (const p of popups) { p.t += dt; p.y -= 22 * dt; }
+    popups = popups.filter((p) => p.t < 1.2);
+    if (message) { message.t += dt; if (message.t > (message.long ? 2.8 : 2.2)) message = null; }
+    const flags = () => { jumpPressed = stabPressed = false; };
+    if (state === "intro") { stateT -= dt; flags(); sceneT += dt; if (P.mode === "vine") setOnVine(P); if (stateT <= 0) state = "play"; return; }
+    if (state === "dead") {
+      stateT -= dt; flags();
+      if (stateT <= 0) {
+        if (lives <= 0) gameOver();
+        else {
+          // in the river and on the hill you start again a little before where you fell
+          const keep = bonus, s = scene(), back = Math.max(60, P.x - 140);
+          buildScene(); bonus = keep;
+          if (s === "fiume" || s === "massi") { P.x = back; if (s === "massi") P.y = groundAt(back); camX = clamp(back - 220, 0, Math.max(0, END + 120 - W)); }
+          state = "intro"; stateT = 1;
+        }
+      }
+      return;
+    }
+    if (state === "clear") {
+      stateT -= dt; flags();
+      if (stateT <= 0) { sceneIdx++; if (sceneIdx >= SCENES.length) { sceneIdx = 0; round++; } beginScene(); }
+      return;
+    }
+    if (state !== "play") { flags(); return; }
+    sceneT += dt;
+    bonus = Math.max(0, bonus - dt * 50 * round);
+    const s = scene();
+    if (s === "liane") updateVines(dt); else if (s === "fiume") updateRiver(dt); else if (s === "massi") updateHill(dt); else updateVillage(dt);
+    flags();
+    if (s !== "cannibali") camX = clamp(Math.max(camX, P.x - 220), 0, Math.max(0, END + 120 - W));
+  }
+
+  // ---------- Drawing ----------
+  function drawHero(x, y, pose) {
+    // safari shirt, shorts and a pith helmet
+    const f = P.face || 1;
+    ctx.save(); ctx.translate(Math.round(x), Math.round(y));
+    if (pose === "swim") {
+      ctx.rotate(-f * 0.1);
+      ctx.fillStyle = "#e8d8a8"; ctx.fillRect(-14, -8, 22, 9);
+      ctx.fillStyle = "#ffd8b0"; ctx.beginPath(); ctx.arc(f * 12, -5, 6, 0, TAU); ctx.fill();
+      ctx.strokeStyle = "#ffd8b0"; ctx.lineWidth = 3; const k = Math.sin(clock * 10) * 6; ctx.beginPath(); ctx.moveTo(f * 4, -6); ctx.lineTo(f * 18, -10 + k); ctx.moveTo(-f * 12, -4); ctx.lineTo(-f * 22, -4 - k); ctx.stroke();
+      if (P.stab > 0.1) { ctx.fillStyle = "#e8e8f8"; ctx.fillRect(f > 0 ? 18 : -32, -11, 14, 3); }
+      ctx.restore(); return;
+    }
+    const duck = pose === "duck", h = duck ? 22 : 36, run = pose === "run" ? Math.sin(clock * 14) * 5 : 0;
+    ctx.strokeStyle = "#7a5a2a"; ctx.lineWidth = 4;
+    ctx.beginPath(); ctx.moveTo(-2, -h * 0.4); ctx.lineTo(-4 + run, 0); ctx.moveTo(2, -h * 0.4); ctx.lineTo(4 - run, 0); ctx.stroke();
+    ctx.fillStyle = "#e8d8a8"; ctx.fillRect(-7, -h * 0.82, 14, h * 0.45);
+    ctx.strokeStyle = "#ffd8b0"; ctx.lineWidth = 3; ctx.beginPath();
+    if (pose === "hang" || pose === "fly") { ctx.moveTo(-4, -h * 0.75); ctx.lineTo(-2, -h - 8); ctx.moveTo(4, -h * 0.75); ctx.lineTo(2, -h - 8); }
+    else { ctx.moveTo(-6, -h * 0.75); ctx.lineTo(-10, -h * 0.45); ctx.moveTo(6, -h * 0.75); ctx.lineTo(10, -h * 0.45); }
+    ctx.stroke();
+    ctx.fillStyle = "#ffd8b0"; ctx.beginPath(); ctx.arc(0, -h - 1, 6, 0, TAU); ctx.fill();
+    ctx.fillStyle = "#f4ecd0"; ctx.beginPath(); ctx.ellipse(0, -h - 4, 9, 3, 0, 0, TAU); ctx.fill(); ctx.beginPath(); ctx.arc(0, -h - 5, 6, Math.PI, TAU); ctx.fill();
+    ctx.restore();
+  }
+  function drawJungle(tint) {
+    const g = ctx.createLinearGradient(0, TOP, 0, H);
+    g.addColorStop(0, tint[0]); g.addColorStop(1, tint[1]);
+    ctx.fillStyle = g; ctx.fillRect(0, TOP, W, H - TOP);
+    // trunks and leaves, in two layers of parallax
+    for (const [k, col, n] of [[0.3, "rgba(20,60,30,0.6)", 8], [0.6, "rgba(10,40,20,0.85)", 6]]) {
+      ctx.fillStyle = col;
+      for (let i = -1; i < n; i++) {
+        const x = ((i * 137 - camX * k) % (W + 140) + W + 140) % (W + 140) - 70;
+        ctx.fillRect(x, TOP, 16 * (1 + k), H - TOP);
+        ctx.beginPath(); ctx.ellipse(x + 10, TOP + 20, 60, 30, 0, 0, TAU); ctx.fill();
+      }
+    }
+  }
+  function draw() {
+    ctx.setTransform(pxRatio, 0, 0, pxRatio, 0, 0);
+    if (!P) { buildScene(); }
+    const s = scene();
+    if (s === "fiume") drawJungle(["#2a6a3a", "#1a3a2a"]);
+    else if (s === "massi") drawJungle(["#e8a85a", "#6a5a3a"]);
+    else if (s === "cannibali") drawJungle(["#3a2a4a", "#c86a3a"]);
+    else drawJungle(["#3a8a4a", "#1a4a2a"]);
+    ctx.save(); ctx.translate(-Math.round(camX), 0);
+    if (s === "liane") {
+      // the river far below and the far bank
+      ctx.fillStyle = "#2a6ab0"; ctx.fillRect(camX, H - 24, W, 24);
+      ctx.fillStyle = "#5a3a1a"; ctx.fillRect(END, 300, 400, 60); ctx.fillStyle = "#3a8a2a"; ctx.fillRect(END, 296, 400, 6);
+      ctx.fillStyle = "#1a3a1a"; ctx.fillRect(camX, TOP, W, 8);
+      for (const v of vines) {
+        const a = vineAngle(v), ex = v.x + Math.sin(a) * v.L, ey = v.y + Math.cos(a) * v.L;
+        ctx.strokeStyle = "#5a8a2a"; ctx.lineWidth = 3; ctx.beginPath(); ctx.moveTo(v.x, v.y); ctx.quadraticCurveTo((v.x + ex) / 2 + Math.cos(a) * 6, (v.y + ey) / 2, ex, ey); ctx.stroke();
+        ctx.fillStyle = "#3a6a1a"; for (let k = 0.3; k < 1; k += 0.25) { ctx.beginPath(); ctx.ellipse(v.x + Math.sin(a) * v.L * k, v.y + Math.cos(a) * v.L * k, 5, 3, a, 0, TAU); ctx.fill(); }
+      }
+      if (state !== "dead" || Math.floor(clock * 6) % 2) drawHero(P.x, P.y, P.mode === "vine" ? "hang" : "fly");
+    } else if (s === "fiume") {
+      // the water, with the surface line
+      ctx.fillStyle = "rgba(30,90,160,0.75)"; ctx.fillRect(camX, SURF - 4, W, H - SURF + 4);
+      ctx.fillStyle = "#4a3a1a"; ctx.fillRect(camX, RIVER_BOT, W, H - RIVER_BOT);
+      ctx.strokeStyle = "rgba(200,230,255,0.8)"; ctx.lineWidth = 2; ctx.beginPath();
+      for (let x = camX; x <= camX + W; x += 10) ctx.lineTo(x, SURF - 4 + Math.sin(x * 0.05 + clock * 3) * 2);
+      ctx.stroke();
+      ctx.fillStyle = "#5a3a1a"; ctx.fillRect(END + 40, SURF - 30, 300, 60);
+      for (const c of crocs) {
+        const x = c.x, y = c.y, jaw = c.open ? 0.5 : 0.05;
+        ctx.fillStyle = "#3a7a3a"; ctx.beginPath(); ctx.ellipse(x + 10, y, 30, 8, 0, 0, TAU); ctx.fill();
+        ctx.fillRect(x + 30, y - 3, 22, 5);
+        ctx.save(); ctx.translate(x - 16, y); ctx.fillStyle = "#4a8a3a";
+        ctx.save(); ctx.rotate(jaw); ctx.fillRect(-22, -6, 24, 6); ctx.restore();
+        ctx.save(); ctx.rotate(-jaw * 0.5); ctx.fillRect(-22, 0, 24, 5); ctx.restore();
+        if (c.open) { ctx.fillStyle = "#ffffff"; for (let k = 0; k < 4; k++) ctx.fillRect(-20 + k * 5, -2, 2, 3); }
+        ctx.restore();
+        ctx.fillStyle = "#ffd23a"; ctx.fillRect(x - 8, y - 6, 3, 3);
+      }
+      if (state !== "dead" || Math.floor(clock * 6) % 2) drawHero(P.x, P.y + 4, "swim");
+    } else if (s === "massi") {
+      ctx.fillStyle = "#7a5a3a"; ctx.beginPath(); ctx.moveTo(camX - 10, H); for (let x = camX - 10; x <= camX + W + 10; x += 20) ctx.lineTo(x, groundAt(x)); ctx.lineTo(camX + W + 10, H); ctx.fill();
+      ctx.strokeStyle = "#5a8a2a"; ctx.lineWidth = 4; ctx.beginPath(); for (let x = camX - 10; x <= camX + W + 10; x += 20) ctx.lineTo(x, groundAt(x)); ctx.stroke();
+      for (const r of rocks) {
+        ctx.save(); ctx.translate(r.x, r.y); ctx.rotate(r.rot);
+        ctx.fillStyle = r.big ? "#8a8078" : "#a8988a"; ctx.beginPath(); ctx.arc(0, 0, r.r, 0, TAU); ctx.fill();
+        ctx.fillStyle = "rgba(0,0,0,0.25)"; ctx.fillRect(-r.r * 0.5, -2, r.r, 3); ctx.fillRect(-2, -r.r * 0.5, 3, r.r * 0.6);
+        ctx.restore();
+      }
+      if (state !== "dead" || Math.floor(clock * 6) % 2) drawHero(P.x, P.y, P.air ? "fly" : P.duck ? "duck" : "run");
+    } else {
+      ctx.fillStyle = "#6a4a2a"; ctx.fillRect(0, 300, W, 60); ctx.fillStyle = "#4a7a2a"; ctx.fillRect(0, 298, W, 4);
+      // huts, the fire and the pot with the explorer
+      for (const hx of [130, 480]) { ctx.fillStyle = "#8a6a3a"; ctx.fillRect(hx - 30, 240, 60, 58); ctx.fillStyle = "#c8a85a"; ctx.beginPath(); ctx.moveTo(hx - 40, 244); ctx.lineTo(hx, 200); ctx.lineTo(hx + 40, 244); ctx.fill(); }
+      ctx.fillStyle = "#ff8a2a"; for (let i = 0; i < 5; i++) { ctx.beginPath(); ctx.arc(575 + Math.sin(clock * 9 + i) * 6, 294 - i * 3, 6 - i, 0, TAU); ctx.fill(); }
+      ctx.fillStyle = "#3a3a3a"; ctx.beginPath(); ctx.ellipse(575, 270, 30, 22, 0, 0, TAU); ctx.fill();
+      ctx.fillStyle = "#ffd8b0"; ctx.beginPath(); ctx.arc(575, 240, 7, 0, TAU); ctx.fill(); ctx.fillStyle = "#c8a85a"; ctx.fillRect(568, 230, 14, 5);
+      ctx.strokeStyle = "#ffd8b0"; ctx.lineWidth = 3; ctx.beginPath(); ctx.moveTo(568, 250); ctx.lineTo(560, 236 + Math.sin(clock * 8) * 4); ctx.moveTo(582, 250); ctx.lineTo(590, 236 - Math.sin(clock * 8) * 4); ctx.stroke();
+      for (const n of natives) {
+        const x = n.x, y = n.y;
+        ctx.strokeStyle = "#5a3a1a"; ctx.lineWidth = 5; ctx.beginPath(); ctx.moveTo(x - 4, y - 16); ctx.lineTo(x - 6, y); ctx.moveTo(x + 4, y - 16); ctx.lineTo(x + 6, y); ctx.stroke();
+        ctx.fillStyle = "#6a4a2a"; ctx.fillRect(x - 8, y - 38, 16, 22);
+        ctx.fillStyle = "#c8281a"; ctx.fillRect(x - 9, y - 20, 18, 6);
+        ctx.fillStyle = "#6a4a2a"; ctx.beginPath(); ctx.arc(x, y - 44, 7, 0, TAU); ctx.fill();
+        ctx.fillStyle = "#ffd23a"; ctx.fillRect(x - 6, y - 54, 3, 8); ctx.fillStyle = "#ff5a3a"; ctx.fillRect(x + 2, y - 56, 3, 9);
+        ctx.strokeStyle = "#a8743a"; ctx.lineWidth = 2; ctx.beginPath(); ctx.moveTo(x - 12, y - 60); ctx.lineTo(x - 12, y - 4); ctx.stroke();
+        ctx.fillStyle = "#c8c8d8"; ctx.beginPath(); ctx.moveTo(x - 15, y - 60); ctx.lineTo(x - 12, y - 68); ctx.lineTo(x - 9, y - 60); ctx.fill();
+      }
+      if (state !== "dead" || Math.floor(clock * 6) % 2) drawHero(P.x, P.y, P.air ? "fly" : P.duck ? "duck" : "run");
+    }
+    for (const p of parts) { ctx.globalAlpha = Math.max(0, 1 - p.t / p.life); ctx.fillStyle = p.c; ctx.fillRect(p.x - 1.5, p.y - 1.5, 3, 3); }
+    ctx.globalAlpha = 1;
+    for (const p of popups) {
+      ctx.globalAlpha = Math.max(0, 1 - p.t / 1.2);
+      ctx.textAlign = "center"; ctx.font = "900 11px system-ui";
+      ctx.lineWidth = 3; ctx.strokeStyle = "#0c1a0e"; ctx.strokeText(p.text, p.x, p.y); ctx.fillStyle = p.color; ctx.fillText(p.text, p.x, p.y);
+    }
+    ctx.globalAlpha = 1;
+    ctx.restore();
+    if (state === "menu") return;
+    drawHud();
+    if (message) {
+      const life = message.long ? 2.8 : 2.2;
+      ctx.globalAlpha = Math.min(1, (life - message.t) * 2);
+      ctx.textAlign = "center"; ctx.font = "italic 900 22px system-ui"; ctx.fillStyle = "#ffd23a";
+      ctx.lineWidth = 5; ctx.strokeStyle = "#0c1a0e"; ctx.strokeText(message.text, W / 2, 90); ctx.fillText(message.text, W / 2, 90);
+      if (message.sub) { ctx.font = "800 12px system-ui"; ctx.fillStyle = "#ffffff"; ctx.lineWidth = 4; ctx.strokeText(message.sub, W / 2, 109); ctx.fillText(message.sub, W / 2, 109); }
+      ctx.globalAlpha = 1;
+    }
+  }
+  function drawHud() {
+    ctx.fillStyle = "rgba(12,26,14,0.96)"; ctx.fillRect(0, 0, W, TOP);
+    ctx.textBaseline = "middle"; ctx.textAlign = "left";
+    const x0 = touchMode ? 130 : 10;
+    ctx.fillStyle = "#ffffff"; ctx.font = "900 15px system-ui"; ctx.fillText(score.toLocaleString("it-IT"), x0, 14);
+    ctx.fillStyle = "#c8e0b8"; ctx.font = "700 9px system-ui"; ctx.fillText(`REC ${Math.max(bestCache, score).toLocaleString("it-IT")}`, x0 + 80, 9);
+    ctx.fillStyle = "#ffd23a"; ctx.font = "900 10px system-ui"; ctx.fillText(`GIRO ${round} · ${sceneIdx + 1}/4`, x0 + 80, 21);
+    ctx.fillStyle = "#ffffff"; ctx.font = "800 10px system-ui"; ctx.fillText(`BONUS ${(Math.round(bonus / 10) * 10).toLocaleString("it-IT")}`, x0 + 170, 14);
+    if (scene() === "fiume") {
+      ctx.fillStyle = "rgba(255,255,255,0.15)"; ctx.fillRect(x0 + 260, 9, 80, 10);
+      ctx.fillStyle = air < 30 ? (Math.floor(clock * 6) % 2 ? "#ff3a3a" : "#ff8a3a") : "#7ad8ff"; ctx.fillRect(x0 + 260, 9, 80 * air / 100, 10);
+      ctx.fillStyle = "#ffffff"; ctx.font = "800 8px system-ui"; ctx.fillText("ARIA", x0 + 345, 14);
+    }
+    const lx = touchMode ? W - 60 : W - 12;
+    for (let i = 0; i < Math.min(lives - (state === "dead" ? 0 : 1), 6); i++) { ctx.fillStyle = "#f4ecd0"; ctx.beginPath(); ctx.arc(lx - 5 - i * 13, 15, 5, Math.PI, TAU); ctx.fill(); ctx.fillRect(lx - 11 - i * 13, 15, 12, 2); }
+    ctx.textBaseline = "alphabetic";
+  }
+
+  // ---------- Loop ----------
+  const STEP = 1 / 120;
+  let last = performance.now(), acc = 0;
+  function frame(now) {
+    const dt = Math.min(0.1, (now - last) / 1000);
+    last = now;
+    if (isPlaying()) {
+      acc += dt;
+      while (acc >= STEP && isPlaying()) { update(STEP); acc -= STEP; }
+    } else { acc = 0; update(dt); }
+    draw();
+    requestAnimationFrame(frame);
+  }
+  syncControls();
+  showTitle();
+  requestAnimationFrame(frame);
+})();
+</script>
+<script src="../../shared/iniziali.js" data-record="regiungla-best-" data-kind="score"></script>
+</body>
+</html>
