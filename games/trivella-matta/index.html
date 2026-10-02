@@ -1,0 +1,701 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no, viewport-fit=cover">
+<title>Trivella Matta</title>
+<style>
+  :root {
+    --bg: #0e1424;
+    --fg: #f4f6ee;
+    --muted: #b8c8e0;
+    --pink: #ff6aa8;
+    --yellow: #8ae05a;
+    --red: #ff4a3a;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  html, body {
+    height: 100%;
+    background: var(--bg);
+    color: var(--fg);
+    font-family: system-ui, -apple-system, "Segoe UI", sans-serif;
+    overflow: hidden;
+    user-select: none;
+    -webkit-user-select: none;
+    touch-action: none;
+  }
+  #wrap { position: fixed; inset: 0; display: flex; align-items: center; justify-content: center; }
+  canvas { display: block; touch-action: none; border-radius: 6px; box-shadow: 0 0 0 2px #1a3a5a, 0 10px 40px rgba(0,0,0,0.6); }
+  #pauseBtn {
+    position: fixed; z-index: 3; display: none; right: 10px; top: calc(10px + env(safe-area-inset-top, 0px));
+    font: 700 13px system-ui, sans-serif; color: var(--fg);
+    background: rgba(0, 0, 0, 0.6); border: 1px solid rgba(244, 246, 238, 0.35);
+    border-radius: 8px; padding: 6px 10px; cursor: pointer;
+  }
+  #touch {
+    position: fixed; z-index: 2; display: none; left: 12px; right: 12px;
+    bottom: calc(14px + env(safe-area-inset-bottom, 0px));
+    justify-content: space-between; align-items: flex-end; pointer-events: none;
+  }
+  /* thumb stick: walk left and right and choose where to drill (down, up, sideways); TRIVELLA drills */
+  #touch .stick { position: relative; width: 136px; height: 136px; border-radius: 50%; pointer-events: auto; touch-action: none;
+    border: 2px solid rgba(255, 106, 168, 0.6); background: radial-gradient(circle, rgba(255,200,58,0.14), rgba(255,200,58,0.04)); }
+  #touch .stick .knob { position: absolute; left: 50%; top: 50%; width: 58px; height: 58px; margin: -29px 0 0 -29px; border-radius: 50%;
+    background: rgba(255, 106, 168, 0.45); border: 2px solid rgba(255,255,255,0.7); box-shadow: 0 4px 10px rgba(0,0,0,0.4); pointer-events: none; }
+  #touch .stick .ring { position: absolute; inset: 10px; border-radius: 50%; border: 1px dashed rgba(244,246,238,0.25); pointer-events: none; }
+  #touch .jump { width: 96px; height: 96px; border-radius: 50%; pointer-events: auto; touch-action: none; color: var(--fg);
+    font: 800 13px system-ui, sans-serif; letter-spacing: 1px; border: 2px solid rgba(122, 228, 255, 0.9); background: rgba(122, 228, 255, 0.22); }
+  #touch .jump.on { background: rgba(122, 228, 255, 0.55); }
+  #touch.small .stick { width: 112px; height: 112px; }
+  #touch.small .stick .knob { width: 48px; height: 48px; margin: -24px 0 0 -24px; }
+  #touch.small .jump { width: 80px; height: 80px; font-size: 11px; }
+  #touch .btns { display: flex; flex-direction: column; align-items: center; gap: 10px; pointer-events: none; }
+  #touch .jump.axe { width: 64px; height: 64px; font-size: 11px; border-color: rgba(255, 244, 200, 0.9); background: rgba(255, 244, 200, 0.16); }
+  #touch .jump.axe.on { background: rgba(255, 244, 200, 0.5); }
+  #touch.small .jump.axe { width: 54px; height: 54px; font-size: 10px; }
+  #overlay {
+    position: fixed; inset: 0; z-index: 5;
+    display: flex; flex-direction: column; align-items: center; justify-content: flex-start;
+    gap: 14px; padding: 16px; text-align: center; overflow-y: auto;
+    background: rgba(14, 20, 36, 0.93);
+  }
+  #overlay > :first-child { margin-top: auto; }
+  #overlay > :last-child { margin-bottom: auto; }
+  #overlay.hidden { display: none; }
+  #homeLink {
+    position: fixed; top: calc(10px + env(safe-area-inset-top, 0px)); left: 10px; z-index: 6;
+    font: 600 13px/1 system-ui, sans-serif; color: #fff; text-decoration: none;
+    padding: 8px 12px; border-radius: 999px; background: rgba(0,0,0,.55);
+    border: 1px solid rgba(255,255,255,.25);
+  }
+  #homeLink:hover { background: rgba(0,0,0,.8); }
+  #overlay.hidden ~ #homeLink { display: none; }
+  @media (max-width: 700px) { #overlay { padding-top: calc(52px + env(safe-area-inset-top, 0px)); } }
+  #overlay h1 { font-size: clamp(32px, 10vw, 58px); font-weight: 900; font-style: italic; letter-spacing: 1px; color: var(--pink);
+    text-shadow: 3px 3px 0 #6a1a4a, 0 0 22px rgba(255,122,184,0.35); }
+  #overlay h2 { font-size: clamp(26px, 7vw, 42px); font-weight: 900; letter-spacing: 2px; color: var(--pink); }
+  #overlay h2.lose { color: var(--red); }
+  #overlay p { max-width: 540px; font-size: clamp(13px, 3.4vw, 16px); line-height: 1.55; }
+  #overlay p.muted { color: var(--muted); }
+  #overlay .pts { display: grid; grid-template-columns: repeat(2, auto); gap: 4px 18px; font-size: 13px; color: var(--muted); text-align: left; max-width: 560px; }
+  #overlay .pts b { color: var(--fg); }
+  #overlay .diff { display: flex; gap: 10px; flex-wrap: wrap; justify-content: center; }
+  #overlay button {
+    font: 800 15px system-ui, sans-serif; letter-spacing: 1.5px; color: var(--fg);
+    background: transparent; cursor: pointer;
+    border: 2px solid rgba(244,246,238,0.3); border-radius: 10px; padding: 9px 16px;
+  }
+  #overlay .diff button.on { border-color: var(--c); color: var(--c); box-shadow: 0 0 12px var(--c); }
+  #overlay button.start { border-color: var(--pink); color: #2e0418; background: var(--pink); padding: 11px 30px; box-shadow: 0 4px 0 #a83a6a; }
+  @media (max-height: 560px) {
+    #overlay { gap: 8px; }
+    #overlay h1 { font-size: 30px; }
+    #overlay p { font-size: 13px; line-height: 1.4; }
+    #overlay .help, #overlay .pts { display: none; }
+  }
+</style>
+</head>
+<body>
+<div id="wrap"><canvas id="game"></canvas></div>
+<div id="touch">
+  <div class="stick" aria-label="Levetta"><div class="ring"></div><div class="knob"></div></div>
+  <div class="btns"><button type="button" class="jump hop" aria-label="Trivella">TRIVELLA</button></div>
+</div>
+<button id="pauseBtn" type="button" aria-label="Pausa">❚❚</button>
+<div id="overlay"></div>
+<a id="homeLink" href="../../index.html">← Sala Giochi</a>
+
+
+<script>
+(() => {
+  "use strict";
+
+  const W = 640, H = 360, TAU = Math.PI * 2, TOP = 28;
+  const COLS = 9, CS = 34, GX = (W - COLS * CS) / 2;
+  const X = 4, AIR = 5, GOAL = 6;
+  const COLORS = [["#ff4a6a", "#ffa0b0"], ["#3aa8ff", "#a0d8ff"], ["#ffd23a", "#fff0a0"], ["#4ae07a", "#b0ffc8"]];
+
+  const DIFFICULTIES = {
+    facile:    { label: "FACILE",    color: "#7ed87a", desc: "5 vite · l'aria dura di più · meno blocchi marroni", lives: 5, air: 0.75, xs: 0.6, caps: 1.3 },
+    normale:   { label: "NORMALE",   color: "#ff6aa8", desc: "3 vite", lives: 3, air: 1, xs: 1, caps: 1 },
+    difficile: { label: "DIFFICILE", color: "#ff5a5a", desc: "3 vite · l'aria finisce prima · più blocchi marroni", lives: 3, air: 1.25, xs: 1.35, caps: 0.8 },
+  };
+  const DIFF_IDS = Object.keys(DIFFICULTIES);
+  const DIFF_KEY = "trivella-difficulty";
+  const bestKey = (id) => `trivella-best-${id}`;
+  function store(k, v) { try { localStorage.setItem(k, v); } catch { /* ignore */ } }
+  function load(k) { try { return localStorage.getItem(k); } catch { return null; } }
+  const rnd = (a, b) => a + Math.random() * (b - a);
+  const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
+
+  // ---------- Canvas ----------
+  const canvas = document.getElementById("game");
+  const ctx = canvas.getContext("2d");
+  const wrapEl = document.getElementById("wrap");
+  const overlay = document.getElementById("overlay");
+  const touchEl = document.getElementById("touch");
+  const pauseBtn = document.getElementById("pauseBtn");
+  let pxRatio = 1, touchMode = !!(window.matchMedia && matchMedia("(pointer: coarse)").matches);
+  function resize() {
+    const portrait = window.innerHeight > window.innerWidth;
+    const showTouch = touchMode && isPlaying();
+    touchEl.style.display = showTouch ? "flex" : "none";
+    touchEl.classList.toggle("small", !portrait && window.innerHeight < 480);
+    wrapEl.style.paddingBottom = showTouch && portrait ? "calc(170px + env(safe-area-inset-bottom, 0px))" : "0";
+    let availW = window.innerWidth - 8, availH = window.innerHeight - 8;
+    if (showTouch && portrait) availH -= 170;
+    if (showTouch && !portrait) {
+      const side = Math.max(...[...touchEl.children].map((el) => el.offsetWidth)) + 20;
+      if (window.innerWidth - 2 * side > 200) availW = window.innerWidth - 2 * side;
+    }
+    const s = Math.max(0.2, Math.min(availW / W, availH / H));
+    pxRatio = Math.min(3, s * (window.devicePixelRatio || 1));
+    canvas.style.width = W * s + "px";
+    canvas.style.height = H * s + "px";
+    canvas.width = Math.round(W * pxRatio);
+    canvas.height = Math.round(H * pxRatio);
+  }
+  window.addEventListener("resize", () => syncControls());
+
+  // ---------- Audio ----------
+  let audioCtx = null;
+  function beep(freq, dur, type = "square", vol = 0.04, slide = 0, delay = 0) {
+    if (!audioCtx) return;
+    const t = audioCtx.currentTime + delay;
+    const osc = audioCtx.createOscillator(), gain = audioCtx.createGain();
+    osc.type = type;
+    osc.frequency.setValueAtTime(freq, t);
+    if (slide) osc.frequency.exponentialRampToValueAtTime(Math.max(20, freq + slide), t + dur);
+    gain.gain.setValueAtTime(vol, t);
+    gain.gain.exponentialRampToValueAtTime(0.0001, t + dur);
+    osc.connect(gain).connect(audioCtx.destination);
+    osc.start(t); osc.stop(t + dur + 0.02);
+  }
+  function noise(dur, vol, freq) {
+    if (!audioCtx) return;
+    const len = Math.floor(audioCtx.sampleRate * dur), buf = audioCtx.createBuffer(1, len, audioCtx.sampleRate), d = buf.getChannelData(0);
+    for (let i = 0; i < len; i++) d[i] = (Math.random() * 2 - 1) * (1 - i / len);
+    const src = audioCtx.createBufferSource(), f = audioCtx.createBiquadFilter(), g = audioCtx.createGain();
+    src.buffer = buf; f.type = "bandpass"; f.frequency.value = freq; g.gain.value = vol;
+    src.connect(f).connect(g).connect(audioCtx.destination); src.start();
+  }
+  const arp = (notes, gap, d, type = "square", vol = 0.04) => notes.forEach((f, i) => beep(f, d, type, vol, 0, i * gap));
+  let sfxN = 0;
+  const lim = (fn) => (...a) => { if (sfxN++ < 6) fn(...a); };
+  const sfx = {
+    drill: lim(() => { noise(0.06, 0.06, 1800); beep(300, 0.05, "square", 0.025, 200); }),
+    hard: lim(() => { noise(0.08, 0.08, 600); beep(160, 0.06, "square", 0.03); }),
+    land: lim(() => noise(0.08, 0.06, 250)),
+    pop: lim((n) => arp([523 + n * 40, 659 + n * 40, 784 + n * 40], 0.04, 0.08, "square", 0.035)),
+    air: () => arp([784, 988, 1175, 1568], 0.05, 0.08, "sine", 0.05),
+    low: () => beep(880, 0.12, "square", 0.03),
+    die: () => { noise(0.3, 0.1, 400); for (let i = 0; i < 6; i++) beep(600 - i * 70, 0.12, "triangle", 0.045, 0, i * 0.07); },
+    clear: () => arp([392, 523, 659, 784, 659, 784, 1047], 0.08, 0.14, "square", 0.045),
+    over: () => arp([523, 466, 415, 392, 330, 262], 0.15, 0.24, "triangle", 0.05),
+  };
+
+  // ---------- State ----------
+  let difficulty = DIFFICULTIES[load(DIFF_KEY)] ? load(DIFF_KEY) : "normale";
+  let diff = DIFFICULTIES[difficulty];
+  let state = "menu", menu = null, pausedFrom = null, stateT = 0, clock = 0;
+  let score = 0, lives = 3, level = 1, bestCache = 0, nextLife = 20000, depthTotal = 0;
+  let grid = [], ROWS = 0, LEN = 100, falling = [], P = null, air = 100, camY = 0, parts = [], popups = [], message = null, lowT = 0, dirty = true, drillPressed = false, drillHeld = false;
+  const keys = { left: false, right: false, up: false, down: false };
+  const stick = { x: 0, y: 0 };
+  const cell = (r, c) => (r >= 0 && r < ROWS && c >= 0 && c < COLS ? grid[r][c] : null);
+  const solidAt = (r, c) => c < 0 || c >= COLS || r >= ROWS || !!cell(r, c);
+
+  // ---------- The ground ----------
+  // a shaft of coloured blocks: same colours clump together, brown blocks and air capsules sprinkled in
+  function buildLevel() {
+    LEN = 100;
+    ROWS = 4 + LEN + 1;
+    grid = [];
+    const lvl = level - 1;
+    const pX = Math.min(0.14, (0.035 + 0.012 * lvl) * diff.xs), clump = Math.min(0.3, 0.16 + 0.012 * lvl);
+    let nextAir = 6 + Math.floor(Math.random() * 4);
+    for (let r = 0; r < ROWS; r++) {
+      const row = [];
+      for (let c = 0; c < COLS; c++) {
+        if (r < 4) { row.push(null); continue; }
+        if (r === ROWS - 1) { row.push({ k: GOAL }); continue; }
+        let k;
+        if (Math.random() < pX * Math.min(1, (r - 4) / 15 + 0.3)) k = X;
+        else if (c > 0 && row[c - 1] && row[c - 1].k < 4 && Math.random() < clump) k = row[c - 1].k;
+        else if (grid[r - 1] && grid[r - 1][c] && grid[r - 1][c].k < 4 && Math.random() < clump * 0.8) k = grid[r - 1][c].k;
+        else k = Math.floor(Math.random() * 4);
+        row.push(k === X ? { k, hp: 5 } : { k });
+      }
+      if (r >= 4 && r < ROWS - 1 && r >= nextAir) { row[Math.floor(Math.random() * COLS)] = { k: AIR }; nextAir = r + Math.round(rnd(13, 19) / diff.caps); }
+      grid.push(row);
+    }
+    falling = [];
+    dirty = true;
+  }
+
+  // ---------- Groups and gravity ----------
+  // blocks of the same colour that touch stick together; a group falls when nothing holds it up
+  function groupAt(r, c, seen) {
+    const b = cell(r, c); if (!b) return [];
+    if (b.k >= 4) { if (seen) seen.add(r * COLS + c); return [[r, c]]; }
+    const out = [], stack = [[r, c]], mark = new Set([r * COLS + c]);
+    while (stack.length) {
+      const [y, x] = stack.pop(); out.push([y, x]);
+      for (const [dy, dx] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) {
+        const ny = y + dy, nx = x + dx, n = cell(ny, nx);
+        if (n && n.k === b.k && !n.fall && !mark.has(ny * COLS + nx)) { mark.add(ny * COLS + nx); stack.push([ny, nx]); }
+      }
+    }
+    if (seen) for (const k of mark) seen.add(k);
+    return out;
+  }
+  function checkSupport() {
+    dirty = false;
+    // every resting group, and which ones are held up (by the goal floor or a held group below)
+    const groups = [], gid = new Map(), seen = new Set();
+    for (let r = 0; r < ROWS; r++) for (let c = 0; c < COLS; c++) {
+      const b = grid[r][c];
+      if (!b || b.fall || seen.has(r * COLS + c)) continue;
+      const g = groupAt(r, c, seen), id = groups.length;
+      groups.push({ cells: g, held: b.k === GOAL });
+      for (const [y, x] of g) gid.set(y * COLS + x, id);
+    }
+    let changed = true;
+    while (changed) {
+      changed = false;
+      for (const g of groups) {
+        if (g.held) continue;
+        for (const [y, x] of g.cells) {
+          const below = gid.get((y + 1) * COLS + x);
+          if (below !== undefined && groups[below] !== g && groups[below].held) { g.held = true; changed = true; break; }
+        }
+      }
+    }
+    for (const g of groups) {
+      if (g.held) continue;
+      // resting on a block that is already falling: it goes along at once, otherwise it shakes first
+      const onFalling = g.cells.some(([y, x]) => { const b = cell(y + 1, x); return b && b.fall; });
+      const f = { cells: g.cells.map(([y, x]) => [y, x]), shake: onFalling ? 0 : 0.8, off: 0 };
+      for (const [y, x] of f.cells) grid[y][x].fall = f;
+      falling.push(f);
+    }
+  }
+  function updateFalling(dt) {
+    const speed = 3.6 * CS;
+    for (const f of falling) {
+      if (f.shake > 0) { f.shake -= dt; continue; }
+      f.off += speed * dt;
+      while (f.off >= CS && !f.landed) {
+        // can every block of it move one row down?
+        const mine = new Set(f.cells.map(([y, x]) => y * COLS + x));
+        const free = f.cells.every(([y, x]) => { if (y + 1 >= ROWS) return false; const b = grid[y + 1][x]; return !b || mine.has((y + 1) * COLS + x); });
+        if (!free) { f.landed = true; break; }
+        f.cells.sort((a, b) => b[0] - a[0]);
+        for (const cl of f.cells) { const [y, x] = cl; grid[y + 1][x] = grid[y][x]; grid[y][x] = null; cl[0] = y + 1; if (P && P.r === y + 1 && P.c === x && state === "play") crush(); }
+        f.off -= CS;
+      }
+      if (!f.landed) {
+        // stop as soon as something is right below
+        const mine = new Set(f.cells.map(([y, x]) => y * COLS + x));
+        if (!f.cells.every(([y, x]) => y + 1 < ROWS && (!grid[y + 1][x] || mine.has((y + 1) * COLS + x)))) f.landed = true;
+      }
+      if (f.landed) { f.off = 0; for (const [y, x] of f.cells) if (grid[y][x]) grid[y][x].fall = null; }
+    }
+    const landed = falling.filter((f) => f.landed);
+    falling = falling.filter((f) => !f.landed);
+    if (landed.length) {
+      sfx.land();
+      // landed blocks that now touch three or more of their colour vanish
+      let chain = 0;
+      for (const f of landed) for (const [y, x] of f.cells) {
+        const b = cell(y, x); if (!b || b.k >= 4) continue;
+        const g = groupAt(y, x);
+        if (g.length >= 4) {
+          chain++;
+          for (const [gy, gx] of g) { burst(GX + gx * CS + CS / 2, gy * CS + CS / 2, COLORS[b.k][0], 5); grid[gy][gx] = null; }
+          addScore(20 * g.length * chain, GX + x * CS + CS / 2, y * CS, "#ffffff");
+          sfx.pop(chain);
+        }
+      }
+      dirty = true;
+    }
+  }
+
+  // ---------- Flow ----------
+  const isPlaying = () => ["intro", "play", "dead", "clear"].includes(state);
+  function startGame() {
+    if (!audioCtx) { try { audioCtx = new (window.AudioContext || window.webkitAudioContext)(); } catch { audioCtx = null; } }
+    if (audioCtx && audioCtx.state === "suspended") audioCtx.resume();
+    score = 0; lives = diff.lives; level = 1; nextLife = 50000; depthTotal = 0;
+    bestCache = parseInt(load(bestKey(difficulty)), 10) || 0;
+    beginLevel();
+    menu = null;
+    overlay.classList.add("hidden");
+    syncControls();
+    last = performance.now();
+  }
+  function beginLevel() {
+    buildLevel();
+    P = { r: 3, c: 4, x: 4, y: 3, face: "d", mv: null, cd: 0, best: 3, walk: 0 };
+    air = 100; camY = 0; parts = []; popups = [];
+    message = { text: `LIVELLO ${level}`, sub: `scava giù per ${LEN} metri prima che finisca l'aria!`, t: 0 };
+    state = "intro"; stateT = 1.6;
+  }
+  function addScore(n, x, y, color = "#ffffff", text) {
+    score += n;
+    if (score >= nextLife) { lives++; nextLife += 100000; arp([523, 659, 784, 1047, 1319], 0.07, 0.12); popups.push({ x: GX + P.c * CS + CS / 2, y: P.r * CS - 30, text: "VITA EXTRA!", color: "#7ed87a", t: 0 }); }
+    if (x !== undefined) popups.push({ x, y, text: text || String(n), color, t: 0 });
+  }
+  function burst(x, y, c, n = 10, sp = 100, life = 0.5) {
+    for (let k = 0; k < n; k++) { const a = Math.random() * TAU, s = sp * rnd(0.3, 1); parts.push({ x, y, vx: Math.cos(a) * s, vy: Math.sin(a) * s, t: 0, life: life * rnd(0.6, 1.2), c }); }
+  }
+  function crush() { lose("schiacciato"); }
+  function lose(by) {
+    if (state !== "play") return;
+    if (window.__deaths) window.__deaths.push([level, by, P.r - 3]);
+    if (window.__god) { if (by === "aria") air = 100; return; }
+    lives--; sfx.die(); burst(GX + P.c * CS + CS / 2, P.r * CS + CS / 2, "#ffffff", 20, 120, 0.7);
+    message = { text: by === "aria" ? "SENZA ARIA!" : "SCHIACCIATO!", t: 0 };
+    state = "dead"; stateT = 2;
+  }
+  function gameOver() {
+    state = "over";
+    const prev = parseInt(load(bestKey(difficulty)), 10) || 0;
+    const record = score > prev;
+    if (record) store(bestKey(difficulty), String(score));
+    sfx.over();
+    menu = () => showOverlay(
+      `<h2 class="lose">GAME OVER</h2>
+       <p>Punteggio: <b>${score.toLocaleString("it-IT")}</b> · livello ${level} · ${depthTotal + Math.max(0, P.best - 3)} metri in tutto · ${diff.label}</p>
+       ${record ? "<p style='color:var(--pink)'>★ NUOVO RECORD! ★</p>" : ""}
+       ${difficultyHTML()}
+       <button class="start" data-start>SCAVA ANCORA</button>`
+    );
+    menu();
+    syncControls();
+  }
+  function togglePause() {
+    if (isPlaying()) {
+      pausedFrom = state; state = "paused";
+      showOverlay(`<h2>PAUSA</h2><button class="start" data-resume>CONTINUA</button><p class="muted">Premi P per continuare</p>`);
+    } else if (state === "paused") {
+      state = pausedFrom; overlay.classList.add("hidden"); last = performance.now();
+    }
+    syncControls();
+  }
+  // the pause menu can end the game (shared/iniziali.js): it ends here the usual way, saving the record
+  window.addEventListener("sala:termina", () => { if (state !== "paused") return; state = pausedFrom; overlay.classList.add("hidden"); gameOver(); syncControls(); });
+  function syncControls() {
+    pauseBtn.style.display = isPlaying() && touchMode ? "block" : "none";
+    resize();
+  }
+  pauseBtn.addEventListener("click", () => togglePause());
+  function showOverlay(html) { overlay.innerHTML = html; overlay.classList.remove("hidden"); }
+  function difficultyHTML() {
+    const buttons = DIFF_IDS.map((id) => {
+      const d = DIFFICULTIES[id];
+      return `<button type="button" data-diff="${id}" class="${id === difficulty ? "on" : ""}" style="--c:${d.color}">${d.label}</button>`;
+    }).join("");
+    const best = parseInt(load(bestKey(difficulty)), 10);
+    return `<div class="diff">${buttons}</div><p class="muted">${diff.desc}${best ? ` · Record: ${best.toLocaleString("it-IT")}` : ""}</p>`;
+  }
+  function setDifficulty(id) { if (!DIFFICULTIES[id]) return; difficulty = id; diff = DIFFICULTIES[id]; store(DIFF_KEY, id); if (menu) menu(); }
+  function showTitle() {
+    menu = showTitle;
+    showOverlay(
+      `<h1>TRIVELLA MATTA</h1>
+       <p>Scava verso il basso tra i blocchi colorati fino in fondo a ogni livello! La trivella distrugge in un colpo tutti i blocchi dello stesso colore che si toccano. I blocchi rimasti senza appoggio tremano e poi cadono: spostati o ti schiacciano! Se cadendo ne toccano almeno altri tre del loro colore, spariscono. E tieni d'occhio l'aria, che continua a scendere.</p>
+       <div class="pts">
+         <span><b>Blocchi</b></span><span>colorati 10 per blocco · spariti in caduta 20 per blocco, di più a catena · marroni: 5 colpi e costano il 20% d'aria</span>
+         <span><b>Aria</b></span><span>capsule blu +20% (20 punti) · ogni metro 10 · fine livello 1.000 per livello più l'aria rimasta</span>
+       </div>
+       ${touchMode
+         ? `<p class="muted help">Levetta per camminare e scegliere dove scavare (giù, su o di lato) · TRIVELLA per scavare (tieni premuto)</p>`
+         : `<p class="muted help">Frecce o A D per camminare, ↓ ↑ per scegliere dove scavare · SPAZIO, J o X per scavare (tieni premuto) · P pausa</p>`}
+       ${difficultyHTML()}
+       <button class="start" data-start>SI SCAVA!</button>`
+    );
+  }
+  overlay.addEventListener("click", (e) => {
+    const d = e.target.closest("[data-diff]");
+    if (d) { setDifficulty(d.dataset.diff); return; }
+    if (e.target.closest("[data-start]")) startGame();
+    if (e.target.closest("[data-resume]")) togglePause();
+  });
+
+  // ---------- Input ----------
+  const KEYMAP = { arrowleft: "left", a: "left", arrowright: "right", d: "right", arrowup: "up", w: "up", arrowdown: "down", s: "down" };
+  const DRILLKEYS = [" ", "j", "x", "k", "z"];
+  window.addEventListener("keydown", (e) => {
+    const k = e.key.toLowerCase();
+    if ([" ", "arrowup", "arrowdown", "arrowleft", "arrowright"].includes(k)) e.preventDefault();
+    if (state === "menu" || state === "over") {
+      if (e.key === "Enter") startGame();
+      else if (["1", "2", "3"].includes(k)) setDifficulty(DIFF_IDS[+k - 1]);
+      return;
+    }
+    if (k === "p" || k === "escape") { if (!e.repeat) togglePause(); return; }
+    if (state === "paused") { if (e.key === "Enter") togglePause(); return; }
+    if (DRILLKEYS.includes(k)) { if (!e.repeat) drillPressed = true; drillHeld = true; }
+    if (KEYMAP[k]) keys[KEYMAP[k]] = true;
+  });
+  window.addEventListener("keyup", (e) => { const k = e.key.toLowerCase(); if (KEYMAP[k]) keys[KEYMAP[k]] = false; if (DRILLKEYS.includes(k)) drillHeld = false; });
+  window.addEventListener("blur", () => { for (const k in keys) keys[k] = false; drillHeld = false; stick.x = stick.y = 0; if (isPlaying()) togglePause(); });
+  {
+    const b = touchEl.querySelector(".hop");
+    b.addEventListener("pointerdown", (e) => { e.preventDefault(); drillPressed = true; drillHeld = true; b.classList.add("on"); });
+    for (const ev of ["pointerup", "pointercancel", "pointerleave"]) b.addEventListener(ev, () => { drillHeld = false; b.classList.remove("on"); });
+  }
+  const stickEl = touchEl.querySelector(".stick"), knob = stickEl.querySelector(".knob");
+  let stickId = null;
+  function stickAt(e) {
+    const r = stickEl.getBoundingClientRect(), max = r.width / 2 - 14;
+    let dx = e.clientX - (r.left + r.width / 2), dy = e.clientY - (r.top + r.height / 2);
+    const len = Math.hypot(dx, dy);
+    if (len > max) { dx *= max / len; dy *= max / len; }
+    knob.style.transform = `translate(${dx}px, ${dy}px)`;
+    const f = (v) => { const a = Math.abs(v) / max; return a < 0.18 ? 0 : Math.sign(v) * Math.min(1, (a - 0.18) / 0.55); };
+    stick.x = f(dx); stick.y = f(dy);
+  }
+  const stickEnd = (e) => { if (e.pointerId !== stickId) return; stickId = null; knob.style.transform = ""; stick.x = stick.y = 0; };
+  stickEl.addEventListener("pointerdown", (e) => { e.preventDefault(); stickId = e.pointerId; try { stickEl.setPointerCapture(e.pointerId); } catch { /* ignore */ } stickAt(e); });
+  stickEl.addEventListener("pointermove", (e) => { if (e.pointerId === stickId) stickAt(e); });
+  for (const ev of ["pointerup", "pointercancel", "lostpointercapture"]) stickEl.addEventListener(ev, stickEnd);
+  window.addEventListener("pointerdown", (e) => { if (e.pointerType === "touch" && !touchMode) { touchMode = true; syncControls(); if (menu) menu(); } }, true);
+
+  // ---------- The driller ----------
+  function drill() {
+    const d = { l: [0, -1], r: [0, 1], d: [1, 0], u: [-1, 0] }[P.face];
+    const r = P.r + d[0], c = P.c + d[1], b = cell(r, c);
+    P.cd = 0.2; P.drillT = 0.15;
+    if (!b || b.fall || b.k === GOAL) return;
+    if (b.k === X) {
+      b.hp--; sfx.hard(); burst(GX + c * CS + CS / 2, r * CS + CS / 2, "#a86a3a", 4, 70, 0.3);
+      if (b.hp <= 0) { grid[r][c] = null; air = Math.max(0, air - 20); popups.push({ x: GX + c * CS + CS / 2, y: r * CS, text: "-20% ARIA", color: "#ff8a8a", t: 0 }); addScore(10); dirty = true; }
+      return;
+    }
+    if (b.k === AIR) { grabAir(r, c); return; }
+    const g = groupAt(r, c);
+    for (const [y, x] of g) { burst(GX + x * CS + CS / 2, y * CS + CS / 2, COLORS[b.k][0], 4, 80, 0.35); grid[y][x] = null; }
+    addScore(10 * g.length);
+    sfx.drill();
+    dirty = true;
+  }
+  function grabAir(r, c) {
+    grid[r][c] = null; air = Math.min(100, air + 20); sfx.air(); dirty = true;
+    addScore(20, GX + c * CS + CS / 2, r * CS, "#7ad8ff", "+20% ARIA");
+  }
+  function updatePlayer(dt) {
+    if (P.cd > 0) P.cd -= dt;
+    if (P.drillT > 0) P.drillT -= dt;
+    const mx = clamp((keys.right ? 1 : 0) - (keys.left ? 1 : 0) + stick.x, -1, 1);
+    const my = clamp((keys.down ? 1 : 0) - (keys.up ? 1 : 0) + stick.y, -1, 1);
+    // facing: sideways when walking, otherwise down (or up when pushing up)
+    if (Math.abs(mx) > 0.4) P.face = mx > 0 ? "r" : "l";
+    else if (my < -0.5) P.face = "u";
+    else if (my > 0.4 || !P.mv) { if (my > 0.4 || P.face === "u") P.face = "d"; }
+    if (P.mv) {
+      P.mv.t += dt;
+      const k = Math.min(1, P.mv.t / P.mv.dur);
+      P.x = P.mv.x0 + (P.c - P.mv.x0) * k; P.y = P.mv.y0 + (P.r - P.mv.y0) * k;
+      if (k >= 1) P.mv = null;
+    }
+    if (!P.mv) {
+      P.x = P.c; P.y = P.r;
+      const move = (dr, dc, dur) => { P.mv = { x0: P.c, y0: P.r, t: 0, dur }; P.r += dr; P.c += dc; const b = cell(P.r, P.c); if (b && b.k === AIR) grabAir(P.r, P.c); if (dc) P.walk += 1; };
+      const below = cell(P.r + 1, P.c);
+      if (!solidAt(P.r + 1, P.c) || (below && below.k === AIR)) move(1, 0, 0.085);
+      else if (Math.abs(mx) > 0.4) {
+        const dc = mx > 0 ? 1 : -1, side = cell(P.r, P.c + dc);
+        if (P.c + dc >= 0 && P.c + dc < COLS) {
+          if (!side || side.k === AIR) move(0, dc, 0.16);
+          // climb a single step
+          else if (!side.fall && !solidAt(P.r - 1, P.c + dc) && !solidAt(P.r - 1, P.c) && P.r > 0) move(-1, dc, 0.26);
+        }
+      }
+    }
+    if ((drillPressed || drillHeld) && P.cd <= 0 && !P.mv) drill();
+    if (P.r > P.best) { addScore(10 * (P.r - P.best)); P.best = P.r; }
+    // standing on the goal floor
+    if (!P.mv && P.r === ROWS - 2) levelClear();
+  }
+  function levelClear() {
+    if (state !== "play") return;
+    const bonus = 1000 * level + Math.round(air) * 10;
+    score += bonus;
+    message = { text: "TRAGUARDO!", sub: `livello ${level} · bonus ${bonus.toLocaleString("it-IT")}`, t: 0, long: true };
+    sfx.clear(); state = "clear"; stateT = 2.6;
+  }
+  function update(dt) {
+    clock += dt; sfxN = 0;
+    if (window.__bot) window.__bot(dt);
+    for (const p of parts) { p.t += dt; p.x += p.vx * dt; p.y += p.vy * dt; p.vy += 200 * dt; }
+    parts = parts.filter((p) => p.t < p.life);
+    for (const p of popups) { p.t += dt; p.y -= 22 * dt; }
+    popups = popups.filter((p) => p.t < 1.2);
+    if (message) { message.t += dt; if (message.t > (message.long ? 2.8 : 2.2)) message = null; }
+    const flags = () => { drillPressed = false; };
+    if (state === "intro") { stateT -= dt; flags(); if (stateT <= 0) state = "play"; return; }
+    if (state === "dead") {
+      stateT -= dt; flags();
+      if (stateT <= 0) {
+        if (lives <= 0) gameOver();
+        else {
+          // a fresh driller: the blocks right above are cleared away and the air is full again
+          for (let r = Math.max(0, P.r - 3); r <= P.r; r++) for (let c = Math.max(0, P.c - 1); c <= Math.min(COLS - 1, P.c + 1); c++) if (grid[r][c] && grid[r][c].k !== GOAL && (r < P.r || c === P.c)) grid[r][c] = null;
+          // and whatever was already tumbling down nearby is swept away too
+          for (const f of falling) if (f.cells.some(([y, x]) => Math.abs(x - P.c) <= 2 && y <= P.r && y >= P.r - 8)) for (const [y, x] of f.cells) if (grid[y][x] && grid[y][x].fall === f) grid[y][x] = null;
+          falling = falling.filter((f) => { const keep = f.cells.every(([y, x]) => grid[y][x] && grid[y][x].fall === f); if (!keep) for (const [y, x] of f.cells) if (grid[y][x]) grid[y][x].fall = null; return keep; });
+          air = 100; dirty = true; P.mv = null; P.x = P.c; P.y = P.r; state = "play";
+        }
+      }
+      return;
+    }
+    if (state === "clear") { stateT -= dt; flags(); if (stateT <= 0) { depthTotal += LEN; level++; beginLevel(); } return; }
+    if (state !== "play") { flags(); return; }
+    air -= dt * diff.air * (2.6 + 0.15 * Math.min(10, level - 1));
+    if (air <= 25) { lowT -= dt; if (lowT <= 0) { sfx.low(); lowT = 1; } }
+    if (air <= 0) { air = 0; lose("aria"); flags(); return; }
+    updatePlayer(dt); flags();
+    if (state !== "play") return;
+    if (dirty) checkSupport();
+    updateFalling(dt);
+    if (dirty) checkSupport();
+    camY = clamp(camY + ((P.y - 3.2) * CS - camY) * Math.min(1, dt * 6), 0, (ROWS - 9) * CS);
+  }
+
+  // ---------- Drawing ----------
+  function drawBlock(b, x, y, r, c) {
+    if (b.k === GOAL) {
+      ctx.fillStyle = (c % 2) ? "#ffffff" : "#1a1a1a"; ctx.fillRect(x, y, CS, CS / 2); ctx.fillStyle = (c % 2) ? "#1a1a1a" : "#ffffff"; ctx.fillRect(x, y + CS / 2, CS, CS / 2);
+      return;
+    }
+    const shake = b.fall && b.fall.shake > 0 ? Math.sin(clock * 70) * 1.6 : 0;
+    x += shake;
+    if (b.k === X) {
+      ctx.fillStyle = "#7a4a2a"; ctx.fillRect(x + 1, y + 1, CS - 2, CS - 2);
+      ctx.fillStyle = "#a86a3a"; ctx.fillRect(x + 3, y + 3, CS - 6, CS - 6);
+      ctx.strokeStyle = "#4a2a1a"; ctx.lineWidth = 3; ctx.beginPath(); ctx.moveTo(x + 9, y + 9); ctx.lineTo(x + CS - 9, y + CS - 9); ctx.moveTo(x + CS - 9, y + 9); ctx.lineTo(x + 9, y + CS - 9); ctx.stroke();
+      ctx.strokeStyle = "#2a1a0a"; ctx.lineWidth = 1;
+      for (let i = 0; i < 5 - b.hp; i++) { ctx.beginPath(); ctx.moveTo(x + 4 + i * 6, y + 4); ctx.lineTo(x + 10 + i * 5, y + 16); ctx.lineTo(x + 6 + i * 6, y + 28); ctx.stroke(); }
+      return;
+    }
+    if (b.k === AIR) {
+      ctx.fillStyle = "#e8f4ff"; ctx.beginPath(); ctx.roundRect ? ctx.roundRect(x + 7, y + 4, CS - 14, CS - 8, 10) : ctx.rect(x + 7, y + 4, CS - 14, CS - 8); ctx.fill();
+      ctx.fillStyle = "#3a8aff"; ctx.fillRect(x + 7, y + CS / 2, CS - 14, CS / 2 - 6);
+      ctx.fillStyle = "#1a3a8a"; ctx.font = "900 11px system-ui"; ctx.textAlign = "center"; ctx.fillText("A", x + CS / 2, y + CS / 2 + 4);
+      return;
+    }
+    // coloured blocks merge into blobs with their same-coloured neighbours
+    const [c0, c1] = COLORS[b.k], same = (dr, dc) => { const n = cell(r + dr, c + dc); return n && n.k === b.k && (n.fall || null) === (b.fall || null); };
+    const u = same(-1, 0), d = same(1, 0), l = same(0, -1), rt = same(0, 1);
+    ctx.fillStyle = c0;
+    ctx.fillRect(x + (l ? 0 : 2), y + (u ? 0 : 2), CS - (l ? 0 : 2) - (rt ? 0 : 2), CS - (u ? 0 : 2) - (d ? 0 : 2));
+    ctx.fillStyle = c1;
+    if (!u) ctx.fillRect(x + (l ? 0 : 4), y + 4, CS - (l ? 0 : 4) - (rt ? 0 : 4), 3);
+    if (!l) ctx.fillRect(x + 4, y + (u ? 0 : 4), 3, CS - (u ? 0 : 4) - (d ? 0 : 4));
+  }
+  function drawDriller() {
+    const x = GX + P.x * CS + CS / 2, y = TOP + P.y * CS - camY + CS;
+    const f = P.face, buzz = P.drillT > 0 ? Math.sin(clock * 90) : 0;
+    // the drill
+    ctx.fillStyle = "#c8c8d8";
+    ctx.save(); ctx.translate(x, y - 15); ctx.rotate({ d: 0, r: -Math.PI / 2, l: Math.PI / 2, u: Math.PI }[f]);
+    ctx.beginPath(); ctx.moveTo(-5 + buzz, 6); ctx.lineTo(5 + buzz, 6); ctx.lineTo(buzz, 18); ctx.fill();
+    ctx.restore();
+    // body, helmet and visor
+    ctx.fillStyle = "#ff6aa8"; ctx.fillRect(x - 8, y - 24, 16, 18);
+    ctx.fillStyle = "#2a2a4a"; ctx.fillRect(x - 7, y - 7, 5, 7); ctx.fillRect(x + 2, y - 7, 5, 7);
+    ctx.fillStyle = "#ffffff"; ctx.beginPath(); ctx.arc(x, y - 27, 9, 0, TAU); ctx.fill();
+    ctx.fillStyle = "#3a8aff"; ctx.fillRect(x - 6 + (f === "l" ? -2 : f === "r" ? 2 : 0), y - 30, 12, 6);
+    ctx.fillStyle = "#ffd23a"; ctx.fillRect(x - 2, y - 38, 4, 4);
+  }
+  function drawHud() {
+    ctx.fillStyle = "rgba(14,20,36,0.96)"; ctx.fillRect(0, 0, W, TOP);
+    ctx.textBaseline = "middle"; ctx.textAlign = "left";
+    const x0 = touchMode ? 130 : 10;
+    ctx.fillStyle = "#ffffff"; ctx.font = "900 15px system-ui"; ctx.fillText(score.toLocaleString("it-IT"), x0, 14);
+    ctx.fillStyle = "#b8c8e0"; ctx.font = "700 9px system-ui"; ctx.fillText(`REC ${Math.max(bestCache, score).toLocaleString("it-IT")}`, x0 + 80, 9);
+    ctx.fillStyle = "#ff6aa8"; ctx.font = "900 10px system-ui"; ctx.fillText(`LIVELLO ${level}`, x0 + 80, 21);
+    ctx.fillStyle = "#ffffff"; ctx.font = "900 12px system-ui"; ctx.fillText(`${Math.max(0, P.best - 3)} / ${LEN} m`, x0 + 160, 14);
+    const lx = touchMode ? W - 60 : W - 12;
+    for (let i = 0; i < Math.min(lives - (state === "dead" ? 0 : 1), 6); i++) { ctx.fillStyle = "#ff6aa8"; ctx.beginPath(); ctx.arc(lx - 5 - i * 13, 14, 5, 0, TAU); ctx.fill(); }
+    ctx.textBaseline = "alphabetic";
+    // the air gauge beside the shaft
+    const ax = GX + COLS * CS + 22, ay = TOP + 30, ah = H - TOP - 70;
+    ctx.fillStyle = "rgba(255,255,255,0.12)"; ctx.fillRect(ax, ay, 22, ah);
+    ctx.fillStyle = air < 25 ? (Math.floor(clock * 6) % 2 ? "#ff3a3a" : "#ff8a3a") : air < 50 ? "#ffd23a" : "#3ab8ff";
+    ctx.fillRect(ax, ay + ah * (1 - air / 100), 22, ah * air / 100);
+    ctx.strokeStyle = "rgba(255,255,255,0.6)"; ctx.lineWidth = 1; ctx.strokeRect(ax, ay, 22, ah);
+    ctx.fillStyle = "#ffffff"; ctx.font = "900 10px system-ui"; ctx.textAlign = "center";
+    ctx.fillText("ARIA", ax + 11, ay - 8); ctx.fillText(`${Math.ceil(air)}%`, ax + 11, ay + ah + 14);
+    // the depth meter on the other side
+    const dx = GX - 44;
+    ctx.fillStyle = "rgba(255,255,255,0.12)"; ctx.fillRect(dx, ay, 10, ah);
+    ctx.fillStyle = "#ff6aa8"; ctx.fillRect(dx - 3, ay + ah * clamp((P.y - 3) / LEN, 0, 1) - 2, 16, 4);
+    ctx.fillStyle = "#ffffff"; ctx.fillText("GIÙ", dx + 5, ay - 8); ctx.fillText("🏁", dx + 5, ay + ah + 14);
+  }
+  function draw() {
+    ctx.setTransform(pxRatio, 0, 0, pxRatio, 0, 0);
+    if (!P) { buildLevel(); P = { r: 3, c: 4, x: 4, y: 3, face: "d", best: 3, drillT: 0 }; }
+    // the earth around the shaft gets darker the deeper you go
+    const k = clamp(P.y / ROWS, 0, 1);
+    const g = ctx.createLinearGradient(0, TOP, 0, H);
+    g.addColorStop(0, `hsl(${220 - k * 40},40%,${18 - k * 8}%)`); g.addColorStop(1, `hsl(${230 - k * 40},45%,${10 - k * 5}%)`);
+    ctx.fillStyle = g; ctx.fillRect(0, TOP, W, H - TOP);
+    ctx.fillStyle = "rgba(255,255,255,0.04)";
+    for (let i = 0; i < 30; i++) { const y = ((i * 71 - camY * 0.5) % (H - TOP) + (H - TOP)) % (H - TOP) + TOP; ctx.fillRect((i * 131) % W, y, 3, 3); }
+    // the sky above the first rows
+    if (camY < 4 * CS) { ctx.fillStyle = "#6ab8ff"; ctx.fillRect(GX, TOP, COLS * CS, 4 * CS - camY); }
+    ctx.fillStyle = "rgba(0,0,0,0.35)"; ctx.fillRect(GX, TOP, COLS * CS, H - TOP);
+    if (camY < 4 * CS) { ctx.fillStyle = "#8ad0ff"; ctx.fillRect(GX, TOP, COLS * CS, 4 * CS - camY); }
+    ctx.save(); ctx.beginPath(); ctx.rect(GX, TOP, COLS * CS, H - TOP); ctx.clip();
+    const r0 = Math.max(0, Math.floor(camY / CS) - 1), r1 = Math.min(ROWS - 1, r0 + 12);
+    for (let r = r0; r <= r1; r++) for (let c = 0; c < COLS; c++) {
+      const b = grid[r] && grid[r][c]; if (!b) continue;
+      drawBlock(b, GX + c * CS, TOP + r * CS - camY + (b.fall ? b.fall.off : 0), r, c);
+    }
+    if (state !== "menu" && (state !== "dead" || Math.floor(clock * 6) % 2)) drawDriller();
+    for (const p of parts) { ctx.globalAlpha = Math.max(0, 1 - p.t / p.life); ctx.fillStyle = p.c; ctx.fillRect(p.x - 2, TOP + p.y - camY - 2, 4, 4); }
+    ctx.globalAlpha = 1;
+    for (const p of popups) {
+      ctx.globalAlpha = Math.max(0, 1 - p.t / 1.2);
+      ctx.textAlign = "center"; ctx.font = "900 11px system-ui";
+      ctx.lineWidth = 3; ctx.strokeStyle = "#0e1424"; ctx.strokeText(p.text, p.x, TOP + p.y - camY); ctx.fillStyle = p.color; ctx.fillText(p.text, p.x, TOP + p.y - camY);
+    }
+    ctx.globalAlpha = 1;
+    ctx.restore();
+    ctx.strokeStyle = "rgba(255,255,255,0.25)"; ctx.lineWidth = 2; ctx.strokeRect(GX - 1, TOP - 2, COLS * CS + 2, H - TOP + 4);
+    if (state === "menu") return;
+    drawHud();
+    if (message) {
+      const life = message.long ? 2.8 : 2.2;
+      ctx.globalAlpha = Math.min(1, (life - message.t) * 2);
+      ctx.textAlign = "center"; ctx.font = "italic 900 22px system-ui"; ctx.fillStyle = "#ff6aa8";
+      ctx.lineWidth = 5; ctx.strokeStyle = "#0e1424"; ctx.strokeText(message.text, W / 2, 120); ctx.fillText(message.text, W / 2, 120);
+      if (message.sub) { ctx.font = "800 12px system-ui"; ctx.fillStyle = "#ffffff"; ctx.lineWidth = 4; ctx.strokeText(message.sub, W / 2, 139); ctx.fillText(message.sub, W / 2, 139); }
+      ctx.globalAlpha = 1;
+    }
+  }
+
+  // ---------- Loop ----------
+  const STEP = 1 / 120;
+  let last = performance.now(), acc = 0;
+  function frame(now) {
+    const dt = Math.min(0.1, (now - last) / 1000);
+    last = now;
+    if (isPlaying()) {
+      acc += dt;
+      while (acc >= STEP && isPlaying()) { update(STEP); acc -= STEP; }
+    } else { acc = 0; update(dt); }
+    draw();
+    requestAnimationFrame(frame);
+  }
+  syncControls();
+  showTitle();
+  requestAnimationFrame(frame);
+})();
+</script>
+<script src="../../shared/iniziali.js" data-record="trivella-best-" data-kind="score"></script>
+</body>
+</html>
