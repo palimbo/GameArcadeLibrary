@@ -14,6 +14,8 @@ Apri `index.html` nella cartella principale per la pagina di raccolta: mostra tu
 
 **Trofei:** ogni gioco ha tre trofei a punteggio: 🥉 **Bronzo** (la soglia in qualsiasi difficoltà), 🥈 **Argento** (a Normale o Difficile) e 🥇 **Oro** (a Difficile); nei giochi a tempo (*Corsa al Tramonto*, *Crystal Wars*) conta finire entro un certo tempo. I trofei si calcolano dai record salvati, quindi quelli già fatti si sbloccano da soli; quando un record nuovo ne conquista uno compare un avviso in alto. Le soglie sono nella schermata iniziale, in pausa e a fine partita di ogni gioco; in Sala Giochi ogni cabinato mostra i suoi trofei, in cima c'è il totale (su 351) con il numero di giochi giocati e il filtro **Già giocati** mostra solo i giochi con almeno un record. Le soglie vengono dalle partite di prova di un bot per circa un terzo dei giochi e sono stimate sulle regole di punteggio per gli altri (`shared/trofei.js`).
 
+**Cerca:** sotto i trofei c'è una casella per trovare subito un gioco scrivendo parte del nome o del genere (maiuscole e accenti non contano, più parole restringono la ricerca); con Invio si apre il primo gioco trovato, con Esc si svuota. Funziona insieme al filtro *Già giocati*.
+
 ## Giochi
 
 ### 🚀 Space Defender — `games/space-defender/index.html`
