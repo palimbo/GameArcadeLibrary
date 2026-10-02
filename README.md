@@ -4,7 +4,7 @@ Raccolta di giochi arcade per il browser. Ogni gioco è un singolo file HTML sen
 
 ## 🕹️ Sala Giochi — `index.html`
 
-Apri `index.html` nella cartella principale per la pagina di raccolta: mostra tutti i 122 giochi con copertina, genere, comandi e i tuoi record per ogni difficoltà (Facile, Normale, Difficile). Tocca «Gioca» per avviare un gioco; in ogni gioco il pulsante «← Sala Giochi» in alto a sinistra (visibile nei menu) riporta alla raccolta.
+Apri `index.html` nella cartella principale per la pagina di raccolta: mostra tutti i 123 giochi con copertina, genere, comandi e i tuoi record per ogni difficoltà (Facile, Normale, Difficile). Tocca «Gioca» per avviare un gioco; in ogni gioco il pulsante «← Sala Giochi» in alto a sinistra (visibile nei menu) riporta alla raccolta.
 
 **Iniziali del record:** quando batti un record compare la schermata da sala giochi per inserire le tue tre iniziali (frecce ↑ ↓ per cambiare lettera, ← → per spostarti, oppure scrivile direttamente; su telefono i tasti ▲ ▼ e OK). Le iniziali vengono salvate insieme al record e compaiono nei menu del gioco e nella Sala Giochi. Il codice è condiviso da tutti i giochi in `shared/iniziali.js`.
 
@@ -12,7 +12,7 @@ Apri `index.html` nella cartella principale per la pagina di raccolta: mostra tu
 
 **Comandi touch: levetta o frecce:** in cima alla Sala Giochi e nel menu di pausa di ogni gioco con la levetta si sceglie se usare la levetta analogica o una croce di frecce. Con le frecce il tocco viene agganciato a una delle otto direzioni (le quattro principali hanno la zona più larga, così le diagonali si prendono solo di proposito) e spinto fino in fondo; la scelta vale per tutti i giochi e resta memorizzata. Funziona anche nei giochi con due levette (la sfida a due di *Pugni di Fuoco*, muovi e spara di *Assalto Robotico*).
 
-**Trofei:** ogni gioco ha tre trofei a punteggio: 🥉 **Bronzo** (la soglia in qualsiasi difficoltà), 🥈 **Argento** (a Normale o Difficile) e 🥇 **Oro** (a Difficile); nei giochi a tempo (*Corsa al Tramonto*, *Crystal Wars*) conta finire entro un certo tempo. I trofei si calcolano dai record salvati, quindi quelli già fatti si sbloccano da soli; quando un record nuovo ne conquista uno compare un avviso in alto. Le soglie sono nella schermata iniziale, in pausa e a fine partita di ogni gioco; in Sala Giochi ogni cabinato mostra i suoi trofei, in cima c'è il totale (su 366) con il numero di giochi giocati e il filtro **Già giocati** mostra solo i giochi con almeno un record. Le soglie vengono dalle partite di prova di un bot per circa un terzo dei giochi e sono stimate sulle regole di punteggio per gli altri (`shared/trofei.js`).
+**Trofei:** ogni gioco ha tre trofei a punteggio: 🥉 **Bronzo** (la soglia in qualsiasi difficoltà), 🥈 **Argento** (a Normale o Difficile) e 🥇 **Oro** (a Difficile); nei giochi a tempo (*Corsa al Tramonto*, *Crystal Wars*) conta finire entro un certo tempo. I trofei si calcolano dai record salvati, quindi quelli già fatti si sbloccano da soli; quando un record nuovo ne conquista uno compare un avviso in alto. Le soglie sono nella schermata iniziale, in pausa e a fine partita di ogni gioco; in Sala Giochi ogni cabinato mostra i suoi trofei, in cima c'è il totale (su 369) con il numero di giochi giocati e il filtro **Già giocati** mostra solo i giochi con almeno un record. Le soglie vengono dalle partite di prova di un bot per circa un terzo dei giochi e sono stimate sulle regole di punteggio per gli altri (`shared/trofei.js`).
 
 **Generi:** ogni gioco appartiene a una o più famiglie di generi (🚀 Sparatutto, 🪜 Piattaforme, 🎯 Azione e riflessi, 🌀 Labirinti, ⚽ Sport, 🧩 Rompicapo, 🏁 Corse e veicoli, 🏰 Strategia e difesa, 🥊 Picchiaduro, 🗝️ Avventura, 🎵 Ritmo e musica): per esempio *Cripta degli Eroi* è avventura, sparatutto e labirinto. Le famiglie sono le etichette colorate di ogni cabinato. Sotto la ricerca una fila di pulsanti, con il numero di giochi di ciascuna famiglia, mostra solo quel genere (toccandolo di nuovo si torna a *Tutti i generi*); anche toccare un'etichetta su un cabinato filtra per quella famiglia. Un gioco con più famiglie compare in ognuna. La scelta resta memorizzata e si combina con la ricerca e con *Già giocati*. Su telefono la fila scorre di lato.
 
@@ -1890,3 +1890,20 @@ Baseball in battuta, visto da dietro casa base. Un campionato contro squadre sem
 - **Touch:** levetta (o frecce) per muovere la mazza, pulsante BATTI
 
 Per giocare apri `games/fuoricampo/index.html` nel browser.
+
+### 🗡️ Terra dei Mostri — `games/terra-dei-mostri/index.html`
+
+Avventura a piattaforme in stile *Wonder Boy in Monster Land*. Un giovane eroe con una spada di legno attraversa sei terre invase dai mostri (Prati di Smeraldo, Bosco Oscuro, Grotte di Cristallo, Palude Nebbiosa, Vulcano Ardente e Castello del Drago); dopo l'ultima si ricomincia con mostri più forti.
+
+- **Il viaggio:** si va verso destra camminando e saltando tra gradini, sporgenze e burroni; cadere in un burrone costa un cuore e si riparte dal bordo. Sulle sporgenze più alte ci sono monete
+- **I mostri:** lumache, serpenti che saltano, pipistrelli che si tuffano, goblin che lanciano lance (dalla seconda zona) e scheletri robusti (dalla terza). Tutti si sconfiggono con la spada (anche le lance si possono spezzare al volo) e lasciano monete
+- **La bottega:** a metà di ogni zona; ci si entra con su davanti alla porta. Spada (di ferro, d'argento, leggendaria: colpisce più forte), armatura (cotta, corazza, armatura d'oro: toglie danno), stivali (alati, di vento: più veloci e più alti), pozione (+2 cuori) e clessidra
+- **La clessidra:** in alto a destra; quando si svuota perdi un cuore e si rigira. In bottega si può comprarne una nuova, e il tempo avanzato al guardiano vale punti
+- **I guardiani:** in fondo a ogni zona, a turno il Ciclope (cammina verso di te e salta: all'atterraggio due onde corrono sul terreno, da saltare; colpito arretra un attimo) e il Drago (vola, sputa fuoco e ogni tanto scende in picchiata: è allora, o saltando, che si colpisce)
+- **Cuori:** a metà (💔); i danni vanno da mezzo cuore a un cuore e mezzo, l'armatura li riduce
+- **Punti:** 100 per ogni colpo che serve a battere un mostro, 10 per ogni moneta, 2.000 per zona a ogni guardiano, 1.000 per zona più il tempo avanzato a ogni zona liberata
+- **Difficoltà:** Facile (7 cuori, clessidra lenta, botteghe meno care), Normale (5 cuori), Difficile (4 cuori, clessidra veloce, mostri più robusti e svelti, burroni un po' più larghi); record separati per ogni difficoltà
+- **Comandi:** frecce o `A` `D` per camminare · `↑` o `W` davanti a una porta per entrare · `Spazio` o `J` per saltare · `X`, `K` o `Z` per la spada · in bottega `↑` `↓` per scegliere, `X` o `Invio` per comprare, `Spazio` per uscire · `P` pausa
+- **Touch:** levetta (o frecce) per camminare e per entrare e scegliere in bottega, pulsanti SALTA e SPADA
+
+Per giocare apri `games/terra-dei-mostri/index.html` nel browser.
