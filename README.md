@@ -4,7 +4,7 @@ Raccolta di giochi arcade per il browser. Ogni gioco è un singolo file HTML sen
 
 ## 🕹️ Sala Giochi — `index.html`
 
-Apri `index.html` nella cartella principale per la pagina di raccolta: mostra tutti i 135 giochi con copertina, genere, comandi e i tuoi record per ogni difficoltà (Facile, Normale, Difficile). Tocca «Gioca» per avviare un gioco; in ogni gioco il pulsante «← Sala Giochi» in alto a sinistra (visibile nei menu) riporta alla raccolta.
+Apri `index.html` nella cartella principale per la pagina di raccolta: mostra tutti i 136 giochi con copertina, genere, comandi e i tuoi record per ogni difficoltà (Facile, Normale, Difficile). Tocca «Gioca» per avviare un gioco; in ogni gioco il pulsante «← Sala Giochi» in alto a sinistra (visibile nei menu) riporta alla raccolta.
 
 **Iniziali del record:** quando batti un record compare la schermata da sala giochi per inserire le tue tre iniziali (frecce ↑ ↓ per cambiare lettera, ← → per spostarti, oppure scrivile direttamente; su telefono i tasti ▲ ▼ e OK). Le iniziali vengono salvate insieme al record e compaiono nei menu del gioco e nella Sala Giochi. Il codice è condiviso da tutti i giochi in `shared/iniziali.js`.
 
@@ -12,7 +12,7 @@ Apri `index.html` nella cartella principale per la pagina di raccolta: mostra tu
 
 **Comandi touch: levetta o frecce:** in cima alla Sala Giochi e nel menu di pausa di ogni gioco con la levetta si sceglie se usare la levetta analogica o una croce di frecce. Con le frecce il tocco viene agganciato a una delle otto direzioni (le quattro principali hanno la zona più larga, così le diagonali si prendono solo di proposito) e spinto fino in fondo; la scelta vale per tutti i giochi e resta memorizzata. Funziona anche nei giochi con due levette (la sfida a due di *Pugni di Fuoco*, muovi e spara di *Assalto Robotico*).
 
-**Trofei:** ogni gioco ha tre trofei a punteggio: 🥉 **Bronzo** (la soglia in qualsiasi difficoltà), 🥈 **Argento** (a Normale o Difficile) e 🥇 **Oro** (a Difficile); nei giochi a tempo (*Corsa al Tramonto*, *Crystal Wars*) conta finire entro un certo tempo. I trofei si calcolano dai record salvati, quindi quelli già fatti si sbloccano da soli; quando un record nuovo ne conquista uno compare un avviso in alto. Le soglie sono nella schermata iniziale, in pausa e a fine partita di ogni gioco; in Sala Giochi ogni cabinato mostra i suoi trofei, in cima c'è il totale (su 405) con il numero di giochi giocati e il filtro **Già giocati** mostra solo i giochi con almeno un record. Le soglie vengono dalle partite di prova di un bot per circa un terzo dei giochi e sono stimate sulle regole di punteggio per gli altri (`shared/trofei.js`).
+**Trofei:** ogni gioco ha tre trofei a punteggio: 🥉 **Bronzo** (la soglia in qualsiasi difficoltà), 🥈 **Argento** (a Normale o Difficile) e 🥇 **Oro** (a Difficile); nei giochi a tempo (*Corsa al Tramonto*, *Crystal Wars*) conta finire entro un certo tempo. I trofei si calcolano dai record salvati, quindi quelli già fatti si sbloccano da soli; quando un record nuovo ne conquista uno compare un avviso in alto. Le soglie sono nella schermata iniziale, in pausa e a fine partita di ogni gioco; in Sala Giochi ogni cabinato mostra i suoi trofei, in cima c'è il totale (su 408) con il numero di giochi giocati e il filtro **Già giocati** mostra solo i giochi con almeno un record. Le soglie vengono dalle partite di prova di un bot per circa un terzo dei giochi e sono stimate sulle regole di punteggio per gli altri (`shared/trofei.js`).
 
 **Generi:** ogni gioco appartiene a una o più famiglie di generi (🚀 Sparatutto, 🪜 Piattaforme, 🎯 Azione e riflessi, 🌀 Labirinti, ⚽ Sport, 🧩 Rompicapo, 🏁 Corse e veicoli, 🏰 Strategia e difesa, 🥊 Picchiaduro, 🗝️ Avventura, 🎵 Ritmo e musica): per esempio *Cripta degli Eroi* è avventura, sparatutto e labirinto. Le famiglie sono le etichette colorate di ogni cabinato. Sotto la ricerca una fila di pulsanti, con il numero di giochi di ciascuna famiglia, mostra solo quel genere (toccandolo di nuovo si torna a *Tutti i generi*); anche toccare un'etichetta su un cabinato filtra per quella famiglia. Un gioco con più famiglie compare in ognuna. La scelta resta memorizzata e si combina con la ricerca e con *Già giocati*. Su telefono la fila scorre di lato.
 
@@ -2096,3 +2096,18 @@ Sparatutto spaziale in stile *Moon Cresta*, con il razzo a tre stadi da aggancia
 - **Touch:** levetta e pulsante FUOCO
 
 Per giocare apri `games/cresta-lunare/index.html` nel browser.
+
+### 🧸 Pinza Fortunata — `games/pinza-fortunata/index.html`
+
+La macchina acchiappa-peluche delle sale giochi: una gru con la pinza sopra una vetrina piena di premi, che si ammucchiano, rotolano e si spingono a vicenda con una piccola fisica vera.
+
+- **Un gettone, un tentativo:** sposti la gru a destra e sinistra (hai pochi secondi) e premi PRENDI: la pinza scende fino al primo peluche che incontra, si chiude, risale e porta il premio allo scivolo a sinistra
+- **La presa:** più la pinza è centrata sul peluche, più stringe; i peluche grandi pesano di più. Con una presa debole il premio può scivolare durante la salita o il viaggio. Ogni tanto la macchina è generosa: PINZA FORTE!
+- **Colpi fortunati:** i premi spinti nello scivolo da un altro contano anche loro; due premi nello stesso tentativo valgono il doppio, tre il triplo
+- **I premi:** palla 80 · orsetto 100 · coniglio 150 · gatto 200 · stella 300 (piccola, scomoda da prendere) · drago 500 (pesante) · gettone d'oro +2 gettoni. Ogni 1.500 punti un gettone in regalo
+- **Le macchine:** quando restano pochi peluche la macchina è svuotata (1.000 punti per macchina e 2 gettoni) e ne arriva una nuova, con la pinza un po' più avara e i premi che valgono il 25% in più. La partita finisce quando finiscono i gettoni
+- **Difficoltà:** Facile (15 gettoni, pinza più forte, più tempo per mirare), Normale (10 gettoni), Difficile (8 gettoni, pinza più debole, meno tempo); record separati per ogni difficoltà
+- **Comandi:** frecce o `A` `D` per spostare la gru · `Spazio`, `J` o `↓` per calare la pinza · `P` pausa
+- **Touch:** levetta e pulsante PRENDI
+
+Per giocare apri `games/pinza-fortunata/index.html` nel browser.
