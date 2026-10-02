@@ -229,36 +229,63 @@
     for (let r = 3; r <= 4; r++) for (let c = 0; c <= 9; c++) list.push({ kind: "bee", row: r, col: c });
     return list;
   }
-  // entry paths: from the top in two files, or from the lower sides, curling into a loop
-  function entryPath(side, dir) {
-    if (side === 0) return [[W / 2 + 12 * dir, -20], [W / 2 + 12 * dir, 190], [W / 2 - 150 * dir, 330], [W / 2 - 100 * dir, 250]];
-    return [[side < 0 ? -20 : W + 20, 400], [side < 0 ? 100 : W - 100, 330], [side < 0 ? 210 : W - 210, 210], [side < 0 ? 150 : W - 150, 170]];
+  // entry paths, drawn for an entry from the left (m = 1); m = -1 mirrors them to the right.
+  // "top" comes down the middle in two files (m picks the file).
+  const PATHS = {
+    top: [[12, -20], [12, 190], [-150, 330], [-100, 250]],
+    low: [[-20, 400], [100, 330], [210, 210], [150, 170]],
+    corner: [[-20, 60], [130, 40], [270, 250], [205, 205]],
+    side: [[70, -20], [70, 220], [290, 300], [250, 210]],
+    mid: [[-20, 250], [150, 150], [300, 310], [215, 235]],
+    swoop: [[12, -20], [150, 170], [-140, 270], [0, 150]],
+  };
+  function entryPath(type, m) {
+    const centred = type === "top" || type === "swoop";
+    return PATHS[type].map(([x, y]) => [centred ? W / 2 + x * m : (m > 0 ? x : W - x), y]);
   }
+  // a different entry for each stage: five groups, each with its path and side ("2" = both files at once)
+  const PATTERNS = [
+    [["top", 2], ["low", 1], ["low", -1], ["low", 1], ["low", -1]],
+    [["corner", 1], ["corner", -1], ["side", 1], ["side", -1], ["top", 2]],
+    [["top", 2], ["mid", 1], ["mid", -1], ["corner", -1], ["corner", 1]],
+    [["side", -1], ["low", 1], ["swoop", 2], ["low", -1], ["side", 1]],
+    [["mid", 1], ["mid", -1], ["top", 2], ["corner", 1], ["low", -1]],
+    [["swoop", 2], ["side", 1], ["side", -1], ["mid", -1], ["mid", 1]],
+  ];
+  const BONUS = [
+    [["top", 2], ["low", 1], ["low", -1], ["top", 2], ["low", 1]],
+    [["swoop", 2], ["corner", 1], ["corner", -1], ["swoop", 2], ["mid", 1]],
+    [["side", 1], ["side", -1], ["mid", 1], ["mid", -1], ["swoop", 2]],
+  ];
   function buildStage() {
     foes = []; shots = []; eshots = []; spawnQ = [];
     challenge = isChallenge(stage);
     const all = slots();
     const take = (pred, n) => { const out = []; for (let i = 0; i < all.length && out.length < n; i++) if (pred(all[i])) out.push(all.splice(i--, 1)[0]); return out; };
     let groups;
+    // the pattern for this stage: it changes each stage and, on later rounds, may come mirrored
+    const bonusN = Math.floor((stage - 2) / 4), normalN = stage - (stage >= 2 ? Math.floor((stage - 2) / 4) + 1 : 0);
+    const plan = challenge ? BONUS[bonusN % BONUS.length] : PATTERNS[normalN % PATTERNS.length];
+    const flip = (challenge ? bonusN : normalN) >= (challenge ? BONUS : PATTERNS).length && Math.random() < 0.5 ? -1 : 1;
     if (!challenge) {
       groups = [
-        { side: 0, members: [...take((s) => s.kind === "bee", 4), ...take((s) => s.kind === "fly", 4)] },
-        { side: -1, members: [...take((s) => s.kind === "boss", 4), ...take((s) => s.kind === "fly", 4)] },
-        { side: 1, members: take((s) => s.kind === "fly", 8) },
-        { side: -1, members: take((s) => s.kind === "bee", 8) },
-        { side: 1, members: take((s) => s.kind === "bee", 8) },
+        [...take((s) => s.kind === "bee", 4), ...take((s) => s.kind === "fly", 4)],
+        [...take((s) => s.kind === "boss", 4), ...take((s) => s.kind === "fly", 4)],
+        take((s) => s.kind === "fly", 8),
+        take((s) => s.kind === "bee", 8),
+        take((s) => s.kind === "bee", 8),
       ];
     } else {
       // the bonus stage: forty aliens fly past and never shoot
-      const kinds = ["bee", "fly", "boss", "fly", "bee"];
-      groups = kinds.map((k, i) => ({ side: [0, -1, 1, 0, -1][i], members: Array.from({ length: 8 }, () => ({ kind: k })) }));
+      groups = ["bee", "fly", "boss", "fly", "bee"].map((k) => Array.from({ length: 8 }, () => ({ kind: k })));
       chHits = 0; chTotal = 40;
     }
     let delay = 0.8;
-    groups.forEach((g, gi) => {
-      g.members.forEach((m, i) => {
-        const dir = g.side === 0 ? (i % 2 ? -1 : 1) : 1;
-        spawnQ.push({ t: delay + Math.floor(i / (g.side === 0 ? 2 : 1)) * 0.16, kind: m.kind, row: m.row, col: m.col, path: entryPath(g.side, dir), loopDir: g.side === 0 ? dir : -g.side });
+    groups.forEach((members, gi) => {
+      const [type, side] = plan[gi];
+      members.forEach((m, i) => {
+        const both = side === 2, dir = (both ? (i % 2 ? -1 : 1) : side) * flip;
+        spawnQ.push({ t: delay + Math.floor(i / (both ? 2 : 1)) * 0.16, kind: m.kind, row: m.row, col: m.col, path: entryPath(type, dir), loopDir: dir });
       });
       delay += challenge ? 2.2 : 2.6 / Math.min(1.5, pace());
     });

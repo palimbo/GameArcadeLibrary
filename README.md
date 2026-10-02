@@ -782,6 +782,7 @@ Per giocare apri `games/guantoni-d-oro/index.html` nel browser.
 Sparatutto a formazione in stile *Galaga*: api, farfalle e comandanti alieni entrano a spirale, si schierano e poi si tuffano sulla tua nave.
 
 - **Formazione:** 40 alieni per livello. Api (50), farfalle (80) e comandanti verdi (due colpi, 150); abbattuti in picchiata valgono il doppio o più (comandante 400)
+- **Entrate:** ogni livello ha un suo schema d'ingresso: gli alieni arrivano in fila dall'alto al centro, dai lati in basso, dagli angoli in alto, a metà schermo o con un'ampia virata, in combinazioni diverse (sei schemi per i livelli normali e tre per i bonus). Dopo il primo giro gli schemi tornano, a volte rovesciati da destra a sinistra
 - **Picchiate:** gli alieni si staccano dallo schieramento con un mezzo giro e scendono su di te sparando; le farfalle zigzagano
 - **Raggio traente:** un comandante può scendere e aprire un raggio: se ci finisci dentro la tua nave viene catturata (perdi una vita) e resta sopra di lui
 - **Doppio caccia:** abbatti quel comandante mentre si tuffa e la nave prigioniera torna da te: voli con due caccia affiancati, spari il doppio (1.000 punti). Se lo colpisci mentre è in formazione, la nave è persa. Un colpo nemico fa perdere solo uno dei due caccia
