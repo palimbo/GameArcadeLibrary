@@ -4,7 +4,7 @@ Raccolta di giochi arcade per il browser. Ogni gioco è un singolo file HTML sen
 
 ## 🕹️ Sala Giochi — `index.html`
 
-Apri `index.html` nella cartella principale per la pagina di raccolta: mostra tutti i 116 giochi con copertina, genere, comandi e i tuoi record per ogni difficoltà (Facile, Normale, Difficile). Tocca «Gioca» per avviare un gioco; in ogni gioco il pulsante «← Sala Giochi» in alto a sinistra (visibile nei menu) riporta alla raccolta.
+Apri `index.html` nella cartella principale per la pagina di raccolta: mostra tutti i 117 giochi con copertina, genere, comandi e i tuoi record per ogni difficoltà (Facile, Normale, Difficile). Tocca «Gioca» per avviare un gioco; in ogni gioco il pulsante «← Sala Giochi» in alto a sinistra (visibile nei menu) riporta alla raccolta.
 
 **Iniziali del record:** quando batti un record compare la schermata da sala giochi per inserire le tue tre iniziali (frecce ↑ ↓ per cambiare lettera, ← → per spostarti, oppure scrivile direttamente; su telefono i tasti ▲ ▼ e OK). Le iniziali vengono salvate insieme al record e compaiono nei menu del gioco e nella Sala Giochi. Il codice è condiviso da tutti i giochi in `shared/iniziali.js`.
 
@@ -1790,3 +1790,18 @@ Arcade in stile *Circus*. Sotto il tendone ci sono due acrobati e un'altalena: u
 - **Touch:** levetta a destra e sinistra
 
 Per giocare apri `games/acrobati-in-altalena/index.html` nel browser.
+
+### ⛄ Palle di Neve — `games/palle-di-neve/index.html`
+
+Piattaforme a schermo fisso in stile *Snow Bros*. Un pupazzo di neve affronta i mostri di una torre piano per piano; per passare al piano successivo bisogna eliminarli tutti.
+
+- **La neve:** con NEVE il pupazzo tira un fiocco davanti a sé (10 punti). Ogni colpo copre il mostro di uno strato: con due strati resta bloccato e innocuo, con quattro diventa una palla di neve. Se lo lasci stare la neve si scioglie e torna a camminare (la palla lampeggia quando sta per sciogliersi)
+- **Il calcio:** davanti a una palla di neve, NEVE la calcia: rotola nella direzione in cui guardi, cade giù dai bordi dei piani, rimbalza sulle pareti e travolge ogni mostro che incontra (1.000, 2.000, 4.000, 8.000… per i mostri presi in fila). Sul piano terra si rompe alla prima parete (500). Ogni mostro lascia un frutto da raccogliere (200-800). Camminando contro una palla la spingi piano
+- **I mostri:** diavoletti che girano per i piani, rane che saltano al piano di sopra, draghetti che sputano fiamme lungo il loro piano. Anche loro scendono e salgono per inseguirti
+- **La zucca:** se resti troppo su un piano (la barra in alto) arriva una zucca invincibile che attraversa tutto e ti insegue. Finire in fretta dà un bonus
+- **Movimento:** si salta attraverso le piattaforme dal basso; con giù + SALTA si scende da una piattaforma. I piani si alternano fra cinque schemi
+- **Difficoltà:** Facile (5 vite, mostri lenti e uno in meno, la neve si scioglie piano), Normale (3 vite, un mostro in più), Difficile (3 vite, due mostri in più e più svelti, draghetti già dal secondo piano, la zucca arriva prima); record separati per ogni difficoltà. Vita extra a 30.000 punti e poi ogni 40.000
+- **Comandi:** frecce o `A` `D` per camminare · `Spazio`, `W`, `↑` o `J` per saltare (con `↓` scendi da una piattaforma) · `X`, `K` o `Z` per la neve e il calcio · `P` pausa
+- **Touch:** levetta (o frecce) per camminare, pulsanti SALTA e NEVE
+
+Per giocare apri `games/palle-di-neve/index.html` nel browser.

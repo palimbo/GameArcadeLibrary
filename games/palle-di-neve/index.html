@@ -1,0 +1,699 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no, viewport-fit=cover">
+<title>Palle di Neve</title>
+<style>
+  :root {
+    --bg: #1a1440;
+    --fg: #f4f6ee;
+    --muted: #a8c8d8;
+    --pink: #ff7ab8;
+    --yellow: #8ae05a;
+    --red: #ff4a3a;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  html, body {
+    height: 100%;
+    background: var(--bg);
+    color: var(--fg);
+    font-family: system-ui, -apple-system, "Segoe UI", sans-serif;
+    overflow: hidden;
+    user-select: none;
+    -webkit-user-select: none;
+    touch-action: none;
+  }
+  #wrap { position: fixed; inset: 0; display: flex; align-items: center; justify-content: center; }
+  canvas { display: block; touch-action: none; border-radius: 6px; box-shadow: 0 0 0 2px #1a3a5a, 0 10px 40px rgba(0,0,0,0.6); }
+  #pauseBtn {
+    position: fixed; z-index: 3; display: none; right: 10px; top: calc(10px + env(safe-area-inset-top, 0px));
+    font: 700 13px system-ui, sans-serif; color: var(--fg);
+    background: rgba(0, 0, 0, 0.6); border: 1px solid rgba(244, 246, 238, 0.35);
+    border-radius: 8px; padding: 6px 10px; cursor: pointer;
+  }
+  #touch {
+    position: fixed; z-index: 2; display: none; left: 12px; right: 12px;
+    bottom: calc(14px + env(safe-area-inset-bottom, 0px));
+    justify-content: space-between; align-items: flex-end; pointer-events: none;
+  }
+  /* thumb stick: walk; SALTA jumps, NEVE throws snow (and kicks a snowball) */
+  #touch .stick { position: relative; width: 136px; height: 136px; border-radius: 50%; pointer-events: auto; touch-action: none;
+    border: 2px solid rgba(255, 200, 58, 0.6); background: radial-gradient(circle, rgba(255,200,58,0.14), rgba(255,200,58,0.04)); }
+  #touch .stick .knob { position: absolute; left: 50%; top: 50%; width: 58px; height: 58px; margin: -29px 0 0 -29px; border-radius: 50%;
+    background: rgba(255, 200, 58, 0.45); border: 2px solid rgba(255,255,255,0.7); box-shadow: 0 4px 10px rgba(0,0,0,0.4); pointer-events: none; }
+  #touch .stick .ring { position: absolute; inset: 10px; border-radius: 50%; border: 1px dashed rgba(244,246,238,0.25); pointer-events: none; }
+  #touch .jump { width: 96px; height: 96px; border-radius: 50%; pointer-events: auto; touch-action: none; color: var(--fg);
+    font: 800 13px system-ui, sans-serif; letter-spacing: 1px; border: 2px solid rgba(122, 228, 255, 0.9); background: rgba(122, 228, 255, 0.22); }
+  #touch .jump.on { background: rgba(122, 228, 255, 0.55); }
+  #touch.small .stick { width: 112px; height: 112px; }
+  #touch.small .stick .knob { width: 48px; height: 48px; margin: -24px 0 0 -24px; }
+  #touch.small .jump { width: 80px; height: 80px; font-size: 11px; }
+  #touch .btns { display: flex; flex-direction: column; align-items: center; gap: 10px; pointer-events: none; }
+  #touch .jump.axe { width: 64px; height: 64px; font-size: 11px; border-color: rgba(255, 244, 200, 0.9); background: rgba(255, 244, 200, 0.16); }
+  #touch .jump.axe.on { background: rgba(255, 244, 200, 0.5); }
+  #touch.small .jump.axe { width: 54px; height: 54px; font-size: 10px; }
+  #overlay {
+    position: fixed; inset: 0; z-index: 5;
+    display: flex; flex-direction: column; align-items: center; justify-content: flex-start;
+    gap: 14px; padding: 16px; text-align: center; overflow-y: auto;
+    background: rgba(26, 20, 64, 0.93);
+  }
+  #overlay > :first-child { margin-top: auto; }
+  #overlay > :last-child { margin-bottom: auto; }
+  #overlay.hidden { display: none; }
+  #homeLink {
+    position: fixed; top: calc(10px + env(safe-area-inset-top, 0px)); left: 10px; z-index: 6;
+    font: 600 13px/1 system-ui, sans-serif; color: #fff; text-decoration: none;
+    padding: 8px 12px; border-radius: 999px; background: rgba(0,0,0,.55);
+    border: 1px solid rgba(255,255,255,.25);
+  }
+  #homeLink:hover { background: rgba(0,0,0,.8); }
+  #overlay.hidden ~ #homeLink { display: none; }
+  @media (max-width: 700px) { #overlay { padding-top: calc(52px + env(safe-area-inset-top, 0px)); } }
+  #overlay h1 { font-size: clamp(32px, 10vw, 58px); font-weight: 900; font-style: italic; letter-spacing: 1px; color: var(--pink);
+    text-shadow: 3px 3px 0 #6a1a4a, 0 0 22px rgba(255,122,184,0.35); }
+  #overlay h2 { font-size: clamp(26px, 7vw, 42px); font-weight: 900; letter-spacing: 2px; color: var(--pink); }
+  #overlay h2.lose { color: var(--red); }
+  #overlay p { max-width: 540px; font-size: clamp(13px, 3.4vw, 16px); line-height: 1.55; }
+  #overlay p.muted { color: var(--muted); }
+  #overlay .pts { display: grid; grid-template-columns: repeat(2, auto); gap: 4px 18px; font-size: 13px; color: var(--muted); text-align: left; max-width: 560px; }
+  #overlay .pts b { color: var(--fg); }
+  #overlay .diff { display: flex; gap: 10px; flex-wrap: wrap; justify-content: center; }
+  #overlay button {
+    font: 800 15px system-ui, sans-serif; letter-spacing: 1.5px; color: var(--fg);
+    background: transparent; cursor: pointer;
+    border: 2px solid rgba(244,246,238,0.3); border-radius: 10px; padding: 9px 16px;
+  }
+  #overlay .diff button.on { border-color: var(--c); color: var(--c); box-shadow: 0 0 12px var(--c); }
+  #overlay button.start { border-color: var(--pink); color: #2e0418; background: var(--pink); padding: 11px 30px; box-shadow: 0 4px 0 #b83a7a; }
+  @media (max-height: 560px) {
+    #overlay { gap: 8px; }
+    #overlay h1 { font-size: 30px; }
+    #overlay p { font-size: 13px; line-height: 1.4; }
+    #overlay .help, #overlay .pts { display: none; }
+  }
+</style>
+</head>
+<body>
+<div id="wrap"><canvas id="game"></canvas></div>
+<div id="touch">
+  <div class="stick" aria-label="Levetta"><div class="ring"></div><div class="knob"></div></div>
+  <div class="btns"><button type="button" class="jump axe" aria-label="Neve">NEVE</button><button type="button" class="jump hop" aria-label="Salta">SALTA</button></div>
+</div>
+<button id="pauseBtn" type="button" aria-label="Pausa">❚❚</button>
+<div id="overlay"></div>
+<a id="homeLink" href="../../index.html">← Sala Giochi</a>
+
+
+<script>
+(() => {
+  "use strict";
+
+  const W = 640, H = 360, TAU = Math.PI * 2, TOP = 28;
+  const GY = 338, WX0 = 10, WX1 = W - 10, PW = 7, PH = 18, ER = 9, BR = 11;
+  const GRAV = 1000, JH = 74, JV = Math.sqrt(2 * GRAV * JH), WALK = 112;
+  const SHOT_V = 270, SHOT_LIFE = 0.42, KICK_V = 270;
+  // platform layouts: [x0, x1, y]; the floor is always there
+  const LAYOUTS = [
+    [[60, 260, 278], [380, 580, 278], [160, 480, 218], [40, 236, 158], [404, 600, 158], [200, 440, 98]],
+    [[40, 280, 278], [360, 600, 278], [120, 520, 218], [40, 276, 158], [364, 600, 158], [240, 400, 98], [40, 140, 98], [500, 600, 98]],
+    [[100, 540, 278], [40, 200, 218], [440, 600, 218], [160, 480, 158], [40, 240, 98], [400, 600, 98]],
+    [[40, 280, 278], [360, 600, 278], [40, 160, 218], [240, 400, 218], [480, 600, 218], [100, 300, 158], [340, 540, 158], [200, 440, 98]],
+    [[60, 220, 278], [260, 420, 278], [460, 600, 278], [140, 300, 218], [340, 500, 218], [60, 276, 158], [364, 580, 158], [240, 400, 98]],
+  ];
+  const KINDS = {
+    diavolo: { col: "#ff4a5a", col2: "#a81a2a", pts: 0, sp: 46, name: "UN DIAVOLETTO" },
+    rana: { col: "#5ad05a", col2: "#2a7a2a", pts: 0, sp: 40, name: "UNA RANA SALTERINA" },
+    drago: { col: "#ff9a2a", col2: "#a8501a", pts: 0, sp: 36, name: "UN DRAGHETTO" },
+  };
+  const FRUITS = [["#ff3a3a", 200], ["#ffd23a", 300], ["#c87aff", 500], ["#5ad0ff", 800]];
+
+  const DIFFICULTIES = {
+    facile:    { label: "FACILE",    color: "#7ed87a", desc: "5 vite · mostri lenti e meno numerosi, la neve si scioglie piano", lives: 5, speed: 0.6, melt: 1.8, hurry: 70, fewer: 1 },
+    normale:   { label: "NORMALE",   color: "#ff7ab8", desc: "3 vite", lives: 3, speed: 1.25, melt: 0.8, hurry: 38, fewer: -1 },
+    difficile: { label: "DIFFICILE", color: "#ff5a5a", desc: "3 vite · più mostri e più svelti, la neve si scioglie presto, la zucca arriva prima", lives: 3, speed: 1.5, melt: 0.55, hurry: 30, fewer: -2 },
+  };
+  const DIFF_IDS = Object.keys(DIFFICULTIES);
+  const DIFF_KEY = "neve-difficulty";
+  const bestKey = (id) => `neve-best-${id}`;
+  function store(k, v) { try { localStorage.setItem(k, v); } catch { /* ignore */ } }
+  function load(k) { try { return localStorage.getItem(k); } catch { return null; } }
+  const rnd = (a, b) => a + Math.random() * (b - a);
+  const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
+  const pick = (arr) => arr[Math.floor(Math.random() * arr.length)];
+
+  // ---------- Canvas ----------
+  const canvas = document.getElementById("game");
+  const ctx = canvas.getContext("2d");
+  const wrapEl = document.getElementById("wrap");
+  const overlay = document.getElementById("overlay");
+  const touchEl = document.getElementById("touch");
+  const pauseBtn = document.getElementById("pauseBtn");
+  let pxRatio = 1, touchMode = !!(window.matchMedia && matchMedia("(pointer: coarse)").matches);
+  function resize() {
+    const portrait = window.innerHeight > window.innerWidth;
+    const showTouch = touchMode && isPlaying();
+    touchEl.style.display = showTouch ? "flex" : "none";
+    touchEl.classList.toggle("small", !portrait && window.innerHeight < 480);
+    wrapEl.style.paddingBottom = showTouch && portrait ? "calc(170px + env(safe-area-inset-bottom, 0px))" : "0";
+    let availW = window.innerWidth - 8, availH = window.innerHeight - 8;
+    if (showTouch && portrait) availH -= 170;
+    if (showTouch && !portrait) {
+      const side = Math.max(...[...touchEl.children].map((el) => el.offsetWidth)) + 20;
+      if (window.innerWidth - 2 * side > 200) availW = window.innerWidth - 2 * side;
+    }
+    const s = Math.max(0.2, Math.min(availW / W, availH / H));
+    pxRatio = Math.min(3, s * (window.devicePixelRatio || 1));
+    canvas.style.width = W * s + "px";
+    canvas.style.height = H * s + "px";
+    canvas.width = Math.round(W * pxRatio);
+    canvas.height = Math.round(H * pxRatio);
+  }
+  window.addEventListener("resize", () => syncControls());
+
+  // ---------- Audio ----------
+  let audioCtx = null;
+  function beep(freq, dur, type = "square", vol = 0.04, slide = 0, delay = 0) {
+    if (!audioCtx) return;
+    const t = audioCtx.currentTime + delay;
+    const osc = audioCtx.createOscillator(), gain = audioCtx.createGain();
+    osc.type = type;
+    osc.frequency.setValueAtTime(freq, t);
+    if (slide) osc.frequency.exponentialRampToValueAtTime(Math.max(20, freq + slide), t + dur);
+    gain.gain.setValueAtTime(vol, t);
+    gain.gain.exponentialRampToValueAtTime(0.0001, t + dur);
+    osc.connect(gain).connect(audioCtx.destination);
+    osc.start(t); osc.stop(t + dur + 0.02);
+  }
+  function noise(dur, vol, freq) {
+    if (!audioCtx) return;
+    const len = Math.floor(audioCtx.sampleRate * dur), buf = audioCtx.createBuffer(1, len, audioCtx.sampleRate), d = buf.getChannelData(0);
+    for (let i = 0; i < len; i++) d[i] = (Math.random() * 2 - 1) * (1 - i / len);
+    const src = audioCtx.createBufferSource(), f = audioCtx.createBiquadFilter(), g = audioCtx.createGain();
+    src.buffer = buf; f.type = "bandpass"; f.frequency.value = freq; g.gain.value = vol;
+    src.connect(f).connect(g).connect(audioCtx.destination); src.start();
+  }
+  const arp = (notes, gap, d, type = "square", vol = 0.04) => notes.forEach((f, i) => beep(f, d, type, vol, 0, i * gap));
+  let sfxN = 0;
+  const lim = (fn) => (...a) => { if (sfxN++ < 6) fn(...a); };
+  const sfx = {
+    throw: lim(() => noise(0.06, 0.05, 3500)),
+    snow: lim((n) => beep(500 + n * 120, 0.06, "sine", 0.04, 200)),
+    ball: lim(() => arp([784, 1047], 0.05, 0.08, "sine", 0.045)),
+    kick: lim(() => { noise(0.08, 0.1, 900); beep(220, 0.12, "square", 0.04, 300); }),
+    bounce: lim(() => beep(180, 0.06, "triangle", 0.04)),
+    smash: lim((n) => { noise(0.15, 0.12, 1200); beep(600 + n * 150, 0.1, "square", 0.04, 400); }),
+    shatter: lim(() => { noise(0.3, 0.14, 2500); }),
+    jump: lim(() => beep(300, 0.1, "square", 0.025, 350)),
+    fruit: lim(() => arp([880, 1175], 0.05, 0.08, "square", 0.04)),
+    fire: lim(() => noise(0.2, 0.06, 500)),
+    hurry: () => arp([440, 415, 392, 370], 0.1, 0.12, "sawtooth", 0.035),
+    clear: () => arp([523, 659, 784, 1047, 784, 1047, 1319], 0.08, 0.14, "square", 0.045),
+    die: () => { noise(0.3, 0.14, 500); for (let i = 0; i < 8; i++) beep(800 - i * 80, 0.1, "triangle", 0.04, 0, i * 0.06); },
+    over: () => arp([523, 466, 415, 392, 330, 262], 0.15, 0.24, "triangle", 0.05),
+  };
+
+  // ---------- State ----------
+  let difficulty = DIFFICULTIES[load(DIFF_KEY)] ? load(DIFF_KEY) : "normale";
+  let diff = DIFFICULTIES[difficulty];
+  let state = "menu", menu = null, pausedFrom = null, stateT = 0, clock = 0;
+  let score = 0, lives = 3, level = 1, bestCache = 0, nextLife = 30000;
+  let plats = [], P = null, foes = [], shots = [], fires = [], fruits = [], parts = [], popups = [], message = null;
+  let ghost = null, levelT = 0, lastBy = "";
+  let jumpPressed = false, snowPressed = false;
+  const keys = { left: false, right: false, up: false, down: false };
+  const stick = { x: 0, y: 0 };
+  const flakes = Array.from({ length: 60 }, (_, i) => ({ x: (i * 131) % W, y: (i * 71) % H, s: 0.5 + (i % 3) * 0.4 }));
+
+  // ---------- Platforms ----------
+  // the surface an object standing at (x, y) with half-width hw rests on, or null
+  function surfaceAt(x, hw, y0, y1, skip) {
+    // returns the highest top crossed going down from y0 to y1
+    let best = null;
+    if (y0 <= GY && y1 >= GY) best = GY;
+    for (const p of plats) {
+      if (p === skip) continue;
+      if (x + hw > p[0] && x - hw < p[1] && y0 <= p[2] && y1 >= p[2] && (best === null || p[2] < best)) best = p[2];
+    }
+    return best;
+  }
+  function platUnder(x, hw, y) {
+    if (Math.abs(y - GY) < 0.5) return "floor";
+    for (const p of plats) if (Math.abs(y - p[2]) < 0.5 && x + hw > p[0] && x - hw < p[1]) return p;
+    return null;
+  }
+
+  // ---------- Flow ----------
+  const isPlaying = () => ["intro", "play", "dead", "clear"].includes(state);
+  function startGame() {
+    if (!audioCtx) { try { audioCtx = new (window.AudioContext || window.webkitAudioContext)(); } catch { audioCtx = null; } }
+    if (audioCtx && audioCtx.state === "suspended") audioCtx.resume();
+    score = 0; lives = diff.lives; level = 1; nextLife = 30000;
+    bestCache = parseInt(load(bestKey(difficulty)), 10) || 0;
+    beginLevel();
+    menu = null;
+    overlay.classList.add("hidden");
+    syncControls();
+    last = performance.now();
+  }
+  function beginLevel() {
+    plats = LAYOUTS[(level - 1) % LAYOUTS.length].map((p) => p.slice());
+    foes = []; shots = []; fires = []; fruits = []; ghost = null; levelT = 0;
+    const n = Math.min(8, 3 + Math.floor(level / 2)) - (diff.fewer || 0);
+    const ups = plats.filter((p) => p[2] <= 218).sort(() => Math.random() - 0.5);
+    for (let i = 0; i < n; i++) {
+      const p = ups[i % ups.length];
+      const kind = level >= (diff.fewer < 0 ? 2 : 3) && i % 3 === 2 ? "drago" : level >= 2 && i % 2 === 1 ? "rana" : "diavolo";
+      foes.push(makeFoe(kind, rnd(p[0] + 12, p[1] - 12), p[2]));
+    }
+    spawnPlayer();
+    message = { text: `PIANO ${level}`, sub: "copri di neve i mostri e calcia le palle di neve!", t: 0 };
+    state = "intro"; stateT = 1.6;
+  }
+  function makeFoe(kind, x, y) {
+    return { kind, x, y, vx: 0, vy: 0, dir: Math.random() < 0.5 ? -1 : 1, air: false, layers: 0, meltT: 0, state: "walk", t: rnd(1, 3), cd: rnd(2, 4), walk: 0, drop: null };
+  }
+  function spawnPlayer() { P = { x: W / 2, y: GY, vy: 0, air: false, face: 1, walk: 0, safe: 2, cd: 0, drop: null, dropT: 0, kickT: 0 }; }
+  function addScore(n, x, y, color = "#ffffff", text) {
+    score += n;
+    if (score >= nextLife) { lives++; nextLife += 40000; arp([523, 659, 784, 1047, 1319], 0.07, 0.12); popups.push({ x: W / 2, y: 70, text: "VITA EXTRA!", color: "#7ed87a", t: 0 }); }
+    if (x !== undefined) popups.push({ x, y, text: text || String(n), color, t: 0 });
+  }
+  function burst(x, y, c, n = 12, sp = 110, life = 0.6) {
+    for (let k = 0; k < n; k++) { const a = Math.random() * TAU, s = sp * rnd(0.3, 1); parts.push({ x, y, vx: Math.cos(a) * s, vy: Math.sin(a) * s - 30, t: 0, life: life * rnd(0.6, 1.2), c }); }
+  }
+  function die(by) {
+    if (state !== "play" || P.safe > 0) return;
+    if (window.__deaths) window.__deaths.push([level, by]);
+    if (window.__god) return;
+    lives--; lastBy = by; sfx.die(); burst(P.x, P.y - 9, "#ffffff", 20, 110, 0.6);
+    state = "dead"; stateT = 2;
+  }
+  function gameOver() {
+    state = "over";
+    const prev = parseInt(load(bestKey(difficulty)), 10) || 0;
+    const record = score > prev;
+    if (record) store(bestKey(difficulty), String(score));
+    sfx.over();
+    menu = () => showOverlay(
+      `<h2 class="lose">${lives <= 0 ? "VITE FINITE!" : "PARTITA FINITA"}</h2>
+       <p>Punteggio: <b>${score.toLocaleString("it-IT")}</b> · piano ${level} · ${diff.label}</p>
+       ${record ? "<p style='color:var(--pink)'>★ NUOVO RECORD! ★</p>" : ""}
+       ${difficultyHTML()}
+       <button class="start" data-start>GIOCA ANCORA</button>`
+    );
+    menu();
+    syncControls();
+  }
+  function togglePause() {
+    if (isPlaying()) {
+      pausedFrom = state; state = "paused";
+      showOverlay(`<h2>PAUSA</h2><button class="start" data-resume>CONTINUA</button><p class="muted">Premi P per continuare</p>`);
+    } else if (state === "paused") {
+      state = pausedFrom; overlay.classList.add("hidden"); last = performance.now();
+    }
+    syncControls();
+  }
+  // the pause menu can end the game (shared/iniziali.js): it ends here the usual way, saving the record
+  window.addEventListener("sala:termina", () => { if (state !== "paused") return; state = pausedFrom; overlay.classList.add("hidden"); gameOver(); syncControls(); });
+  function syncControls() {
+    pauseBtn.style.display = isPlaying() && touchMode ? "block" : "none";
+    resize();
+  }
+  pauseBtn.addEventListener("click", () => togglePause());
+  function showOverlay(html) { overlay.innerHTML = html; overlay.classList.remove("hidden"); }
+  function difficultyHTML() {
+    const buttons = DIFF_IDS.map((id) => {
+      const d = DIFFICULTIES[id];
+      return `<button type="button" data-diff="${id}" class="${id === difficulty ? "on" : ""}" style="--c:${d.color}">${d.label}</button>`;
+    }).join("");
+    const best = parseInt(load(bestKey(difficulty)), 10);
+    return `<div class="diff">${buttons}</div><p class="muted">${diff.desc}${best ? ` · Record: ${best.toLocaleString("it-IT")}` : ""}</p>`;
+  }
+  function setDifficulty(id) { if (!DIFFICULTIES[id]) return; difficulty = id; diff = DIFFICULTIES[id]; store(DIFF_KEY, id); if (menu) menu(); }
+  function showTitle() {
+    menu = showTitle;
+    showOverlay(
+      `<h1>PALLE DI NEVE</h1>
+       <p>Un pupazzo di neve contro i mostri della torre! Tira fiocchi di neve ai mostri finché non diventano una palla di neve, poi dagli un calcio: la palla rotola giù per i piani travolgendo tutti i mostri che incontra. Più ne prende in fila, più punti fai. Libera ogni piano prima che arrivi la zucca!</p>
+       <div class="pts">
+         <span><b>Neve</b></span><span>4 colpi trasformano un mostro in una palla · se lo lasci stare la neve si scioglie</span>
+         <span><b>Calcio</b></span><span>palla rotta 500 · mostri travolti 1.000, 2.000, 4.000, 8.000… · un frutto per ogni mostro</span>
+         <span><b>Mostri</b></span><span>diavoletti · rane che saltano ai piani di sopra · draghetti che sputano fuoco</span>
+       </div>
+       ${touchMode
+         ? `<p class="muted help">Levetta per camminare (giù + SALTA per scendere da un piano) · SALTA · NEVE per tirare la neve o calciare una palla</p>`
+         : `<p class="muted help">Frecce o A D per camminare · SPAZIO, W, ↑ o J per saltare (con ↓ scendi da un piano) · X, K o Z per la neve e il calcio · P pausa</p>`}
+       ${difficultyHTML()}
+       <button class="start" data-start>NEVICA!</button>`
+    );
+  }
+  overlay.addEventListener("click", (e) => {
+    const d = e.target.closest("[data-diff]");
+    if (d) { setDifficulty(d.dataset.diff); return; }
+    if (e.target.closest("[data-start]")) startGame();
+    if (e.target.closest("[data-resume]")) togglePause();
+  });
+
+  // ---------- Input ----------
+  const KEYMAP = { arrowleft: "left", a: "left", arrowright: "right", d: "right", arrowdown: "down", s: "down" };
+  const JUMPKEYS = [" ", "w", "arrowup", "j"], SNOWKEYS = ["x", "k", "z"];
+  window.addEventListener("keydown", (e) => {
+    const k = e.key.toLowerCase();
+    if ([" ", "arrowup", "arrowdown", "arrowleft", "arrowright"].includes(k)) e.preventDefault();
+    if (state === "menu" || state === "over") {
+      if (e.key === "Enter") startGame();
+      else if (["1", "2", "3"].includes(k)) setDifficulty(DIFF_IDS[+k - 1]);
+      return;
+    }
+    if (k === "p" || k === "escape") { if (!e.repeat) togglePause(); return; }
+    if (state === "paused") { if (e.key === "Enter") togglePause(); return; }
+    if (JUMPKEYS.includes(k) && !e.repeat) jumpPressed = true;
+    if (SNOWKEYS.includes(k) && !e.repeat) snowPressed = true;
+    if (KEYMAP[k]) keys[KEYMAP[k]] = true;
+  });
+  window.addEventListener("keyup", (e) => { const m = KEYMAP[e.key.toLowerCase()]; if (m) keys[m] = false; });
+  window.addEventListener("blur", () => { for (const k in keys) keys[k] = false; stick.x = stick.y = 0; if (isPlaying()) togglePause(); });
+  for (const [sel, fn] of [[".hop", () => { jumpPressed = true; }], [".axe", () => { snowPressed = true; }]]) {
+    const b = touchEl.querySelector(sel);
+    b.addEventListener("pointerdown", (e) => { e.preventDefault(); fn(); b.classList.add("on"); });
+    for (const ev of ["pointerup", "pointercancel", "pointerleave"]) b.addEventListener(ev, () => b.classList.remove("on"));
+  }
+  const stickEl = touchEl.querySelector(".stick"), knob = stickEl.querySelector(".knob");
+  let stickId = null;
+  function stickAt(e) {
+    const r = stickEl.getBoundingClientRect(), max = r.width / 2 - 14;
+    let dx = e.clientX - (r.left + r.width / 2), dy = e.clientY - (r.top + r.height / 2);
+    const len = Math.hypot(dx, dy);
+    if (len > max) { dx *= max / len; dy *= max / len; }
+    knob.style.transform = `translate(${dx}px, ${dy}px)`;
+    const f = (v) => { const a = Math.abs(v) / max; return a < 0.18 ? 0 : Math.sign(v) * Math.min(1, (a - 0.18) / 0.55); };
+    stick.x = f(dx); stick.y = f(dy);
+  }
+  const stickEnd = (e) => { if (e.pointerId !== stickId) return; stickId = null; knob.style.transform = ""; stick.x = stick.y = 0; };
+  stickEl.addEventListener("pointerdown", (e) => { e.preventDefault(); stickId = e.pointerId; try { stickEl.setPointerCapture(e.pointerId); } catch { /* ignore */ } stickAt(e); });
+  stickEl.addEventListener("pointermove", (e) => { if (e.pointerId === stickId) stickAt(e); });
+  for (const ev of ["pointerup", "pointercancel", "lostpointercapture"]) stickEl.addEventListener(ev, stickEnd);
+  window.addEventListener("pointerdown", (e) => { if (e.pointerType === "touch" && !touchMode) { touchMode = true; syncControls(); if (menu) menu(); } }, true);
+
+  // ---------- Update ----------
+  // gravity and landing, shared by the snowman, the monsters, the snowballs and the fruit
+  function fall(o, hw, dt) {
+    const y0 = o.y;
+    o.vy = Math.min(o.vy + GRAV * dt, 700); o.y += o.vy * dt;
+    if (o.vy > 0) {
+      const s = surfaceAt(o.x, hw, y0, o.y, o.dropT > 0 ? o.drop : null);
+      if (s !== null) { o.y = s; o.vy = 0; o.air = false; return true; }
+    }
+    return false;
+  }
+  const isBall = (f) => f.layers >= 4 && f.state !== "roll";
+  function updatePlayer(dt) {
+    P.safe = Math.max(0, P.safe - dt); P.cd -= dt; P.dropT -= dt; P.kickT -= dt;
+    const ix = clamp(stick.x + (keys.right ? 1 : 0) - (keys.left ? 1 : 0), -1, 1);
+    const down = stick.y > 0.5 || keys.down;
+    if (Math.abs(ix) > 0.15) { P.face = Math.sign(ix); }
+    let nx = clamp(P.x + (Math.abs(ix) > 0.15 ? Math.sign(ix) * WALK * Math.min(1, Math.abs(ix) * 1.4) : 0) * dt, WX0 + PW, WX1 - PW);
+    // walking into a snowball pushes it along
+    for (const f of foes) if (isBall(f) && Math.abs(f.y - P.y) < 6 && Math.abs(f.x - nx) < PW + BR && Math.sign(f.x - P.x) === Math.sign(nx - P.x)) {
+      f.x = clamp(f.x + (nx - P.x) * 0.6, WX0 + BR, WX1 - BR); nx = f.x - Math.sign(nx - P.x) * (PW + BR);
+    }
+    if (Math.abs(nx - P.x) > 0.01) P.walk += dt * 12;
+    P.x = nx;
+    if (jumpPressed && !P.air) {
+      const under = platUnder(P.x, PW, P.y);
+      if (down && under && under !== "floor") { P.drop = under; P.dropT = 0.25; P.air = true; }
+      else { P.vy = -JV; P.air = true; sfx.jump(); }
+    }
+    jumpPressed = false;
+    if (snowPressed && P.cd <= 0) {
+      P.cd = 0.22;
+      // a snowball right in front gets a kick, otherwise snow flies
+      const ball = foes.find((f) => isBall(f) && Math.abs(f.y - P.y) < 10 && Math.abs(f.x - P.x) < PW + BR + 10 && Math.sign(f.x - P.x || P.face) === P.face);
+      if (ball) {
+        ball.state = "roll"; ball.vx = P.face * KICK_V; ball.chain = 0; ball.bounces = 0; ball.vy = -40; ball.air = true; P.kickT = 0.2; sfx.kick();
+      } else { shots.push({ x: P.x + P.face * 8, y: P.y - 12, vx: P.face * SHOT_V, vy: -30, life: SHOT_LIFE }); sfx.throw(); }
+    }
+    snowPressed = false;
+    if (P.air || !platUnder(P.x, PW, P.y)) { P.air = true; fall(P, PW, dt); }
+  }
+  function updateFoes(dt) {
+    const sp = diff.speed * Math.min(1.5, 1 + 0.05 * (level - 1));
+    for (const f of foes) {
+      const K = KINDS[f.kind];
+      f.walk += dt * 10; f.dropT = (f.dropT || 0) - dt;
+      if (f.state === "roll") { updateBall(f, dt); continue; }
+      // snow melts after a while
+      if (f.layers > 0) {
+        f.meltT -= dt;
+        if (f.meltT <= 0) { f.layers--; f.meltT = 1.1 * diff.melt; if (f.layers === 0) f.state = "walk"; }
+      }
+      if (f.air || !platUnder(f.x, ER - 3, f.y)) { f.air = true; fall(f, ER - 3, dt); }
+      if (f.layers >= 2) continue;   // frozen under the snow
+      const v = K.sp * sp * (f.layers ? 0.4 : 1);
+      if (!f.air) {
+        f.t -= dt;
+        const under = platUnder(f.x, ER - 3, f.y);
+        // at an edge: turn, or step off
+        const ahead = f.x + f.dir * (ER + 2);
+        if (under && under !== "floor" && (ahead < under[0] || ahead > under[1]) && Math.random() < 0.6) f.dir *= -1;
+        f.x += f.dir * v * dt;
+        if (f.x < WX0 + ER || f.x > WX1 - ER) { f.dir *= -1; f.x = clamp(f.x, WX0 + ER, WX1 - ER); }
+        if (f.t <= 0) {
+          f.t = rnd(1.5, 3.5);
+          // most of them turn towards the snowman now and then
+          if (Math.random() < 0.5) f.dir = P.x > f.x ? 1 : -1;
+          // frogs (and sometimes the others) jump up a floor
+          const jumper = f.kind === "rana" ? 0.8 : 0.2;
+          const above = plats.some((p) => p[2] < f.y - 20 && p[2] > f.y - JH + 4 && f.x > p[0] && f.x < p[1]);
+          if (above && Math.random() < jumper && P.y < f.y - 10) { f.vy = -JV; f.air = true; }
+          // and some drop through to chase a snowman below
+          else if (under && under !== "floor" && P.y > f.y + 20 && Math.random() < 0.35) { f.drop = under; f.dropT = 0.25; f.air = true; }
+        }
+        // little dragons spit fire along their floor
+        if (f.kind === "drago") {
+          f.cd -= dt;
+          if (f.cd < 0.5 && f.cd + dt >= 0.5 && Math.abs(P.y - f.y) < 8 && Math.abs(P.x - f.x) < 260) f.dir = P.x > f.x ? 1 : -1;
+          if (f.cd <= 0) { f.cd = rnd(2.8, 4.2) / sp; if (Math.abs(P.y - f.y) < 8 && Math.abs(P.x - f.x) < 260) { fires.push({ x: f.x + f.dir * 10, y: f.y - 9, vx: f.dir * 150 * sp, life: 2 }); sfx.fire(); } }
+        }
+      } else f.x = clamp(f.x + f.dir * v * 0.8 * dt, WX0 + ER, WX1 - ER);
+      if (P.safe <= 0 && Math.abs(f.x - P.x) < ER + PW - 3 && Math.abs((f.y - 8) - (P.y - 9)) < 14) die(K.name);
+    }
+    foes = foes.filter((f) => !f.gone);
+  }
+  function updateBall(b, dt) {
+    const y0 = b.y;
+    b.x += b.vx * dt;
+    if (b.x < WX0 + BR || b.x > WX1 - BR) {
+      b.x = clamp(b.x, WX0 + BR, WX1 - BR); b.vx = -b.vx; b.bounces++; sfx.bounce();
+      // down on the ground floor, the first wall breaks it
+      if (Math.abs(b.y - GY) < 1) { shatter(b); return; }
+    }
+    b.vy = Math.min(b.vy + GRAV * dt, 600); b.y += b.vy * dt;
+    if (b.vy > 0) { const s = surfaceAt(b.x, 3, y0, b.y, null); if (s !== null) { b.y = s; b.vy = 0; } }
+    if (b.bounces >= 5) { shatter(b); return; }
+    // anything in its way is flattened
+    for (const o of foes) {
+      if (o === b || o.gone || o.state === "roll") continue;
+      if (Math.abs(o.x - b.x) < BR + ER - 2 && Math.abs((o.y - 8) - (b.y - BR)) < BR + 8) {
+        o.gone = true; b.chain++;
+        const pts = Math.min(16000, 500 * Math.pow(2, b.chain));
+        addScore(pts, o.x, o.y - 24, "#ffd23a"); sfx.smash(b.chain); burst(o.x, o.y - 8, KINDS[o.kind].col, 14, 120, 0.5);
+        dropFruit(o.x, o.y - 10);
+      }
+    }
+  }
+  function shatter(b) {
+    b.gone = true; addScore(500, b.x, b.y - 26, "#ffffff"); sfx.shatter();
+    burst(b.x, b.y - BR, "#ffffff", 22, 140, 0.7); dropFruit(b.x, b.y - 10);
+  }
+  function dropFruit(x, y) { const [c, v] = FRUITS[Math.min(FRUITS.length - 1, Math.floor(Math.random() * Math.min(FRUITS.length, 1 + level / 2)))]; fruits.push({ x, y, vy: -150, c, v, t: 8, air: true }); }
+  function updateRest(dt) {
+    for (const s of shots) {
+      s.x += s.vx * dt; s.vy += 260 * dt; s.y += s.vy * dt; s.life -= dt;
+      if (s.life <= 0 || s.x < WX0 || s.x > WX1) { s.gone = true; continue; }
+      for (const f of foes) {
+        if (f.state === "roll" || Math.abs(f.x - s.x) > ER + 3 || Math.abs((f.y - 8) - s.y) > ER + 4) continue;
+        s.gone = true;
+        if (f.layers < 4) { f.layers++; addScore(10); sfx.snow(f.layers); if (f.layers === 4) { sfx.ball(); f.vy = 0; } }
+        f.meltT = (f.layers === 4 ? 3.2 : 2.2) * diff.melt;
+        break;
+      }
+    }
+    shots = shots.filter((s) => !s.gone);
+    for (const fr of fires) { fr.x += fr.vx * dt; fr.life -= dt; if (fr.life <= 0 || fr.x < WX0 || fr.x > WX1) fr.gone = true; else if (P.safe <= 0 && Math.abs(fr.x - P.x) < 9 && Math.abs(fr.y - (P.y - 9)) < 10) { fr.gone = true; die("UNA FIAMMATA"); } }
+    fires = fires.filter((f) => !f.gone);
+    for (const fr of fruits) {
+      fr.t -= dt; if (fr.air) fall(fr, 4, dt);
+      if (Math.abs(fr.x - P.x) < 12 && Math.abs(fr.y - P.y) < 16) { fr.gone = true; addScore(fr.v, fr.x, fr.y - 14, fr.c); sfx.fruit(); }
+      if (fr.t <= 0) fr.gone = true;
+    }
+    fruits = fruits.filter((f) => !f.gone);
+    // dawdle too long and the pumpkin comes floating through everything
+    levelT += dt;
+    if (!ghost && levelT > diff.hurry) { ghost = { x: Math.random() < 0.5 ? -20 : W + 20, y: TOP + 20, t: 0 }; sfx.hurry(); message = { text: "SBRIGATI!", sub: "arriva la zucca", t: 0.6 }; }
+    if (ghost) {
+      ghost.t += dt; const gs = 38 + ghost.t * 1.5, dx = P.x - ghost.x, dy = (P.y - 9) - ghost.y, l = Math.hypot(dx, dy) || 1;
+      ghost.x += dx / l * gs * dt; ghost.y += dy / l * gs * dt;
+      if (P.safe <= 0 && l < 14) die("LA ZUCCA");
+    }
+  }
+  function update(dt) {
+    clock += dt; sfxN = 0;
+    if (message) { message.t += dt; if (message.t > 2.4) message = null; }
+    for (const p of parts) { p.t += dt; p.x += p.vx * dt; p.y += p.vy * dt; p.vy += 240 * dt; }
+    parts = parts.filter((p) => p.t < p.life);
+    for (const p of popups) { p.t += dt; p.y -= 20 * dt; }
+    popups = popups.filter((p) => p.t < 1.2);
+    for (const s of flakes) { s.y += 16 * s.s * dt; s.x += Math.sin(clock + s.y * 0.05) * 6 * dt; if (s.y > H) { s.y = TOP; s.x = Math.random() * W; } }
+    if (!isPlaying()) return;
+    if (state === "intro") { stateT -= dt; if (stateT <= 0) state = "play"; return; }
+    if (state === "dead") {
+      stateT -= dt;
+      if (stateT <= 0) { if (lives <= 0) { gameOver(); return; } spawnPlayer(); fires = []; if (ghost) { ghost.x = ghost.x < W / 2 ? -40 : W + 40; ghost.y = TOP; ghost.t = 0; } state = "play"; }
+      return;
+    }
+    if (state === "clear") { stateT -= dt; if (stateT <= 0) { level++; beginLevel(); } return; }
+    if (window.__bot) window.__bot(dt);
+    updatePlayer(dt);
+    updateFoes(dt);
+    if (state !== "play") return;
+    updateRest(dt);
+    if (state === "play" && !foes.length) {
+      const b = 1000 * level + Math.max(0, Math.round(diff.hurry - levelT)) * 50;
+      addScore(b);
+      message = { text: "PIANO LIBERO!", sub: `bonus ${b.toLocaleString("it-IT")}`, t: 0 };
+      sfx.clear(); state = "clear"; stateT = 2.6; ghost = null;
+    }
+  }
+
+  // ---------- Drawing ----------
+  function drawScene() {
+    const g = ctx.createLinearGradient(0, TOP, 0, H);
+    g.addColorStop(0, "#1a1440"); g.addColorStop(1, "#3a2a6a");
+    ctx.fillStyle = g; ctx.fillRect(0, TOP, W, H - TOP);
+    ctx.fillStyle = "#fff6d8"; ctx.beginPath(); ctx.arc(560, 70, 18, 0, TAU); ctx.fill();
+    for (const s of flakes) { ctx.fillStyle = `rgba(255,255,255,${0.3 + s.s * 0.3})`; ctx.fillRect(s.x, s.y, s.s * 2, s.s * 2); }
+    // the walls of the tower
+    ctx.fillStyle = "#4a3a7a"; ctx.fillRect(0, TOP, WX0, H - TOP); ctx.fillRect(WX1, TOP, W - WX1, H - TOP);
+    const plat = (x0, x1, y) => {
+      ctx.fillStyle = "#6a5aa8"; ctx.fillRect(x0, y, x1 - x0, 10);
+      ctx.fillStyle = "#ffffff"; ctx.beginPath(); ctx.moveTo(x0, y + 2);
+      for (let x = x0; x <= x1; x += 8) ctx.quadraticCurveTo(x + 4, y - 3, Math.min(x1, x + 8), y + 1);
+      ctx.lineTo(x1, y + 4); ctx.lineTo(x0, y + 4); ctx.fill();
+      ctx.fillStyle = "rgba(255,255,255,0.6)"; for (let x = x0 + 10; x < x1 - 4; x += 26) { ctx.beginPath(); ctx.moveTo(x, y + 9); ctx.lineTo(x + 2, y + 15); ctx.lineTo(x + 4, y + 9); ctx.fill(); }
+    };
+    for (const p of plats) plat(p[0], p[1], p[2]);
+    plat(WX0, WX1, GY);
+  }
+  function drawFoe(f) {
+    const K = KINDS[f.kind], x = f.x, y = f.y;
+    if (f.state === "roll" || f.layers >= 4) {
+      // a rolling (or waiting) snowball, with a hint of the monster inside
+      const a = f.state === "roll" ? clock * f.vx * 0.05 : 0;
+      ctx.save(); ctx.translate(x, y - BR); ctx.rotate(a);
+      ctx.fillStyle = "#ffffff"; ctx.beginPath(); ctx.arc(0, 0, BR, 0, TAU); ctx.fill();
+      ctx.strokeStyle = "#a8c8f0"; ctx.lineWidth = 1.5; ctx.stroke();
+      ctx.fillStyle = K.col; ctx.globalAlpha = 0.35; ctx.beginPath(); ctx.arc(2, -2, 4, 0, TAU); ctx.fill(); ctx.globalAlpha = 1;
+      ctx.fillStyle = "rgba(160,200,240,0.6)"; ctx.beginPath(); ctx.arc(-4, 3, 2, 0, TAU); ctx.arc(4, 5, 1.5, 0, TAU); ctx.fill();
+      ctx.restore();
+      if (f.state !== "roll" && f.meltT < 1.2 && Math.floor(clock * 8) % 2) { ctx.strokeStyle = "#ff7ab8"; ctx.lineWidth = 1.5; ctx.beginPath(); ctx.arc(x, y - BR, BR + 3, 0, TAU); ctx.stroke(); }
+      return;
+    }
+    const b = f.layers >= 2 ? 0 : Math.sin(f.walk) * 1.2, d = f.dir;
+    ctx.fillStyle = K.col2; ctx.fillRect(x - 6, y - 4, 4, 4 + b * 0.3); ctx.fillRect(x + 2, y - 4, 4, 4 - b * 0.3);
+    ctx.fillStyle = K.col; ctx.beginPath(); ctx.ellipse(x, y - 10, 9, 8, 0, 0, TAU); ctx.fill();
+    if (f.kind === "diavolo") { ctx.beginPath(); ctx.moveTo(x - 6, y - 16); ctx.lineTo(x - 8, y - 22); ctx.lineTo(x - 3, y - 17); ctx.moveTo(x + 6, y - 16); ctx.lineTo(x + 8, y - 22); ctx.lineTo(x + 3, y - 17); ctx.fill(); }
+    if (f.kind === "rana") { ctx.beginPath(); ctx.arc(x - 4, y - 17, 3.5, 0, TAU); ctx.arc(x + 4, y - 17, 3.5, 0, TAU); ctx.fill(); }
+    if (f.kind === "drago") { ctx.fillStyle = K.col2; for (let i = -1; i <= 1; i++) { ctx.beginPath(); ctx.moveTo(x - d * 4 + i * 4, y - 17); ctx.lineTo(x - d * 4 + i * 4 + 2, y - 22); ctx.lineTo(x - d * 4 + i * 4 + 4, y - 17); ctx.fill(); } }
+    ctx.fillStyle = "#ffffff"; ctx.beginPath(); ctx.arc(x + d * 3 - 2, y - 12, 2.4, 0, TAU); ctx.arc(x + d * 3 + 3, y - 12, 2.4, 0, TAU); ctx.fill();
+    ctx.fillStyle = "#1a1a1a"; ctx.fillRect(x + d * 4 - 2.5, y - 12.5, 1.6, 1.8); ctx.fillRect(x + d * 4 + 2.5, y - 12.5, 1.6, 1.8);
+    // the snow that's stuck on it so far
+    if (f.layers) {
+      ctx.fillStyle = "rgba(255,255,255,0.9)";
+      const h = f.layers * 5; ctx.beginPath(); ctx.ellipse(x, y - h / 2, 10, h / 2 + 1, 0, 0, TAU); ctx.fill();
+    }
+  }
+  function drawSnowman() {
+    if (P.safe > 0 && Math.floor(clock * 10) % 2) return;
+    const x = P.x, y = P.y, f = P.face, b = P.air ? 0 : Math.abs(Math.sin(P.walk)) * 1.5;
+    ctx.fillStyle = "#ffffff"; ctx.beginPath(); ctx.arc(x, y - 6 - b * 0.3, 7, 0, TAU); ctx.fill();
+    ctx.beginPath(); ctx.arc(x, y - 16 - b, 5.5, 0, TAU); ctx.fill();
+    ctx.strokeStyle = "#a8c8f0"; ctx.lineWidth = 1; ctx.beginPath(); ctx.arc(x, y - 6 - b * 0.3, 7, 0, TAU); ctx.stroke();
+    ctx.fillStyle = "#ff3a5a"; ctx.fillRect(x - 6, y - 12 - b, 12, 2.5); ctx.fillRect(x - f * 5 - 1.5, y - 12 - b, 3, 6);
+    ctx.fillStyle = "#3a5aff"; ctx.fillRect(x - 5, y - 24 - b, 10, 3); ctx.fillRect(x - 3, y - 28 - b, 6, 4);
+    ctx.fillStyle = "#1a1a1a"; ctx.fillRect(x + f * 2 - 1, y - 18 - b, 1.6, 1.6); ctx.fillRect(x + f * 2 + 2, y - 18 - b, 1.6, 1.6);
+    ctx.fillStyle = "#ff8a2a"; ctx.beginPath(); ctx.moveTo(x + f * 4, y - 16 - b); ctx.lineTo(x + f * 9, y - 15 - b); ctx.lineTo(x + f * 4, y - 14 - b); ctx.fill();
+    if (P.kickT > 0) { ctx.strokeStyle = "#ffffff"; ctx.lineWidth = 3; ctx.beginPath(); ctx.moveTo(x, y - 4); ctx.lineTo(x + f * 11, y - 3); ctx.stroke(); }
+  }
+  function drawHud() {
+    ctx.fillStyle = "rgba(14,10,36,0.95)"; ctx.fillRect(0, 0, W, TOP);
+    ctx.textBaseline = "middle"; ctx.textAlign = "left";
+    const x0 = touchMode ? 130 : 10;
+    ctx.fillStyle = "#ffffff"; ctx.font = "900 15px system-ui"; ctx.fillText(score.toLocaleString("it-IT"), x0, 14);
+    ctx.fillStyle = "#c8b8e8"; ctx.font = "700 9px system-ui"; ctx.fillText(`REC ${Math.max(bestCache, score).toLocaleString("it-IT")}`, x0 + 80, 9);
+    ctx.fillStyle = "#ff7ab8"; ctx.font = "900 10px system-ui"; ctx.fillText(`PIANO ${level}`, x0 + 80, 21);
+    ctx.fillStyle = "#c8b8e8"; ctx.font = "800 9px system-ui"; ctx.fillText("MOSTRI", x0 + 160, 14);
+    foes.forEach((f, i) => { ctx.fillStyle = f.state === "roll" || f.layers >= 4 ? "#ffffff" : KINDS[f.kind].col; ctx.beginPath(); ctx.arc(x0 + 204 + i * 11, 14, 4, 0, TAU); ctx.fill(); });
+    // the pumpkin's clock
+    if (!ghost) { const k = clamp(1 - levelT / diff.hurry, 0, 1); ctx.fillStyle = "#3a2a5a"; ctx.fillRect(x0 + 290, 10, 60, 8); ctx.fillStyle = k < 0.25 ? "#ff8a2a" : "#7ed87a"; ctx.fillRect(x0 + 290, 10, 60 * k, 8); ctx.fillStyle = "#ff8a2a"; ctx.fillText("🎃", x0 + 354, 14); }
+    const lx = touchMode ? W - 60 : W - 12;
+    for (let i = 0; i < Math.min(lives - (state === "dead" ? 0 : 1), 6); i++) { const cx = lx - i * 13; ctx.fillStyle = "#ffffff"; ctx.beginPath(); ctx.arc(cx, 17, 4, 0, TAU); ctx.arc(cx, 10, 3, 0, TAU); ctx.fill(); }
+    ctx.textBaseline = "alphabetic";
+  }
+  function draw() {
+    ctx.setTransform(pxRatio, 0, 0, pxRatio, 0, 0);
+    if (!plats.length) { plats = LAYOUTS[0].map((p) => p.slice()); spawnPlayer(); P.x = 200; P.y = 278; P.safe = 0; foes = [makeFoe("diavolo", 300, 218), makeFoe("rana", 480, 278)]; foes[1].layers = 4; foes.push(makeFoe("drago", 120, 158)); foes[2].layers = 2; }
+    drawScene();
+    for (const fr of fruits) { if (fr.t < 2 && Math.floor(clock * 8) % 2) continue; ctx.fillStyle = fr.c; ctx.beginPath(); ctx.arc(fr.x, fr.y - 5, 5, 0, TAU); ctx.fill(); ctx.fillStyle = "#3aa83a"; ctx.fillRect(fr.x - 1, fr.y - 12, 2, 3); }
+    for (const f of foes) drawFoe(f);
+    if (state !== "menu" && (state !== "dead" || Math.floor(clock * 6) % 2)) drawSnowman();
+    for (const s of shots) { ctx.fillStyle = "#ffffff"; ctx.beginPath(); ctx.arc(s.x, s.y, 3.5, 0, TAU); ctx.fill(); ctx.fillStyle = "rgba(255,255,255,0.4)"; ctx.beginPath(); ctx.arc(s.x - Math.sign(s.vx) * 5, s.y, 2.5, 0, TAU); ctx.fill(); }
+    for (const fr of fires) { ctx.fillStyle = "#ff8a2a"; ctx.beginPath(); ctx.arc(fr.x, fr.y, 5, 0, TAU); ctx.fill(); ctx.fillStyle = "#ffd23a"; ctx.beginPath(); ctx.arc(fr.x, fr.y, 2.5, 0, TAU); ctx.fill(); }
+    if (ghost) { ctx.font = "22px system-ui"; ctx.textAlign = "center"; ctx.textBaseline = "middle"; ctx.globalAlpha = 0.85 + 0.15 * Math.sin(clock * 6); ctx.fillText("🎃", ghost.x, ghost.y); ctx.globalAlpha = 1; ctx.textBaseline = "alphabetic"; }
+    for (const p of parts) { ctx.globalAlpha = Math.max(0, 1 - p.t / p.life); ctx.fillStyle = p.c; ctx.fillRect(p.x - 1.5, p.y - 1.5, 3, 3); }
+    ctx.globalAlpha = 1;
+    for (const p of popups) {
+      ctx.globalAlpha = Math.max(0, 1 - p.t / 1.2);
+      ctx.textAlign = "center"; ctx.font = "900 11px system-ui";
+      ctx.lineWidth = 3; ctx.strokeStyle = "#1a1440"; ctx.strokeText(p.text, p.x, p.y); ctx.fillStyle = p.color; ctx.fillText(p.text, p.x, p.y);
+    }
+    ctx.globalAlpha = 1;
+    if (state === "menu") return;
+    drawHud();
+    if (message) {
+      ctx.globalAlpha = Math.min(1, (2.4 - message.t) * 2);
+      ctx.textAlign = "center"; ctx.font = "italic 900 24px system-ui"; ctx.fillStyle = "#ff7ab8";
+      ctx.lineWidth = 5; ctx.strokeStyle = "#1a1440"; ctx.strokeText(message.text, W / 2, 70); ctx.fillText(message.text, W / 2, 70);
+      if (message.sub) { ctx.font = "800 12px system-ui"; ctx.fillStyle = "#ffffff"; ctx.strokeText(message.sub, W / 2, 89); ctx.fillText(message.sub, W / 2, 89); }
+      ctx.globalAlpha = 1;
+    }
+    if (state === "dead") {
+      ctx.textAlign = "center"; ctx.font = "900 17px system-ui"; ctx.fillStyle = "#ff3a3a"; ctx.lineWidth = 4; ctx.strokeStyle = "#ffffff";
+      const t = `PRESO DA ${lastBy}!`;
+      ctx.strokeText(t, W / 2, 190); ctx.fillText(t, W / 2, 190);
+    }
+  }
+
+  // ---------- Loop ----------
+  const STEP = 1 / 120;
+  let last = performance.now(), acc = 0;
+  function frame(now) {
+    const dt = Math.min(0.1, (now - last) / 1000);
+    last = now;
+    if (isPlaying()) {
+      acc += dt;
+      while (acc >= STEP && isPlaying()) { update(STEP); acc -= STEP; }
+    } else { acc = 0; update(dt); }
+    draw();
+    requestAnimationFrame(frame);
+  }
+  syncControls();
+  showTitle();
+  requestAnimationFrame(frame);
+})();
+</script>
+<script src="../../shared/iniziali.js" data-record="neve-best-" data-kind="score"></script>
+</body>
+</html>
