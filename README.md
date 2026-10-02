@@ -4,7 +4,7 @@ Raccolta di giochi arcade per il browser. Ogni gioco è un singolo file HTML sen
 
 ## 🕹️ Sala Giochi — `index.html`
 
-Apri `index.html` nella cartella principale per la pagina di raccolta: mostra tutti i 132 giochi con copertina, genere, comandi e i tuoi record per ogni difficoltà (Facile, Normale, Difficile). Tocca «Gioca» per avviare un gioco; in ogni gioco il pulsante «← Sala Giochi» in alto a sinistra (visibile nei menu) riporta alla raccolta.
+Apri `index.html` nella cartella principale per la pagina di raccolta: mostra tutti i 133 giochi con copertina, genere, comandi e i tuoi record per ogni difficoltà (Facile, Normale, Difficile). Tocca «Gioca» per avviare un gioco; in ogni gioco il pulsante «← Sala Giochi» in alto a sinistra (visibile nei menu) riporta alla raccolta.
 
 **Iniziali del record:** quando batti un record compare la schermata da sala giochi per inserire le tue tre iniziali (frecce ↑ ↓ per cambiare lettera, ← → per spostarti, oppure scrivile direttamente; su telefono i tasti ▲ ▼ e OK). Le iniziali vengono salvate insieme al record e compaiono nei menu del gioco e nella Sala Giochi. Il codice è condiviso da tutti i giochi in `shared/iniziali.js`.
 
@@ -12,7 +12,7 @@ Apri `index.html` nella cartella principale per la pagina di raccolta: mostra tu
 
 **Comandi touch: levetta o frecce:** in cima alla Sala Giochi e nel menu di pausa di ogni gioco con la levetta si sceglie se usare la levetta analogica o una croce di frecce. Con le frecce il tocco viene agganciato a una delle otto direzioni (le quattro principali hanno la zona più larga, così le diagonali si prendono solo di proposito) e spinto fino in fondo; la scelta vale per tutti i giochi e resta memorizzata. Funziona anche nei giochi con due levette (la sfida a due di *Pugni di Fuoco*, muovi e spara di *Assalto Robotico*).
 
-**Trofei:** ogni gioco ha tre trofei a punteggio: 🥉 **Bronzo** (la soglia in qualsiasi difficoltà), 🥈 **Argento** (a Normale o Difficile) e 🥇 **Oro** (a Difficile); nei giochi a tempo (*Corsa al Tramonto*, *Crystal Wars*) conta finire entro un certo tempo. I trofei si calcolano dai record salvati, quindi quelli già fatti si sbloccano da soli; quando un record nuovo ne conquista uno compare un avviso in alto. Le soglie sono nella schermata iniziale, in pausa e a fine partita di ogni gioco; in Sala Giochi ogni cabinato mostra i suoi trofei, in cima c'è il totale (su 396) con il numero di giochi giocati e il filtro **Già giocati** mostra solo i giochi con almeno un record. Le soglie vengono dalle partite di prova di un bot per circa un terzo dei giochi e sono stimate sulle regole di punteggio per gli altri (`shared/trofei.js`).
+**Trofei:** ogni gioco ha tre trofei a punteggio: 🥉 **Bronzo** (la soglia in qualsiasi difficoltà), 🥈 **Argento** (a Normale o Difficile) e 🥇 **Oro** (a Difficile); nei giochi a tempo (*Corsa al Tramonto*, *Crystal Wars*) conta finire entro un certo tempo. I trofei si calcolano dai record salvati, quindi quelli già fatti si sbloccano da soli; quando un record nuovo ne conquista uno compare un avviso in alto. Le soglie sono nella schermata iniziale, in pausa e a fine partita di ogni gioco; in Sala Giochi ogni cabinato mostra i suoi trofei, in cima c'è il totale (su 399) con il numero di giochi giocati e il filtro **Già giocati** mostra solo i giochi con almeno un record. Le soglie vengono dalle partite di prova di un bot per circa un terzo dei giochi e sono stimate sulle regole di punteggio per gli altri (`shared/trofei.js`).
 
 **Generi:** ogni gioco appartiene a una o più famiglie di generi (🚀 Sparatutto, 🪜 Piattaforme, 🎯 Azione e riflessi, 🌀 Labirinti, ⚽ Sport, 🧩 Rompicapo, 🏁 Corse e veicoli, 🏰 Strategia e difesa, 🥊 Picchiaduro, 🗝️ Avventura, 🎵 Ritmo e musica): per esempio *Cripta degli Eroi* è avventura, sparatutto e labirinto. Le famiglie sono le etichette colorate di ogni cabinato. Sotto la ricerca una fila di pulsanti, con il numero di giochi di ciascuna famiglia, mostra solo quel genere (toccandolo di nuovo si torna a *Tutti i generi*); anche toccare un'etichetta su un cabinato filtra per quella famiglia. Un gioco con più famiglie compare in ognuna. La scelta resta memorizzata e si combina con la ricerca e con *Già giocati*. Su telefono la fila scorre di lato.
 
@@ -2052,3 +2052,18 @@ Rompicapo d'azione in stile *Mr. Driller*: si scava verso il basso in un pozzo p
 - **Touch:** levetta per camminare e scegliere dove scavare, pulsante TRIVELLA
 
 Per giocare apri `games/trivella-matta/index.html` nel browser.
+
+### 🐉 Torneo del Drago — `games/torneo-del-drago/index.html`
+
+Picchiaduro uno contro uno in stile *Yie Ar Kung-Fu*: il giovane Oolong affronta uno dopo l'altro gli otto maestri del torneo, ognuno con la sua arma e il suo modo di combattere.
+
+- **I maestri:** Wang il Bastone, Tao il Soffio di Fuoco (palle di fuoco alte e basse), Chen la Catena (lunghissima, in alto e in basso), Lang delle Stelle (shuriken e salti), Mei dei Ventagli, Sun la Spada (affondo), Bai il Calcio Volante e infine Li il Gran Maestro, che usa un po' di tutto. Dopo Li si ricomincia, con maestri più forti
+- **Difendersi:** guarda come il maestro si prepara: accucciati sotto i colpi alti, salta quelli bassi, para quelli medi tenendo la levetta all'indietro (in piedi pari alti e medi, accucciato bassi e medi)
+- **Attaccare:** pugno (veloce, corto) e calcio (più lungo e forte); da accucciato il pugno basso e la spazzata; in salto il calcio volante. Anche i maestri parano e contrattaccano se stai troppo vicino
+- **Incontri:** 60 secondi; allo scadere vince chi ha più energia. Se vai al tappeto perdi una vita e rifai lo stesso incontro
+- **Punti:** pugno 100 · calcio e spazzata 200 · calcio volante 300 (di più dal secondo giro) · vittoria 1.000 per incontro più 20 per punto di energia rimasta e 10 per secondo · senza un graffio 3.000 · vita extra a 30.000 e poi ogni 50.000
+- **Difficoltà:** Facile (5 vite, maestri più lenti e che colpiscono meno forte), Normale (3 vite), Difficile (3 vite, maestri più svelti, robusti e che parano di più); record separati per ogni difficoltà
+- **Comandi:** frecce o `W` `A` `S` `D` · `↑` salta · `↓` accucciati · indietro para · `J` pugno · `K` (o `Spazio`) calcio · `P` pausa
+- **Touch:** levetta (su salta, giù accucciati, all'indietro para), pulsanti PUGNO e CALCIO
+
+Per giocare apri `games/torneo-del-drago/index.html` nel browser.

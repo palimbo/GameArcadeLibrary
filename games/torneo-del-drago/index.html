@@ -1,0 +1,684 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no, viewport-fit=cover">
+<title>Torneo del Drago</title>
+<style>
+  :root {
+    --bg: #1a0c0a;
+    --fg: #f4f6ee;
+    --muted: #e8c8a8;
+    --pink: #ffcc3a;
+    --yellow: #8ae05a;
+    --red: #ff4a3a;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  html, body {
+    height: 100%;
+    background: var(--bg);
+    color: var(--fg);
+    font-family: system-ui, -apple-system, "Segoe UI", sans-serif;
+    overflow: hidden;
+    user-select: none;
+    -webkit-user-select: none;
+    touch-action: none;
+  }
+  #wrap { position: fixed; inset: 0; display: flex; align-items: center; justify-content: center; }
+  canvas { display: block; touch-action: none; border-radius: 6px; box-shadow: 0 0 0 2px #1a3a5a, 0 10px 40px rgba(0,0,0,0.6); }
+  #pauseBtn {
+    position: fixed; z-index: 3; display: none; right: 10px; top: calc(10px + env(safe-area-inset-top, 0px));
+    font: 700 13px system-ui, sans-serif; color: var(--fg);
+    background: rgba(0, 0, 0, 0.6); border: 1px solid rgba(244, 246, 238, 0.35);
+    border-radius: 8px; padding: 6px 10px; cursor: pointer;
+  }
+  #touch {
+    position: fixed; z-index: 2; display: none; left: 12px; right: 12px;
+    bottom: calc(14px + env(safe-area-inset-bottom, 0px));
+    justify-content: space-between; align-items: flex-end; pointer-events: none;
+  }
+  /* thumb stick: walk, up jumps, down crouches, away from the opponent blocks; the small PUGNO punches, the big CALCIO kicks */
+  #touch .stick { position: relative; width: 136px; height: 136px; border-radius: 50%; pointer-events: auto; touch-action: none;
+    border: 2px solid rgba(255, 200, 58, 0.6); background: radial-gradient(circle, rgba(255,200,58,0.14), rgba(255,200,58,0.04)); }
+  #touch .stick .knob { position: absolute; left: 50%; top: 50%; width: 58px; height: 58px; margin: -29px 0 0 -29px; border-radius: 50%;
+    background: rgba(255, 200, 58, 0.45); border: 2px solid rgba(255,255,255,0.7); box-shadow: 0 4px 10px rgba(0,0,0,0.4); pointer-events: none; }
+  #touch .stick .ring { position: absolute; inset: 10px; border-radius: 50%; border: 1px dashed rgba(244,246,238,0.25); pointer-events: none; }
+  #touch .jump { width: 96px; height: 96px; border-radius: 50%; pointer-events: auto; touch-action: none; color: var(--fg);
+    font: 800 13px system-ui, sans-serif; letter-spacing: 1px; border: 2px solid rgba(255, 110, 70, 0.9); background: rgba(255, 110, 70, 0.22); }
+  #touch .jump.on { background: rgba(255, 110, 70, 0.55); }
+  #touch.small .stick { width: 112px; height: 112px; }
+  #touch.small .stick .knob { width: 48px; height: 48px; margin: -24px 0 0 -24px; }
+  #touch.small .jump { width: 80px; height: 80px; font-size: 11px; }
+  #touch .btns { display: flex; flex-direction: column; align-items: center; gap: 10px; pointer-events: none; }
+  #touch .jump.axe { width: 64px; height: 64px; font-size: 11px; border-color: rgba(255, 244, 200, 0.9); background: rgba(255, 244, 200, 0.16); }
+  #touch .jump.axe.on { background: rgba(255, 244, 200, 0.5); }
+  #touch.small .jump.axe { width: 54px; height: 54px; font-size: 10px; }
+  #overlay {
+    position: fixed; inset: 0; z-index: 5;
+    display: flex; flex-direction: column; align-items: center; justify-content: flex-start;
+    gap: 14px; padding: 16px; text-align: center; overflow-y: auto;
+    background: rgba(26, 12, 10, 0.93);
+  }
+  #overlay > :first-child { margin-top: auto; }
+  #overlay > :last-child { margin-bottom: auto; }
+  #overlay.hidden { display: none; }
+  #homeLink {
+    position: fixed; top: calc(10px + env(safe-area-inset-top, 0px)); left: 10px; z-index: 6;
+    font: 600 13px/1 system-ui, sans-serif; color: #fff; text-decoration: none;
+    padding: 8px 12px; border-radius: 999px; background: rgba(0,0,0,.55);
+    border: 1px solid rgba(255,255,255,.25);
+  }
+  #homeLink:hover { background: rgba(0,0,0,.8); }
+  #overlay.hidden ~ #homeLink { display: none; }
+  @media (max-width: 700px) { #overlay { padding-top: calc(52px + env(safe-area-inset-top, 0px)); } }
+  #overlay h1 { font-size: clamp(32px, 10vw, 58px); font-weight: 900; font-style: italic; letter-spacing: 1px; color: var(--pink);
+    text-shadow: 3px 3px 0 #6a1a4a, 0 0 22px rgba(255,122,184,0.35); }
+  #overlay h2 { font-size: clamp(26px, 7vw, 42px); font-weight: 900; letter-spacing: 2px; color: var(--pink); }
+  #overlay h2.lose { color: var(--red); }
+  #overlay p { max-width: 540px; font-size: clamp(13px, 3.4vw, 16px); line-height: 1.55; }
+  #overlay p.muted { color: var(--muted); }
+  #overlay .pts { display: grid; grid-template-columns: repeat(2, auto); gap: 4px 18px; font-size: 13px; color: var(--muted); text-align: left; max-width: 560px; }
+  #overlay .pts b { color: var(--fg); }
+  #overlay .diff { display: flex; gap: 10px; flex-wrap: wrap; justify-content: center; }
+  #overlay button {
+    font: 800 15px system-ui, sans-serif; letter-spacing: 1.5px; color: var(--fg);
+    background: transparent; cursor: pointer;
+    border: 2px solid rgba(244,246,238,0.3); border-radius: 10px; padding: 9px 16px;
+  }
+  #overlay .diff button.on { border-color: var(--c); color: var(--c); box-shadow: 0 0 12px var(--c); }
+  #overlay button.start { border-color: var(--pink); color: #2e1804; background: var(--pink); padding: 11px 30px; box-shadow: 0 4px 0 #a8781a; }
+  @media (max-height: 560px) {
+    #overlay { gap: 8px; }
+    #overlay h1 { font-size: 30px; }
+    #overlay p { font-size: 13px; line-height: 1.4; }
+    #overlay .help, #overlay .pts { display: none; }
+  }
+</style>
+</head>
+<body>
+<div id="wrap"><canvas id="game"></canvas></div>
+<div id="touch">
+  <div class="stick" aria-label="Levetta"><div class="ring"></div><div class="knob"></div></div>
+  <div class="btns"><button type="button" class="jump axe" aria-label="Pugno">PUGNO</button><button type="button" class="jump hop" aria-label="Calcio">CALCIO</button></div>
+</div>
+<button id="pauseBtn" type="button" aria-label="Pausa">❚❚</button>
+<div id="overlay"></div>
+<a id="homeLink" href="../../index.html">← Sala Giochi</a>
+
+
+<script>
+(() => {
+  "use strict";
+
+  const W = 640, H = 360, TAU = Math.PI * 2, TOP = 28;
+  const FLOOR = 318, WALL0 = 40, WALL1 = 600, GRAV = 1500, JV = 560;
+  const STAND = 62, CROUCH = 36;
+
+  // the hero's moves: band = the height it hits, measured from the feet
+  const HERO_MOVES = {
+    pugno:  { startup: 0.06, active: 0.08, recovery: 0.13, r0: 6, r1: 40, band: [36, 52], dmg: 6, pts: 100 },
+    calcio: { startup: 0.11, active: 0.1, recovery: 0.2, r0: 8, r1: 56, band: [22, 42], dmg: 9, pts: 200 },
+    pugnoBasso: { startup: 0.06, active: 0.08, recovery: 0.13, r0: 6, r1: 38, band: [10, 26], dmg: 5, pts: 100, crouch: true },
+    spazzata: { startup: 0.12, active: 0.1, recovery: 0.24, r0: 8, r1: 60, band: [0, 14], dmg: 8, pts: 200, crouch: true },
+    volante: { startup: 0.07, active: 0.22, recovery: 0.05, r0: 4, r1: 50, band: [14, 40], dmg: 11, pts: 300, air: true },
+  };
+  // the eight masters of the tournament and their weapons
+  const MASTERS = [
+    { name: "WANG", title: "il Bastone", color: "#3a7aff", hp: 70, speed: 70, range: 70, aggr: 0.8, jump: 0.05, weapon: "bastone",
+      moves: [{ startup: 0.34, active: 0.12, recovery: 0.35, r0: 10, r1: 92, band: [24, 44], dmg: 12 }, { startup: 0.4, active: 0.12, recovery: 0.4, r0: 10, r1: 86, band: [44, 62], dmg: 14 }] },
+    { name: "TAO", title: "il Soffio di Fuoco", color: "#ff5a2a", hp: 75, speed: 60, range: 150, aggr: 0.7, jump: 0.08, weapon: "fuoco",
+      moves: [{ startup: 0.4, active: 0.05, recovery: 0.4, proj: { band: [40, 58], vx: 210 }, dmg: 12 }, { startup: 0.4, active: 0.05, recovery: 0.4, proj: { band: [2, 18], vx: 190 }, dmg: 12 }, { startup: 0.25, active: 0.1, recovery: 0.25, r0: 8, r1: 44, band: [30, 50], dmg: 9 }] },
+    { name: "CHEN", title: "la Catena", color: "#8a8a9a", hp: 80, speed: 75, range: 100, aggr: 0.85, jump: 0.04, weapon: "catena",
+      moves: [{ startup: 0.38, active: 0.14, recovery: 0.4, r0: 20, r1: 120, band: [44, 62], dmg: 13 }, { startup: 0.38, active: 0.14, recovery: 0.4, r0: 20, r1: 115, band: [0, 16], dmg: 13 }] },
+    { name: "LANG", title: "delle Stelle", color: "#4ae07a", hp: 80, speed: 95, range: 160, aggr: 0.85, jump: 0.25, weapon: "stelle",
+      moves: [{ startup: 0.3, active: 0.05, recovery: 0.3, proj: { band: [42, 54], vx: 260, star: 1 }, dmg: 10 }, { startup: 0.3, active: 0.05, recovery: 0.3, proj: { band: [4, 16], vx: 260, star: 1 }, dmg: 10 }, { startup: 0.2, active: 0.1, recovery: 0.2, r0: 6, r1: 50, band: [22, 42], dmg: 9 }] },
+    { name: "MEI", title: "dei Ventagli", color: "#ff6ad0", hp: 85, speed: 105, range: 130, aggr: 0.9, jump: 0.15, weapon: "ventagli",
+      moves: [{ startup: 0.3, active: 0.05, recovery: 0.35, proj: { band: [26, 44], vx: 200, fan: 1 }, dmg: 11 }, { startup: 0.18, active: 0.1, recovery: 0.2, r0: 6, r1: 52, band: [36, 54], dmg: 10 }, { startup: 0.2, active: 0.1, recovery: 0.22, r0: 6, r1: 56, band: [0, 14], dmg: 10 }] },
+    { name: "SUN", title: "la Spada", color: "#e8e8e8", hp: 90, speed: 90, range: 90, aggr: 1, jump: 0.06, weapon: "spada",
+      moves: [{ startup: 0.3, active: 0.16, recovery: 0.38, r0: 10, r1: 100, band: [24, 46], dmg: 15, lunge: 220 }, { startup: 0.3, active: 0.12, recovery: 0.35, r0: 10, r1: 80, band: [46, 62], dmg: 14 }] },
+    { name: "BAI", title: "il Calcio Volante", color: "#ffd23a", hp: 90, speed: 110, range: 70, aggr: 1.05, jump: 0.35, weapon: null,
+      moves: [{ startup: 0.14, active: 0.25, recovery: 0.1, r0: 4, r1: 56, band: [10, 40], dmg: 13, air: true }, { startup: 0.2, active: 0.1, recovery: 0.22, r0: 6, r1: 58, band: [22, 42], dmg: 11 }, { startup: 0.22, active: 0.1, recovery: 0.24, r0: 6, r1: 60, band: [0, 14], dmg: 11 }] },
+    { name: "LI", title: "il Gran Maestro", color: "#c83a3a", hp: 110, speed: 115, range: 110, aggr: 1.15, jump: 0.2, weapon: "bastone", block: 0.3,
+      moves: [{ startup: 0.28, active: 0.12, recovery: 0.3, r0: 10, r1: 92, band: [24, 44], dmg: 13 }, { startup: 0.3, active: 0.05, recovery: 0.32, proj: { band: [40, 58], vx: 240 }, dmg: 12 }, { startup: 0.3, active: 0.12, recovery: 0.32, r0: 20, r1: 110, band: [0, 16], dmg: 13 }, { startup: 0.14, active: 0.25, recovery: 0.1, r0: 4, r1: 56, band: [10, 40], dmg: 13, air: true }] },
+  ];
+
+  const DIFFICULTIES = {
+    facile:    { label: "FACILE",    color: "#7ed87a", desc: "5 vite · i maestri attaccano più piano e colpiscono meno forte", lives: 5, slow: 1, dmg: 1.05, hp: 0.9 },
+    normale:   { label: "NORMALE",   color: "#ffcc3a", desc: "3 vite", lives: 3, slow: 0.76, dmg: 1.55, hp: 1 },
+    difficile: { label: "DIFFICILE", color: "#ff5a5a", desc: "3 vite · i maestri sono più svelti, più robusti e parano di più", lives: 3, slow: 0.67, dmg: 1.85, hp: 1.15 },
+  };
+  const DIFF_IDS = Object.keys(DIFFICULTIES);
+  const DIFF_KEY = "torneo-difficulty";
+  const bestKey = (id) => `torneo-best-${id}`;
+  function store(k, v) { try { localStorage.setItem(k, v); } catch { /* ignore */ } }
+  function load(k) { try { return localStorage.getItem(k); } catch { return null; } }
+  const rnd = (a, b) => a + Math.random() * (b - a);
+  const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
+  const pick = (arr) => arr[Math.floor(Math.random() * arr.length)];
+
+  // ---------- Canvas ----------
+  const canvas = document.getElementById("game");
+  const ctx = canvas.getContext("2d");
+  const wrapEl = document.getElementById("wrap");
+  const overlay = document.getElementById("overlay");
+  const touchEl = document.getElementById("touch");
+  const pauseBtn = document.getElementById("pauseBtn");
+  let pxRatio = 1, touchMode = !!(window.matchMedia && matchMedia("(pointer: coarse)").matches);
+  function resize() {
+    const portrait = window.innerHeight > window.innerWidth;
+    const showTouch = touchMode && isPlaying();
+    touchEl.style.display = showTouch ? "flex" : "none";
+    touchEl.classList.toggle("small", !portrait && window.innerHeight < 480);
+    wrapEl.style.paddingBottom = showTouch && portrait ? "calc(170px + env(safe-area-inset-bottom, 0px))" : "0";
+    let availW = window.innerWidth - 8, availH = window.innerHeight - 8;
+    if (showTouch && portrait) availH -= 170;
+    if (showTouch && !portrait) {
+      const side = Math.max(...[...touchEl.children].map((el) => el.offsetWidth)) + 20;
+      if (window.innerWidth - 2 * side > 200) availW = window.innerWidth - 2 * side;
+    }
+    const s = Math.max(0.2, Math.min(availW / W, availH / H));
+    pxRatio = Math.min(3, s * (window.devicePixelRatio || 1));
+    canvas.style.width = W * s + "px";
+    canvas.style.height = H * s + "px";
+    canvas.width = Math.round(W * pxRatio);
+    canvas.height = Math.round(H * pxRatio);
+  }
+  window.addEventListener("resize", () => syncControls());
+
+  // ---------- Audio ----------
+  let audioCtx = null;
+  function beep(freq, dur, type = "square", vol = 0.04, slide = 0, delay = 0) {
+    if (!audioCtx) return;
+    const t = audioCtx.currentTime + delay;
+    const osc = audioCtx.createOscillator(), gain = audioCtx.createGain();
+    osc.type = type;
+    osc.frequency.setValueAtTime(freq, t);
+    if (slide) osc.frequency.exponentialRampToValueAtTime(Math.max(20, freq + slide), t + dur);
+    gain.gain.setValueAtTime(vol, t);
+    gain.gain.exponentialRampToValueAtTime(0.0001, t + dur);
+    osc.connect(gain).connect(audioCtx.destination);
+    osc.start(t); osc.stop(t + dur + 0.02);
+  }
+  function noise(dur, vol, freq) {
+    if (!audioCtx) return;
+    const len = Math.floor(audioCtx.sampleRate * dur), buf = audioCtx.createBuffer(1, len, audioCtx.sampleRate), d = buf.getChannelData(0);
+    for (let i = 0; i < len; i++) d[i] = (Math.random() * 2 - 1) * (1 - i / len);
+    const src = audioCtx.createBufferSource(), f = audioCtx.createBiquadFilter(), g = audioCtx.createGain();
+    src.buffer = buf; f.type = "bandpass"; f.frequency.value = freq; g.gain.value = vol;
+    src.connect(f).connect(g).connect(audioCtx.destination); src.start();
+  }
+  const arp = (notes, gap, d, type = "square", vol = 0.04) => notes.forEach((f, i) => beep(f, d, type, vol, 0, i * gap));
+  let sfxN = 0;
+  const lim = (fn) => (...a) => { if (sfxN++ < 6) fn(...a); };
+  const sfx = {
+    swing: lim(() => noise(0.06, 0.04, 3000)),
+    hit: lim((big) => { noise(0.1, 0.12, big ? 500 : 900); beep(big ? 160 : 220, 0.08, "square", 0.04, -60); }),
+    block: lim(() => { beep(1200, 0.05, "square", 0.03); noise(0.04, 0.05, 4000); }),
+    hurt: lim(() => { noise(0.15, 0.14, 400); beep(140, 0.15, "sawtooth", 0.05, -60); }),
+    throw: lim(() => beep(700, 0.1, "triangle", 0.03, 500)),
+    fire: lim(() => noise(0.3, 0.08, 700)),
+    gong: () => { beep(110, 1.2, "sine", 0.12, -10); beep(220, 0.9, "sine", 0.05); beep(330, 0.6, "triangle", 0.03); },
+    ko: () => arp([392, 523, 659, 784, 1047], 0.08, 0.16, "square", 0.045),
+    lose: () => { for (let i = 0; i < 6; i++) beep(600 - i * 70, 0.12, "triangle", 0.045, 0, i * 0.07); },
+    over: () => arp([523, 466, 415, 392, 330, 262], 0.15, 0.24, "triangle", 0.05),
+  };
+
+  // ---------- State ----------
+  let difficulty = DIFFICULTIES[load(DIFF_KEY)] ? load(DIFF_KEY) : "normale";
+  let diff = DIFFICULTIES[difficulty];
+  let state = "menu", menu = null, pausedFrom = null, stateT = 0, clock = 0;
+  let score = 0, lives = 3, stage = 1, bestCache = 0, nextLife = 30000;
+  let P = null, E = null, M = null, projs = [], parts = [], popups = [], message = null, timeLeft = 60, lap = 0, perfect = true, shakeT = 0;
+  let punchPressed = false, kickPressed = false;
+  const keys = { left: false, right: false, up: false, down: false };
+  const stick = { x: 0, y: 0 };
+
+  function fighter(x, face) { return { x, y: 0, vy: 0, face, crouch: false, block: false, state: "idle", t: 0, move: null, hitDone: false, stun: 0, hp: 100, max: 100, walk: 0, flash: 0 }; }
+
+  // ---------- Flow ----------
+  const isPlaying = () => ["intro", "play", "dead", "clear"].includes(state);
+  function startGame() {
+    if (!audioCtx) { try { audioCtx = new (window.AudioContext || window.webkitAudioContext)(); } catch { audioCtx = null; } }
+    if (audioCtx && audioCtx.state === "suspended") audioCtx.resume();
+    score = 0; lives = diff.lives; stage = 1; nextLife = 30000;
+    bestCache = parseInt(load(bestKey(difficulty)), 10) || 0;
+    beginFight();
+    menu = null;
+    overlay.classList.add("hidden");
+    syncControls();
+    last = performance.now();
+  }
+  function beginFight() {
+    lap = Math.floor((stage - 1) / MASTERS.length);
+    M = MASTERS[(stage - 1) % MASTERS.length];
+    P = fighter(180, 1);
+    E = fighter(460, -1);
+    E.max = E.hp = Math.round(M.hp * 1.25 * diff.hp * (1 + 0.15 * lap));
+    E.guard = Math.min(0.6, (M.block || 0.1 + 0.05 * ((stage - 1) % MASTERS.length)) * (1 + 0.3 * lap));
+    E.ai = { think: 0.8, cd: 1 };
+    projs = []; parts = []; popups = []; timeLeft = 60; perfect = true;
+    message = { text: `${M.name} ${M.title.toUpperCase()}`, sub: `incontro ${stage}${lap ? ` · giro ${lap + 1}` : ""}`, t: 0 };
+    state = "intro"; stateT = 2; sfx.gong();
+  }
+  function addScore(n, x, y, color = "#ffffff", text) {
+    score += n;
+    if (score >= nextLife) { lives++; nextLife += 50000; arp([523, 659, 784, 1047, 1319], 0.07, 0.12); popups.push({ x: P.x, y: FLOOR - 90, text: "VITA EXTRA!", color: "#7ed87a", t: 0 }); }
+    if (x !== undefined) popups.push({ x, y, text: text || String(n), color, t: 0 });
+  }
+  function burst(x, y, c, n = 10, sp = 110, life = 0.5) {
+    for (let k = 0; k < n; k++) { const a = Math.random() * TAU, s = sp * rnd(0.3, 1); parts.push({ x, y, vx: Math.cos(a) * s, vy: Math.sin(a) * s, t: 0, life: life * rnd(0.6, 1.2), c }); }
+  }
+  function gameOver() {
+    state = "over";
+    const prev = parseInt(load(bestKey(difficulty)), 10) || 0;
+    const record = score > prev;
+    if (record) store(bestKey(difficulty), String(score));
+    sfx.over();
+    menu = () => showOverlay(
+      `<h2 class="lose">GAME OVER</h2>
+       <p>Punteggio: <b>${score.toLocaleString("it-IT")}</b> · incontro ${stage} (${M.name} ${M.title}) · ${diff.label}</p>
+       ${record ? "<p style='color:var(--pink)'>★ NUOVO RECORD! ★</p>" : ""}
+       ${difficultyHTML()}
+       <button class="start" data-start>COMBATTI ANCORA</button>`
+    );
+    menu();
+    syncControls();
+  }
+  function togglePause() {
+    if (isPlaying()) {
+      pausedFrom = state; state = "paused";
+      showOverlay(`<h2>PAUSA</h2><button class="start" data-resume>CONTINUA</button><p class="muted">Premi P per continuare</p>`);
+    } else if (state === "paused") {
+      state = pausedFrom; overlay.classList.add("hidden"); last = performance.now();
+    }
+    syncControls();
+  }
+  // the pause menu can end the game (shared/iniziali.js): it ends here the usual way, saving the record
+  window.addEventListener("sala:termina", () => { if (state !== "paused") return; state = pausedFrom; overlay.classList.add("hidden"); gameOver(); syncControls(); });
+  function syncControls() {
+    pauseBtn.style.display = isPlaying() && touchMode ? "block" : "none";
+    resize();
+  }
+  pauseBtn.addEventListener("click", () => togglePause());
+  function showOverlay(html) { overlay.innerHTML = html; overlay.classList.remove("hidden"); }
+  function difficultyHTML() {
+    const buttons = DIFF_IDS.map((id) => {
+      const d = DIFFICULTIES[id];
+      return `<button type="button" data-diff="${id}" class="${id === difficulty ? "on" : ""}" style="--c:${d.color}">${d.label}</button>`;
+    }).join("");
+    const best = parseInt(load(bestKey(difficulty)), 10);
+    return `<div class="diff">${buttons}</div><p class="muted">${diff.desc}${best ? ` · Record: ${best.toLocaleString("it-IT")}` : ""}</p>`;
+  }
+  function setDifficulty(id) { if (!DIFFICULTIES[id]) return; difficulty = id; diff = DIFFICULTIES[id]; store(DIFF_KEY, id); if (menu) menu(); }
+  function showTitle() {
+    menu = showTitle;
+    showOverlay(
+      `<h1>TORNEO DEL DRAGO</h1>
+       <p>Affronta uno dopo l'altro gli otto maestri del torneo, ognuno con la sua arma: bastone, fuoco, catena, stelle, ventagli, spada, calcio volante e infine il Gran Maestro Li. Guarda come si preparano: accucciati sotto i colpi alti, salta quelli bassi, para quelli medi tenendo la levetta all'indietro.</p>
+       <div class="pts">
+         <span><b>Colpi</b></span><span>pugno 100 · calcio e spazzata 200 · calcio volante 300 · da accucciato colpisci in basso</span>
+         <span><b>Vittoria</b></span><span>1.000 per incontro · 20 per ogni punto di energia rimasta · 10 per secondo · senza un graffio 3.000</span>
+       </div>
+       ${touchMode
+         ? `<p class="muted help">Levetta: cammina, su per saltare, giù per accucciarti, all'indietro per parare · PUGNO e CALCIO</p>`
+         : `<p class="muted help">Frecce o W A S D: cammina, ↑ salta, ↓ accucciati, indietro para · J pugno · K calcio · P pausa</p>`}
+       ${difficultyHTML()}
+       <button class="start" data-start>AL TORNEO!</button>`
+    );
+  }
+  overlay.addEventListener("click", (e) => {
+    const d = e.target.closest("[data-diff]");
+    if (d) { setDifficulty(d.dataset.diff); return; }
+    if (e.target.closest("[data-start]")) startGame();
+    if (e.target.closest("[data-resume]")) togglePause();
+  });
+
+  // ---------- Input ----------
+  const KEYMAP = { arrowleft: "left", a: "left", arrowright: "right", d: "right", arrowup: "up", w: "up", arrowdown: "down", s: "down" };
+  window.addEventListener("keydown", (e) => {
+    const k = e.key.toLowerCase();
+    if ([" ", "arrowup", "arrowdown", "arrowleft", "arrowright"].includes(k)) e.preventDefault();
+    if (state === "menu" || state === "over") {
+      if (e.key === "Enter") startGame();
+      else if (["1", "2", "3"].includes(k)) setDifficulty(DIFF_IDS[+k - 1]);
+      return;
+    }
+    if (k === "p" || k === "escape") { if (!e.repeat) togglePause(); return; }
+    if (state === "paused") { if (e.key === "Enter") togglePause(); return; }
+    if (!e.repeat && (k === "j" || k === "z")) punchPressed = true;
+    if (!e.repeat && (k === "k" || k === "x" || k === " ")) kickPressed = true;
+    if (KEYMAP[k]) keys[KEYMAP[k]] = true;
+  });
+  window.addEventListener("keyup", (e) => { const m = KEYMAP[e.key.toLowerCase()]; if (m) keys[m] = false; });
+  window.addEventListener("blur", () => { for (const k in keys) keys[k] = false; stick.x = stick.y = 0; if (isPlaying()) togglePause(); });
+  for (const [sel, fn] of [[".axe", () => { punchPressed = true; }], [".hop", () => { kickPressed = true; }]]) {
+    const b = touchEl.querySelector(sel);
+    b.addEventListener("pointerdown", (e) => { e.preventDefault(); fn(); b.classList.add("on"); });
+    for (const ev of ["pointerup", "pointercancel", "pointerleave"]) b.addEventListener(ev, () => b.classList.remove("on"));
+  }
+  const stickEl = touchEl.querySelector(".stick"), knob = stickEl.querySelector(".knob");
+  let stickId = null;
+  function stickAt(e) {
+    const r = stickEl.getBoundingClientRect(), max = r.width / 2 - 14;
+    let dx = e.clientX - (r.left + r.width / 2), dy = e.clientY - (r.top + r.height / 2);
+    const len = Math.hypot(dx, dy);
+    if (len > max) { dx *= max / len; dy *= max / len; }
+    knob.style.transform = `translate(${dx}px, ${dy}px)`;
+    const f = (v) => { const a = Math.abs(v) / max; return a < 0.18 ? 0 : Math.sign(v) * Math.min(1, (a - 0.18) / 0.55); };
+    stick.x = f(dx); stick.y = f(dy);
+  }
+  const stickEnd = (e) => { if (e.pointerId !== stickId) return; stickId = null; knob.style.transform = ""; stick.x = stick.y = 0; };
+  stickEl.addEventListener("pointerdown", (e) => { e.preventDefault(); stickId = e.pointerId; try { stickEl.setPointerCapture(e.pointerId); } catch { /* ignore */ } stickAt(e); });
+  stickEl.addEventListener("pointermove", (e) => { if (e.pointerId === stickId) stickAt(e); });
+  for (const ev of ["pointerup", "pointercancel", "lostpointercapture"]) stickEl.addEventListener(ev, stickEnd);
+  window.addEventListener("pointerdown", (e) => { if (e.pointerType === "touch" && !touchMode) { touchMode = true; syncControls(); if (menu) menu(); } }, true);
+
+  // ---------- Fighting ----------
+  const bodyH = (f) => (f.crouch ? CROUCH : STAND);
+  function startMove(f, m) {
+    f.state = "atk"; f.move = m; f.t = 0; f.hitDone = false;
+    if (m.air && f.y === 0) { f.vy = -JV * 0.85; f.y = -0.1; f.vx = f.face * 140; }
+    sfx.swing();
+  }
+  // an attack lands if the target is in reach and its body overlaps the height of the blow
+  function tryHit(a, b, m, isHero) {
+    const dx = (b.x - a.x) * a.face;
+    if (dx < m.r0 || dx > m.r1 + 10) return false;
+    const lo = m.band[0] - a.y, hi = m.band[1] - a.y, blo = -b.y, bhi = -b.y + bodyH(b);
+    if (hi < blo || lo > bhi) return false;
+    landHit(a, b, m.dmg, m, isHero, a.x);
+    return true;
+  }
+  function landHit(a, b, dmg, m, isHero, fromX) {
+    const high = m.band[0] >= 36, low = m.band[1] <= 18;
+    // a block: holding away from the blow on the ground, standing for high and middle blows, crouching for low and middle ones
+    if (b.block && b.y === 0 && b.state !== "atk" && b.stun <= 0 && !(high && b.crouch) && !(low && !b.crouch)) {
+      sfx.block(); burst(b.x - b.face * 4, FLOOR - (m.band[0] + m.band[1]) / 2, "#ffffff", 5, 80, 0.25);
+      b.x += Math.sign(b.x - fromX) * 10; return;
+    }
+    b.hp = Math.max(0, b.hp - dmg); b.stun = 0.32; b.flash = 0.15; b.state = "hit"; b.move = null;
+    b.x += Math.sign(b.x - fromX) * 22;
+    burst(b.x, FLOOR - b.y - (m.band[0] + m.band[1]) / 2, isHero ? "#ffd23a" : "#ff5a5a", 10, 120, 0.4);
+    shakeT = 0.12;
+    if (isHero) { sfx.hit(m.pts >= 200); addScore(m.pts * (1 + lap), b.x, FLOOR - 90 - b.y); }
+    else { sfx.hurt(); perfect = false; if (window.__hits) window.__hits.push([stage, Math.round(dmg)]); }
+  }
+  function updateFighter(f, dt, other, isHero) {
+    f.t += dt;
+    if (f.flash > 0) f.flash -= dt;
+    if (f.stun > 0) { f.stun -= dt; if (f.stun <= 0 && f.state === "hit") f.state = "idle"; }
+    // gravity
+    if (f.y !== 0 || f.vy) {
+      f.vy += GRAV * dt; f.y -= f.vy * dt * -1; f.y = Math.min(0, f.y);
+      f.x += (f.vx || 0) * dt;
+      if (f.y >= 0 && f.vy > 0) { f.y = 0; f.vy = 0; f.vx = 0; if (f.state === "jump") f.state = "idle"; if (f.state === "atk" && f.move.air) { f.state = "idle"; f.move = null; } }
+    }
+    if (f.state === "atk") {
+      const m = f.move, k = f.t;
+      if (m.lunge && k > m.startup && k < m.startup + m.active) f.x += f.face * m.lunge * dt;
+      if (k >= m.startup && !f.hitDone) {
+        if (m.proj) {
+          f.hitDone = true;
+          projs.push({ x: f.x + f.face * 24, band: m.proj.band, vx: f.face * m.proj.vx * (1 + 0.1 * lap), dmg: m.dmg * (isHero ? 1 : diff.dmg), hero: isHero, star: m.proj.star, fan: m.proj.fan, t: 0 });
+          if (m.proj.star || m.proj.fan) sfx.throw(); else sfx.fire();
+        } else if (k < m.startup + m.active) {
+          const mm = isHero ? m : { ...m, dmg: m.dmg * diff.dmg };
+          if (tryHit(f, other, mm, isHero)) f.hitDone = true;
+        }
+      }
+      if (k >= m.startup + m.active + m.recovery && !m.air) { f.state = "idle"; f.move = null; }
+      if (m.air && k >= m.startup + m.active + m.recovery && f.y === 0) { f.state = "idle"; f.move = null; }
+    }
+    f.x = clamp(f.x, WALL0, WALL1);
+    // keep the two apart
+    if (Math.abs(f.x - other.x) < 26 && f.y > -30 && other.y > -30) f.x = other.x - Math.sign(other.x - f.x || -f.face) * 26;
+    f.x = clamp(f.x, WALL0, WALL1);
+    if (f.state !== "atk" && f.y === 0) f.face = other.x > f.x ? 1 : -1;
+  }
+  function controlHero(dt) {
+    const mx = clamp((keys.right ? 1 : 0) - (keys.left ? 1 : 0) + stick.x, -1, 1);
+    const my = clamp((keys.down ? 1 : 0) - (keys.up ? 1 : 0) + stick.y, -1, 1);
+    const f = P, free = f.state === "idle" || f.state === "walk";
+    f.block = false;
+    if (f.stun > 0) { f.crouch = f.crouch && my > 0.5; return; }
+    if (f.y === 0 && free) {
+      f.crouch = my > 0.5;
+      const back = mx * f.face < -0.3;
+      f.block = back;
+      if (my < -0.55) { f.state = "jump"; f.vy = -JV; f.y = -0.1; f.vx = mx * 150; f.crouch = false; }
+      else if (!f.crouch && Math.abs(mx) > 0.25) { f.x += mx * 130 * dt; f.walk += dt * 10; f.state = "walk"; }
+      else f.state = "idle";
+      if (kickPressed) startMove(f, f.crouch ? HERO_MOVES.spazzata : HERO_MOVES.calcio);
+      else if (punchPressed) startMove(f, f.crouch ? HERO_MOVES.pugnoBasso : HERO_MOVES.pugno);
+    } else if (f.state === "jump" && (kickPressed || punchPressed)) {
+      f.state = "atk"; f.move = HERO_MOVES.volante; f.t = 0; f.hitDone = false; sfx.swing();
+    }
+  }
+  function controlMaster(dt) {
+    const f = E, ai = E.ai, slow = diff.slow / (1 + 0.1 * lap);
+    f.block = false;
+    if (f.stun > 0) return;
+    ai.cd -= dt; ai.think -= dt;
+    const dist = Math.abs(P.x - f.x), free = (f.state === "idle" || f.state === "walk") && f.y === 0;
+    // the master reacts to the hero's attacks sometimes: a jump over sweeps, a duck under high blows, a block
+    if (free && P.state === "atk" && P.t < 0.05 && !P.seenBy && dist < 90) {
+      P.seenBy = true;
+      const m = P.move;
+      if (m.band[1] <= 16 && Math.random() < 0.3 / diff.slow) { f.state = "jump"; f.vy = -JV * 0.9; f.y = -0.1; f.vx = -f.face * 60; return; }
+      if (Math.random() < E.guard / diff.slow) { f.block = true; f.blockT = 0.35; f.crouch = m.band[1] <= 18; }
+    }
+    if (P.state !== "atk") P.seenBy = false;
+    if (f.blockT > 0) { f.blockT -= dt; f.block = true; if (f.blockT <= 0) f.crouch = false; return; }
+    // too close: a quick jab, or a step back
+    if (free && dist < 46 && ai.cd < 0.6 && Math.random() < dt * 4 * M.aggr / slow) {
+      if (Math.random() < 0.65) { startMove(f, { startup: 0.17 * slow, active: 0.08, recovery: 0.22 * slow, r0: 4, r1: 46, band: [26, 46], dmg: 8 }); ai.cd = rnd(0.4, 0.9) * slow; return; }
+      ai.walk = -f.face; ai.think = 0.3;
+    }
+    if (!free) return;
+    if (ai.think > 0) { if (ai.walk) { f.x += ai.walk * M.speed * dt; f.walk += dt * 9; f.state = "walk"; } return; }
+    ai.think = rnd(0.12, 0.3) * slow;
+    ai.walk = 0; f.state = "idle";
+    const usable = M.moves.filter((m) => m.proj ? dist > 90 : dist >= m.r0 && dist <= m.r1 - 4);
+    if (ai.cd <= 0 && usable.length && Math.random() < 0.55 * M.aggr) {
+      const m = pick(usable), sm = { ...m, startup: m.startup * slow, recovery: m.recovery * slow };
+      startMove(f, sm);
+      ai.cd = rnd(0.5, 1.3) * slow / M.aggr;
+      return;
+    }
+    if (Math.random() < M.jump * 0.4) { f.state = "jump"; f.vy = -JV * 0.9; f.y = -0.1; f.vx = f.face * rnd(-80, 140); return; }
+    // keep to its favourite distance, with a little wandering
+    const want = M.range * rnd(0.7, 1.05);
+    ai.walk = dist > want + 10 ? f.face : dist < want - 30 ? -f.face * 0.7 : (Math.random() < 0.3 ? pick([-1, 1]) * 0.5 : 0);
+  }
+  function updateProjs(dt) {
+    for (const p of projs) {
+      p.t += dt; p.x += p.vx * dt;
+      if (p.x < WALL0 - 30 || p.x > WALL1 + 30) { p.gone = true; continue; }
+      const tgt = p.hero ? E : P;
+      if (Math.abs(p.x - tgt.x) < 14) {
+        const lo = p.band[0], hi = p.band[1], blo = -tgt.y, bhi = -tgt.y + bodyH(tgt);
+        if (!(hi < blo || lo > bhi)) { p.gone = true; landHit(p.hero ? P : E, tgt, p.dmg, { band: p.band, pts: 100 }, p.hero, p.x - Math.sign(p.vx) * 30); }
+      }
+    }
+    projs = projs.filter((p) => !p.gone);
+  }
+  function endFight(won) {
+    if (won) {
+      const bonus = 1000 * stage + Math.round(P.hp) * 20 + Math.ceil(timeLeft) * 10 + (perfect ? 3000 : 0);
+      score += bonus;
+      message = { text: perfect ? "PERFETTO!" : "VITTORIA!", sub: `${M.name} è al tappeto · bonus ${bonus.toLocaleString("it-IT")}`, t: 0, long: true };
+      E.state = "ko"; sfx.ko(); state = "clear"; stateT = 2.8;
+    } else {
+      if (window.__deaths) window.__deaths.push([stage, M.name, Math.round(E.hp)]);
+      lives--; P.state = "ko"; sfx.lose();
+      message = { text: timeLeft <= 0 ? "TEMPO SCADUTO!" : "AL TAPPETO!", sub: lives > 0 ? `si riprova con ${M.name}` : "", t: 0, long: true };
+      state = "dead"; stateT = 2.4;
+    }
+  }
+  function update(dt) {
+    clock += dt; sfxN = 0;
+    if (window.__bot) window.__bot(dt);
+    for (const p of parts) { p.t += dt; p.x += p.vx * dt; p.y += p.vy * dt; p.vy += 200 * dt; }
+    parts = parts.filter((p) => p.t < p.life);
+    for (const p of popups) { p.t += dt; p.y -= 22 * dt; }
+    popups = popups.filter((p) => p.t < 1.2);
+    if (shakeT > 0) shakeT -= dt;
+    if (message) { message.t += dt; if (message.t > (message.long ? 2.8 : 2.2)) message = null; }
+    const flags = () => { punchPressed = kickPressed = false; };
+    if (state === "intro") { stateT -= dt; flags(); if (stateT <= 0) state = "play"; return; }
+    if (state === "dead") { stateT -= dt; flags(); if (stateT <= 0) { if (lives <= 0) gameOver(); else beginFight(); } return; }
+    if (state === "clear") { stateT -= dt; flags(); if (stateT <= 0) { stage++; beginFight(); } return; }
+    if (state !== "play") { flags(); return; }
+    timeLeft -= dt;
+    controlHero(dt); flags();
+    controlMaster(dt);
+    updateFighter(P, dt, E, true);
+    updateFighter(E, dt, P, false);
+    updateProjs(dt);
+    if (E.hp <= 0) endFight(true);
+    else if (P.hp <= 0) endFight(false);
+    else if (timeLeft <= 0) { timeLeft = 0; endFight(P.hp / P.max > E.hp / E.max); }
+  }
+
+  // ---------- Drawing ----------
+  function drawFighter(f, isHero) {
+    const x = Math.round(f.x), base = FLOOR + f.y, s = f.face;
+    const skin = "#ffd8b0", gi = isHero ? "#f4f4f4" : M.color, belt = isHero ? "#c8281a" : "#1a1a1a";
+    if (f.flash > 0 && Math.floor(clock * 30) % 2) ctx.globalAlpha = 0.5;
+    ctx.fillStyle = "rgba(0,0,0,0.3)"; ctx.beginPath(); ctx.ellipse(x, FLOOR + 2, 20, 5, 0, 0, TAU); ctx.fill();
+    const m = f.state === "atk" ? f.move : null, k = m ? clamp((f.t - m.startup * 0.5) / (m.startup * 0.5 + 0.0001), 0, 1) : 0;
+    const strike = m && f.t >= m.startup && f.t < m.startup + m.active + 0.05;
+    ctx.lineCap = "round";
+    if (f.state === "ko") {
+      ctx.fillStyle = gi; ctx.fillRect(x - 30, FLOOR - 12, 50, 12); ctx.fillStyle = skin; ctx.beginPath(); ctx.arc(x - 34 * s, FLOOR - 8, 8, 0, TAU); ctx.fill();
+      ctx.globalAlpha = 1; return;
+    }
+    const crouch = f.crouch || (m && m.crouch), hip = base - (crouch ? 20 : 30), sh = hip - (crouch ? 18 : 24);
+    // legs
+    ctx.strokeStyle = gi; ctx.lineWidth = 8;
+    ctx.beginPath();
+    const walk = Math.sin(f.walk) * 6;
+    if (m && (m === HERO_MOVES.calcio || m.r1 >= 50 && !m.proj && !E.weaponLike && !isHero && !M.weapon) && strike && !m.air) { ctx.moveTo(x, hip); ctx.lineTo(x - s * 8, base); ctx.moveTo(x, hip); ctx.lineTo(x + s * (m.r1 - 8), base - (m.band[0] + m.band[1]) / 2); }
+    else if (m && m.air && strike) { ctx.moveTo(x, hip); ctx.lineTo(x + s * 44, base - 24); ctx.moveTo(x, hip); ctx.lineTo(x - s * 6, hip + 14); }
+    else if (m === HERO_MOVES.spazzata && strike) { ctx.moveTo(x, hip); ctx.lineTo(x - s * 14, base); ctx.moveTo(x, hip); ctx.lineTo(x + s * 54, base - 4); }
+    else if (crouch) { ctx.moveTo(x, hip); ctx.lineTo(x + s * 14, hip + 4); ctx.lineTo(x + s * 12, base); ctx.moveTo(x, hip); ctx.lineTo(x - s * 12, base); }
+    else if (f.y < 0) { ctx.moveTo(x, hip); ctx.lineTo(x + s * 12, hip + 10); ctx.lineTo(x + s * 4, hip + 22); ctx.moveTo(x, hip); ctx.lineTo(x - s * 10, hip + 18); }
+    else { ctx.moveTo(x, hip); ctx.lineTo(x + s * 8 + walk, base); ctx.moveTo(x, hip); ctx.lineTo(x - s * 8 - walk, base); }
+    ctx.stroke();
+    // body
+    ctx.fillStyle = gi; ctx.beginPath(); ctx.moveTo(x - 10, sh); ctx.lineTo(x + 10, sh); ctx.lineTo(x + 8, hip); ctx.lineTo(x - 8, hip); ctx.fill();
+    ctx.fillStyle = belt; ctx.fillRect(x - 9, hip - 5, 18, 4);
+    // arms and weapons
+    ctx.strokeStyle = skin; ctx.lineWidth = 6;
+    ctx.beginPath();
+    const armY = sh + 6;
+    if (f.block) { ctx.moveTo(x, armY); ctx.lineTo(x + s * 10, armY - 10); ctx.lineTo(x + s * 14, armY - 2); }
+    else if (m && !m.proj && (m === HERO_MOVES.pugno || m === HERO_MOVES.pugnoBasso) && strike) { ctx.moveTo(x, armY); ctx.lineTo(x + s * 34, base - (m.band[0] + m.band[1]) / 2); }
+    else if (m && m.proj) { ctx.moveTo(x, armY); ctx.lineTo(x + s * (strike ? 24 : 6), armY - (strike ? 0 : 12)); }
+    else { ctx.moveTo(x, armY); ctx.lineTo(x + s * 14, armY + 6); ctx.lineTo(x + s * 18, armY - 4); }
+    ctx.stroke();
+    if (!isHero && M.weapon && M.weapon !== "fuoco" && M.weapon !== "stelle" && M.weapon !== "ventagli") {
+      const reach = m && !m.proj ? (strike ? m.r1 - 8 : 10) : 10, wy = m && !m.proj ? base - (m.band[0] + m.band[1]) / 2 : armY - 6;
+      if (M.weapon === "bastone") { ctx.strokeStyle = "#a8743a"; ctx.lineWidth = 4; ctx.beginPath(); ctx.moveTo(x + s * (reach - 70 > -30 ? reach - 70 : -30), strike ? wy : armY + 20); ctx.lineTo(x + s * reach, strike ? wy : armY - 30); ctx.stroke(); }
+      else if (M.weapon === "catena") { ctx.strokeStyle = "#c8c8d8"; ctx.lineWidth = 2; ctx.setLineDash([3, 3]); ctx.beginPath(); ctx.moveTo(x + s * 12, armY); ctx.quadraticCurveTo(x + s * reach * 0.5, strike ? wy - 10 : armY + 20, x + s * reach, strike ? wy : armY + 10); ctx.stroke(); ctx.setLineDash([]); ctx.fillStyle = "#8a8a9a"; ctx.beginPath(); ctx.arc(x + s * reach, strike ? wy : armY + 10, 5, 0, TAU); ctx.fill(); }
+      else if (M.weapon === "spada") { ctx.strokeStyle = "#e8f4ff"; ctx.lineWidth = 3; ctx.beginPath(); ctx.moveTo(x + s * 16, strike ? wy : armY - 4); ctx.lineTo(x + s * (strike ? reach : 50), strike ? wy : armY - 40); ctx.stroke(); }
+    }
+    // head
+    ctx.fillStyle = skin; ctx.beginPath(); ctx.arc(x + s * 2, sh - 9, 8, 0, TAU); ctx.fill();
+    ctx.fillStyle = "#1a1a1a"; ctx.beginPath(); ctx.arc(x + s * 1, sh - 12, 8, Math.PI, TAU); ctx.fill();
+    if (isHero) { ctx.fillStyle = "#c8281a"; ctx.fillRect(x - 8, sh - 13, 16, 3); }
+    else { ctx.fillRect(x - s * 8, sh - 12, 4, 10); }
+    ctx.fillStyle = "#1a1a1a"; ctx.fillRect(x + s * 5, sh - 10, 2, 2);
+    ctx.globalAlpha = 1;
+  }
+  function drawProj(p) {
+    const y = FLOOR - (p.band[0] + p.band[1]) / 2;
+    if (p.star) { ctx.save(); ctx.translate(p.x, y); ctx.rotate(p.t * 20); ctx.fillStyle = "#e8e8f8"; for (let i = 0; i < 4; i++) { ctx.rotate(Math.PI / 2); ctx.beginPath(); ctx.moveTo(0, 0); ctx.lineTo(3, -3); ctx.lineTo(0, -10); ctx.lineTo(-3, -3); ctx.fill(); } ctx.restore(); }
+    else if (p.fan) { ctx.save(); ctx.translate(p.x, y); ctx.rotate(p.t * 12); ctx.fillStyle = "#ff6ad0"; ctx.beginPath(); ctx.moveTo(0, 0); ctx.arc(0, 0, 11, -1, 1); ctx.fill(); ctx.restore(); }
+    else { for (let i = 0; i < 4; i++) { ctx.fillStyle = ["#ffd23a", "#ff8a2a", "#ff4a2a", "rgba(255,60,20,0.5)"][i]; ctx.beginPath(); ctx.arc(p.x - Math.sign(p.vx) * i * 6, y, 9 - i * 1.5, 0, TAU); ctx.fill(); } }
+  }
+  function drawHud() {
+    ctx.fillStyle = "rgba(26,12,10,0.96)"; ctx.fillRect(0, 0, W, TOP);
+    ctx.textBaseline = "middle"; ctx.textAlign = "left";
+    const x0 = touchMode ? 130 : 10;
+    ctx.fillStyle = "#ffffff"; ctx.font = "900 15px system-ui"; ctx.fillText(score.toLocaleString("it-IT"), x0, 14);
+    ctx.fillStyle = "#e8c8a8"; ctx.font = "700 9px system-ui"; ctx.fillText(`REC ${Math.max(bestCache, score).toLocaleString("it-IT")}`, x0 + 80, 9);
+    ctx.fillStyle = "#ffcc3a"; ctx.font = "900 10px system-ui"; ctx.fillText(`INCONTRO ${stage}`, x0 + 80, 21);
+    const lx = touchMode ? W - 60 : W - 12;
+    for (let i = 0; i < Math.min(lives - (state === "dead" ? 0 : 1), 6); i++) { ctx.fillStyle = "#c8281a"; ctx.beginPath(); ctx.arc(lx - 5 - i * 13, 14, 5, 0, TAU); ctx.fill(); }
+    ctx.textBaseline = "alphabetic";
+    // the two energy bars and the clock
+    const bw = 200, by = TOP + 10;
+    for (const [f, x, right, name, col] of [[P, 40, false, "OOLONG", "#ffd23a"], [E, W - 40 - bw, true, M.name, M.color]]) {
+      ctx.fillStyle = "rgba(0,0,0,0.5)"; ctx.fillRect(x - 2, by - 2, bw + 4, 14);
+      const w = bw * f.hp / f.max;
+      ctx.fillStyle = f.hp / f.max < 0.3 ? "#ff4a3a" : col; ctx.fillRect(right ? x + bw - w : x, by, w, 10);
+      ctx.fillStyle = "#ffffff"; ctx.font = "900 10px system-ui"; ctx.textAlign = right ? "right" : "left"; ctx.fillText(name, right ? x + bw : x, by + 24);
+    }
+    ctx.textAlign = "center"; ctx.font = "900 20px system-ui"; ctx.fillStyle = timeLeft < 10 ? "#ff5a5a" : "#ffffff"; ctx.fillText(String(Math.ceil(timeLeft)), W / 2, by + 14);
+  }
+  function draw() {
+    ctx.setTransform(pxRatio, 0, 0, pxRatio, 0, 0);
+    if (!P) { M = MASTERS[0]; P = fighter(220, 1); E = fighter(420, -1); }
+    const sk = shakeT > 0 ? rnd(-2, 2) : 0;
+    ctx.save(); ctx.translate(sk, 0);
+    // the temple courtyard at dusk
+    const g = ctx.createLinearGradient(0, TOP, 0, FLOOR);
+    g.addColorStop(0, "#3a1a3a"); g.addColorStop(0.6, "#c8582a"); g.addColorStop(1, "#ffb05a");
+    ctx.fillStyle = g; ctx.fillRect(-4, TOP, W + 8, FLOOR - TOP);
+    ctx.fillStyle = "rgba(255,240,200,0.8)"; ctx.beginPath(); ctx.arc(500, 120, 26, 0, TAU); ctx.fill();
+    // mountains and the pagoda
+    ctx.fillStyle = "#5a2a3a"; ctx.beginPath(); ctx.moveTo(-4, 230); ctx.lineTo(90, 150); ctx.lineTo(180, 220); ctx.lineTo(300, 140); ctx.lineTo(420, 230); ctx.lineTo(W + 4, 190); ctx.lineTo(W + 4, FLOOR); ctx.lineTo(-4, FLOOR); ctx.fill();
+    ctx.fillStyle = "#2a1020";
+    for (let i = 0; i < 4; i++) { const w = 120 - i * 22, y = 250 - i * 34; ctx.fillRect(320 - w / 2 + 10, y, w - 20, 30); ctx.beginPath(); ctx.moveTo(320 - w / 2 - 10, y + 4); ctx.lineTo(320, y - 14); ctx.lineTo(320 + w / 2 + 10, y + 4); ctx.fill(); }
+    // lanterns and the stone floor
+    for (const lx of [70, 570]) { ctx.fillStyle = "#3a1a1a"; ctx.fillRect(lx - 2, 150, 4, FLOOR - 150); ctx.fillStyle = "#ff4a2a"; ctx.beginPath(); ctx.ellipse(lx, 150, 12, 16, 0, 0, TAU); ctx.fill(); ctx.fillStyle = "rgba(255,200,80,0.25)"; ctx.beginPath(); ctx.arc(lx, 150, 26, 0, TAU); ctx.fill(); }
+    ctx.fillStyle = "#6a4a3a"; ctx.fillRect(-4, FLOOR, W + 8, H - FLOOR);
+    ctx.fillStyle = "rgba(0,0,0,0.25)"; for (let x = 0; x < W; x += 48) ctx.fillRect(x, FLOOR, 2, H - FLOOR);
+    ctx.fillRect(-4, FLOOR + 18, W + 8, 2);
+    if (state !== "menu") { drawFighter(E, false); drawFighter(P, true); }
+    else { drawFighter(E, false); drawFighter(P, true); }
+    for (const p of projs) drawProj(p);
+    for (const p of parts) { ctx.globalAlpha = Math.max(0, 1 - p.t / p.life); ctx.fillStyle = p.c; ctx.fillRect(p.x - 2, p.y - 2, 4, 4); }
+    ctx.globalAlpha = 1;
+    for (const p of popups) {
+      ctx.globalAlpha = Math.max(0, 1 - p.t / 1.2);
+      ctx.textAlign = "center"; ctx.font = "900 12px system-ui";
+      ctx.lineWidth = 3; ctx.strokeStyle = "#1a0c0a"; ctx.strokeText(p.text, p.x, p.y); ctx.fillStyle = p.color; ctx.fillText(p.text, p.x, p.y);
+    }
+    ctx.globalAlpha = 1;
+    ctx.restore();
+    if (state === "menu") return;
+    drawHud();
+    if (state === "intro" && stateT < 0.9) { ctx.textAlign = "center"; ctx.font = "italic 900 34px system-ui"; ctx.fillStyle = "#ffffff"; ctx.lineWidth = 6; ctx.strokeStyle = "#1a0c0a"; ctx.strokeText("COMBATTI!", W / 2, 170); ctx.fillText("COMBATTI!", W / 2, 170); }
+    if (message) {
+      const life = message.long ? 2.8 : 2.2;
+      ctx.globalAlpha = Math.min(1, (life - message.t) * 2);
+      ctx.textAlign = "center"; ctx.font = "italic 900 24px system-ui"; ctx.fillStyle = "#ffcc3a";
+      ctx.lineWidth = 5; ctx.strokeStyle = "#1a0c0a"; ctx.strokeText(message.text, W / 2, 110); ctx.fillText(message.text, W / 2, 110);
+      if (message.sub) { ctx.font = "800 12px system-ui"; ctx.fillStyle = "#ffffff"; ctx.lineWidth = 4; ctx.strokeText(message.sub, W / 2, 130); ctx.fillText(message.sub, W / 2, 130); }
+      ctx.globalAlpha = 1;
+    }
+  }
+
+  // ---------- Loop ----------
+  const STEP = 1 / 120;
+  let last = performance.now(), acc = 0;
+  function frame(now) {
+    const dt = Math.min(0.1, (now - last) / 1000);
+    last = now;
+    if (isPlaying()) {
+      acc += dt;
+      while (acc >= STEP && isPlaying()) { update(STEP); acc -= STEP; }
+    } else { acc = 0; update(dt); }
+    draw();
+    requestAnimationFrame(frame);
+  }
+  syncControls();
+  showTitle();
+  requestAnimationFrame(frame);
+})();
+</script>
+<script src="../../shared/iniziali.js" data-record="torneo-best-" data-kind="score"></script>
+</body>
+</html>
