@@ -1,0 +1,624 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no, viewport-fit=cover">
+<title>Cresta Lunare</title>
+<style>
+  :root {
+    --bg: #06081a;
+    --fg: #f4f6ee;
+    --muted: #b8c8f0;
+    --pink: #5ae8ff;
+    --yellow: #8ae05a;
+    --red: #ff4a3a;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  html, body {
+    height: 100%;
+    background: var(--bg);
+    color: var(--fg);
+    font-family: system-ui, -apple-system, "Segoe UI", sans-serif;
+    overflow: hidden;
+    user-select: none;
+    -webkit-user-select: none;
+    touch-action: none;
+  }
+  #wrap { position: fixed; inset: 0; display: flex; align-items: center; justify-content: center; }
+  canvas { display: block; touch-action: none; border-radius: 6px; box-shadow: 0 0 0 2px #1a3a5a, 0 10px 40px rgba(0,0,0,0.6); }
+  #pauseBtn {
+    position: fixed; z-index: 3; display: none; right: 10px; top: calc(10px + env(safe-area-inset-top, 0px));
+    font: 700 13px system-ui, sans-serif; color: var(--fg);
+    background: rgba(0, 0, 0, 0.6); border: 1px solid rgba(244, 246, 238, 0.35);
+    border-radius: 8px; padding: 6px 10px; cursor: pointer;
+  }
+  #touch {
+    position: fixed; z-index: 2; display: none; left: 12px; right: 12px;
+    bottom: calc(14px + env(safe-area-inset-bottom, 0px));
+    justify-content: space-between; align-items: flex-end; pointer-events: none;
+  }
+  /* thumb stick: steer left and right (and up and down while docking); FUOCO shoots, and while docking it fires the retro-rockets */
+  #touch .stick { position: relative; width: 136px; height: 136px; border-radius: 50%; pointer-events: auto; touch-action: none;
+    border: 2px solid rgba(255, 200, 58, 0.6); background: radial-gradient(circle, rgba(255,200,58,0.14), rgba(255,200,58,0.04)); }
+  #touch .stick .knob { position: absolute; left: 50%; top: 50%; width: 58px; height: 58px; margin: -29px 0 0 -29px; border-radius: 50%;
+    background: rgba(255, 200, 58, 0.45); border: 2px solid rgba(255,255,255,0.7); box-shadow: 0 4px 10px rgba(0,0,0,0.4); pointer-events: none; }
+  #touch .stick .ring { position: absolute; inset: 10px; border-radius: 50%; border: 1px dashed rgba(244,246,238,0.25); pointer-events: none; }
+  #touch .jump { width: 96px; height: 96px; border-radius: 50%; pointer-events: auto; touch-action: none; color: var(--fg);
+    font: 800 13px system-ui, sans-serif; letter-spacing: 1px; border: 2px solid rgba(122, 228, 255, 0.9); background: rgba(122, 228, 255, 0.22); }
+  #touch .jump.on { background: rgba(122, 228, 255, 0.55); }
+  #touch.small .stick { width: 112px; height: 112px; }
+  #touch.small .stick .knob { width: 48px; height: 48px; margin: -24px 0 0 -24px; }
+  #touch.small .jump { width: 80px; height: 80px; font-size: 11px; }
+  #touch .btns { display: flex; flex-direction: column; align-items: center; gap: 10px; pointer-events: none; }
+  #touch .jump.axe { width: 64px; height: 64px; font-size: 11px; border-color: rgba(255, 244, 200, 0.9); background: rgba(255, 244, 200, 0.16); }
+  #touch .jump.axe.on { background: rgba(255, 244, 200, 0.5); }
+  #touch.small .jump.axe { width: 54px; height: 54px; font-size: 10px; }
+  #overlay {
+    position: fixed; inset: 0; z-index: 5;
+    display: flex; flex-direction: column; align-items: center; justify-content: flex-start;
+    gap: 14px; padding: 16px; text-align: center; overflow-y: auto;
+    background: rgba(6, 8, 26, 0.93);
+  }
+  #overlay > :first-child { margin-top: auto; }
+  #overlay > :last-child { margin-bottom: auto; }
+  #overlay.hidden { display: none; }
+  #homeLink {
+    position: fixed; top: calc(10px + env(safe-area-inset-top, 0px)); left: 10px; z-index: 6;
+    font: 600 13px/1 system-ui, sans-serif; color: #fff; text-decoration: none;
+    padding: 8px 12px; border-radius: 999px; background: rgba(0,0,0,.55);
+    border: 1px solid rgba(255,255,255,.25);
+  }
+  #homeLink:hover { background: rgba(0,0,0,.8); }
+  #overlay.hidden ~ #homeLink { display: none; }
+  @media (max-width: 700px) { #overlay { padding-top: calc(52px + env(safe-area-inset-top, 0px)); } }
+  #overlay h1 { font-size: clamp(32px, 10vw, 58px); font-weight: 900; font-style: italic; letter-spacing: 1px; color: var(--pink);
+    text-shadow: 3px 3px 0 #6a1a4a, 0 0 22px rgba(255,122,184,0.35); }
+  #overlay h2 { font-size: clamp(26px, 7vw, 42px); font-weight: 900; letter-spacing: 2px; color: var(--pink); }
+  #overlay h2.lose { color: var(--red); }
+  #overlay p { max-width: 540px; font-size: clamp(13px, 3.4vw, 16px); line-height: 1.55; }
+  #overlay p.muted { color: var(--muted); }
+  #overlay .pts { display: grid; grid-template-columns: repeat(2, auto); gap: 4px 18px; font-size: 13px; color: var(--muted); text-align: left; max-width: 560px; }
+  #overlay .pts b { color: var(--fg); }
+  #overlay .diff { display: flex; gap: 10px; flex-wrap: wrap; justify-content: center; }
+  #overlay button {
+    font: 800 15px system-ui, sans-serif; letter-spacing: 1.5px; color: var(--fg);
+    background: transparent; cursor: pointer;
+    border: 2px solid rgba(244,246,238,0.3); border-radius: 10px; padding: 9px 16px;
+  }
+  #overlay .diff button.on { border-color: var(--c); color: var(--c); box-shadow: 0 0 12px var(--c); }
+  #overlay button.start { border-color: var(--pink); color: #04202a; background: var(--pink); padding: 11px 30px; box-shadow: 0 4px 0 #1a8aa8; }
+  @media (max-height: 560px) {
+    #overlay { gap: 8px; }
+    #overlay h1 { font-size: 30px; }
+    #overlay p { font-size: 13px; line-height: 1.4; }
+    #overlay .help, #overlay .pts { display: none; }
+  }
+</style>
+</head>
+<body>
+<div id="wrap"><canvas id="game"></canvas></div>
+<div id="touch">
+  <div class="stick" aria-label="Levetta"><div class="ring"></div><div class="knob"></div></div>
+  <div class="btns"><button type="button" class="jump hop" aria-label="Fuoco">FUOCO</button></div>
+</div>
+<button id="pauseBtn" type="button" aria-label="Pausa">❚❚</button>
+<div id="overlay"></div>
+<a id="homeLink" href="../../index.html">← Sala Giochi</a>
+
+
+<script>
+(() => {
+  "use strict";
+
+  const W = 640, H = 360, TAU = Math.PI * 2, TOP = 28;
+  const BASE = 334, SEG = 17, DOCK_Y = BASE;
+  const WAVES = ["OCCHI FREDDI", "SUPER MOSCHE", "PILE ATOMICHE", "PIOGGIA DI METEORE"];
+
+  const DIFFICULTIES = {
+    facile:    { label: "FACILE",    color: "#7ed87a", desc: "3 stadi di riserva · nemici più lenti · aggancio più facile", reserve: 3, speed: 0.82, fire: 0.6, dock: 1.5 },
+    normale:   { label: "NORMALE",   color: "#5ae8ff", desc: "2 stadi di riserva", reserve: 2, speed: 0.95, fire: 0.88, dock: 1 },
+    difficile: { label: "DIFFICILE", color: "#ff5a5a", desc: "2 stadi di riserva · nemici più svelti e aggressivi · aggancio più delicato", reserve: 2, speed: 1.2, fire: 1.4, dock: 0.75 },
+  };
+  const DIFF_IDS = Object.keys(DIFFICULTIES);
+  const DIFF_KEY = "cresta-difficulty";
+  const bestKey = (id) => `cresta-best-${id}`;
+  function store(k, v) { try { localStorage.setItem(k, v); } catch { /* ignore */ } }
+  function load(k) { try { return localStorage.getItem(k); } catch { return null; } }
+  const rnd = (a, b) => a + Math.random() * (b - a);
+  const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
+  const pick = (arr) => arr[Math.floor(Math.random() * arr.length)];
+
+  // ---------- Canvas ----------
+  const canvas = document.getElementById("game");
+  const ctx = canvas.getContext("2d");
+  const wrapEl = document.getElementById("wrap");
+  const overlay = document.getElementById("overlay");
+  const touchEl = document.getElementById("touch");
+  const pauseBtn = document.getElementById("pauseBtn");
+  let pxRatio = 1, touchMode = !!(window.matchMedia && matchMedia("(pointer: coarse)").matches);
+  function resize() {
+    const portrait = window.innerHeight > window.innerWidth;
+    const showTouch = touchMode && isPlaying();
+    touchEl.style.display = showTouch ? "flex" : "none";
+    touchEl.classList.toggle("small", !portrait && window.innerHeight < 480);
+    wrapEl.style.paddingBottom = showTouch && portrait ? "calc(170px + env(safe-area-inset-bottom, 0px))" : "0";
+    let availW = window.innerWidth - 8, availH = window.innerHeight - 8;
+    if (showTouch && portrait) availH -= 170;
+    if (showTouch && !portrait) {
+      const side = Math.max(...[...touchEl.children].map((el) => el.offsetWidth)) + 20;
+      if (window.innerWidth - 2 * side > 200) availW = window.innerWidth - 2 * side;
+    }
+    const s = Math.max(0.2, Math.min(availW / W, availH / H));
+    pxRatio = Math.min(3, s * (window.devicePixelRatio || 1));
+    canvas.style.width = W * s + "px";
+    canvas.style.height = H * s + "px";
+    canvas.width = Math.round(W * pxRatio);
+    canvas.height = Math.round(H * pxRatio);
+  }
+  window.addEventListener("resize", () => syncControls());
+
+  // ---------- Audio ----------
+  let audioCtx = null;
+  function beep(freq, dur, type = "square", vol = 0.04, slide = 0, delay = 0) {
+    if (!audioCtx) return;
+    const t = audioCtx.currentTime + delay;
+    const osc = audioCtx.createOscillator(), gain = audioCtx.createGain();
+    osc.type = type;
+    osc.frequency.setValueAtTime(freq, t);
+    if (slide) osc.frequency.exponentialRampToValueAtTime(Math.max(20, freq + slide), t + dur);
+    gain.gain.setValueAtTime(vol, t);
+    gain.gain.exponentialRampToValueAtTime(0.0001, t + dur);
+    osc.connect(gain).connect(audioCtx.destination);
+    osc.start(t); osc.stop(t + dur + 0.02);
+  }
+  function noise(dur, vol, freq) {
+    if (!audioCtx) return;
+    const len = Math.floor(audioCtx.sampleRate * dur), buf = audioCtx.createBuffer(1, len, audioCtx.sampleRate), d = buf.getChannelData(0);
+    for (let i = 0; i < len; i++) d[i] = (Math.random() * 2 - 1) * (1 - i / len);
+    const src = audioCtx.createBufferSource(), f = audioCtx.createBiquadFilter(), g = audioCtx.createGain();
+    src.buffer = buf; f.type = "bandpass"; f.frequency.value = freq; g.gain.value = vol;
+    src.connect(f).connect(g).connect(audioCtx.destination); src.start();
+  }
+  const arp = (notes, gap, d, type = "square", vol = 0.04) => notes.forEach((f, i) => beep(f, d, type, vol, 0, i * gap));
+  let sfxN = 0;
+  const lim = (fn) => (...a) => { if (sfxN++ < 6) fn(...a); };
+  const sfx = {
+    shot: lim(() => beep(1400, 0.06, "square", 0.022, -900)),
+    kill: lim(() => { noise(0.12, 0.08, 1400); beep(500, 0.08, "square", 0.03, -300); }),
+    split: lim(() => arp([700, 900], 0.04, 0.06, "square", 0.03)),
+    dive: lim(() => beep(900, 0.4, "sine", 0.02, -600)),
+    hit: () => { noise(0.4, 0.14, 300); beep(200, 0.3, "sawtooth", 0.05, -120); },
+    thrust: lim(() => noise(0.05, 0.03, 500)),
+    dock: () => arp([392, 523, 659, 784, 1047, 1319], 0.07, 0.12, "square", 0.045),
+    fail: () => arp([400, 300, 200], 0.1, 0.15, "sawtooth", 0.04),
+    wave: () => arp([523, 659, 784], 0.06, 0.1, "square", 0.04),
+    over: () => arp([523, 466, 415, 392, 330, 262], 0.15, 0.24, "triangle", 0.05),
+  };
+
+  // ---------- State ----------
+  let difficulty = DIFFICULTIES[load(DIFF_KEY)] ? load(DIFF_KEY) : "normale";
+  let diff = DIFFICULTIES[difficulty];
+  let state = "menu", menu = null, pausedFrom = null, stateT = 0, clock = 0;
+  let score = 0, wave = 1, bestCache = 0, nextStage = 30000, reserve = 2;
+  let P = null, foes = [], shots = [], eshots = [], parts = [], popups = [], stars = [], message = null, toSpawn = 0, spawnT = 0, dock = null;
+  let fireHeld = false, firePressed = false;
+  const keys = { left: false, right: false, up: false, down: false };
+  const stick = { x: 0, y: 0 };
+  for (let i = 0; i < 70; i++) stars.push({ x: Math.random() * W, y: TOP + Math.random() * (H - TOP), s: rnd(10, 60), c: pick(["#ffffff", "#8ad8ff", "#ffd8a8"]) });
+
+  // ---------- Flow ----------
+  const isPlaying = () => ["intro", "play", "dead", "dock", "clear"].includes(state);
+  function startGame() {
+    if (!audioCtx) { try { audioCtx = new (window.AudioContext || window.webkitAudioContext)(); } catch { audioCtx = null; } }
+    if (audioCtx && audioCtx.state === "suspended") audioCtx.resume();
+    score = 0; wave = 1; nextStage = 30000; reserve = diff.reserve;
+    bestCache = parseInt(load(bestKey(difficulty)), 10) || 0;
+    P = { x: W / 2, s: 1, cd: 0, safe: 1.5 };
+    beginWave();
+    menu = null;
+    overlay.classList.add("hidden");
+    syncControls();
+    last = performance.now();
+  }
+  const kind = () => (wave - 1) % 4;
+  function beginWave() {
+    foes = []; shots = []; eshots = [];
+    toSpawn = 12 + Math.min(8, wave - 1); spawnT = 0.5;
+    message = { text: `ONDATA ${wave}`, sub: WAVES[kind()].toLowerCase(), t: 0 };
+    state = "intro"; stateT = 1.6; sfx.wave();
+  }
+  const pace = () => diff.speed * (1 + 0.06 * Math.min(10, wave - 1));
+  function addScore(n, x, y, color = "#ffffff", text) {
+    score += n;
+    if (score >= nextStage) { nextStage += 60000; reserve = Math.min(4, reserve + 1); arp([523, 659, 784, 1047, 1319], 0.07, 0.12); popups.push({ x: P.x, y: BASE - 70, text: "STADIO EXTRA!", color: "#7ed87a", t: 0 }); }
+    if (x !== undefined) popups.push({ x, y, text: text || String(n), color, t: 0 });
+  }
+  function burst(x, y, c, n = 12, sp = 110, life = 0.6) {
+    for (let k = 0; k < n; k++) { const a = Math.random() * TAU, s = sp * rnd(0.3, 1); parts.push({ x, y, vx: Math.cos(a) * s, vy: Math.sin(a) * s, t: 0, life: life * rnd(0.6, 1.2), c }); }
+  }
+  // a hit costs the ship its top stage; with none left a stage from the reserve takes off
+  function hitShip(by) {
+    if (state !== "play" || P.safe > 0) return;
+    if (window.__deaths) window.__deaths.push([wave, by, P.s, reserve]);
+    if (window.__god) return;
+    sfx.hit(); burst(P.x, BASE - P.s * SEG + 8, "#ff8a3a", 24, 140, 0.8);
+    P.s--;
+    if (P.s > 0) { P.safe = 1.6; message = { text: "STADIO PERSO!", t: 0 }; return; }
+    state = "dead"; stateT = 2;
+    message = { text: reserve > 0 ? "RAZZO DISTRUTTO!" : "FINE DELLA MISSIONE", sub: reserve > 0 ? "parte uno stadio di riserva" : "", t: 0 };
+  }
+  function gameOver() {
+    state = "over";
+    const prev = parseInt(load(bestKey(difficulty)), 10) || 0;
+    const record = score > prev;
+    if (record) store(bestKey(difficulty), String(score));
+    sfx.over();
+    menu = () => showOverlay(
+      `<h2 class="lose">GAME OVER</h2>
+       <p>Punteggio: <b>${score.toLocaleString("it-IT")}</b> · ondata ${wave} · ${diff.label}</p>
+       ${record ? "<p style='color:var(--pink)'>★ NUOVO RECORD! ★</p>" : ""}
+       ${difficultyHTML()}
+       <button class="start" data-start>NUOVA MISSIONE</button>`
+    );
+    menu();
+    syncControls();
+  }
+  function togglePause() {
+    if (isPlaying()) {
+      pausedFrom = state; state = "paused";
+      showOverlay(`<h2>PAUSA</h2><button class="start" data-resume>CONTINUA</button><p class="muted">Premi P per continuare</p>`);
+    } else if (state === "paused") {
+      state = pausedFrom; overlay.classList.add("hidden"); last = performance.now();
+    }
+    syncControls();
+  }
+  // the pause menu can end the game (shared/iniziali.js): it ends here the usual way, saving the record
+  window.addEventListener("sala:termina", () => { if (state !== "paused") return; state = pausedFrom; overlay.classList.add("hidden"); gameOver(); syncControls(); });
+  function syncControls() {
+    pauseBtn.style.display = isPlaying() && touchMode ? "block" : "none";
+    resize();
+  }
+  pauseBtn.addEventListener("click", () => togglePause());
+  function showOverlay(html) { overlay.innerHTML = html; overlay.classList.remove("hidden"); }
+  function difficultyHTML() {
+    const buttons = DIFF_IDS.map((id) => {
+      const d = DIFFICULTIES[id];
+      return `<button type="button" data-diff="${id}" class="${id === difficulty ? "on" : ""}" style="--c:${d.color}">${d.label}</button>`;
+    }).join("");
+    const best = parseInt(load(bestKey(difficulty)), 10);
+    return `<div class="diff">${buttons}</div><p class="muted">${diff.desc}${best ? ` · Record: ${best.toLocaleString("it-IT")}` : ""}</p>`;
+  }
+  function setDifficulty(id) { if (!DIFFICULTIES[id]) return; difficulty = id; diff = DIFFICULTIES[id]; store(DIFF_KEY, id); if (menu) menu(); }
+  function showTitle() {
+    menu = showTitle;
+    showOverlay(
+      `<h1>CRESTA LUNARE</h1>
+       <p>Il tuo razzo è fatto di stadi. Si parte con il più piccolo; ogni due ondate ne arriva un altro dalla riserva e va agganciato sopra, scendendo piano con i retrorazzi. Più stadi vuol dire più cannoni, ma anche un bersaglio più grande: ogni colpo ne fa perdere uno.</p>
+       <div class="pts">
+         <span><b>Ondate</b></span><span>occhi freddi 50 · super mosche 80 · pile atomiche 100 e si dividono · meteore 60 · in picchiata valgono il doppio</span>
+         <span><b>Aggancio</b></span><span>allineati e tocca piano: 1.000 per ondata più un bonus per la delicatezza · se sbagli nessun danno, lo stadio resta in riserva</span>
+       </div>
+       ${touchMode
+         ? `<p class="muted help">Levetta per spostarti · FUOCO per sparare (tieni premuto) e, nell'aggancio, per i retrorazzi</p>`
+         : `<p class="muted help">Frecce o A D per spostarti · SPAZIO, J o X per sparare e, nell'aggancio, per i retrorazzi · P pausa</p>`}
+       ${difficultyHTML()}
+       <button class="start" data-start>DECOLLO!</button>`
+    );
+  }
+  overlay.addEventListener("click", (e) => {
+    const d = e.target.closest("[data-diff]");
+    if (d) { setDifficulty(d.dataset.diff); return; }
+    if (e.target.closest("[data-start]")) startGame();
+    if (e.target.closest("[data-resume]")) togglePause();
+  });
+
+  // ---------- Input ----------
+  const KEYMAP = { arrowleft: "left", a: "left", arrowright: "right", d: "right", arrowup: "up", w: "up", arrowdown: "down", s: "down" };
+  const FIREKEYS = [" ", "j", "x", "z", "k"];
+  window.addEventListener("keydown", (e) => {
+    const k = e.key.toLowerCase();
+    if ([" ", "arrowup", "arrowdown", "arrowleft", "arrowright"].includes(k)) e.preventDefault();
+    if (state === "menu" || state === "over") {
+      if (e.key === "Enter") startGame();
+      else if (["1", "2", "3"].includes(k)) setDifficulty(DIFF_IDS[+k - 1]);
+      return;
+    }
+    if (k === "p" || k === "escape") { if (!e.repeat) togglePause(); return; }
+    if (state === "paused") { if (e.key === "Enter") togglePause(); return; }
+    if (FIREKEYS.includes(k)) { if (!e.repeat) firePressed = true; fireHeld = true; }
+    if (KEYMAP[k]) keys[KEYMAP[k]] = true;
+  });
+  window.addEventListener("keyup", (e) => { const k = e.key.toLowerCase(); if (KEYMAP[k]) keys[KEYMAP[k]] = false; if (FIREKEYS.includes(k)) fireHeld = false; });
+  window.addEventListener("blur", () => { for (const k in keys) keys[k] = false; fireHeld = false; stick.x = stick.y = 0; if (isPlaying()) togglePause(); });
+  {
+    const b = touchEl.querySelector(".hop");
+    b.addEventListener("pointerdown", (e) => { e.preventDefault(); firePressed = true; fireHeld = true; b.classList.add("on"); });
+    for (const ev of ["pointerup", "pointercancel", "pointerleave"]) b.addEventListener(ev, () => { fireHeld = false; b.classList.remove("on"); });
+  }
+  const stickEl = touchEl.querySelector(".stick"), knob = stickEl.querySelector(".knob");
+  let stickId = null;
+  function stickAt(e) {
+    const r = stickEl.getBoundingClientRect(), max = r.width / 2 - 14;
+    let dx = e.clientX - (r.left + r.width / 2), dy = e.clientY - (r.top + r.height / 2);
+    const len = Math.hypot(dx, dy);
+    if (len > max) { dx *= max / len; dy *= max / len; }
+    knob.style.transform = `translate(${dx}px, ${dy}px)`;
+    const f = (v) => { const a = Math.abs(v) / max; return a < 0.15 ? 0 : Math.sign(v) * Math.min(1, (a - 0.15) / 0.55); };
+    stick.x = f(dx); stick.y = f(dy);
+  }
+  const stickEnd = (e) => { if (e.pointerId !== stickId) return; stickId = null; knob.style.transform = ""; stick.x = stick.y = 0; };
+  stickEl.addEventListener("pointerdown", (e) => { e.preventDefault(); stickId = e.pointerId; try { stickEl.setPointerCapture(e.pointerId); } catch { /* ignore */ } stickAt(e); });
+  stickEl.addEventListener("pointermove", (e) => { if (e.pointerId === stickId) stickAt(e); });
+  for (const ev of ["pointerup", "pointercancel", "lostpointercapture"]) stickEl.addEventListener(ev, stickEnd);
+  window.addEventListener("pointerdown", (e) => { if (e.pointerType === "touch" && !touchMode) { touchMode = true; syncControls(); if (menu) menu(); } }, true);
+
+  // ---------- The rocket ----------
+  const mx = () => clamp((keys.right ? 1 : 0) - (keys.left ? 1 : 0) + stick.x, -1, 1);
+  function updateShip(dt) {
+    if (P.safe > 0) P.safe -= dt;
+    if (P.cd > 0) P.cd -= dt;
+    P.x = clamp(P.x + mx() * 210 * dt, 20, W - 20);
+    // one cannon per stage: the second adds two side guns, the third two angled ones
+    if ((firePressed || fireHeld) && P.cd <= 0 && shots.length < 2 + P.s * 2) {
+      const top = BASE - P.s * SEG;
+      shots.push({ x: P.x, y: top, vx: 0, vy: -480 });
+      if (P.s >= 2) { shots.push({ x: P.x - 11, y: top + SEG, vx: 0, vy: -480 }); shots.push({ x: P.x + 11, y: top + SEG, vx: 0, vy: -480 }); }
+      if (P.s >= 3) { shots.push({ x: P.x - 14, y: top + SEG * 2, vx: -120, vy: -440 }); shots.push({ x: P.x + 14, y: top + SEG * 2, vx: 120, vy: -440 }); }
+      P.cd = 0.24; sfx.shot();
+    }
+  }
+  // ---------- The aliens ----------
+  function spawnFoe() {
+    const k = kind(), side = Math.random() < 0.5 ? -1 : 1, sp = pace();
+    if (k === 0) foes.push({ k, x: side < 0 ? -20 : W + 20, y: rnd(70, 150), vx: -side * 0, hp: 1, t: rnd(0, 6), cx: rnd(120, 520), cy: rnd(70, 160), mode: "fly", cd: rnd(1, 3) / diff.fire, enter: side });
+    else if (k === 1) foes.push({ k, x: rnd(60, 580), y: TOP - 10, hp: 1, t: 0, mode: "fly", cx: rnd(80, 560), cy: rnd(60, 150), cd: rnd(0.8, 2) / diff.fire, enter: 0 });
+    else if (k === 2) foes.push({ k, x: rnd(60, 580), y: TOP - 10, vx: rnd(-90, 90) * sp, vy: rnd(40, 70) * sp, hp: 2, r: 13, t: 0, mode: "bounce", cd: 99 });
+    else foes.push({ k, x: rnd(40, 600), y: TOP - 14, vx: rnd(-40, 40) * sp, vy: rnd(70, 110) * sp, hp: Math.random() < 0.4 ? 2 : 1, r: Math.random() < 0.4 ? 14 : 9, t: 0, mode: "fall", cd: 99, rot: 0 });
+  }
+  function updateFoes(dt) {
+    const sp = pace();
+    spawnT -= dt;
+    if (toSpawn > 0 && spawnT <= 0) { spawnFoe(); toSpawn--; spawnT = (kind() === 3 ? 0.6 : 0.45) / sp; }
+    for (const f of foes) {
+      f.t += dt;
+      if (f.mode === "fly") {
+        // circling in the upper sky, sometimes swooping down on the rocket
+        const tx = f.cx + Math.sin(f.t * 0.9 * sp) * 70, ty = f.cy + Math.sin(f.t * 1.7 * sp) * 25;
+        const k = Math.min(1, dt * 2.5); f.x += (tx - f.x) * k; f.y += (ty - f.y) * k;
+        f.cd -= dt;
+        if (f.cd <= 0) {
+          f.cd = rnd(1.4, 3) / (diff.fire * sp * (0.7 + 0.05 * Math.min(10, wave - 1)));
+          if (Math.random() < (f.k === 1 ? 0.45 : 0.3) * diff.fire) { f.mode = "dive"; f.vx = (P.x - f.x) * 0.7; f.vy = (f.k === 1 ? 210 : 160) * sp; f.dt = 0; sfx.dive(); }
+          else if (Math.random() < 0.6) { const a = Math.atan2(BASE - 20 - f.y, P.x - f.x); eshots.push({ x: f.x, y: f.y + 8, vx: Math.cos(a) * 150 * sp, vy: Math.sin(a) * 150 * sp }); }
+        }
+      } else if (f.mode === "dive") {
+        f.dt += dt; f.x += f.vx * dt; f.y += f.vy * dt;
+        if (f.k === 1) f.x += Math.sin(f.dt * 8) * 140 * dt;
+        if (f.dt > 0.4 && f.dt < 0.45 && Math.random() < 0.5 * diff.fire) eshots.push({ x: f.x, y: f.y + 8, vx: 0, vy: 200 * sp });
+        if (f.y > H + 20) { f.y = TOP - 20; f.mode = "fly"; f.cd = rnd(1, 2.5) / diff.fire; }
+      } else if (f.mode === "bounce") {
+        // the atomic piles bounce around the screen
+        f.x += f.vx * dt; f.y += f.vy * dt;
+        if (f.x < f.r || f.x > W - f.r) { f.vx = -f.vx; f.x = clamp(f.x, f.r, W - f.r); }
+        if (f.y < TOP + f.r && f.vy < 0) f.vy = -f.vy;
+        if (f.y > BASE - 6 - f.r && f.vy > 0) f.vy = -Math.abs(f.vy);
+      } else {
+        f.x += f.vx * dt; f.y += f.vy * dt; f.rot += dt * 2;
+        if (f.y > H + 20) f.gone = true;
+      }
+      // touching the rocket
+      const top = BASE - P.s * SEG, rr = f.r || 9;
+      if (P.safe <= 0 && f.x + rr > P.x - 10 && f.x - rr < P.x + 10 && f.y + rr > top && f.y - rr < BASE) { f.dead = true; burst(f.x, f.y, "#ffd23a", 10, 100, 0.4); hitShip("urto"); }
+    }
+    foes = foes.filter((f) => !f.dead && !f.gone);
+  }
+  function killFoe(f) {
+    f.dead = true; sfx.kill();
+    const base = [50, 80, 100, 60][f.k], pts = (f.mode === "dive" ? 2 : 1) * base * (1 + Math.floor((wave - 1) / 4));
+    burst(f.x, f.y, ["#5ae8ff", "#7aff6a", "#ff6ad0", "#c8a87a"][f.k], 12, 110, 0.5);
+    addScore(pts, f.x, f.y - 14, f.mode === "dive" ? "#ffd23a" : "#ffffff");
+    // an atomic pile splits in two smaller ones
+    if (f.k === 2 && f.r > 9) for (const s of [-1, 1]) foes.push({ k: 2, x: f.x + s * 6, y: f.y, vx: s * Math.abs(f.vx || 80) * 1.2, vy: -Math.abs(f.vy) * 0.9, hp: 1, r: 8, t: 0, mode: "bounce", cd: 99 });
+  }
+  function updateShots(dt) {
+    for (const s of shots) {
+      s.x += s.vx * dt; s.y += s.vy * dt;
+      if (s.y < TOP - 10 || s.x < -10 || s.x > W + 10) { s.gone = true; continue; }
+      for (const f of foes) {
+        if (f.dead) continue;
+        const rr = f.r || 11;
+        if (Math.abs(s.x - f.x) < rr + 2 && Math.abs(s.y - f.y) < rr + 4) { s.gone = true; f.hp--; if (f.hp <= 0) killFoe(f); else { sfx.split(); burst(s.x, s.y, "#ffffff", 4, 60, 0.2); } break; }
+      }
+    }
+    shots = shots.filter((s) => !s.gone);
+    const top = BASE - P.s * SEG;
+    for (const s of eshots) {
+      s.x += s.vx * dt; s.y += s.vy * dt;
+      if (s.y > H + 10 || s.x < -10 || s.x > W + 10) s.gone = true;
+      if (!s.gone && Math.abs(s.x - P.x) < 9 && s.y > top && s.y < BASE) { s.gone = true; hitShip("colpo"); }
+    }
+    eshots = eshots.filter((s) => !s.gone);
+  }
+  // ---------- Docking ----------
+  function beginDock() {
+    dock = { x: W / 2 + rnd(-140, 140), sx: W / 2 + rnd(-200, 200), y: 90, vx: 0, vy: 30, t: 0, thrust: false };
+    message = { text: "AGGANCIO!", sub: "allineati sullo stadio in attesa e scendi piano · FUOCO accende i retrorazzi", t: 0, long: true };
+    state = "dock"; stateT = 0;
+  }
+  function updateDock(dt) {
+    const d = dock;
+    d.t += dt;
+    d.vx = clamp(d.vx + mx() * 260 * dt, -110, 110); d.vx *= Math.pow(0.25, dt);
+    d.thrust = fireHeld;
+    d.vy += (d.thrust ? -120 : 55) * dt; d.vy = clamp(d.vy, -60, 140);
+    if (d.thrust && Math.random() < dt * 20) { sfx.thrust(); parts.push({ x: d.sx + rnd(-4, 4), y: d.y + 4, vx: rnd(-20, 20), vy: rnd(60, 110), t: 0, life: 0.3, c: "#ffb03a" }); }
+    d.sx = clamp(d.sx + d.vx * dt, 20, W - 20); d.y += d.vy * dt;
+    d.y = Math.max(d.y, TOP + 30);
+    // the bottom of the descending rocket meets the top of the waiting stage
+    const meet = DOCK_Y - SEG;
+    if (d.y >= meet) {
+      const okX = Math.abs(d.sx - d.x) < 9 * diff.dock, okV = d.vy < 45 * diff.dock;
+      if (okX && okV) {
+        P.s++; reserve--; P.x = d.x; sfx.dock();
+        const bonus = 1000 * Math.ceil(wave / 2) + Math.round((45 * diff.dock - d.vy) * 20 + (9 * diff.dock - Math.abs(d.sx - d.x)) * 50);
+        addScore(bonus, d.x, BASE - P.s * SEG - 20, "#7ed87a", `AGGANCIATO! +${bonus.toLocaleString("it-IT")}`);
+        message = { text: "AGGANCIATO!", sub: `il razzo ha ${P.s} stadi`, t: 0 };
+        if (window.__docks) window.__docks.push(1);
+      } else {
+        sfx.fail(); P.x = d.x;
+        message = { text: "AGGANCIO FALLITO", sub: okX ? "troppo veloce: lo stadio resta in riserva" : "non eri allineato: lo stadio resta in riserva", t: 0 };
+        if (window.__docks) window.__docks.push(0);
+      }
+      dock = null; P.safe = 1.2;
+      wave++; beginWave();
+    } else if (d.t > 25) { dock.y = meet; }
+  }
+  function update(dt) {
+    clock += dt; sfxN = 0;
+    if (window.__bot) window.__bot(dt);
+    for (const s of stars) { s.y += s.s * dt; if (s.y > H) { s.y = TOP; s.x = Math.random() * W; } }
+    for (const p of parts) { p.t += dt; p.x += p.vx * dt; p.y += p.vy * dt; }
+    parts = parts.filter((p) => p.t < p.life);
+    for (const p of popups) { p.t += dt; p.y -= 22 * dt; }
+    popups = popups.filter((p) => p.t < 1.2);
+    if (message) { message.t += dt; if (message.t > (message.long ? 3 : 2.2)) message = null; }
+    const flags = () => { firePressed = false; };
+    if (state === "intro") { stateT -= dt; flags(); if (stateT <= 0) state = "play"; return; }
+    if (state === "dead") {
+      stateT -= dt; flags();
+      if (stateT <= 0) {
+        if (reserve <= 0) gameOver();
+        else { reserve--; P.s = 1; P.safe = 2; eshots = []; for (const f of foes) if (f.mode === "dive") { f.mode = "fly"; f.y = TOP - 10; } state = "play"; }
+      }
+      return;
+    }
+    if (state === "dock") { updateDock(dt); flags(); return; }
+    if (state === "clear") {
+      stateT -= dt; flags();
+      if (stateT <= 0) { if (wave % 2 === 0 && reserve > 0 && P.s < 3) beginDock(); else { wave++; beginWave(); } }
+      return;
+    }
+    if (state !== "play") { flags(); return; }
+    updateShip(dt); flags();
+    updateFoes(dt); if (state !== "play") return;
+    updateShots(dt); if (state !== "play") return;
+    if (toSpawn <= 0 && !foes.length) {
+      const b = 500 * Math.ceil(wave / 2);
+      addScore(b, W / 2, 150, "#5ae8ff", `ONDATA SUPERATA +${b}`);
+      state = "clear"; stateT = 1.4; eshots = [];
+    }
+  }
+
+  // ---------- Drawing ----------
+  // one stage of the rocket: the bottom one is the widest
+  function drawStage(x, y, n, flame) {
+    const w = [8, 11, 14][n - 1] || 8;
+    ctx.fillStyle = "#e8eef8"; ctx.beginPath(); ctx.moveTo(x - w, y + SEG); ctx.lineTo(x - w, y + 6); ctx.lineTo(x, y - (n === 1 ? 6 : 0)); ctx.lineTo(x + w, y + 6); ctx.lineTo(x + w, y + SEG); ctx.fill();
+    ctx.fillStyle = ["#5ae8ff", "#ff6ad0", "#ffd23a"][n - 1] || "#5ae8ff"; ctx.fillRect(x - w, y + SEG - 6, w * 2, 4);
+    ctx.fillStyle = "#c83a3a"; ctx.fillRect(x - w - 3, y + SEG - 8, 3, 8); ctx.fillRect(x + w, y + SEG - 8, 3, 8);
+    if (flame) { ctx.fillStyle = Math.floor(clock * 30) % 2 ? "#ffd23a" : "#ff8a3a"; ctx.beginPath(); ctx.moveTo(x - 4, y + SEG); ctx.lineTo(x, y + SEG + 8 + Math.random() * 6); ctx.lineTo(x + 4, y + SEG); ctx.fill(); }
+  }
+  function drawRocket(x, s) {
+    // stage 1 is the nose on top, the bigger ones below it
+    for (let i = 0; i < s; i++) drawStage(x, BASE - SEG * (s - i), i + 1, false);
+  }
+  function drawFoe(f) {
+    const x = f.x, y = f.y;
+    if (f.k === 0) {
+      const flap = Math.sin(clock * 12 + f.t) * 6;
+      ctx.fillStyle = "#5ae8ff"; ctx.beginPath(); ctx.moveTo(x - 14, y - flap); ctx.lineTo(x, y + 4); ctx.lineTo(x + 14, y - flap); ctx.lineTo(x, y - 2); ctx.fill();
+      ctx.fillStyle = "#ffffff"; ctx.beginPath(); ctx.arc(x, y, 5, 0, TAU); ctx.fill(); ctx.fillStyle = "#1a2a8a"; ctx.beginPath(); ctx.arc(x, y + 1, 2.5, 0, TAU); ctx.fill();
+    } else if (f.k === 1) {
+      ctx.fillStyle = "rgba(220,255,220,0.6)"; const w = Math.sin(clock * 40) * 3; ctx.beginPath(); ctx.ellipse(x - 6, y - 4 - w, 6, 3, -0.5, 0, TAU); ctx.ellipse(x + 6, y - 4 - w, 6, 3, 0.5, 0, TAU); ctx.fill();
+      ctx.fillStyle = "#7aff6a"; ctx.beginPath(); ctx.ellipse(x, y, 5, 8, 0, 0, TAU); ctx.fill();
+      ctx.fillStyle = "#ff3a3a"; ctx.fillRect(x - 4, y - 7, 3, 3); ctx.fillRect(x + 1, y - 7, 3, 3);
+    } else if (f.k === 2) {
+      ctx.fillStyle = "#ff6ad0"; ctx.beginPath(); ctx.arc(x, y, f.r, 0, TAU); ctx.fill();
+      ctx.strokeStyle = "#ffffff"; ctx.lineWidth = 1.5; for (let i = 0; i < 3; i++) { ctx.beginPath(); ctx.ellipse(x, y, f.r - 2, (f.r - 2) * 0.35, clock * 3 + i * 1.05, 0, TAU); ctx.stroke(); }
+      ctx.fillStyle = "#ffffff"; ctx.beginPath(); ctx.arc(x, y, 3, 0, TAU); ctx.fill();
+    } else {
+      ctx.save(); ctx.translate(x, y); ctx.rotate(f.rot);
+      ctx.fillStyle = "#a8907a"; ctx.beginPath(); for (let i = 0; i < 8; i++) { const a = i / 8 * TAU, r = f.r * (i % 2 ? 0.8 : 1); ctx.lineTo(Math.cos(a) * r, Math.sin(a) * r); } ctx.fill();
+      ctx.fillStyle = "rgba(0,0,0,0.25)"; ctx.beginPath(); ctx.arc(-f.r * 0.3, -f.r * 0.2, f.r * 0.25, 0, TAU); ctx.fill();
+      ctx.restore();
+    }
+  }
+  function drawHud() {
+    ctx.fillStyle = "rgba(6,8,26,0.96)"; ctx.fillRect(0, 0, W, TOP);
+    ctx.textBaseline = "middle"; ctx.textAlign = "left";
+    const x0 = touchMode ? 130 : 10;
+    ctx.fillStyle = "#ffffff"; ctx.font = "900 15px system-ui"; ctx.fillText(score.toLocaleString("it-IT"), x0, 14);
+    ctx.fillStyle = "#b8c8f0"; ctx.font = "700 9px system-ui"; ctx.fillText(`REC ${Math.max(bestCache, score).toLocaleString("it-IT")}`, x0 + 80, 9);
+    ctx.fillStyle = "#5ae8ff"; ctx.font = "900 10px system-ui"; ctx.fillText(`ONDATA ${wave} · ${WAVES[kind()]}`, x0 + 80, 21);
+    // the stages waiting in reserve
+    const lx = touchMode ? W - 60 : W - 12;
+    ctx.fillStyle = "#b8c8f0"; ctx.font = "800 8px system-ui"; ctx.textAlign = "right"; ctx.fillText("RISERVA", lx - Math.min(reserve, 4) * 14 - 4, 14);
+    for (let i = 0; i < Math.min(reserve, 4); i++) { ctx.fillStyle = "#e8eef8"; ctx.fillRect(lx - 10 - i * 14, 7, 9, 14); ctx.fillStyle = "#c83a3a"; ctx.fillRect(lx - 10 - i * 14, 17, 9, 3); }
+    ctx.textBaseline = "alphabetic";
+  }
+  function draw() {
+    ctx.setTransform(pxRatio, 0, 0, pxRatio, 0, 0);
+    if (!P) P = { x: W / 2, s: 2, safe: 0 };
+    ctx.fillStyle = "#06081a"; ctx.fillRect(0, TOP, W, H - TOP);
+    for (const s of stars) { ctx.fillStyle = s.c; ctx.globalAlpha = 0.4 + s.s / 100; ctx.fillRect(s.x, s.y, s.s > 40 ? 2 : 1, s.s > 40 ? 2 : 1); }
+    ctx.globalAlpha = 1;
+    // the moon with its crest
+    ctx.fillStyle = "#c8c8b8"; ctx.beginPath(); ctx.arc(530, 110, 40, 0, TAU); ctx.fill();
+    ctx.fillStyle = "#a8a898"; for (const [cx, cy, r] of [[515, 98, 8], [545, 125, 6], [538, 92, 4], [512, 128, 5]]) { ctx.beginPath(); ctx.arc(cx, cy, r, 0, TAU); ctx.fill(); }
+    ctx.fillStyle = "#06081a"; ctx.beginPath(); ctx.arc(548, 100, 36, 0, TAU); ctx.globalAlpha = 0.55; ctx.fill(); ctx.globalAlpha = 1;
+    for (const f of foes) drawFoe(f);
+    if (state === "dock" && dock) {
+      // the waiting stage with its guide lights, and the rocket coming down
+      const blink = Math.floor(clock * 4) % 2;
+      drawStage(dock.x, DOCK_Y - SEG, Math.min(3, P.s + 1), false);
+      ctx.fillStyle = blink ? "#7ed87a" : "#3a6a3a"; ctx.fillRect(dock.x - 9 * diff.dock, DOCK_Y - SEG - 3, 18 * diff.dock, 2);
+      ctx.strokeStyle = "rgba(126,216,122,0.3)"; ctx.setLineDash([4, 6]); ctx.beginPath(); ctx.moveTo(dock.x, TOP); ctx.lineTo(dock.x, DOCK_Y - SEG - 4); ctx.stroke(); ctx.setLineDash([]);
+      for (let i = 0; i < P.s; i++) drawStage(dock.sx, dock.y - SEG * (P.s - i), i + 1, i === P.s - 1 && dock.thrust);
+      const okV = dock.vy < 45 * diff.dock;
+      ctx.fillStyle = okV ? "#7ed87a" : "#ff5a5a"; ctx.font = "900 11px system-ui"; ctx.textAlign = "left"; ctx.fillText(`VELOCITÀ ${Math.max(0, Math.round(dock.vy))}`, 16, H - 16);
+    } else if (state !== "menu" && (state !== "dead" || Math.floor(clock * 6) % 2)) {
+      if (!(P.safe > 0 && state === "play" && Math.floor(clock * 12) % 2)) drawRocket(P.x, Math.max(1, P.s));
+    }
+    ctx.fillStyle = "#ffffff"; for (const s of shots) ctx.fillRect(s.x - 1, s.y - 5, 2, 8);
+    for (const s of eshots) { ctx.fillStyle = "#ff5a3a"; ctx.beginPath(); ctx.arc(s.x, s.y, 3, 0, TAU); ctx.fill(); ctx.fillStyle = "#ffd23a"; ctx.fillRect(s.x - 1, s.y - 1, 2, 2); }
+    for (const p of parts) { ctx.globalAlpha = Math.max(0, 1 - p.t / p.life); ctx.fillStyle = p.c; ctx.fillRect(p.x - 1.5, p.y - 1.5, 3, 3); }
+    ctx.globalAlpha = 1;
+    for (const p of popups) {
+      ctx.globalAlpha = Math.max(0, 1 - p.t / 1.2);
+      ctx.textAlign = "center"; ctx.font = "900 11px system-ui";
+      ctx.lineWidth = 3; ctx.strokeStyle = "#06081a"; ctx.strokeText(p.text, p.x, p.y); ctx.fillStyle = p.color; ctx.fillText(p.text, p.x, p.y);
+    }
+    ctx.globalAlpha = 1;
+    if (state === "menu") return;
+    drawHud();
+    if (message) {
+      const life = message.long ? 3 : 2.2;
+      ctx.globalAlpha = Math.min(1, (life - message.t) * 2);
+      ctx.textAlign = "center"; ctx.font = "italic 900 22px system-ui"; ctx.fillStyle = "#5ae8ff";
+      ctx.lineWidth = 5; ctx.strokeStyle = "#06081a"; ctx.strokeText(message.text, W / 2, 200); ctx.fillText(message.text, W / 2, 200);
+      if (message.sub) { ctx.font = "800 12px system-ui"; ctx.fillStyle = "#ffffff"; ctx.lineWidth = 4; ctx.strokeText(message.sub, W / 2, 219); ctx.fillText(message.sub, W / 2, 219); }
+      ctx.globalAlpha = 1;
+    }
+  }
+
+  // ---------- Loop ----------
+  const STEP = 1 / 120;
+  let last = performance.now(), acc = 0;
+  function frame(now) {
+    const dt = Math.min(0.1, (now - last) / 1000);
+    last = now;
+    if (isPlaying()) {
+      acc += dt;
+      while (acc >= STEP && isPlaying()) { update(STEP); acc -= STEP; }
+    } else { acc = 0; update(dt); }
+    draw();
+    requestAnimationFrame(frame);
+  }
+  syncControls();
+  showTitle();
+  requestAnimationFrame(frame);
+})();
+</script>
+<script src="../../shared/iniziali.js" data-record="cresta-best-" data-kind="score"></script>
+</body>
+</html>
