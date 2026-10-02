@@ -9,6 +9,7 @@
   "use strict";
   // record key prefix → [bronzo, argento, oro] (and t for times)
   const DATA = {
+    "ping-best-": [6800, 20000, 14000],   // ping-elettronico (bot)
     "invasori-best-": [2400, 7200, 5800],   // invasori-dallo-spazio (bot)
     "terra-best-": [7200, 22000, 15000],   // terra-dei-mostri (bot)
     "fuoricampo-best-": [2100, 6400, 4700],   // fuoricampo (bot)
