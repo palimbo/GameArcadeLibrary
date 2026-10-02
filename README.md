@@ -4,7 +4,7 @@ Raccolta di giochi arcade per il browser. Ogni gioco è un singolo file HTML sen
 
 ## 🕹️ Sala Giochi — `index.html`
 
-Apri `index.html` nella cartella principale per la pagina di raccolta: mostra tutti i 121 giochi con copertina, genere, comandi e i tuoi record per ogni difficoltà (Facile, Normale, Difficile). Tocca «Gioca» per avviare un gioco; in ogni gioco il pulsante «← Sala Giochi» in alto a sinistra (visibile nei menu) riporta alla raccolta.
+Apri `index.html` nella cartella principale per la pagina di raccolta: mostra tutti i 122 giochi con copertina, genere, comandi e i tuoi record per ogni difficoltà (Facile, Normale, Difficile). Tocca «Gioca» per avviare un gioco; in ogni gioco il pulsante «← Sala Giochi» in alto a sinistra (visibile nei menu) riporta alla raccolta.
 
 **Iniziali del record:** quando batti un record compare la schermata da sala giochi per inserire le tue tre iniziali (frecce ↑ ↓ per cambiare lettera, ← → per spostarti, oppure scrivile direttamente; su telefono i tasti ▲ ▼ e OK). Le iniziali vengono salvate insieme al record e compaiono nei menu del gioco e nella Sala Giochi. Il codice è condiviso da tutti i giochi in `shared/iniziali.js`.
 
@@ -12,7 +12,7 @@ Apri `index.html` nella cartella principale per la pagina di raccolta: mostra tu
 
 **Comandi touch: levetta o frecce:** in cima alla Sala Giochi e nel menu di pausa di ogni gioco con la levetta si sceglie se usare la levetta analogica o una croce di frecce. Con le frecce il tocco viene agganciato a una delle otto direzioni (le quattro principali hanno la zona più larga, così le diagonali si prendono solo di proposito) e spinto fino in fondo; la scelta vale per tutti i giochi e resta memorizzata. Funziona anche nei giochi con due levette (la sfida a due di *Pugni di Fuoco*, muovi e spara di *Assalto Robotico*).
 
-**Trofei:** ogni gioco ha tre trofei a punteggio: 🥉 **Bronzo** (la soglia in qualsiasi difficoltà), 🥈 **Argento** (a Normale o Difficile) e 🥇 **Oro** (a Difficile); nei giochi a tempo (*Corsa al Tramonto*, *Crystal Wars*) conta finire entro un certo tempo. I trofei si calcolano dai record salvati, quindi quelli già fatti si sbloccano da soli; quando un record nuovo ne conquista uno compare un avviso in alto. Le soglie sono nella schermata iniziale, in pausa e a fine partita di ogni gioco; in Sala Giochi ogni cabinato mostra i suoi trofei, in cima c'è il totale (su 363) con il numero di giochi giocati e il filtro **Già giocati** mostra solo i giochi con almeno un record. Le soglie vengono dalle partite di prova di un bot per circa un terzo dei giochi e sono stimate sulle regole di punteggio per gli altri (`shared/trofei.js`).
+**Trofei:** ogni gioco ha tre trofei a punteggio: 🥉 **Bronzo** (la soglia in qualsiasi difficoltà), 🥈 **Argento** (a Normale o Difficile) e 🥇 **Oro** (a Difficile); nei giochi a tempo (*Corsa al Tramonto*, *Crystal Wars*) conta finire entro un certo tempo. I trofei si calcolano dai record salvati, quindi quelli già fatti si sbloccano da soli; quando un record nuovo ne conquista uno compare un avviso in alto. Le soglie sono nella schermata iniziale, in pausa e a fine partita di ogni gioco; in Sala Giochi ogni cabinato mostra i suoi trofei, in cima c'è il totale (su 366) con il numero di giochi giocati e il filtro **Già giocati** mostra solo i giochi con almeno un record. Le soglie vengono dalle partite di prova di un bot per circa un terzo dei giochi e sono stimate sulle regole di punteggio per gli altri (`shared/trofei.js`).
 
 **Generi:** ogni gioco appartiene a una o più famiglie di generi (🚀 Sparatutto, 🪜 Piattaforme, 🎯 Azione e riflessi, 🌀 Labirinti, ⚽ Sport, 🧩 Rompicapo, 🏁 Corse e veicoli, 🏰 Strategia e difesa, 🥊 Picchiaduro, 🗝️ Avventura, 🎵 Ritmo e musica): per esempio *Cripta degli Eroi* è avventura, sparatutto e labirinto. Le famiglie sono le etichette colorate di ogni cabinato. Sotto la ricerca una fila di pulsanti, con il numero di giochi di ciascuna famiglia, mostra solo quel genere (toccandolo di nuovo si torna a *Tutti i generi*); anche toccare un'etichetta su un cabinato filtra per quella famiglia. Un gioco con più famiglie compare in ognuna. La scelta resta memorizzata e si combina con la ricerca e con *Già giocati*. Su telefono la fila scorre di lato.
 
@@ -1873,3 +1873,20 @@ Gioco di ritmo in stile *Dance Dance Revolution*. Le frecce salgono lungo quattr
 - **Touch:** si spinge la levetta verso la freccia e si torna al centro tra una e l'altra; in diagonale si premono due frecce insieme. Con l'impostazione *frecce* della Sala Giochi la levetta diventa una croce, ancora più comoda per questo gioco
 
 Per giocare apri `games/pista-da-ballo/index.html` nel browser.
+
+### ⚾ Fuoricampo — `games/fuoricampo/index.html`
+
+Baseball in battuta, visto da dietro casa base. Un campionato contro squadre sempre più forti: ogni partita è una rimonta, in cui bisogna fare più punti di quelli che gli avversari hanno già segnato.
+
+- **Il lancio:** il lanciatore tira palle veloci, curve (che piegano di lato), cambi di velocità (più lenti, per ingannare) e palle che affondano all'ultimo; in alto a destra compaiono il tipo di lancio e la velocità. Il riquadro tratteggiato è la zona dello strike
+- **La battuta:** il cerchio è il punto in cui passerà la mazza: con la levetta lo porti dove arriverà la palla e con BATTI colpisci. Il tempismo decide la direzione (presto = a sinistra, tardi = a destra, troppo presto o tardi = foul), il punto d'impatto l'altezza (mazza sopra la palla = rasoterra, sotto = palla alta, al centro = linea tesa). Più il colpo è pulito, più la palla va lontano
+- **Il conteggio:** 3 strike e sei eliminato (anche se manchi la palla), 4 ball e vai in base; il foul conta come strike fino al secondo. Con 3 eliminati la ripresa finisce. Una palla che non è nel riquadro conviene lasciarla passare
+- **Dopo il colpo:** il campo si vede dall'alto, con la palla in volo e i difensori che corrono; valida, doppio, triplo o fuoricampo fanno avanzare i corridori sulle basi. Il muro è a 100 metri sulle linee e a 122 al centro
+- **La partita:** 3 riprese (4 a Facile) per superare i punti degli avversari; appena li superi hai vinto. In pareggio si gioca una ripresa supplementare
+- **Le squadre:** Gabbiani di Rimini, Leoni di Nettuno, Volpi di Parma, Squali di Bologna, Tori di Grosseto e Draghi di San Marino, con lanciatori sempre più veloci e lanci sempre più vari; poi il campionato ricomincia, ancora più duro
+- **Punti:** singolo 100, doppio 200, triplo 300, fuoricampo 500, ogni punto segnato 150, base ball 30; vittoria 1.000 più 300 per ogni punto di scarto; dalla seconda partita tutto vale di più
+- **Difficoltà:** Facile (4 riprese, una partita di riserva, lanci più lenti, mazza più larga), Normale, Difficile (lanci più veloci, mazza più stretta); record separati per ogni difficoltà
+- **Comandi:** frecce o `W` `A` `S` `D` per muovere la mazza · `Spazio` o `J` per battere · `P` pausa
+- **Touch:** levetta (o frecce) per muovere la mazza, pulsante BATTI
+
+Per giocare apri `games/fuoricampo/index.html` nel browser.

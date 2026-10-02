@@ -9,6 +9,7 @@
   "use strict";
   // record key prefix → [bronzo, argento, oro] (and t for times)
   const DATA = {
+    "fuoricampo-best-": [2100, 6400, 4700],   // fuoricampo (bot)
     "ballo-best-": [50000, 150000, 105000],   // pista-da-ballo (bot)
     "pesca-best-": [13000, 38000, 27000],   // gara-di-pesca (bot)
     "volley-best-": [4100, 12000, 8400],   // pallavolo-da-spiaggia (bot)
