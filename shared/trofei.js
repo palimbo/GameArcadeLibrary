@@ -9,6 +9,7 @@
   "use strict";
   // record key prefix → [bronzo, argento, oro] (and t for times)
   const DATA = {
+    "capsule-best-": [24000, 73000, 51000],   // capsule-galattiche (bot)
     "ciliegie-best-": [3300, 10000, 11000],   // ciliegie-e-mele (bot)
     "ping-best-": [6800, 20000, 14000],   // ping-elettronico (bot)
     "invasori-best-": [2400, 7200, 5800],   // invasori-dallo-spazio (bot)

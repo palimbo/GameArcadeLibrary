@@ -4,7 +4,7 @@ Raccolta di giochi arcade per il browser. Ogni gioco è un singolo file HTML sen
 
 ## 🕹️ Sala Giochi — `index.html`
 
-Apri `index.html` nella cartella principale per la pagina di raccolta: mostra tutti i 126 giochi con copertina, genere, comandi e i tuoi record per ogni difficoltà (Facile, Normale, Difficile). Tocca «Gioca» per avviare un gioco; in ogni gioco il pulsante «← Sala Giochi» in alto a sinistra (visibile nei menu) riporta alla raccolta.
+Apri `index.html` nella cartella principale per la pagina di raccolta: mostra tutti i 127 giochi con copertina, genere, comandi e i tuoi record per ogni difficoltà (Facile, Normale, Difficile). Tocca «Gioca» per avviare un gioco; in ogni gioco il pulsante «← Sala Giochi» in alto a sinistra (visibile nei menu) riporta alla raccolta.
 
 **Iniziali del record:** quando batti un record compare la schermata da sala giochi per inserire le tue tre iniziali (frecce ↑ ↓ per cambiare lettera, ← → per spostarti, oppure scrivile direttamente; su telefono i tasti ▲ ▼ e OK). Le iniziali vengono salvate insieme al record e compaiono nei menu del gioco e nella Sala Giochi. Il codice è condiviso da tutti i giochi in `shared/iniziali.js`.
 
@@ -12,7 +12,7 @@ Apri `index.html` nella cartella principale per la pagina di raccolta: mostra tu
 
 **Comandi touch: levetta o frecce:** in cima alla Sala Giochi e nel menu di pausa di ogni gioco con la levetta si sceglie se usare la levetta analogica o una croce di frecce. Con le frecce il tocco viene agganciato a una delle otto direzioni (le quattro principali hanno la zona più larga, così le diagonali si prendono solo di proposito) e spinto fino in fondo; la scelta vale per tutti i giochi e resta memorizzata. Funziona anche nei giochi con due levette (la sfida a due di *Pugni di Fuoco*, muovi e spara di *Assalto Robotico*).
 
-**Trofei:** ogni gioco ha tre trofei a punteggio: 🥉 **Bronzo** (la soglia in qualsiasi difficoltà), 🥈 **Argento** (a Normale o Difficile) e 🥇 **Oro** (a Difficile); nei giochi a tempo (*Corsa al Tramonto*, *Crystal Wars*) conta finire entro un certo tempo. I trofei si calcolano dai record salvati, quindi quelli già fatti si sbloccano da soli; quando un record nuovo ne conquista uno compare un avviso in alto. Le soglie sono nella schermata iniziale, in pausa e a fine partita di ogni gioco; in Sala Giochi ogni cabinato mostra i suoi trofei, in cima c'è il totale (su 378) con il numero di giochi giocati e il filtro **Già giocati** mostra solo i giochi con almeno un record. Le soglie vengono dalle partite di prova di un bot per circa un terzo dei giochi e sono stimate sulle regole di punteggio per gli altri (`shared/trofei.js`).
+**Trofei:** ogni gioco ha tre trofei a punteggio: 🥉 **Bronzo** (la soglia in qualsiasi difficoltà), 🥈 **Argento** (a Normale o Difficile) e 🥇 **Oro** (a Difficile); nei giochi a tempo (*Corsa al Tramonto*, *Crystal Wars*) conta finire entro un certo tempo. I trofei si calcolano dai record salvati, quindi quelli già fatti si sbloccano da soli; quando un record nuovo ne conquista uno compare un avviso in alto. Le soglie sono nella schermata iniziale, in pausa e a fine partita di ogni gioco; in Sala Giochi ogni cabinato mostra i suoi trofei, in cima c'è il totale (su 381) con il numero di giochi giocati e il filtro **Già giocati** mostra solo i giochi con almeno un record. Le soglie vengono dalle partite di prova di un bot per circa un terzo dei giochi e sono stimate sulle regole di punteggio per gli altri (`shared/trofei.js`).
 
 **Generi:** ogni gioco appartiene a una o più famiglie di generi (🚀 Sparatutto, 🪜 Piattaforme, 🎯 Azione e riflessi, 🌀 Labirinti, ⚽ Sport, 🧩 Rompicapo, 🏁 Corse e veicoli, 🏰 Strategia e difesa, 🥊 Picchiaduro, 🗝️ Avventura, 🎵 Ritmo e musica): per esempio *Cripta degli Eroi* è avventura, sparatutto e labirinto. Le famiglie sono le etichette colorate di ogni cabinato. Sotto la ricerca una fila di pulsanti, con il numero di giochi di ciascuna famiglia, mostra solo quel genere (toccandolo di nuovo si torna a *Tutti i generi*); anche toccare un'etichetta su un cabinato filtra per quella famiglia. Un gioco con più famiglie compare in ognuna. La scelta resta memorizzata e si combina con la ricerca e con *Già giocati*. Su telefono la fila scorre di lato.
 
@@ -1955,3 +1955,20 @@ Azione nel sottosuolo in stile *Mr. Do!*. Un clown scava gallerie nella terra di
 - **Touch:** levetta (o frecce) nelle quattro direzioni, pulsante PALLA
 
 Per giocare apri `games/ciliegie-e-mele/index.html` nel browser.
+
+### 🛸 Capsule Galattiche — `games/capsule-galattiche/index.html`
+
+Sparatutto a scorrimento orizzontale in stile *Gradius*, con la sua celebre barra delle armi. La nave vola tra montagne, caverne di ghiaccio e basi nemiche, fino alla grande corazzata di fine missione.
+
+- **La barra delle armi:** in basso ci sono sei caselle: VELOCITÀ, MISSILE, DOPPIO, LASER, OPZIONE e ?. Ogni capsula arancione raccolta sposta la luce di una casella; con POTERE prendi l'arma illuminata e la luce si spegne. Conviene aspettare di arrivare all'arma che serve
+- **Le armi:** velocità (fino a 5 livelli) · missile (scende in diagonale e poi corre lungo il terreno, ottimo contro i cannoni) · doppio (un secondo colpo in diagonale verso l'alto) · laser (un raggio lungo che trapassa i nemici; doppio e laser si escludono) · opzione (fino a 4 sfere arancioni che seguono la scia della nave e sparano con lei) · ? (uno scudo sul muso che assorbe colpi e urti)
+- **Le capsule:** le lasciano le squadriglie di sei abbattute per intero e i nemici rossi
+- **I nemici:** squadriglie a girandola, volanti che ondeggiano, cannoni sul terreno e sul soffitto, portelli che sfornano piccoli caccia
+- **La corazzata:** in fondo a ogni missione, con quattro raggi e un nucleo protetto da tre pareti: prima si abbattono le pareti, poi il nucleo (10.000 punti). Se non la distruggi in tempo se ne va
+- **Attenzione:** montagne, caverne e nemici distruggono la nave
+- **Punti:** nemici 100-200, cannoni 200, portelli 800, capsula 500, squadriglia completa 100 in più, corazzata 10.000 e 2.000 per missione; nave extra a 20.000, 70.000 e poi ogni 70.000
+- **Difficoltà:** Facile (5 navi, nemici che sparano meno e più piano), Normale (3 navi; dopo una caduta resta la velocità ma si perdono le altre armi), Difficile (più colpi nemici e più veloci; cadendo si perde tutto, come nell'originale); record separati per ogni difficoltà
+- **Comandi:** frecce o `W` `A` `S` `D` per volare · `Spazio` o `J` per sparare (tieni premuto) · `X`, `K` o `Z` per POTERE · `P` pausa
+- **Touch:** levetta (o frecce) per volare, pulsanti FUOCO (tieni premuto) e POTERE
+
+Per giocare apri `games/capsule-galattiche/index.html` nel browser.
