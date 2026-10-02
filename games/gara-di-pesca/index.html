@@ -1,0 +1,672 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no, viewport-fit=cover">
+<title>Gara di Pesca</title>
+<style>
+  :root {
+    --bg: #06283a;
+    --fg: #f4f8ff;
+    --muted: #b8cce8;
+    --pink: #2ad0c0;
+    --yellow: #ffd23a;
+    --red: #ff5a3a;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  html, body {
+    height: 100%;
+    background: var(--bg);
+    color: var(--fg);
+    font-family: system-ui, -apple-system, "Segoe UI", sans-serif;
+    overflow: hidden;
+    user-select: none;
+    -webkit-user-select: none;
+    touch-action: none;
+  }
+  #wrap { position: fixed; inset: 0; display: flex; align-items: center; justify-content: center; }
+  canvas { display: block; touch-action: none; border-radius: 6px; box-shadow: 0 0 0 2px #2a4a7a, 0 10px 40px rgba(0,0,0,0.6); }
+  #pauseBtn {
+    position: fixed; z-index: 3; display: none; right: 10px; top: calc(10px + env(safe-area-inset-top, 0px));
+    font: 700 13px system-ui, sans-serif; color: var(--fg);
+    background: rgba(0, 0, 0, 0.6); border: 1px solid rgba(244, 246, 238, 0.35);
+    border-radius: 8px; padding: 6px 10px; cursor: pointer;
+  }
+  #touch {
+    position: fixed; z-index: 2; display: none; left: 12px; right: 12px;
+    bottom: calc(14px + env(safe-area-inset-bottom, 0px));
+    justify-content: space-between; align-items: flex-end; pointer-events: none;
+  }
+  /* thumb stick: move the hook; hold MULINELLO to reel in fast */
+  #touch .stick { position: relative; width: 136px; height: 136px; border-radius: 50%; pointer-events: auto; touch-action: none;
+    border: 2px solid rgba(255, 255, 255, 0.6); background: radial-gradient(circle, rgba(255,255,255,0.14), rgba(255,255,255,0.04)); }
+  #touch .stick .knob { position: absolute; left: 50%; top: 50%; width: 58px; height: 58px; margin: -29px 0 0 -29px; border-radius: 50%;
+    background: rgba(255, 255, 255, 0.45); border: 2px solid rgba(255,255,255,0.7); box-shadow: 0 4px 10px rgba(0,0,0,0.4); pointer-events: none; }
+  #touch .stick .ring { position: absolute; inset: 10px; border-radius: 50%; border: 1px dashed rgba(244,246,238,0.25); pointer-events: none; }
+  #touch .jump { width: 96px; height: 96px; border-radius: 50%; pointer-events: auto; touch-action: none; color: var(--fg);
+    font: 800 11px system-ui, sans-serif; letter-spacing: 0; border: 2px solid rgba(42, 208, 192, 0.9); background: rgba(42, 208, 192, 0.22); }
+  #touch .jump.on { background: rgba(42, 208, 192, 0.55); }
+  #touch.small .stick { width: 112px; height: 112px; }
+  #touch.small .stick .knob { width: 48px; height: 48px; margin: -24px 0 0 -24px; }
+  #touch.small .jump { width: 80px; height: 80px; font-size: 11px; }
+  #overlay {
+    position: fixed; inset: 0; z-index: 5;
+    display: flex; flex-direction: column; align-items: center; justify-content: flex-start;
+    gap: 14px; padding: 16px; text-align: center; overflow-y: auto;
+    background: rgba(6, 40, 58, 0.93);
+  }
+  #overlay > :first-child { margin-top: auto; }
+  #overlay > :last-child { margin-bottom: auto; }
+  #overlay.hidden { display: none; }
+  #homeLink {
+    position: fixed; top: calc(10px + env(safe-area-inset-top, 0px)); left: 10px; z-index: 6;
+    font: 600 13px/1 system-ui, sans-serif; color: #fff; text-decoration: none;
+    padding: 8px 12px; border-radius: 999px; background: rgba(0,0,0,.55);
+    border: 1px solid rgba(255,255,255,.25);
+  }
+  #homeLink:hover { background: rgba(0,0,0,.8); }
+  #overlay.hidden ~ #homeLink { display: none; }
+  @media (max-width: 700px) { #overlay { padding-top: calc(52px + env(safe-area-inset-top, 0px)); } }
+  #overlay h1 { font-size: clamp(32px, 10vw, 58px); font-weight: 900; font-style: italic; letter-spacing: 1px; color: var(--pink);
+    text-shadow: 3px 3px 0 #0a4a5a, 0 0 22px rgba(42,208,192,0.35); }
+  #overlay h2 { font-size: clamp(26px, 7vw, 42px); font-weight: 900; letter-spacing: 2px; color: var(--pink); }
+  #overlay h2.lose { color: var(--red); }
+  #overlay p { max-width: 540px; font-size: clamp(13px, 3.4vw, 16px); line-height: 1.55; }
+  #overlay p.muted { color: var(--muted); }
+  #overlay .pts { display: grid; grid-template-columns: repeat(2, auto); gap: 4px 18px; font-size: 13px; color: var(--muted); text-align: left; max-width: 560px; }
+  #overlay .pts b { color: var(--fg); }
+  #overlay .diff { display: flex; gap: 10px; flex-wrap: wrap; justify-content: center; }
+  #overlay button {
+    font: 800 15px system-ui, sans-serif; letter-spacing: 1.5px; color: var(--fg);
+    background: transparent; cursor: pointer;
+    border: 2px solid rgba(244,246,238,0.3); border-radius: 10px; padding: 9px 16px;
+  }
+  #overlay .diff button.on { border-color: var(--c); color: var(--c); box-shadow: 0 0 12px var(--c); }
+  #overlay button.start { border-color: var(--pink); color: #04222a; background: var(--pink); padding: 11px 30px; box-shadow: 0 4px 0 #1a8a80; }
+  @media (max-height: 560px) {
+    #overlay { gap: 8px; }
+    #overlay h1 { font-size: 30px; }
+    #overlay p { font-size: 13px; line-height: 1.4; }
+    #overlay .help, #overlay .pts { display: none; }
+  }
+</style>
+</head>
+<body>
+<div id="wrap"><canvas id="game"></canvas></div>
+<div id="touch">
+  <div class="stick" aria-label="Levetta"><div class="ring"></div><div class="knob"></div></div>
+  <button type="button" class="jump" aria-label="Mulinello">MULINELLO</button>
+</div>
+<button id="pauseBtn" type="button" aria-label="Pausa">❚❚</button>
+<div id="overlay"></div>
+<a id="homeLink" href="../../index.html">← Sala Giochi</a>
+
+
+<script>
+(() => {
+  "use strict";
+
+  const W = 640, H = 360, TAU = Math.PI * 2, TOP = 28;
+  const SEA = 124, BOTTOM = 338, XMIN = 104, XMAX = 536, SHARKY = 156;
+  const HOOK_X = 125, HOOK_Y = 105, REEL = 26, FAST = 88;
+  // the rows of fish: deeper ones weigh more and swim faster
+  const ROWS = [
+    { y: 182, kg: 1, name: "sardina", col: "#b8d8f0", len: 12, sp: 38 },
+    { y: 208, kg: 2, name: "sgombro", col: "#5ab0d0", len: 14, sp: 44 },
+    { y: 234, kg: 3, name: "orata", col: "#e8d080", len: 16, sp: 50 },
+    { y: 260, kg: 4, name: "spigola", col: "#a8b8c8", len: 18, sp: 56 },
+    { y: 288, kg: 5, name: "ricciola", col: "#f0b040", len: 20, sp: 62 },
+    { y: 316, kg: 6, name: "tonno", col: "#3a5a9a", len: 24, sp: 68 },
+  ];
+  const TARGET = 40;
+  // the rivals, round after round
+  const RIVALS = [
+    { name: "Nonno Peppino", col: "#c86a3a", speed: 0.82, react: 0.5, err: 22, shark: 0.35, greed: 0.3 },
+    { name: "Zia Rosetta", col: "#d05a9a", speed: 0.92, react: 0.42, err: 17, shark: 0.5, greed: 0.45 },
+    { name: "Capitan Baffo", col: "#3a6ad0", speed: 1.02, react: 0.35, err: 13, shark: 0.65, greed: 0.6 },
+    { name: "Lupo di Mare", col: "#5a5a6a", speed: 1.1, react: 0.29, err: 10, shark: 0.8, greed: 0.75 },
+    { name: "Marina la Campionessa", col: "#2ab08a", speed: 1.17, react: 0.24, err: 7, shark: 0.9, greed: 0.85 },
+  ];
+
+  const DIFFICULTIES = {
+    facile:    { label: "FACILE",    color: "#7ed87a", desc: "puoi perdere una gara · rivali più lenti · squalo pigro", lives: 2, rival: 0.82, shark: 0.75, jelly: 0.6 },
+    normale:   { label: "NORMALE",   color: "#2ad0c0", desc: "alla prima gara persa la sfida finisce", lives: 1, rival: 1, shark: 1, jelly: 1 },
+    difficile: { label: "DIFFICILE", color: "#ff5a5a", desc: "una sola gara · rivali svelti · squalo affamato · più meduse", lives: 1, rival: 1.2, shark: 1.3, jelly: 1.4 },
+  };
+  const DIFF_IDS = Object.keys(DIFFICULTIES);
+  const DIFF_KEY = "pesca-difficulty";
+  const bestKey = (id) => `pesca-best-${id}`;
+  function store(k, v) { try { localStorage.setItem(k, v); } catch { /* ignore */ } }
+  function load(k) { try { return localStorage.getItem(k); } catch { return null; } }
+  const rnd = (a, b) => a + Math.random() * (b - a);
+  const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
+
+  // ---------- Canvas ----------
+  const canvas = document.getElementById("game");
+  const ctx = canvas.getContext("2d");
+  const wrapEl = document.getElementById("wrap");
+  const overlay = document.getElementById("overlay");
+  const touchEl = document.getElementById("touch");
+  const pauseBtn = document.getElementById("pauseBtn");
+  let pxRatio = 1, touchMode = !!(window.matchMedia && matchMedia("(pointer: coarse)").matches);
+  function resize() {
+    const portrait = window.innerHeight > window.innerWidth;
+    const showTouch = touchMode && isPlaying();
+    touchEl.style.display = showTouch ? "flex" : "none";
+    touchEl.classList.toggle("small", !portrait && window.innerHeight < 480);
+    wrapEl.style.paddingBottom = showTouch && portrait ? "calc(170px + env(safe-area-inset-bottom, 0px))" : "0";
+    let availW = window.innerWidth - 8, availH = window.innerHeight - 8;
+    if (showTouch && portrait) availH -= 170;
+    if (showTouch && !portrait) {
+      const side = Math.max(...[...touchEl.children].map((el) => el.offsetWidth)) + 20;
+      if (window.innerWidth - 2 * side > 200) availW = window.innerWidth - 2 * side;
+    }
+    const s = Math.max(0.2, Math.min(availW / W, availH / H));
+    pxRatio = Math.min(3, s * (window.devicePixelRatio || 1));
+    canvas.style.width = W * s + "px";
+    canvas.style.height = H * s + "px";
+    canvas.width = Math.round(W * pxRatio);
+    canvas.height = Math.round(H * pxRatio);
+  }
+  window.addEventListener("resize", () => syncControls());
+
+  // ---------- Audio ----------
+  let audioCtx = null;
+  function beep(freq, dur, type = "square", vol = 0.04, slide = 0, delay = 0) {
+    if (!audioCtx) return;
+    const t = audioCtx.currentTime + delay;
+    const osc = audioCtx.createOscillator(), gain = audioCtx.createGain();
+    osc.type = type;
+    osc.frequency.setValueAtTime(freq, t);
+    if (slide) osc.frequency.exponentialRampToValueAtTime(Math.max(20, freq + slide), t + dur);
+    gain.gain.setValueAtTime(vol, t);
+    gain.gain.exponentialRampToValueAtTime(0.0001, t + dur);
+    osc.connect(gain).connect(audioCtx.destination);
+    osc.start(t); osc.stop(t + dur + 0.02);
+  }
+  function noise(dur, vol, freq) {
+    if (!audioCtx) return;
+    const len = Math.floor(audioCtx.sampleRate * dur), buf = audioCtx.createBuffer(1, len, audioCtx.sampleRate), d = buf.getChannelData(0);
+    for (let i = 0; i < len; i++) d[i] = (Math.random() * 2 - 1) * (1 - i / len);
+    const src = audioCtx.createBufferSource(), f = audioCtx.createBiquadFilter(), g = audioCtx.createGain();
+    src.buffer = buf; f.type = "bandpass"; f.frequency.value = freq; g.gain.value = vol;
+    src.connect(f).connect(g).connect(audioCtx.destination); src.start();
+  }
+  const arp = (notes, gap, d, type = "square", vol = 0.04) => notes.forEach((f, i) => beep(f, d, type, vol, 0, i * gap));
+  let sfxN = 0;
+  const lim = (fn) => (...a) => { if (sfxN++ < 6) fn(...a); };
+  const sfx = {
+    hook: lim(() => { beep(660, 0.06, "square", 0.04); beep(990, 0.08, "square", 0.04, 0, 0.06); }),
+    reel: lim(() => beep(1400, 0.02, "square", 0.012)),
+    splash: lim(() => noise(0.25, 0.1, 1200)),
+    catch: lim((kg) => arp([523, 659, 784 + kg * 30], 0.06, 0.1, "square", 0.045)),
+    chomp: lim(() => { noise(0.2, 0.14, 300); beep(120, 0.2, "sawtooth", 0.05, -60); }),
+    zap: lim(() => { beep(1800, 0.15, "sawtooth", 0.03, -1400); }),
+    rival: lim(() => beep(330, 0.1, "triangle", 0.04, 120)),
+    win: () => arp([523, 659, 784, 1047, 784, 1047, 1319], 0.08, 0.14, "square", 0.045),
+    lose: () => arp([523, 466, 415, 392, 330, 262], 0.15, 0.24, "triangle", 0.05),
+  };
+
+  // ---------- State ----------
+  let difficulty = DIFFICULTIES[load(DIFF_KEY)] ? load(DIFF_KEY) : "normale";
+  let diff = DIFFICULTIES[difficulty];
+  let state = "menu", menu = null, pausedFrom = null, stateT = 0, clock = 0;
+  let score = 0, lives = 1, round = 1, bestCache = 0, won = false;
+  let ang = [], fish = [], shark = null, jellies = [], parts = [], popups = [], message = null, flying = [];
+  let reelHeld = false;
+  const keys = { left: false, right: false, up: false, down: false, reel: false };
+  const stick = { x: 0, y: 0 };
+  const AI = { you: null, rival: null };
+
+  // ---------- Flow ----------
+  const isPlaying = () => ["intro", "play", "end"].includes(state);
+  function rivalFor(n) {
+    const r = RIVALS[(n - 1) % RIVALS.length], lap = Math.floor((n - 1) / RIVALS.length), k = 1 + 0.07 * lap;
+    return { ...r, speed: Math.min(1.35, r.speed * diff.rival * k), react: Math.max(0.15, r.react / diff.rival / k), err: r.err / diff.rival / k, shark: Math.min(0.97, r.shark * k), greed: Math.min(0.97, r.greed * k) };
+  }
+  function makeAngler(side) {
+    const x = side ? W - HOOK_X : HOOK_X;
+    return { side, tipX: x, tipY: HOOK_Y, hx: x + (side ? -20 : 20), hy: SEA + 30, fish: null, stun: 0, kg: 0, catches: 0, fast: false, bob: 0 };
+  }
+  function startGame() {
+    if (!audioCtx) { try { audioCtx = new (window.AudioContext || window.webkitAudioContext)(); } catch { audioCtx = null; } }
+    if (audioCtx && audioCtx.state === "suspended") audioCtx.resume();
+    score = 0; lives = diff.lives; round = 1;
+    bestCache = parseInt(load(bestKey(difficulty)), 10) || 0;
+    beginRound();
+    menu = null;
+    overlay.classList.add("hidden");
+    syncControls();
+    last = performance.now();
+  }
+  function beginRound() {
+    const rv = rivalFor(round);
+    ang = [makeAngler(0), makeAngler(1)];
+    ang[1].look = rv;
+    AI.rival = mkAI(1, rv);
+    fish = [];
+    ROWS.forEach((r, i) => { for (let k = 0; k < 2; k++) fish.push(makeFish(i, k)); });
+    const sp = (55 + 6 * Math.min(8, round - 1)) * diff.shark;
+    shark = { x: W / 2, y: SHARKY, vx: sp, sp, dir: 1, mouth: 0, chase: false };
+    jellies = [];
+    const nj = round >= 2 ? Math.min(4, Math.round((round - 1) * diff.jelly)) : 0;
+    for (let i = 0; i < nj; i++) jellies.push({ x: rnd(XMIN + 40, XMAX - 40), y: rnd(200, 300), ph: rnd(0, TAU), vx: rnd(-14, 14) });
+    parts = []; popups = []; flying = [];
+    message = { text: `GARA ${round}`, sub: `contro ${rv.name} · vince chi pesca per primo ${TARGET} kg`, t: 0, long: true };
+    state = "intro"; stateT = 2.4;
+  }
+  function makeFish(row, k) {
+    const r = ROWS[row], dir = row % 2 ? -1 : 1;
+    const golden = row === ROWS.length - 1 && k === 1 && round >= 2 && Math.random() < 0.5;
+    return { row, x: k ? rnd(330, 520) : rnd(120, 310), y: r.y, dir, sp: r.sp * (golden ? 1.6 : 1) * (1 + 0.04 * Math.min(8, round - 1)), kg: golden ? 10 : r.kg, golden, by: null, ph: rnd(0, TAU), wait: 0 };
+  }
+  function addScore(n, x, y, color = "#ffffff", text) {
+    score += n;
+    if (x !== undefined) popups.push({ x, y, text: text || String(n), color, t: 0 });
+  }
+  function burst(x, y, c, n = 12, sp = 110, life = 0.6) {
+    for (let k = 0; k < n; k++) { const a = Math.random() * TAU, s = sp * rnd(0.3, 1); parts.push({ x, y, vx: Math.cos(a) * s, vy: Math.sin(a) * s - 40, t: 0, life: life * rnd(0.6, 1.2), c }); }
+  }
+  function endRound(youWon) {
+    won = youWon; state = "end"; stateT = 3;
+    if (youWon) {
+      const bonus = 500 * round + 20 * Math.max(0, ang[0].kg - ang[1].kg) * round;
+      score += bonus;
+      message = { text: "GARA VINTA!", sub: `${ang[0].kg} kg a ${ang[1].kg} · bonus ${bonus.toLocaleString("it-IT")}`, t: 0, long: true };
+      sfx.win();
+    } else {
+      lives--;
+      message = { text: "HA VINTO IL RIVALE", sub: `${ang[0].kg} kg a ${ang[1].kg} · ${lives > 0 ? "hai un'altra possibilità" : "la sfida finisce qui"}`, t: 0, long: true };
+      sfx.lose();
+    }
+  }
+  function gameOver() {
+    state = "over";
+    const prev = parseInt(load(bestKey(difficulty)), 10) || 0;
+    const record = score > prev;
+    if (record) store(bestKey(difficulty), String(score));
+    menu = () => showOverlay(
+      `<h2 class="lose">SFIDA FINITA</h2>
+       <p>Punteggio: <b>${score.toLocaleString("it-IT")}</b> · ${round > 1 ? `${round - 1} ${round - 1 === 1 ? "gara vinta" : "gare vinte"}` : "nessuna gara vinta"} · ${diff.label}</p>
+       ${record ? "<p style='color:var(--pink)'>★ NUOVO RECORD! ★</p>" : ""}
+       ${difficultyHTML()}
+       <button class="start" data-start>PESCA ANCORA</button>`
+    );
+    menu();
+    syncControls();
+  }
+  function togglePause() {
+    if (isPlaying()) {
+      pausedFrom = state; state = "paused";
+      showOverlay(`<h2>PAUSA</h2><button class="start" data-resume>CONTINUA</button><p class="muted">Premi P per continuare</p>`);
+    } else if (state === "paused") {
+      state = pausedFrom; overlay.classList.add("hidden"); last = performance.now();
+    }
+    syncControls();
+  }
+  // the pause menu can end the game (shared/iniziali.js): it ends here the usual way, saving the record
+  window.addEventListener("sala:termina", () => { if (state !== "paused") return; state = pausedFrom; overlay.classList.add("hidden"); gameOver(); syncControls(); });
+  function syncControls() {
+    pauseBtn.style.display = isPlaying() && touchMode ? "block" : "none";
+    resize();
+  }
+  pauseBtn.addEventListener("click", () => togglePause());
+  function showOverlay(html) { overlay.innerHTML = html; overlay.classList.remove("hidden"); }
+  function difficultyHTML() {
+    const buttons = DIFF_IDS.map((id) => {
+      const d = DIFFICULTIES[id];
+      return `<button type="button" data-diff="${id}" class="${id === difficulty ? "on" : ""}" style="--c:${d.color}">${d.label}</button>`;
+    }).join("");
+    const best = parseInt(load(bestKey(difficulty)), 10);
+    return `<div class="diff">${buttons}</div><p class="muted">${diff.desc}${best ? ` · Record: ${best.toLocaleString("it-IT")}` : ""}</p>`;
+  }
+  function setDifficulty(id) { if (!DIFFICULTIES[id]) return; difficulty = id; diff = DIFFICULTIES[id]; store(DIFF_KEY, id); if (menu) menu(); }
+  function showTitle() {
+    menu = showTitle;
+    showOverlay(
+      `<h1>GARA DI PESCA</h1>
+       <p>Una sfida di pesca dai due pontili del porto! Cala l'amo, aggancia un pesce e tiralo su prima del rivale: più è in fondo, più pesa. Ma sotto la superficie gira lo squalo, e se arriva al tuo pesce se lo mangia. Vince chi pesca per primo ${TARGET} kg.</p>
+       <div class="pts">
+         <span><b>Pesci</b></span><span>sardina 1 kg · sgombro 2 · orata 3 · spigola 4 · ricciola 5 · tonno 6 · pesce d'oro 10 (dalla 2ª gara)</span>
+         <span><b>Punti</b></span><span>100 per ogni kg pescato · gara vinta 500 più 20 per ogni kg di vantaggio · dalla 2ª gara tutto vale di più</span>
+         <span><b>Pericoli</b></span><span>lo squalo mangia il pesce all'amo · dalla 2ª gara le meduse fanno scappare il pesce e scuotono l'amo</span>
+       </div>
+       ${touchMode
+         ? `<p class="muted help">Levetta per muovere l'amo (anche col pesce, per schivare lo squalo) · tieni premuto MULINELLO per tirare su veloce</p>`
+         : `<p class="muted help">Frecce o WASD per muovere l'amo · tieni premuto SPAZIO o J per riavvolgere veloce · P pausa</p>`}
+       ${difficultyHTML()}
+       <button class="start" data-start>LENZE IN ACQUA!</button>`
+    );
+  }
+  overlay.addEventListener("click", (e) => {
+    const d = e.target.closest("[data-diff]");
+    if (d) { setDifficulty(d.dataset.diff); return; }
+    if (e.target.closest("[data-start]")) startGame();
+    if (e.target.closest("[data-resume]")) togglePause();
+  });
+
+  // ---------- Input ----------
+  const KEYMAP = { arrowleft: "left", a: "left", arrowright: "right", d: "right", arrowup: "up", w: "up", arrowdown: "down", s: "down", " ": "reel", j: "reel", k: "reel", x: "reel" };
+  window.addEventListener("keydown", (e) => {
+    const k = e.key.toLowerCase();
+    if ([" ", "arrowup", "arrowdown", "arrowleft", "arrowright"].includes(k)) e.preventDefault();
+    if (state === "menu" || state === "over") {
+      if (e.key === "Enter") startGame();
+      else if (["1", "2", "3"].includes(k)) setDifficulty(DIFF_IDS[+k - 1]);
+      return;
+    }
+    if (k === "p" || k === "escape") { if (!e.repeat) togglePause(); return; }
+    if (state === "paused") { if (e.key === "Enter") togglePause(); return; }
+    if (KEYMAP[k]) keys[KEYMAP[k]] = true;
+  });
+  window.addEventListener("keyup", (e) => { const m = KEYMAP[e.key.toLowerCase()]; if (m) keys[m] = false; });
+  window.addEventListener("blur", () => { for (const k in keys) keys[k] = false; stick.x = stick.y = 0; reelHeld = false; if (isPlaying()) togglePause(); });
+  const reelBtn = touchEl.querySelector(".jump");
+  reelBtn.addEventListener("pointerdown", (e) => { e.preventDefault(); reelHeld = true; reelBtn.classList.add("on"); try { reelBtn.setPointerCapture(e.pointerId); } catch { /* ignore */ } });
+  for (const ev of ["pointerup", "pointercancel", "lostpointercapture"]) reelBtn.addEventListener(ev, () => { reelHeld = false; reelBtn.classList.remove("on"); });
+  const stickEl = touchEl.querySelector(".stick"), knob = stickEl.querySelector(".knob");
+  let stickId = null;
+  function stickAt(e) {
+    const r = stickEl.getBoundingClientRect(), max = r.width / 2 - 14;
+    let dx = e.clientX - (r.left + r.width / 2), dy = e.clientY - (r.top + r.height / 2);
+    const len = Math.hypot(dx, dy);
+    if (len > max) { dx *= max / len; dy *= max / len; }
+    knob.style.transform = `translate(${dx}px, ${dy}px)`;
+    const f = (v) => { const a = Math.abs(v) / max; return a < 0.18 ? 0 : Math.sign(v) * Math.min(1, (a - 0.18) / 0.55); };
+    stick.x = f(dx); stick.y = f(dy);
+  }
+  const stickEnd = (e) => { if (e.pointerId !== stickId) return; stickId = null; knob.style.transform = ""; stick.x = stick.y = 0; };
+  stickEl.addEventListener("pointerdown", (e) => { e.preventDefault(); stickId = e.pointerId; try { stickEl.setPointerCapture(e.pointerId); } catch { /* ignore */ } stickAt(e); });
+  stickEl.addEventListener("pointermove", (e) => { if (e.pointerId === stickId) stickAt(e); });
+  for (const ev of ["pointerup", "pointercancel", "lostpointercapture"]) stickEl.addEventListener(ev, stickEnd);
+  window.addEventListener("pointerdown", (e) => { if (e.pointerType === "touch" && !touchMode) { touchMode = true; syncControls(); if (menu) menu(); } }, true);
+
+  // ---------- The rival ----------
+  function mkAI(side, prm) { return { side, prm, t: 0, target: null, ox: 0, oy: 0, wait: false }; }
+  // returns { x, y, fast } for an angler driven by the computer
+  function think(ai, a, dt) {
+    const prm = ai.prm, out = { x: 0, y: 0, fast: false };
+    ai.t -= dt;
+    if (!a.fish) {
+      if (ai.t <= 0 || !ai.target || ai.target.by) {
+        ai.t = prm.react;
+        // the best fish: heavy, close to the hook, and not too near the other angler's side
+        let best = null, bv = -1e9;
+        for (const f of fish) {
+          if (f.by || f.wait > 0) continue;
+          const d = Math.hypot(f.x - a.hx, f.y - a.hy), lift = f.y - SEA;
+          const v = f.kg * (0.6 + prm.greed) - d / 60 - lift / 120 + rnd(-1, 1) * (1 - prm.greed);
+          if (v > bv) { bv = v; best = f; }
+        }
+        ai.target = best; ai.ox = rnd(-1, 1) * prm.err; ai.oy = rnd(-1, 1) * prm.err * 0.4;
+      }
+      const f = ai.target;
+      if (f) {
+        const tx = f.x + f.dir * f.sp * 0.4 + ai.ox, ty = f.y + ai.oy;
+        out.x = clamp((tx - a.hx) / 14, -1, 1); out.y = clamp((ty - a.hy) / 14, -1, 1);
+      }
+      return out;
+    }
+    // reeling in: rush when the shark is away, wait (and slip aside) when it's close
+    if (ai.t <= 0) { ai.t = prm.react; ai.wait = Math.random() < prm.shark && Math.abs(shark.x - a.hx) < 120 && a.hy > SHARKY - 10 && a.hy < SHARKY + 120; }
+    out.fast = !ai.wait;
+    if (ai.wait) out.x = clamp((a.hx - shark.x) / 30, -1, 1);
+    return out;
+  }
+
+  // ---------- Update ----------
+  function updateAngler(a, ctl, dt) {
+    const sp = a.side ? AI.rival.prm.speed : 1;
+    a.bob += dt;
+    if (a.stun > 0) { a.stun -= dt; a.hx += Math.sin(clock * 40) * 0.6; return; }
+    if (!a.fish) {
+      a.hx = clamp(a.hx + ctl.x * 130 * sp * dt, XMIN, XMAX);
+      a.hy = clamp(a.hy + ctl.y * 110 * sp * dt, SEA + 8, BOTTOM);
+      for (const f of fish) {
+        if (f.by || f.wait > 0) continue;
+        if (Math.abs(f.x - a.hx) < ROWS[f.row].len * 0.7 + 3 && Math.abs(f.y - a.hy) < 8) {
+          f.by = a; a.fish = f; sfx.hook();
+          if (a.side === 0) popups.push({ x: f.x, y: f.y - 14, text: f.golden ? "PESCE D'ORO!" : `${ROWS[f.row].name.toUpperCase()}!`, color: f.golden ? "#ffd23a" : "#ffffff", t: 0 });
+          break;
+        }
+      }
+      return;
+    }
+    // a fish on the line: it fights, you reel it in
+    const f = a.fish;
+    a.fast = ctl.fast;
+    const heavy = 1 + f.kg * 0.07;
+    const up = (ctl.fast ? FAST : REEL) * sp / heavy;
+    a.hy -= up * dt;
+    if (ctl.fast && Math.floor(clock * 20) !== Math.floor((clock - dt) * 20)) sfx.reel();
+    f.ph += dt * (2.5 + f.kg * 0.3);
+    a.hx = clamp(a.hx + (Math.sin(f.ph) * (24 + f.kg * 5) + ctl.x * 70 * sp) * dt, XMIN, XMAX);
+    f.x = a.hx; f.y = a.hy + 4; f.dir = Math.cos(f.ph) > 0 ? 1 : -1;
+    if (a.hy <= SEA) landFish(a);
+  }
+  function landFish(a) {
+    const f = a.fish;
+    a.kg += f.kg; a.catches++; a.fish = null; a.hy = SEA + 10;
+    flying.push({ x: f.x, y: SEA, tx: a.tipX + (a.side ? 30 : -30), ty: 96, t: 0, f: { ...f } });
+    sfx.splash(); burst(f.x, SEA, "#ffffff", 10, 90, 0.5);
+    if (a.side === 0) { const pts = 100 * f.kg * round; addScore(pts, f.x, SEA - 16, "#ffd23a", `+${f.kg} kg · ${pts.toLocaleString("it-IT")}`); sfx.catch(f.kg); }
+    else { popups.push({ x: f.x, y: SEA - 16, text: `rivale +${f.kg} kg`, color: "#ff8a8a", t: 0 }); sfx.rival(); }
+    respawn(f);
+    if (a.kg >= TARGET && state === "play") endRound(a.side === 0);
+  }
+  function respawn(f) { const i = fish.indexOf(f), nf = makeFish(f.row, f.golden ? 1 : Math.round(Math.random())); nf.x = nf.dir > 0 ? XMIN - 30 : XMAX + 30; nf.wait = 1.5; fish[i] = nf; }
+  function loseFish(a, why) {
+    const f = a.fish; if (!f) return;
+    a.fish = null;
+    if (window.__lost) window.__lost.push([a.side, why]);
+    if (why === "squalo") { respawn(f); sfx.chomp(); shark.mouth = 0.4; burst(f.x, f.y, "#ff6a6a", 12, 80, 0.5); }
+    else { f.by = null; f.y = ROWS[f.row].y; f.wait = 1; sfx.zap(); a.stun = 1; }
+    if (a.side === 0) popups.push({ x: a.hx, y: a.hy - 14, text: why === "squalo" ? "LO SQUALO!" : "MEDUSA!", color: "#ff5a5a", t: 0 });
+  }
+  function update(dt) {
+    clock += dt; sfxN = 0;
+    if (window.__bot) window.__bot(dt);
+    for (const p of parts) { p.t += dt; p.x += p.vx * dt; p.y += p.vy * dt; p.vy += 220 * dt; }
+    parts = parts.filter((p) => p.t < p.life);
+    for (const p of popups) { p.t += dt; p.y -= 20 * dt; }
+    popups = popups.filter((p) => p.t < 1.3);
+    for (const fl of flying) fl.t += dt * 1.6;
+    flying = flying.filter((fl) => fl.t < 1);
+    if (message) { message.t += dt; if (message.t > (message.long ? 2.6 : 1.6)) message = null; }
+    swim(dt);
+    if (state === "intro") { stateT -= dt; if (stateT <= 0) state = "play"; return; }
+    if (state === "end") {
+      stateT -= dt;
+      if (stateT <= 0) { if (won) { round++; beginRound(); } else if (lives > 0) beginRound(); else gameOver(); }
+      return;
+    }
+    if (state !== "play") return;
+    const you = { x: clamp((keys.right ? 1 : 0) - (keys.left ? 1 : 0) + stick.x, -1, 1), y: clamp((keys.down ? 1 : 0) - (keys.up ? 1 : 0) + stick.y, -1, 1), fast: keys.reel || reelHeld };
+    if (window.__auto && AI.you) Object.assign(you, think(AI.you, ang[0], dt));
+    updateAngler(ang[0], you, dt);
+    if (state !== "play") return;
+    updateAngler(ang[1], think(AI.rival, ang[1], dt), dt);
+    if (state !== "play") return;
+    updateShark(dt);
+    for (const j of jellies) {
+      for (const a of ang) if (Math.hypot(j.x - a.hx, j.y - a.hy) < 14) { if (a.fish) loseFish(a, "medusa"); else if (a.stun <= 0) { a.stun = 0.8; sfx.zap(); } }
+    }
+  }
+  function swim(dt) {
+    for (const f of fish) {
+      if (f.by) continue;
+      if (f.wait > 0) { f.wait -= dt; continue; }
+      f.ph += dt * 3;
+      f.x += f.dir * f.sp * dt; f.y = ROWS[f.row].y + Math.sin(f.ph) * 2;
+      if (f.x > XMAX + 30) { f.dir = -1; } else if (f.x < XMIN - 30) { f.dir = 1; }
+    }
+    for (const j of jellies) { j.ph += dt; j.y += Math.sin(j.ph * 0.8) * 14 * dt; j.x += j.vx * dt; if (j.x < XMIN + 20 || j.x > XMAX - 20) j.vx = -j.vx; j.y = clamp(j.y, 190, 320); }
+  }
+  function updateShark(dt) {
+    // it patrols under the surface and goes for any fish being reeled up past it
+    let prey = null;
+    for (const a of ang) if (a.fish && a.hy < SHARKY + 70 && a.hy > SHARKY - 30 && (!prey || Math.abs(a.hx - shark.x) < Math.abs(prey.hx - shark.x))) prey = a;
+    shark.chase = !!prey;
+    if (prey) shark.dir = Math.sign(prey.hx - shark.x) || shark.dir;
+    else if (shark.x > XMAX - 10) shark.dir = -1; else if (shark.x < XMIN + 10) shark.dir = 1;
+    shark.x += shark.dir * shark.sp * (prey ? 1.1 : 1) * dt;
+    shark.y = SHARKY + Math.sin(clock * 1.5) * 4;
+    if (shark.mouth > 0) shark.mouth -= dt;
+    for (const a of ang) if (a.fish && Math.abs(a.hx - shark.x) < 22 && Math.abs(a.hy - shark.y) < 13) loseFish(a, "squalo");
+  }
+
+  // ---------- Drawing ----------
+  function drawFish(x, y, row, dir, golden, t) {
+    const r = ROWS[row], L = r.len;
+    ctx.save(); ctx.translate(x, y); ctx.scale(dir, 1);
+    ctx.fillStyle = golden ? "#ffd23a" : r.col;
+    ctx.beginPath(); ctx.ellipse(0, 0, L * 0.6, L * 0.26, 0, 0, TAU); ctx.fill();
+    const w = Math.sin(t * 12) * 2;
+    ctx.beginPath(); ctx.moveTo(-L * 0.5, 0); ctx.lineTo(-L * 0.85, -L * 0.25 + w); ctx.lineTo(-L * 0.85, L * 0.25 + w); ctx.fill();
+    if (row === 5 && !golden) { ctx.fillStyle = "#ffd23a"; ctx.beginPath(); ctx.moveTo(0, -L * 0.24); ctx.lineTo(-L * 0.12, -L * 0.42); ctx.lineTo(-L * 0.2, -L * 0.2); ctx.fill(); }
+    ctx.fillStyle = "rgba(255,255,255,0.35)"; ctx.fillRect(-L * 0.4, -1, L * 0.7, 1.5);
+    ctx.fillStyle = "#ffffff"; ctx.beginPath(); ctx.arc(L * 0.36, -L * 0.06, 2.2, 0, TAU); ctx.fill();
+    ctx.fillStyle = "#1a1a1a"; ctx.beginPath(); ctx.arc(L * 0.38, -L * 0.06, 1.1, 0, TAU); ctx.fill();
+    if (golden) { ctx.fillStyle = "rgba(255,255,255,0.8)"; ctx.fillRect(-2 + Math.sin(t * 8) * 6, -L * 0.3, 2, 2); }
+    ctx.restore();
+  }
+  function drawScene() {
+    const sky = ctx.createLinearGradient(0, TOP, 0, SEA);
+    sky.addColorStop(0, "#ffb070"); sky.addColorStop(1, "#ffe0b0");
+    ctx.fillStyle = sky; ctx.fillRect(0, TOP, W, SEA - TOP);
+    ctx.fillStyle = "#fff0c0"; ctx.beginPath(); ctx.arc(W / 2, SEA - 4, 30, Math.PI, TAU); ctx.fill();
+    ctx.fillStyle = "#c8805a"; ctx.beginPath(); ctx.moveTo(160, SEA); ctx.lineTo(220, 86); ctx.lineTo(260, 104); ctx.lineTo(300, 80); ctx.lineTo(360, SEA); ctx.fill();
+    // a lighthouse far away
+    ctx.fillStyle = "#ffffff"; ctx.fillRect(400, 76, 10, SEA - 76); ctx.fillStyle = "#ff5a5a"; ctx.fillRect(400, 86, 10, 6); ctx.fillRect(400, 100, 10, 6); ctx.fillStyle = "#3a3a4a"; ctx.fillRect(398, 70, 14, 6);
+    // the sea, darker further down
+    const sea = ctx.createLinearGradient(0, SEA, 0, H);
+    sea.addColorStop(0, "#2a9ac8"); sea.addColorStop(0.5, "#1a5a8a"); sea.addColorStop(1, "#0a2a4a");
+    ctx.fillStyle = sea; ctx.fillRect(0, SEA, W, H - SEA);
+    ctx.strokeStyle = "rgba(255,255,255,0.55)"; ctx.lineWidth = 1.5; ctx.beginPath();
+    for (let x = 0; x <= W; x += 8) ctx.lineTo(x, SEA + Math.sin(x * 0.08 + clock * 2) * 1.5);
+    ctx.stroke();
+    ctx.fillStyle = "rgba(255,255,255,0.06)";
+    for (let i = 0; i < 6; i++) { const x = (i * 131 + clock * 8) % W; ctx.beginPath(); ctx.moveTo(x, SEA); ctx.lineTo(x + 30, SEA); ctx.lineTo(x - 30, H); ctx.lineTo(x - 70, H); ctx.fill(); }
+    // the sea bed, weed and depth marks
+    ctx.fillStyle = "#c8a870"; ctx.beginPath(); ctx.moveTo(0, H); for (let x = 0; x <= W; x += 20) ctx.lineTo(x, BOTTOM + 10 + Math.sin(x * 0.05) * 4); ctx.lineTo(W, H); ctx.fill();
+    ctx.strokeStyle = "#3a8a5a"; ctx.lineWidth = 3;
+    for (const x of [60, 150, 290, 360, 480, 590]) { ctx.beginPath(); ctx.moveTo(x, BOTTOM + 12); for (let k = 1; k < 5; k++) ctx.lineTo(x + Math.sin(clock * 2 + x + k) * 4, BOTTOM + 12 - k * 9); ctx.stroke(); }
+    ctx.fillStyle = "rgba(255,255,255,0.35)"; ctx.font = "700 8px system-ui"; ctx.textAlign = "left";
+    ROWS.forEach((r) => ctx.fillText(`${r.kg} kg`, 6, r.y + 3));
+    // the two piers
+    for (const s of [0, 1]) {
+      const x0 = s ? W - 92 : 0;
+      ctx.fillStyle = "#8a5a3a"; ctx.fillRect(x0, 110, 92, 8);
+      ctx.fillStyle = "#6a4028"; for (let k = 0; k < 3; k++) ctx.fillRect(x0 + 10 + k * 34, 118, 6, 60);
+      ctx.fillStyle = "rgba(0,0,0,0.15)"; ctx.fillRect(x0, 118, 92, 3);
+    }
+  }
+  function drawAngler(a) {
+    const s = a.side, x = s ? W - 50 : 50, y = 110, L = s ? a.look : { col: "#ffb02a" };
+    const f = s ? -1 : 1;
+    // the angler sitting on the pier
+    ctx.fillStyle = "#3a4a6a"; ctx.fillRect(x - 6, y - 10, 14, 6);
+    ctx.fillStyle = L.col; ctx.beginPath(); ctx.ellipse(x - f * 2, y - 20, 8, 11, 0, 0, TAU); ctx.fill();
+    ctx.fillStyle = "#f0c090"; ctx.beginPath(); ctx.arc(x - f * 2, y - 36, 6.5, 0, TAU); ctx.fill();
+    ctx.fillStyle = s ? "#3a3a3a" : "#ffd23a"; ctx.beginPath(); ctx.ellipse(x - f * 2, y - 41, 10, 3, 0, 0, TAU); ctx.fill(); ctx.fillRect(x - f * 2 - 5, y - 47, 10, 6);
+    // the rod bends more with a heavy fish on
+    const bend = a.fish ? 10 + a.fish.kg * 2 : 3;
+    ctx.strokeStyle = "#5a3a1a"; ctx.lineWidth = 2.5; ctx.beginPath(); ctx.moveTo(x + f * 4, y - 20); ctx.quadraticCurveTo(x + f * 50, y - 60 + bend, a.tipX, a.tipY + bend * 0.6); ctx.stroke();
+    const tipY = a.tipY + bend * 0.6;
+    // the line down to the hook
+    ctx.strokeStyle = "rgba(255,255,255,0.75)"; ctx.lineWidth = 1; ctx.beginPath(); ctx.moveTo(a.tipX, tipY);
+    ctx.quadraticCurveTo((a.tipX + a.hx) / 2 - f * (a.fish ? 0 : 12), (tipY + a.hy) / 2 + (a.fish ? -10 : 10), a.hx, a.hy); ctx.stroke();
+    ctx.fillStyle = "#ff3a3a"; ctx.beginPath(); ctx.arc(a.hx + 0, Math.min(a.hy, SEA + 2) - 2, 3, 0, TAU); ctx.fill();
+    ctx.strokeStyle = a.stun > 0 ? "#ffff6a" : "#e0e8f0"; ctx.lineWidth = 1.6; ctx.beginPath(); ctx.moveTo(a.hx, a.hy - 6); ctx.lineTo(a.hx, a.hy); ctx.arc(a.hx - 3, a.hy, 3, 0, Math.PI); ctx.stroke();
+    // the reel spinning when reeling fast
+    ctx.fillStyle = "#c0c8d0"; ctx.beginPath(); ctx.arc(x + f * 12, y - 26, 3.5, 0, TAU); ctx.fill();
+    if (a.fish && a.fast) { ctx.strokeStyle = "#ffffff"; ctx.lineWidth = 1; ctx.beginPath(); ctx.arc(x + f * 12, y - 26, 6, clock * 20, clock * 20 + 2); ctx.stroke(); }
+  }
+  function drawShark() {
+    const x = shark.x, y = shark.y, d = shark.dir;
+    ctx.save(); ctx.translate(x, y); ctx.scale(d, 1);
+    ctx.fillStyle = "#6a7a8a";
+    ctx.beginPath(); ctx.ellipse(0, 0, 34, 10, 0, 0, TAU); ctx.fill();
+    ctx.beginPath(); ctx.moveTo(-28, 0); ctx.lineTo(-48, -12 + Math.sin(clock * 8) * 2); ctx.lineTo(-44, 0); ctx.lineTo(-48, 10 + Math.sin(clock * 8) * 2); ctx.fill();
+    ctx.beginPath(); ctx.moveTo(-4, -8); ctx.lineTo(6, -24); ctx.lineTo(12, -8); ctx.fill();
+    ctx.fillStyle = "#d8e0e8"; ctx.beginPath(); ctx.ellipse(4, 4, 26, 5, 0, 0, Math.PI); ctx.fill();
+    ctx.fillStyle = "#1a1a1a"; ctx.beginPath(); ctx.arc(22, -3, 2, 0, TAU); ctx.fill();
+    const open = shark.chase || shark.mouth > 0 ? 4 : 1;
+    ctx.fillStyle = "#3a1a1a"; ctx.beginPath(); ctx.moveTo(34, 1); ctx.lineTo(18, 3); ctx.lineTo(34, 2 + open); ctx.fill();
+    if (open > 1) { ctx.fillStyle = "#ffffff"; for (let k = 0; k < 3; k++) ctx.fillRect(22 + k * 4, 2, 1.5, 2); }
+    ctx.restore();
+  }
+  function drawJelly(j) {
+    ctx.fillStyle = "rgba(230,140,255,0.55)"; ctx.beginPath(); ctx.arc(j.x, j.y, 9, Math.PI, TAU); ctx.fill();
+    ctx.strokeStyle = "rgba(230,140,255,0.6)"; ctx.lineWidth = 1.2;
+    for (let k = -2; k <= 2; k++) { ctx.beginPath(); ctx.moveTo(j.x + k * 3, j.y); ctx.quadraticCurveTo(j.x + k * 3 + Math.sin(clock * 4 + k) * 3, j.y + 8, j.x + k * 3, j.y + 15); ctx.stroke(); }
+  }
+  function drawHud() {
+    ctx.fillStyle = "rgba(6,40,58,0.95)"; ctx.fillRect(0, 0, W, TOP);
+    ctx.textBaseline = "middle"; ctx.textAlign = "left";
+    const x0 = touchMode ? 130 : 10;
+    ctx.fillStyle = "#ffffff"; ctx.font = "900 15px system-ui"; ctx.fillText(score.toLocaleString("it-IT"), x0, 14);
+    ctx.fillStyle = "#b8dce0"; ctx.font = "700 9px system-ui"; ctx.fillText(`REC ${Math.max(bestCache, score).toLocaleString("it-IT")}`, x0 + 80, 9);
+    ctx.fillStyle = "#2ad0c0"; ctx.font = "900 10px system-ui"; ctx.fillText(`GARA ${round}${lives > 1 ? " · ♥" : ""}`, x0 + 80, 21);
+    // the race to the target weight
+    const bx = x0 + 170, bw = touchMode ? 200 : 260;
+    for (const s of [0, 1]) {
+      const a = ang[s]; if (!a) continue;
+      const y = s ? 18 : 6;
+      ctx.fillStyle = "rgba(255,255,255,0.15)"; ctx.fillRect(bx, y, bw, 6);
+      ctx.fillStyle = s ? (a.look ? a.look.col : "#ff8a8a") : "#ffb02a"; ctx.fillRect(bx, y, bw * Math.min(1, a.kg / TARGET), 6);
+      ctx.font = "800 9px system-ui"; ctx.fillStyle = "#ffffff"; ctx.textAlign = "left";
+      ctx.fillText(`${s ? (a.look ? a.look.name.split(" ")[0].toUpperCase() : "RIVALE") : "TU"} ${a.kg} kg`, bx + bw + 6, y + 3);
+    }
+    ctx.textBaseline = "alphabetic";
+  }
+  function draw() {
+    ctx.setTransform(pxRatio, 0, 0, pxRatio, 0, 0);
+    if (!ang.length) { const rv = rivalFor(1); ang = [makeAngler(0), makeAngler(1)]; ang[1].look = rv; fish = []; ROWS.forEach((r, i) => { for (let k = 0; k < 2; k++) fish.push(makeFish(i, k)); }); shark = { x: 300, y: SHARKY, vx: 0, sp: 50, dir: 1, mouth: 0, chase: false }; ang[0].hx = 220; ang[0].hy = 250; ang[1].hx = 430; ang[1].hy = 200; }
+    drawScene();
+    for (const f of fish) if (!(f.wait > 0)) drawFish(f.x, f.y, f.row, f.dir, f.golden, clock + f.ph);
+    for (const j of jellies) drawJelly(j);
+    if (shark) drawShark();
+    for (const a of ang) drawAngler(a);
+    for (const fl of flying) { const k = fl.t, x = fl.x + (fl.tx - fl.x) * k, y = fl.y + (fl.ty - fl.y) * k - Math.sin(k * Math.PI) * 50; drawFish(x, y, fl.f.row, fl.tx > fl.x ? 1 : -1, fl.f.golden, clock * 3); }
+    for (const p of parts) { ctx.globalAlpha = Math.max(0, 1 - p.t / p.life); ctx.fillStyle = p.c; ctx.fillRect(p.x - 1.5, p.y - 1.5, 3, 3); }
+    ctx.globalAlpha = 1;
+    for (const p of popups) {
+      ctx.globalAlpha = Math.max(0, 1 - p.t / 1.3);
+      ctx.textAlign = "center"; ctx.font = "900 11px system-ui";
+      ctx.lineWidth = 3; ctx.strokeStyle = "#06283a"; ctx.strokeText(p.text, p.x, p.y); ctx.fillStyle = p.color; ctx.fillText(p.text, p.x, p.y);
+    }
+    ctx.globalAlpha = 1;
+    if (state === "menu") return;
+    drawHud();
+    if (message) {
+      const life = message.long ? 2.6 : 1.6;
+      ctx.globalAlpha = Math.min(1, (life - message.t) * 2);
+      ctx.textAlign = "center"; ctx.font = "italic 900 24px system-ui"; ctx.fillStyle = "#2ad0c0";
+      ctx.lineWidth = 5; ctx.strokeStyle = "#06283a"; ctx.strokeText(message.text, W / 2, 66); ctx.fillText(message.text, W / 2, 66);
+      if (message.sub) { ctx.font = "800 12px system-ui"; ctx.fillStyle = "#ffffff"; ctx.lineWidth = 4; ctx.strokeText(message.sub, W / 2, 85); ctx.fillText(message.sub, W / 2, 85); }
+      ctx.globalAlpha = 1;
+    }
+  }
+
+  // ---------- Loop ----------
+  const STEP = 1 / 120;
+  let last = performance.now(), acc = 0;
+  function frame(now) {
+    const dt = Math.min(0.1, (now - last) / 1000);
+    last = now;
+    if (isPlaying()) {
+      acc += dt;
+      while (acc >= STEP && isPlaying()) { update(STEP); acc -= STEP; }
+    } else { acc = 0; update(dt); }
+    draw();
+    requestAnimationFrame(frame);
+  }
+  syncControls();
+  showTitle();
+  requestAnimationFrame(frame);
+})();
+</script>
+<script src="../../shared/iniziali.js" data-record="pesca-best-" data-kind="score"></script>
+</body>
+</html>
