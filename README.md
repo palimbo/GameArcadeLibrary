@@ -4,7 +4,7 @@ Raccolta di giochi arcade per il browser. Ogni gioco è un singolo file HTML sen
 
 ## 🕹️ Sala Giochi — `index.html`
 
-Apri `index.html` nella cartella principale per la pagina di raccolta: mostra tutti i 129 giochi con copertina, genere, comandi e i tuoi record per ogni difficoltà (Facile, Normale, Difficile). Tocca «Gioca» per avviare un gioco; in ogni gioco il pulsante «← Sala Giochi» in alto a sinistra (visibile nei menu) riporta alla raccolta.
+Apri `index.html` nella cartella principale per la pagina di raccolta: mostra tutti i 130 giochi con copertina, genere, comandi e i tuoi record per ogni difficoltà (Facile, Normale, Difficile). Tocca «Gioca» per avviare un gioco; in ogni gioco il pulsante «← Sala Giochi» in alto a sinistra (visibile nei menu) riporta alla raccolta.
 
 **Iniziali del record:** quando batti un record compare la schermata da sala giochi per inserire le tue tre iniziali (frecce ↑ ↓ per cambiare lettera, ← → per spostarti, oppure scrivile direttamente; su telefono i tasti ▲ ▼ e OK). Le iniziali vengono salvate insieme al record e compaiono nei menu del gioco e nella Sala Giochi. Il codice è condiviso da tutti i giochi in `shared/iniziali.js`.
 
@@ -12,7 +12,7 @@ Apri `index.html` nella cartella principale per la pagina di raccolta: mostra tu
 
 **Comandi touch: levetta o frecce:** in cima alla Sala Giochi e nel menu di pausa di ogni gioco con la levetta si sceglie se usare la levetta analogica o una croce di frecce. Con le frecce il tocco viene agganciato a una delle otto direzioni (le quattro principali hanno la zona più larga, così le diagonali si prendono solo di proposito) e spinto fino in fondo; la scelta vale per tutti i giochi e resta memorizzata. Funziona anche nei giochi con due levette (la sfida a due di *Pugni di Fuoco*, muovi e spara di *Assalto Robotico*).
 
-**Trofei:** ogni gioco ha tre trofei a punteggio: 🥉 **Bronzo** (la soglia in qualsiasi difficoltà), 🥈 **Argento** (a Normale o Difficile) e 🥇 **Oro** (a Difficile); nei giochi a tempo (*Corsa al Tramonto*, *Crystal Wars*) conta finire entro un certo tempo. I trofei si calcolano dai record salvati, quindi quelli già fatti si sbloccano da soli; quando un record nuovo ne conquista uno compare un avviso in alto. Le soglie sono nella schermata iniziale, in pausa e a fine partita di ogni gioco; in Sala Giochi ogni cabinato mostra i suoi trofei, in cima c'è il totale (su 387) con il numero di giochi giocati e il filtro **Già giocati** mostra solo i giochi con almeno un record. Le soglie vengono dalle partite di prova di un bot per circa un terzo dei giochi e sono stimate sulle regole di punteggio per gli altri (`shared/trofei.js`).
+**Trofei:** ogni gioco ha tre trofei a punteggio: 🥉 **Bronzo** (la soglia in qualsiasi difficoltà), 🥈 **Argento** (a Normale o Difficile) e 🥇 **Oro** (a Difficile); nei giochi a tempo (*Corsa al Tramonto*, *Crystal Wars*) conta finire entro un certo tempo. I trofei si calcolano dai record salvati, quindi quelli già fatti si sbloccano da soli; quando un record nuovo ne conquista uno compare un avviso in alto. Le soglie sono nella schermata iniziale, in pausa e a fine partita di ogni gioco; in Sala Giochi ogni cabinato mostra i suoi trofei, in cima c'è il totale (su 390) con il numero di giochi giocati e il filtro **Già giocati** mostra solo i giochi con almeno un record. Le soglie vengono dalle partite di prova di un bot per circa un terzo dei giochi e sono stimate sulle regole di punteggio per gli altri (`shared/trofei.js`).
 
 **Generi:** ogni gioco appartiene a una o più famiglie di generi (🚀 Sparatutto, 🪜 Piattaforme, 🎯 Azione e riflessi, 🌀 Labirinti, ⚽ Sport, 🧩 Rompicapo, 🏁 Corse e veicoli, 🏰 Strategia e difesa, 🥊 Picchiaduro, 🗝️ Avventura, 🎵 Ritmo e musica): per esempio *Cripta degli Eroi* è avventura, sparatutto e labirinto. Le famiglie sono le etichette colorate di ogni cabinato. Sotto la ricerca una fila di pulsanti, con il numero di giochi di ciascuna famiglia, mostra solo quel genere (toccandolo di nuovo si torna a *Tutti i generi*); anche toccare un'etichetta su un cabinato filtra per quella famiglia. Un gioco con più famiglie compare in ognuna. La scelta resta memorizzata e si combina con la ricerca e con *Già giocati*. Su telefono la fila scorre di lato.
 
@@ -2005,3 +2005,19 @@ Sparatutto a piedi in stile *Rolling Thunder*: un agente segreto attraversa il c
 - **Touch:** levetta (giù accucciati, su davanti a una porta per entrarci), pulsante piccolo SALTA e pulsante grande FUOCO
 
 Per giocare apri `games/operazione-tuono/index.html` nel browser.
+
+### 🤠 Polvere e Pistole — `games/polvere-e-pistole/index.html`
+
+Sparatutto a scorrimento verticale nel Far West in stile *Gun.Smoke*: lo sceriffo risale la strada principale di ogni città, che scorre da sola, fino al covo del ricercato del manifesto.
+
+- **Tre direzioni di tiro:** un pulsante spara in diagonale a sinistra, uno dritto e uno in diagonale a destra (tenuti premuti continuano a sparare). Le diagonali servono soprattutto per i pistoleri che si affacciano alle finestre ai lati della strada
+- **Gittata:** i colpi arrivano fino a una certa distanza, quindi bisogna avvicinarsi ai banditi
+- **I banditi:** a piedi (100), alle finestre (200, colpibili solo quando sono affacciati), dinamitardi che lanciano candelotti (300; il candelotto si può abbattere al volo, 50), a cavallo che scendono al galoppo (2 colpi, 400)
+- **Le botti:** bloccano i colpi (anche quelli nemici) e con due colpi si rompono (50). Dentro possono esserci stivali (più veloce), fucile (colpi più lunghi), un cavallo (regge 3 colpi) o una stella (1.000)
+- **Il ricercato:** in fondo alla strada la città si ferma e arriva il ricercato: spara a ventaglio, lancia dinamite e chiama rinforzi. La taglia vale 2.000 più 1.000 per città
+- **Punti:** vita extra a 30.000 e poi ogni 50.000
+- **Difficoltà:** Facile (5 vite, ogni città comincia a cavallo, banditi più lenti a sparare; dopo una caduta si tengono stivali e fucile), Normale (3 vite), Difficile (3 vite, più banditi, più colpi e più veloci); record separati per ogni difficoltà
+- **Comandi:** frecce o `W` `A` `S` `D` per muoverti · `J` `K` `L` (oppure `Z` `X` `C`) per sparare a sinistra, dritto e a destra · `P` pausa
+- **Touch:** levetta per muoverti, pulsanti ◤ ▲ ◥ per sparare
+
+Per giocare apri `games/polvere-e-pistole/index.html` nel browser.

@@ -9,6 +9,7 @@
   "use strict";
   // record key prefix → [bronzo, argento, oro] (and t for times)
   const DATA = {
+    "pistole-best-": [7500, 23000, 16000],   // polvere-e-pistole (bot)
     "tuono-best-": [10000, 32000, 22000],   // operazione-tuono (bot)
     "arcobaleno-best-": [6000, 18000, 13000],   // torre-arcobaleno (bot)
     "capsule-best-": [24000, 73000, 51000],   // capsule-galattiche (bot)
