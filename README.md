@@ -4,7 +4,7 @@ Raccolta di giochi arcade per il browser. Ogni gioco è un singolo file HTML sen
 
 ## 🕹️ Sala Giochi — `index.html`
 
-Apri `index.html` nella cartella principale per la pagina di raccolta: mostra tutti i 130 giochi con copertina, genere, comandi e i tuoi record per ogni difficoltà (Facile, Normale, Difficile). Tocca «Gioca» per avviare un gioco; in ogni gioco il pulsante «← Sala Giochi» in alto a sinistra (visibile nei menu) riporta alla raccolta.
+Apri `index.html` nella cartella principale per la pagina di raccolta: mostra tutti i 131 giochi con copertina, genere, comandi e i tuoi record per ogni difficoltà (Facile, Normale, Difficile). Tocca «Gioca» per avviare un gioco; in ogni gioco il pulsante «← Sala Giochi» in alto a sinistra (visibile nei menu) riporta alla raccolta.
 
 **Iniziali del record:** quando batti un record compare la schermata da sala giochi per inserire le tue tre iniziali (frecce ↑ ↓ per cambiare lettera, ← → per spostarti, oppure scrivile direttamente; su telefono i tasti ▲ ▼ e OK). Le iniziali vengono salvate insieme al record e compaiono nei menu del gioco e nella Sala Giochi. Il codice è condiviso da tutti i giochi in `shared/iniziali.js`.
 
@@ -12,7 +12,7 @@ Apri `index.html` nella cartella principale per la pagina di raccolta: mostra tu
 
 **Comandi touch: levetta o frecce:** in cima alla Sala Giochi e nel menu di pausa di ogni gioco con la levetta si sceglie se usare la levetta analogica o una croce di frecce. Con le frecce il tocco viene agganciato a una delle otto direzioni (le quattro principali hanno la zona più larga, così le diagonali si prendono solo di proposito) e spinto fino in fondo; la scelta vale per tutti i giochi e resta memorizzata. Funziona anche nei giochi con due levette (la sfida a due di *Pugni di Fuoco*, muovi e spara di *Assalto Robotico*).
 
-**Trofei:** ogni gioco ha tre trofei a punteggio: 🥉 **Bronzo** (la soglia in qualsiasi difficoltà), 🥈 **Argento** (a Normale o Difficile) e 🥇 **Oro** (a Difficile); nei giochi a tempo (*Corsa al Tramonto*, *Crystal Wars*) conta finire entro un certo tempo. I trofei si calcolano dai record salvati, quindi quelli già fatti si sbloccano da soli; quando un record nuovo ne conquista uno compare un avviso in alto. Le soglie sono nella schermata iniziale, in pausa e a fine partita di ogni gioco; in Sala Giochi ogni cabinato mostra i suoi trofei, in cima c'è il totale (su 390) con il numero di giochi giocati e il filtro **Già giocati** mostra solo i giochi con almeno un record. Le soglie vengono dalle partite di prova di un bot per circa un terzo dei giochi e sono stimate sulle regole di punteggio per gli altri (`shared/trofei.js`).
+**Trofei:** ogni gioco ha tre trofei a punteggio: 🥉 **Bronzo** (la soglia in qualsiasi difficoltà), 🥈 **Argento** (a Normale o Difficile) e 🥇 **Oro** (a Difficile); nei giochi a tempo (*Corsa al Tramonto*, *Crystal Wars*) conta finire entro un certo tempo. I trofei si calcolano dai record salvati, quindi quelli già fatti si sbloccano da soli; quando un record nuovo ne conquista uno compare un avviso in alto. Le soglie sono nella schermata iniziale, in pausa e a fine partita di ogni gioco; in Sala Giochi ogni cabinato mostra i suoi trofei, in cima c'è il totale (su 393) con il numero di giochi giocati e il filtro **Già giocati** mostra solo i giochi con almeno un record. Le soglie vengono dalle partite di prova di un bot per circa un terzo dei giochi e sono stimate sulle regole di punteggio per gli altri (`shared/trofei.js`).
 
 **Generi:** ogni gioco appartiene a una o più famiglie di generi (🚀 Sparatutto, 🪜 Piattaforme, 🎯 Azione e riflessi, 🌀 Labirinti, ⚽ Sport, 🧩 Rompicapo, 🏁 Corse e veicoli, 🏰 Strategia e difesa, 🥊 Picchiaduro, 🗝️ Avventura, 🎵 Ritmo e musica): per esempio *Cripta degli Eroi* è avventura, sparatutto e labirinto. Le famiglie sono le etichette colorate di ogni cabinato. Sotto la ricerca una fila di pulsanti, con il numero di giochi di ciascuna famiglia, mostra solo quel genere (toccandolo di nuovo si torna a *Tutti i generi*); anche toccare un'etichetta su un cabinato filtra per quella famiglia. Un gioco con più famiglie compare in ognuna. La scelta resta memorizzata e si combina con la ricerca e con *Già giocati*. Su telefono la fila scorre di lato.
 
@@ -2021,3 +2021,19 @@ Sparatutto a scorrimento verticale nel Far West in stile *Gun.Smoke*: lo sceriff
 - **Touch:** levetta per muoverti, pulsanti ◤ ▲ ◥ per sparare
 
 Per giocare apri `games/polvere-e-pistole/index.html` nel browser.
+
+### 🥁 Tamburi del Festival — `games/tamburi-del-festival/index.html`
+
+Gioco di ritmo in stile *Taiko no Tatsujin*: si suona il grande tamburo della festa d'estate sulla musica del festival, tutta sintetizzata nel browser.
+
+- **DON e KA:** le note scorrono da destra verso il cerchio; quando ci arrivano, le rosse si battono al centro del tamburo (DON) e le blu sul bordo (KA). Il tamburo sbagliato conta come errore
+- **Note grandi:** valgono il doppio
+- **Rulli e palloncini:** sulle strisce gialle (RULLO!) ogni colpo vale 100, quindi batti più veloce che puoi; i palloncini scoppiano dopo il numero di DON scritto sopra (1.500)
+- **Precisione:** PERFETTO 300 · BENE 150 · QUASI 50; ogni colpo di fila aggiunge l'1% (fino al doppio), ogni 50 di fila partono i fuochi d'artificio
+- **Energia:** ogni nota mancata svuota la barra, ogni nota presa la riempie; se si svuota il festival finisce
+- **Canzoni:** sei canzoni sempre più veloci e fitte (da *Lanterne di Carta* a *Luna d'Estate*), poi ricominciano più veloci; a fine canzone bonus di 1.000, un voto da D a S e 1.500 per la combo perfetta, moltiplicati per il numero della canzone
+- **Difficoltà:** Facile (canzoni più lente, ritmi semplici, un errore costa poco), Normale, Difficile (canzoni più veloci e ritmi più fitti); record separati per ogni difficoltà
+- **Comandi:** DON con `F`, `J`, `Spazio` o `↓` · KA con `D`, `K`, `←` o `→` · `P` pausa
+- **Touch:** pulsante KA (blu) per il pollice sinistro e DON (rosso) per il destro
+
+Per giocare apri `games/tamburi-del-festival/index.html` nel browser.
