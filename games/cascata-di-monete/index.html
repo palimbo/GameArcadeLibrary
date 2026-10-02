@@ -1,0 +1,526 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no, viewport-fit=cover">
+<title>Cascata di Monete</title>
+<style>
+  :root {
+    --bg: #10140a;
+    --fg: #f4f6ee;
+    --muted: #e8e0b8;
+    --pink: #ffd23a;
+    --yellow: #8ae05a;
+    --red: #ff4a3a;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  html, body {
+    height: 100%;
+    background: var(--bg);
+    color: var(--fg);
+    font-family: system-ui, -apple-system, "Segoe UI", sans-serif;
+    overflow: hidden;
+    user-select: none;
+    -webkit-user-select: none;
+    touch-action: none;
+  }
+  #wrap { position: fixed; inset: 0; display: flex; align-items: center; justify-content: center; }
+  canvas { display: block; touch-action: none; border-radius: 6px; box-shadow: 0 0 0 2px #1a3a5a, 0 10px 40px rgba(0,0,0,0.6); }
+  #pauseBtn {
+    position: fixed; z-index: 3; display: none; right: 10px; top: calc(10px + env(safe-area-inset-top, 0px));
+    font: 700 13px system-ui, sans-serif; color: var(--fg);
+    background: rgba(0, 0, 0, 0.6); border: 1px solid rgba(244, 246, 238, 0.35);
+    border-radius: 8px; padding: 6px 10px; cursor: pointer;
+  }
+  #touch {
+    position: fixed; z-index: 2; display: none; left: 12px; right: 12px;
+    bottom: calc(14px + env(safe-area-inset-bottom, 0px));
+    justify-content: space-between; align-items: flex-end; pointer-events: none;
+  }
+  /* thumb stick: slide the coin slot left and right; MONETA drops a coin */
+  #touch .stick { position: relative; width: 136px; height: 136px; border-radius: 50%; pointer-events: auto; touch-action: none;
+    border: 2px solid rgba(255, 200, 58, 0.6); background: radial-gradient(circle, rgba(255,200,58,0.14), rgba(255,200,58,0.04)); }
+  #touch .stick .knob { position: absolute; left: 50%; top: 50%; width: 58px; height: 58px; margin: -29px 0 0 -29px; border-radius: 50%;
+    background: rgba(255, 200, 58, 0.45); border: 2px solid rgba(255,255,255,0.7); box-shadow: 0 4px 10px rgba(0,0,0,0.4); pointer-events: none; }
+  #touch .stick .ring { position: absolute; inset: 10px; border-radius: 50%; border: 1px dashed rgba(244,246,238,0.25); pointer-events: none; }
+  #touch .jump { width: 96px; height: 96px; border-radius: 50%; pointer-events: auto; touch-action: none; color: var(--fg);
+    font: 800 13px system-ui, sans-serif; letter-spacing: 1px; border: 2px solid rgba(255, 210, 58, 0.9); background: rgba(255, 210, 58, 0.22); }
+  #touch .jump.on { background: rgba(255, 210, 58, 0.55); }
+  #touch.small .stick { width: 112px; height: 112px; }
+  #touch.small .stick .knob { width: 48px; height: 48px; margin: -24px 0 0 -24px; }
+  #touch.small .jump { width: 80px; height: 80px; font-size: 11px; }
+  #touch .btns { display: flex; flex-direction: column; align-items: center; gap: 10px; pointer-events: none; }
+  #touch .jump.axe { width: 64px; height: 64px; font-size: 11px; border-color: rgba(255, 244, 200, 0.9); background: rgba(255, 244, 200, 0.16); }
+  #touch .jump.axe.on { background: rgba(255, 244, 200, 0.5); }
+  #touch.small .jump.axe { width: 54px; height: 54px; font-size: 10px; }
+  #overlay {
+    position: fixed; inset: 0; z-index: 5;
+    display: flex; flex-direction: column; align-items: center; justify-content: flex-start;
+    gap: 14px; padding: 16px; text-align: center; overflow-y: auto;
+    background: rgba(16, 20, 10, 0.93);
+  }
+  #overlay > :first-child { margin-top: auto; }
+  #overlay > :last-child { margin-bottom: auto; }
+  #overlay.hidden { display: none; }
+  #homeLink {
+    position: fixed; top: calc(10px + env(safe-area-inset-top, 0px)); left: 10px; z-index: 6;
+    font: 600 13px/1 system-ui, sans-serif; color: #fff; text-decoration: none;
+    padding: 8px 12px; border-radius: 999px; background: rgba(0,0,0,.55);
+    border: 1px solid rgba(255,255,255,.25);
+  }
+  #homeLink:hover { background: rgba(0,0,0,.8); }
+  #overlay.hidden ~ #homeLink { display: none; }
+  @media (max-width: 700px) { #overlay { padding-top: calc(52px + env(safe-area-inset-top, 0px)); } }
+  #overlay h1 { font-size: clamp(32px, 10vw, 58px); font-weight: 900; font-style: italic; letter-spacing: 1px; color: var(--pink);
+    text-shadow: 3px 3px 0 #6a1a4a, 0 0 22px rgba(255,122,184,0.35); }
+  #overlay h2 { font-size: clamp(26px, 7vw, 42px); font-weight: 900; letter-spacing: 2px; color: var(--pink); }
+  #overlay h2.lose { color: var(--red); }
+  #overlay p { max-width: 540px; font-size: clamp(13px, 3.4vw, 16px); line-height: 1.55; }
+  #overlay p.muted { color: var(--muted); }
+  #overlay .pts { display: grid; grid-template-columns: repeat(2, auto); gap: 4px 18px; font-size: 13px; color: var(--muted); text-align: left; max-width: 560px; }
+  #overlay .pts b { color: var(--fg); }
+  #overlay .diff { display: flex; gap: 10px; flex-wrap: wrap; justify-content: center; }
+  #overlay button {
+    font: 800 15px system-ui, sans-serif; letter-spacing: 1.5px; color: var(--fg);
+    background: transparent; cursor: pointer;
+    border: 2px solid rgba(244,246,238,0.3); border-radius: 10px; padding: 9px 16px;
+  }
+  #overlay .diff button.on { border-color: var(--c); color: var(--c); box-shadow: 0 0 12px var(--c); }
+  #overlay button.start { border-color: var(--pink); color: #2e2004; background: var(--pink); padding: 11px 30px; box-shadow: 0 4px 0 #a8881a; }
+  @media (max-height: 560px) {
+    #overlay { gap: 8px; }
+    #overlay h1 { font-size: 30px; }
+    #overlay p { font-size: 13px; line-height: 1.4; }
+    #overlay .help, #overlay .pts { display: none; }
+  }
+</style>
+</head>
+<body>
+<div id="wrap"><canvas id="game"></canvas></div>
+<div id="touch">
+  <div class="stick" aria-label="Levetta"><div class="ring"></div><div class="knob"></div></div>
+  <div class="btns"><button type="button" class="jump hop" aria-label="Moneta">MONETA</button></div>
+</div>
+<button id="pauseBtn" type="button" aria-label="Pausa">❚❚</button>
+<div id="overlay"></div>
+<a id="homeLink" href="../../index.html">← Sala Giochi</a>
+
+
+<script>
+(() => {
+  "use strict";
+
+  const W = 640, H = 360, TAU = Math.PI * 2, TOP = 28;
+  // the playfield seen from above: the pusher slides at the back, the coins fall off the front edge
+  const X0 = 170, X1 = 470, FRONT = 330, BACK = 72, CR = 10, GUTTER = 236;
+  const SPECIALS = {
+    rubino:  { r: 13, pts: 300, c: "#ff3a5a", name: "RUBINO" },
+    smeraldo:{ r: 13, pts: 500, c: "#3ae07a", name: "SMERALDO" },
+    pioggia: { r: 15, pts: 100, c: "#5ab8ff", name: "PIOGGIA DI MONETE" },
+    doppio:  { r: 15, pts: 100, c: "#ff8a3a", name: "×2" },
+    muro:    { r: 15, pts: 100, c: "#c8a8ff", name: "BARRIERE" },
+  };
+
+  const DIFFICULTIES = {
+    facile:    { label: "FACILE",    color: "#7ed87a", desc: "40 monete · premi speciali più frequenti", coins: 40, every: 10 },
+    normale:   { label: "NORMALE",   color: "#ffd23a", desc: "25 monete", coins: 25, every: 11 },
+    difficile: { label: "DIFFICILE", color: "#ff5a5a", desc: "18 monete · premi speciali più rari", coins: 18, every: 14 },
+  };
+  const DIFF_IDS = Object.keys(DIFFICULTIES);
+  const DIFF_KEY = "monete-difficulty";
+  const bestKey = (id) => `monete-best-${id}`;
+  function store(k, v) { try { localStorage.setItem(k, v); } catch { /* ignore */ } }
+  function load(k) { try { return localStorage.getItem(k); } catch { return null; } }
+  const rnd = (a, b) => a + Math.random() * (b - a);
+  const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
+  const pick = (arr) => arr[Math.floor(Math.random() * arr.length)];
+
+  // ---------- Canvas ----------
+  const canvas = document.getElementById("game");
+  const ctx = canvas.getContext("2d");
+  const wrapEl = document.getElementById("wrap");
+  const overlay = document.getElementById("overlay");
+  const touchEl = document.getElementById("touch");
+  const pauseBtn = document.getElementById("pauseBtn");
+  let pxRatio = 1, touchMode = !!(window.matchMedia && matchMedia("(pointer: coarse)").matches);
+  function resize() {
+    const portrait = window.innerHeight > window.innerWidth;
+    const showTouch = touchMode && isPlaying();
+    touchEl.style.display = showTouch ? "flex" : "none";
+    touchEl.classList.toggle("small", !portrait && window.innerHeight < 480);
+    wrapEl.style.paddingBottom = showTouch && portrait ? "calc(170px + env(safe-area-inset-bottom, 0px))" : "0";
+    let availW = window.innerWidth - 8, availH = window.innerHeight - 8;
+    if (showTouch && portrait) availH -= 170;
+    if (showTouch && !portrait) {
+      const side = Math.max(...[...touchEl.children].map((el) => el.offsetWidth)) + 20;
+      if (window.innerWidth - 2 * side > 200) availW = window.innerWidth - 2 * side;
+    }
+    const s = Math.max(0.2, Math.min(availW / W, availH / H));
+    pxRatio = Math.min(3, s * (window.devicePixelRatio || 1));
+    canvas.style.width = W * s + "px";
+    canvas.style.height = H * s + "px";
+    canvas.width = Math.round(W * pxRatio);
+    canvas.height = Math.round(H * pxRatio);
+  }
+  window.addEventListener("resize", () => syncControls());
+
+  // ---------- Audio ----------
+  let audioCtx = null;
+  function beep(freq, dur, type = "square", vol = 0.04, slide = 0, delay = 0) {
+    if (!audioCtx) return;
+    const t = audioCtx.currentTime + delay;
+    const osc = audioCtx.createOscillator(), gain = audioCtx.createGain();
+    osc.type = type;
+    osc.frequency.setValueAtTime(freq, t);
+    if (slide) osc.frequency.exponentialRampToValueAtTime(Math.max(20, freq + slide), t + dur);
+    gain.gain.setValueAtTime(vol, t);
+    gain.gain.exponentialRampToValueAtTime(0.0001, t + dur);
+    osc.connect(gain).connect(audioCtx.destination);
+    osc.start(t); osc.stop(t + dur + 0.02);
+  }
+  const arp = (notes, gap, d, type = "square", vol = 0.04) => notes.forEach((f, i) => beep(f, d, type, vol, 0, i * gap));
+  let sfxN = 0;
+  const lim = (fn) => (...a) => { if (sfxN++ < 5) fn(...a); };
+  const sfx = {
+    drop: lim(() => { beep(1800, 0.05, "triangle", 0.03); beep(2400, 0.04, "triangle", 0.02, 0, 0.04); }),
+    clink: lim(() => beep(rnd(2600, 3400), 0.03, "triangle", 0.012)),
+    win: lim(() => { beep(1568, 0.06, "square", 0.025); beep(2093, 0.08, "square", 0.02, 0, 0.05); }),
+    lost: lim(() => beep(300, 0.08, "triangle", 0.02, -100)),
+    gem: () => arp([784, 988, 1319, 1568], 0.05, 0.1, "square", 0.045),
+    rain: () => arp([523, 659, 784, 1047, 1319, 1568, 2093], 0.04, 0.08, "square", 0.04),
+    over: () => arp([523, 466, 415, 392, 330, 262], 0.15, 0.24, "triangle", 0.05),
+  };
+
+  // ---------- State ----------
+  let difficulty = DIFFICULTIES[load(DIFF_KEY)] ? load(DIFF_KEY) : "normale";
+  let diff = DIFFICULTIES[difficulty];
+  let state = "menu", menu = null, pausedFrom = null, clock = 0;
+  let score = 0, credits = 25, bestCache = 0, coins = [], parts = [], popups = [], message = null, slotX = 320, dropCd = 0, dropped = 0, wonCoins = 0;
+  let pushT = 0, face = BACK, faceV = 0, doubleT = 0, wallT = 0, idleT = 0, queue = 0, queueT = 0;
+  let dropPressed = false, dropHeld = false;
+  const keys = { left: false, right: false };
+  const stick = { x: 0, y: 0 };
+
+  // ---------- The pusher bed ----------
+  function fillField() {
+    coins = [];
+    for (let y = FRONT - CR - 1; y > BACK + 50; y -= CR * 1.74) for (let x = X0 + CR + 2 + ((y / 7) % 2) * CR; x < X1 - CR; x += CR * 2.02) if (Math.random() < 0.97) coins.push(coin(x + rnd(-2, 2), y + rnd(-2, 2)));
+    for (let i = 0; i < 300; i++) physics(1 / 120, true);
+  }
+  function coin(x, y, kind) { return { x, y, vx: 0, vy: 0, r: kind ? SPECIALS[kind].r : CR, kind: kind || null, spin: rnd(0, TAU) }; }
+  function physics(dt, settle) {
+    // the pusher slides forward and back
+    pushT += dt;
+    const prev = face;
+    face = BACK + 26 + Math.sin(pushT * 1.6) * 24;
+    faceV = (face - prev) / dt;
+    for (const c of coins) {
+      c.x += c.vx * dt; c.y += c.vy * dt;
+      const fr = Math.pow(0.004, dt); c.vx *= fr; c.vy *= fr;
+      if (c.y - c.r < face) { c.y = face + c.r; if (faceV > 0) c.vy = Math.max(c.vy, faceV); }
+      // side walls, except near the front where the coins can slip into the side gutters
+      const guard = wallT > 0 ? FRONT : GUTTER;
+      if (c.y < guard || settle) { if (c.x - c.r < X0) { c.x = X0 + c.r; c.vx = Math.abs(c.vx) * 0.2; } if (c.x + c.r > X1) { c.x = X1 - c.r; c.vx = -Math.abs(c.vx) * 0.2; } }
+      if (settle && c.y + c.r > FRONT) { c.y = FRONT - c.r; c.vy = 0; }
+    }
+    // coins push each other around
+    for (let i = 0; i < coins.length; i++) {
+      const a = coins[i];
+      for (let j = i + 1; j < coins.length; j++) {
+        const b = coins[j], dx = b.x - a.x; if (dx > a.r + b.r || dx < -a.r - b.r) continue;
+        const dy = b.y - a.y, d2 = dx * dx + dy * dy, m = a.r + b.r;
+        if (d2 >= m * m || d2 < 0.0001) continue;
+        const d = Math.sqrt(d2), nx = dx / d, ny = dy / d, over = (m - d) * 0.5;
+        a.x -= nx * over; a.y -= ny * over; b.x += nx * over; b.y += ny * over;
+        const rv = (b.vx - a.vx) * nx + (b.vy - a.vy) * ny;
+        if (rv < 0) { const imp = -rv * 0.5; a.vx -= nx * imp; a.vy -= ny * imp; b.vx += nx * imp; b.vy += ny * imp; }
+      }
+    }
+    if (settle) return;
+    // over the front edge: yours; into the side gutters: lost
+    for (const c of coins) {
+      if (c.y - c.r * 0.2 > FRONT) { c.gone = true; win(c); }
+      else if (c.x < X0 - c.r * 0.3 || c.x > X1 + c.r * 0.3) { c.gone = true; lose(c); }
+    }
+    coins = coins.filter((c) => !c.gone);
+  }
+  function win(c) {
+    idleT = 0;
+    const mult = doubleT > 0 ? 2 : 1;
+    if (!c.kind) {
+      // the golden window in the middle of the edge pays double
+      const gold = Math.abs(c.x - (X0 + X1) / 2) < 40 ? 2 : 1;
+      credits++; wonCoins++; addScore(10 * mult * gold); sfx.win();
+      if (gold > 1) popups.push({ x: c.x, y: FRONT - 6, text: "+" + 20 * mult, color: "#ffd23a", t: 0 });
+      parts.push({ x: c.x, y: FRONT + 10, vx: rnd(-30, 30), vy: 60, t: 0, life: 0.5, c: "#ffd23a" });
+      return;
+    }
+    const S = SPECIALS[c.kind];
+    addScore(S.pts * mult, c.x, FRONT - 20, S.c, `${S.name}${S.pts > 100 ? " +" + S.pts * mult : ""}`);
+    sfx.gem();
+    if (c.kind === "pioggia") { queue += 6; message = { text: "PIOGGIA DI MONETE!", sub: "sei monete regalate cadono sul piano", t: 0 }; sfx.rain(); }
+    else if (c.kind === "doppio") { doubleT = 25; message = { text: "PUNTI DOPPI!", sub: "per 25 secondi", t: 0 }; }
+    else if (c.kind === "muro") { wallT = 15; message = { text: "BARRIERE!", sub: "per 15 secondi i lati sono chiusi", t: 0 }; }
+  }
+  function lose(c) { sfx.lost(); if (c.kind) popups.push({ x: c.x < X0 ? X0 - 20 : X1 + 20, y: c.y, text: "PERSO!", color: "#ff8a8a", t: 0 }); }
+
+  // ---------- Flow ----------
+  const isPlaying = () => state === "play";
+  function startGame() {
+    if (!audioCtx) { try { audioCtx = new (window.AudioContext || window.webkitAudioContext)(); } catch { audioCtx = null; } }
+    if (audioCtx && audioCtx.state === "suspended") audioCtx.resume();
+    score = 0; credits = diff.coins; dropped = 0; wonCoins = 0; doubleT = 0; wallT = 0; idleT = 0; queue = 0;
+    bestCache = parseInt(load(bestKey(difficulty)), 10) || 0;
+    fillField();
+    message = { text: "INSERISCI LE MONETE!", sub: "falle cadere dove il bordo è più pieno", t: 0 };
+    state = "play";
+    menu = null;
+    overlay.classList.add("hidden");
+    syncControls();
+    last = performance.now();
+  }
+  function addScore(n, x, y, color = "#ffffff", text) {
+    score += n;
+    if (x !== undefined) popups.push({ x, y, text: text || String(n), color, t: 0 });
+  }
+  function dropCoin(x, kind, free) {
+    const r = kind ? SPECIALS[kind].r : CR;
+    coins.push({ ...coin(clamp(x, X0 + r, X1 - r), face + r + 2, kind), vy: 40 });
+    if (!free) { credits--; dropped++; sfx.drop(); }
+    // every few coins the machine adds a special prize
+    if (!free && dropped % diff.every === 0) queueT = -1;
+  }
+  function gameOver() {
+    state = "over";
+    const prev = parseInt(load(bestKey(difficulty)), 10) || 0;
+    const record = score > prev;
+    if (record) store(bestKey(difficulty), String(score));
+    sfx.over();
+    menu = () => showOverlay(
+      `<h2 class="lose">MONETE FINITE</h2>
+       <p>Punteggio: <b>${score.toLocaleString("it-IT")}</b> · ${dropped} monete inserite · ${wonCoins} vinte · ${diff.label}</p>
+       ${record ? "<p style='color:var(--pink)'>★ NUOVO RECORD! ★</p>" : ""}
+       ${difficultyHTML()}
+       <button class="start" data-start>CAMBIA ALTRE MONETE</button>`
+    );
+    menu();
+    syncControls();
+  }
+  function togglePause() {
+    if (isPlaying()) {
+      pausedFrom = state; state = "paused";
+      showOverlay(`<h2>PAUSA</h2><button class="start" data-resume>CONTINUA</button><p class="muted">Premi P per continuare</p>`);
+    } else if (state === "paused") {
+      state = pausedFrom; overlay.classList.add("hidden"); last = performance.now();
+    }
+    syncControls();
+  }
+  // the pause menu can end the game (shared/iniziali.js): it ends here the usual way, saving the record
+  window.addEventListener("sala:termina", () => { if (state !== "paused") return; state = pausedFrom; overlay.classList.add("hidden"); gameOver(); syncControls(); });
+  function syncControls() {
+    pauseBtn.style.display = isPlaying() && touchMode ? "block" : "none";
+    resize();
+  }
+  pauseBtn.addEventListener("click", () => togglePause());
+  function showOverlay(html) { overlay.innerHTML = html; overlay.classList.remove("hidden"); }
+  function difficultyHTML() {
+    const buttons = DIFF_IDS.map((id) => {
+      const d = DIFFICULTIES[id];
+      return `<button type="button" data-diff="${id}" class="${id === difficulty ? "on" : ""}" style="--c:${d.color}">${d.label}</button>`;
+    }).join("");
+    const best = parseInt(load(bestKey(difficulty)), 10);
+    return `<div class="diff">${buttons}</div><p class="muted">${diff.desc}${best ? ` · Record: ${best.toLocaleString("it-IT")}` : ""}</p>`;
+  }
+  function setDifficulty(id) { if (!DIFFICULTIES[id]) return; difficulty = id; diff = DIFFICULTIES[id]; store(DIFF_KEY, id); if (menu) menu(); }
+  function showTitle() {
+    menu = showTitle;
+    showOverlay(
+      `<h1>CASCATA DI MONETE</h1>
+       <p>Lo spingi-monete della sala giochi! Fai cadere le monete sul piano: il pistone in fondo va avanti e indietro e spinge tutto verso il bordo. Le monete che cadono davanti sono tue e tornano nel portamonete; quelle che scivolano ai lati sono perse. Ogni tanto la macchina aggiunge un premio speciale: spingilo giù!</p>
+       <div class="pts">
+         <span><b>Premi</b></span><span>moneta vinta 10 (20 se cade nella zona d'oro al centro) · rubino 300 · smeraldo 500 · pioggia di monete (6 monete gratis) · ×2 per 25 secondi · barriere ai lati per 15 secondi</span>
+         <span><b>Fine</b></span><span>quando le monete sono finite e il bordo non ne lascia più cadere</span>
+       </div>
+       ${touchMode
+         ? `<p class="muted help">Levetta per spostare la fessura · MONETA per farne cadere una (tieni premuto per una raffica)</p>`
+         : `<p class="muted help">Frecce o A D per spostare la fessura · SPAZIO, J o ↓ per far cadere una moneta (tieni premuto) · P pausa</p>`}
+       ${difficultyHTML()}
+       <button class="start" data-start>CAMBIA LE MONETE</button>`
+    );
+  }
+  overlay.addEventListener("click", (e) => {
+    const d = e.target.closest("[data-diff]");
+    if (d) { setDifficulty(d.dataset.diff); return; }
+    if (e.target.closest("[data-start]")) startGame();
+    if (e.target.closest("[data-resume]")) togglePause();
+  });
+
+  // ---------- Input ----------
+  const KEYMAP = { arrowleft: "left", a: "left", arrowright: "right", d: "right" };
+  const DROPKEYS = [" ", "j", "x", "arrowdown", "s"];
+  window.addEventListener("keydown", (e) => {
+    const k = e.key.toLowerCase();
+    if ([" ", "arrowup", "arrowdown", "arrowleft", "arrowright"].includes(k)) e.preventDefault();
+    if (state === "menu" || state === "over") {
+      if (e.key === "Enter") startGame();
+      else if (["1", "2", "3"].includes(k)) setDifficulty(DIFF_IDS[+k - 1]);
+      return;
+    }
+    if (k === "p" || k === "escape") { if (!e.repeat) togglePause(); return; }
+    if (state === "paused") { if (e.key === "Enter") togglePause(); return; }
+    if (DROPKEYS.includes(k)) { if (!e.repeat) dropPressed = true; dropHeld = true; }
+    if (KEYMAP[k]) keys[KEYMAP[k]] = true;
+  });
+  window.addEventListener("keyup", (e) => { const k = e.key.toLowerCase(); if (KEYMAP[k]) keys[KEYMAP[k]] = false; if (DROPKEYS.includes(k)) dropHeld = false; });
+  window.addEventListener("blur", () => { for (const k in keys) keys[k] = false; dropHeld = false; stick.x = stick.y = 0; if (isPlaying()) togglePause(); });
+  {
+    const b = touchEl.querySelector(".hop");
+    b.addEventListener("pointerdown", (e) => { e.preventDefault(); dropPressed = true; dropHeld = true; b.classList.add("on"); });
+    for (const ev of ["pointerup", "pointercancel", "pointerleave"]) b.addEventListener(ev, () => { dropHeld = false; b.classList.remove("on"); });
+  }
+  const stickEl = touchEl.querySelector(".stick"), knob = stickEl.querySelector(".knob");
+  let stickId = null;
+  function stickAt(e) {
+    const r = stickEl.getBoundingClientRect(), max = r.width / 2 - 14;
+    let dx = e.clientX - (r.left + r.width / 2), dy = e.clientY - (r.top + r.height / 2);
+    const len = Math.hypot(dx, dy);
+    if (len > max) { dx *= max / len; dy *= max / len; }
+    knob.style.transform = `translate(${dx}px, ${dy}px)`;
+    const f = (v) => { const a = Math.abs(v) / max; return a < 0.12 ? 0 : Math.sign(v) * Math.min(1, (a - 0.12) / 0.6); };
+    stick.x = f(dx); stick.y = f(dy);
+  }
+  const stickEnd = (e) => { if (e.pointerId !== stickId) return; stickId = null; knob.style.transform = ""; stick.x = stick.y = 0; };
+  stickEl.addEventListener("pointerdown", (e) => { e.preventDefault(); stickId = e.pointerId; try { stickEl.setPointerCapture(e.pointerId); } catch { /* ignore */ } stickAt(e); });
+  stickEl.addEventListener("pointermove", (e) => { if (e.pointerId === stickId) stickAt(e); });
+  for (const ev of ["pointerup", "pointercancel", "lostpointercapture"]) stickEl.addEventListener(ev, stickEnd);
+  window.addEventListener("pointerdown", (e) => { if (e.pointerType === "touch" && !touchMode) { touchMode = true; syncControls(); if (menu) menu(); } }, true);
+
+  // ---------- Update ----------
+  function update(dt) {
+    clock += dt; sfxN = 0;
+    if (window.__bot) window.__bot(dt);
+    for (const p of parts) { p.t += dt; p.x += p.vx * dt; p.y += p.vy * dt; p.vy += 300 * dt; }
+    parts = parts.filter((p) => p.t < p.life);
+    for (const p of popups) { p.t += dt; p.y -= 20 * dt; }
+    popups = popups.filter((p) => p.t < 1.4);
+    if (message) { message.t += dt; if (message.t > 2.4) message = null; }
+    if (state !== "play") { dropPressed = false; return; }
+    const mx = clamp((keys.right ? 1 : 0) - (keys.left ? 1 : 0) + stick.x, -1, 1);
+    slotX = clamp(slotX + mx * 170 * dt, X0 + CR, X1 - CR);
+    if (dropCd > 0) dropCd -= dt;
+    if ((dropPressed || dropHeld) && dropCd <= 0 && credits > 0) { dropCoin(slotX); dropCd = 0.3; }
+    dropPressed = false;
+    // the machine's own drops: the special prizes and the coin shower
+    if (queueT < 0) { queueT = 0; dropCoin(rnd(X0 + 40, X1 - 40), pick(["rubino", "rubino", "smeraldo", "pioggia", "doppio", "muro"]), true); }
+    if (queue > 0) { queueT += dt; if (queueT > 0.15) { queueT = 0; queue--; dropCoin(rnd(X0 + 20, X1 - 20), null, true); } }
+    if (doubleT > 0) doubleT -= dt;
+    if (wallT > 0) wallT -= dt;
+    physics(dt, false);
+    // out of coins: wait for the last ones to settle, then it is over
+    if (credits <= 0 && queue <= 0) { idleT += dt; if (idleT > 6) gameOver(); } else idleT = 0;
+  }
+
+  // ---------- Drawing ----------
+  function drawCoin(c) {
+    const x = c.x, y = c.y;
+    if (!c.kind) {
+      ctx.fillStyle = "#a8781a"; ctx.beginPath(); ctx.arc(x, y + 1.5, c.r, 0, TAU); ctx.fill();
+      ctx.fillStyle = "#ffd23a"; ctx.beginPath(); ctx.arc(x, y, c.r, 0, TAU); ctx.fill();
+      ctx.strokeStyle = "#e8a81a"; ctx.lineWidth = 1.5; ctx.beginPath(); ctx.arc(x, y, c.r - 3, 0, TAU); ctx.stroke();
+      ctx.fillStyle = "rgba(255,255,255,0.6)"; ctx.beginPath(); ctx.arc(x - 3, y - 3, 2.5, 0, TAU); ctx.fill();
+      return;
+    }
+    const S = SPECIALS[c.kind];
+    ctx.fillStyle = "rgba(0,0,0,0.35)"; ctx.beginPath(); ctx.arc(x, y + 2, c.r, 0, TAU); ctx.fill();
+    if (c.kind === "rubino" || c.kind === "smeraldo") {
+      ctx.fillStyle = S.c; ctx.beginPath(); for (let i = 0; i < 6; i++) { const a = i / 6 * TAU + Math.PI / 6; ctx.lineTo(x + Math.cos(a) * c.r, y + Math.sin(a) * c.r); } ctx.fill();
+      ctx.fillStyle = "rgba(255,255,255,0.45)"; ctx.beginPath(); ctx.moveTo(x - 5, y - 6); ctx.lineTo(x + 2, y - 8); ctx.lineTo(x - 1, y); ctx.fill();
+    } else {
+      ctx.fillStyle = S.c; ctx.beginPath(); ctx.arc(x, y, c.r, 0, TAU); ctx.fill();
+      ctx.fillStyle = "#ffffff"; ctx.font = "900 10px system-ui"; ctx.textAlign = "center";
+      ctx.fillText(c.kind === "pioggia" ? "☂" : c.kind === "doppio" ? "×2" : "▮▮", x, y + 4);
+    }
+  }
+  function drawHud() {
+    ctx.fillStyle = "rgba(16,20,10,0.96)"; ctx.fillRect(0, 0, W, TOP);
+    ctx.textBaseline = "middle"; ctx.textAlign = "left";
+    const x0 = touchMode ? 130 : 10;
+    ctx.fillStyle = "#ffffff"; ctx.font = "900 15px system-ui"; ctx.fillText(score.toLocaleString("it-IT"), x0, 14);
+    ctx.fillStyle = "#e8e0b8"; ctx.font = "700 9px system-ui"; ctx.fillText(`REC ${Math.max(bestCache, score).toLocaleString("it-IT")}`, x0 + 80, 9);
+    ctx.fillStyle = "#ffd23a"; ctx.font = "900 10px system-ui"; ctx.fillText(`VINTE ${wonCoins} · INSERITE ${dropped}`, x0 + 80, 21);
+    ctx.font = "900 13px system-ui"; ctx.fillText(`🪙 ${credits}`, x0 + 230, 14);
+    let bx = x0 + 280;
+    if (doubleT > 0) { ctx.fillStyle = "#ff8a3a"; ctx.fillText(`×2 ${Math.ceil(doubleT)}`, bx, 14); bx += 52; }
+    if (wallT > 0) { ctx.fillStyle = "#c8a8ff"; ctx.fillText(`▮▮ ${Math.ceil(wallT)}`, bx, 14); }
+    ctx.textBaseline = "alphabetic";
+  }
+  function draw() {
+    ctx.setTransform(pxRatio, 0, 0, pxRatio, 0, 0);
+    if (!coins.length && state === "menu") fillField();
+    // the cabinet: neon frame and the mirrored back
+    const g = ctx.createLinearGradient(0, TOP, 0, H);
+    g.addColorStop(0, "#1a2a10"); g.addColorStop(1, "#0a1206");
+    ctx.fillStyle = g; ctx.fillRect(0, TOP, W, H - TOP);
+    for (let i = 0; i < 10; i++) { ctx.fillStyle = `hsla(${(i * 36 + clock * 60) % 360},90%,60%,${0.4 + 0.3 * Math.sin(clock * 4 + i)})`; ctx.beginPath(); ctx.arc(X0 - 30, TOP + 20 + i * 32, 4, 0, TAU); ctx.arc(X1 + 30, TOP + 20 + i * 32, 4, 0, TAU); ctx.fill(); }
+    // the bed, the side gutters and the front edge
+    ctx.fillStyle = "#2a3a5a"; ctx.fillRect(X0, BACK, X1 - X0, FRONT - BACK);
+    ctx.fillStyle = "rgba(255,255,255,0.04)"; for (let y = BACK; y < FRONT; y += 16) ctx.fillRect(X0, y, X1 - X0, 1);
+    ctx.fillStyle = "#0a0a12"; ctx.fillRect(X0 - 18, GUTTER, 18, FRONT - GUTTER + 30); ctx.fillRect(X1, GUTTER, 18, FRONT - GUTTER + 30);
+    const walls = wallT > 0;
+    ctx.fillStyle = walls ? "#c8a8ff" : "#8a8a9a"; ctx.fillRect(X0 - 4, BACK, 4, (walls ? FRONT : GUTTER) - BACK); ctx.fillRect(X1, BACK, 4, (walls ? FRONT : GUTTER) - BACK);
+    ctx.fillStyle = "#0a0a12"; ctx.fillRect(X0 - 18, FRONT, X1 - X0 + 36, H - FRONT);
+    ctx.fillStyle = "#ffd23a"; ctx.font = "900 9px system-ui"; ctx.textAlign = "center"; ctx.fillText("▼ VINCITA ▼", W / 2 - 80, FRONT + 20); ctx.fillText("▼ VINCITA ▼", W / 2 + 80, FRONT + 20);
+    ctx.fillStyle = "rgba(255,210,58,0.25)"; ctx.fillRect(W / 2 - 40, FRONT + 3, 80, 26); ctx.fillStyle = "#ffffff"; ctx.fillText("ZONA D'ORO ×2", W / 2, FRONT + 20);
+    ctx.fillStyle = "#ff5a5a"; ctx.font = "800 7px system-ui"; ctx.fillText("PERSE", X0 - 9, FRONT + 20); ctx.fillText("PERSE", X1 + 9, FRONT + 20);
+    for (let x = X0; x <= X1; x += 15) { ctx.fillStyle = Math.floor(clock * 6 + x / 15) % 2 ? "#ffd23a" : "#a8781a"; ctx.fillRect(x, FRONT, 6, 3); }
+    for (const c of coins) drawCoin(c);
+    // the pusher, sliding forward and back
+    ctx.fillStyle = "#c8c8d8"; ctx.fillRect(X0, TOP + 20, X1 - X0, face - TOP - 20);
+    ctx.fillStyle = "#e8e8f8"; ctx.fillRect(X0, face - 6, X1 - X0, 6);
+    ctx.fillStyle = "#8a8a9a"; for (let x = X0 + 20; x < X1; x += 40) ctx.fillRect(x, TOP + 30, 20, face - TOP - 44);
+    // the coin slot on its rail
+    if (state !== "menu") {
+      ctx.fillStyle = "#5a4a1a"; ctx.fillRect(X0, TOP + 4, X1 - X0, 6);
+      ctx.fillStyle = "#ffd23a"; ctx.beginPath(); ctx.moveTo(slotX - 12, TOP + 2); ctx.lineTo(slotX + 12, TOP + 2); ctx.lineTo(slotX, TOP + 18); ctx.fill();
+      ctx.strokeStyle = "rgba(255,210,58,0.25)"; ctx.setLineDash([3, 5]); ctx.beginPath(); ctx.moveTo(slotX, TOP + 18); ctx.lineTo(slotX, face); ctx.stroke(); ctx.setLineDash([]);
+    }
+    for (const p of parts) { ctx.globalAlpha = Math.max(0, 1 - p.t / p.life); ctx.fillStyle = p.c; ctx.beginPath(); ctx.arc(p.x, p.y, 5, 0, TAU); ctx.fill(); }
+    ctx.globalAlpha = 1;
+    for (const p of popups) {
+      ctx.globalAlpha = Math.max(0, 1 - p.t / 1.4);
+      ctx.textAlign = "center"; ctx.font = "900 11px system-ui";
+      ctx.lineWidth = 3; ctx.strokeStyle = "#10140a"; ctx.strokeText(p.text, p.x, p.y); ctx.fillStyle = p.color; ctx.fillText(p.text, p.x, p.y);
+    }
+    ctx.globalAlpha = 1;
+    if (state === "menu") return;
+    drawHud();
+    if (message) {
+      ctx.globalAlpha = Math.min(1, (2.4 - message.t) * 2);
+      ctx.textAlign = "center"; ctx.font = "italic 900 22px system-ui"; ctx.fillStyle = "#ffd23a";
+      ctx.lineWidth = 5; ctx.strokeStyle = "#10140a"; ctx.strokeText(message.text, W / 2, 190); ctx.fillText(message.text, W / 2, 190);
+      if (message.sub) { ctx.font = "800 12px system-ui"; ctx.fillStyle = "#ffffff"; ctx.lineWidth = 4; ctx.strokeText(message.sub, W / 2, 209); ctx.fillText(message.sub, W / 2, 209); }
+      ctx.globalAlpha = 1;
+    }
+  }
+
+  // ---------- Loop ----------
+  const STEP = 1 / 120;
+  let last = performance.now(), acc = 0;
+  function frame(now) {
+    const dt = Math.min(0.1, (now - last) / 1000);
+    last = now;
+    if (isPlaying()) {
+      acc += dt;
+      while (acc >= STEP && isPlaying()) { update(STEP); acc -= STEP; }
+    } else { acc = 0; update(dt); }
+    draw();
+    requestAnimationFrame(frame);
+  }
+  syncControls();
+  showTitle();
+  requestAnimationFrame(frame);
+})();
+</script>
+<script src="../../shared/iniziali.js" data-record="monete-best-" data-kind="score"></script>
+</body>
+</html>
