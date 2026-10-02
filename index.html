@@ -159,6 +159,13 @@
   .scores dd.none { color: #6d5d85; }
   .scores .who { display: block; margin-top: 1px; font: 800 11px/1.2 var(--mono); letter-spacing: .18em; color: var(--hue, #ffd34d); }
   .scores-label { font: 11px/1 var(--mono); letter-spacing: .14em; text-transform: uppercase; color: var(--muted); margin-top: 2px; }
+  .trofei { display: flex; gap: 6px; align-items: center; margin: -2px 0 2px; font-size: 18px; }
+  .trofei span { filter: grayscale(1) brightness(.6); opacity: .45; }
+  .trofei span.got { filter: none; opacity: 1; }
+  .trofei small { font: 11px var(--mono); letter-spacing: .08em; color: var(--muted); margin-left: 4px; }
+  .summary { margin: 10px 0 0; display: flex; flex-wrap: wrap; gap: 8px 14px; align-items: center; justify-content: center; font-size: 14px; color: var(--muted); }
+  .summary b { color: var(--amber); font-weight: 700; }
+  .card.hidden { display: none; }
   .play {
     margin-top: auto;
     display: flex; align-items: center; justify-content: center; gap: 8px;
@@ -191,6 +198,7 @@
       <span class="seg"><button type="button" data-pad="levetta">🕹️ Levetta</button><button type="button" data-pad="frecce">✚ Frecce</button></span>
       <small>Vale per tutti i giochi con la levetta; si cambia anche dal menu di pausa.</small>
     </div>
+    <div class="summary" id="summary"></div>
   </header>
 
   <ul class="grid" id="grid"></ul>
@@ -200,6 +208,7 @@
   </footer>
 </main>
 
+<script src="shared/trofei.js"></script>
 <script>
 (() => {
   const GAMES = [
@@ -575,6 +584,31 @@
   }
   const esc = (s) => s.replace(/&/g, "&amp;").replace(/</g, "&lt;");
 
+  // trophies (shared/trofei.js), worked out from the records already saved
+  const ST = window.SalaTrofei;
+  function trofeiRow(g) {
+    const list = ST && ST.status(g.rec.key, g.rec.sd);
+    if (!list) return "";
+    const n = list.filter((t) => t.got).length;
+    return `<div class="trofei">${list.map((t) => `<span class="${t.got ? "got" : ""}" title="${t.name}: ${esc(t.text)}${t.got ? " ✓" : ""}">${t.icon}</span>`).join("")}<small>${n}/3 trofei</small></div>`;
+  }
+  let onlyPlayed = false;
+  try { onlyPlayed = localStorage.getItem("sala-solo-giocati") === "1"; } catch { /* ignore */ }
+  function summary() {
+    const el = document.getElementById("summary"); if (!el || !ST) return;
+    let got = 0, played = 0;
+    for (const g of GAMES) { const l = ST.status(g.rec.key, g.rec.sd); if (l) got += l.filter((t) => t.got).length; if (ST.played(g.rec.key, g.rec.sd)) played++; }
+    el.innerHTML = `<span>🏆 Trofei <b>${got}</b> / ${ST.count()}</span><span>Giochi giocati <b>${played}</b> / ${GAMES.length}</span>
+      <span class="seg"><button type="button" data-filter="0" aria-pressed="${!onlyPlayed}">Tutti</button><button type="button" data-filter="1" aria-pressed="${onlyPlayed}">Già giocati</button></span>`;
+    el.querySelector(".seg").style.cssText = "display:inline-flex;border:1px solid var(--line);border-radius:999px;overflow:hidden";
+    el.querySelectorAll("button").forEach((b) => { b.style.cssText = `font:600 13px var(--body);border:0;padding:7px 14px;cursor:pointer;background:${b.getAttribute("aria-pressed") === "true" ? "var(--amber)" : "var(--surface)"};color:${b.getAttribute("aria-pressed") === "true" ? "#1a1000" : "var(--muted)"}`; });
+  }
+  document.addEventListener("click", (e) => {
+    const b = e.target.closest("[data-filter]"); if (!b) return;
+    onlyPlayed = b.dataset.filter === "1";
+    try { localStorage.setItem("sala-solo-giocati", onlyPlayed ? "1" : "0"); } catch { /* ignore */ }
+    render();
+  });
   const grid = document.getElementById("grid");
   const render = () => { grid.innerHTML = GAMES.map((g) => {
     const href = `games/${g.id}/index.html`;
@@ -585,7 +619,8 @@
       return `<div><dt>${short}</dt><dd class="${v ? "" : "none"}">${v || "—"}${who ? `<span class="who">${who}</span>` : ""}</dd></div>`;
     }).join("");
     const recLabel = g.rec.kind === "time" ? "Miglior tempo" : "Record";
-    return `<li class="card${g.featured ? " featured" : ""}" style="--hue:${g.hue}">
+    const hide = onlyPlayed && ST && !ST.played(g.rec.key, g.rec.sd);
+    return `<li class="card${g.featured ? " featured" : ""}${hide ? " hidden" : ""}" style="--hue:${g.hue}">
       <a class="cover" href="${href}" tabindex="-1" aria-hidden="true">
         <img src="games/${g.id}/cover.jpg" alt="" width="640" height="360" loading="lazy"${g.pos ? ` style="object-position:${g.pos}"` : ""}>
         ${g.badge ? `<span class="badge">${esc(g.badge)}</span>` : ""}
@@ -595,12 +630,13 @@
         <h2>${esc(g.title)}</h2>
         <p class="desc">${esc(g.desc)}</p>
         <ul class="chips">${g.chips.map((c) => `<li>${esc(c)}</li>`).join("")}</ul>
+        ${trofeiRow(g)}
         <span class="scores-label">${recLabel}</span>
         <dl class="scores">${cells}</dl>
         <a class="play" href="${href}">▶ Gioca</a>
       </div>
     </li>`;
-  }).join(""); };
+  }).join(""); summary(); };
   render();
 
   // Games open full screen inside this page (loaded with fetch into an iframe), so they also work

@@ -37,6 +37,7 @@
   Storage.prototype.setItem = function (k, v) {
     rawSet.call(this, k, v);
     if (this !== localStorage || !RECORD_RE.test(k) || /-nome$/.test(k)) return;
+    if (trofeiReady) setTimeout(checkTrofei, 300);
     // a record just made the scoreboard: wait for the game over screen, then ask for the initials
     // (a game that writes two records at once, such as the pinball tables, asks only once)
     pending.push({ k, v: String(v) });
@@ -85,7 +86,13 @@
   .ai-cross .d { left: 33%; bottom: 0; } .ai-cross .d::after { border-top: 10px solid rgba(255,255,255,0.85); border-bottom-width: 0; }
   .ai-cross .l { left: 0; top: 33%; } .ai-cross .l::after { border-right: 10px solid rgba(255,255,255,0.85); border-left-width: 0; }
   .ai-cross .r { right: 0; top: 33%; } .ai-cross .r::after { border-left: 10px solid rgba(255,255,255,0.85); border-right-width: 0; }
-  .ai-cross i.on { background: rgba(255,211,77,0.55); border-color: #ffd34d; }`;
+  .ai-cross i.on { background: rgba(255,211,77,0.55); border-color: #ffd34d; }
+  #overlay .ai-trofei { display: flex; flex-wrap: wrap; gap: 6px; justify-content: center; max-width: 560px; pointer-events: auto; }
+  #overlay .ai-trofei span { font: 600 12px system-ui, sans-serif; padding: 4px 9px; border-radius: 999px; border: 1px solid rgba(255,255,255,0.18); color: rgba(255,255,255,0.55); background: rgba(0,0,0,0.25); }
+  #overlay .ai-trofei span.got { color: #ffe9a8; border-color: #ffd34d; background: rgba(255,211,77,0.14); }
+  #ai-toast { position: fixed; left: 50%; top: calc(14px + env(safe-area-inset-top, 0px)); z-index: 101; transform: translate(-50%, -140%); transition: transform .35s ease;
+    font: 800 14px system-ui, sans-serif; color: #1a1400; background: #ffd34d; padding: 9px 16px; border-radius: 12px; box-shadow: 0 6px 20px rgba(0,0,0,.45); pointer-events: none; white-space: nowrap; }
+  #ai-toast.on { transform: translate(-50%, 0); }`;
   function injectCss() {
     if (document.getElementById("ai-css")) return;
     const st = document.createElement("style"); st.id = "ai-css"; st.textContent = css;
@@ -211,6 +218,7 @@
         break;
       }
     }
+    showTrofei(ov);
     if (observer) observer.observe(ov, { childList: true, subtree: true, characterData: true });
   }
   // ---------- Touch controls: thumb stick or arrow pad ----------
@@ -258,6 +266,57 @@
   function padHTML() {
     const m = padMode();
     return `<span>Comandi touch:</span><button type="button" data-pad="levetta" class="${m === "levetta" ? "ai-on" : ""}">🕹️ LEVETTA</button><button type="button" data-pad="frecce" class="${m === "frecce" ? "ai-on" : ""}">✚ FRECCE</button>`;
+  }
+
+  // ---------- Trophies (shared/trofei.js) ----------
+  // Worked out from the saved records. The ones already won when the game opens are taken as seen;
+  // a new one won while playing pops up at the top of the screen.
+  const SEEN_KEY = "sala-trofei-visti";
+  let trofeiReady = false;
+  const seenSet = () => { try { return new Set(JSON.parse(get(SEEN_KEY) || "[]")); } catch { return new Set(); } };
+  function trofei() { return window.SalaTrofei && BASE ? window.SalaTrofei.status(BASE, SD) : null; }
+  function markSeen(list) {
+    const seen = seenSet(); let fresh = [];
+    for (const t of list) if (t.got && !seen.has(`${BASE}:${t.id}`)) { seen.add(`${BASE}:${t.id}`); fresh.push(t); }
+    if (fresh.length) set(SEEN_KEY, JSON.stringify([...seen]));
+    return fresh;
+  }
+  let toastT = null;
+  function toast(text) {
+    let el = document.getElementById("ai-toast");
+    if (!el) { el = document.createElement("div"); el.id = "ai-toast"; document.body.appendChild(el); }
+    el.textContent = text; void el.offsetWidth; el.classList.add("on");
+    clearTimeout(toastT); toastT = setTimeout(() => el.classList.remove("on"), 3200);
+  }
+  function checkTrofei() {
+    const list = trofei(); if (!list) return;
+    const fresh = markSeen(list);
+    fresh.forEach((t, i) => setTimeout(() => { toast(`🏆 ${t.icon} Trofeo ${t.name.toLowerCase()} sbloccato!`); try { if (window.AudioContext) { const c = new AudioContext(), o = c.createOscillator(), g = c.createGain(); o.type = "triangle"; o.frequency.setValueAtTime(880, c.currentTime); o.frequency.setValueAtTime(1320, c.currentTime + 0.12); g.gain.setValueAtTime(0.05, c.currentTime); g.gain.exponentialRampToValueAtTime(0.0001, c.currentTime + 0.4); o.connect(g).connect(c.destination); o.start(); o.stop(c.currentTime + 0.42); } } catch { /* ignore */ } }, i * 3500));
+  }
+  function trofeiHTML() {
+    const list = trofei(); if (!list) return "";
+    return list.map((t) => `<span class="${t.got ? "got" : ""}" title="${t.name}: ${t.text}">${t.icon} ${t.got ? "✓ " : ""}${t.text}</span>`).join("");
+  }
+  // the trophy row in the title, game over and pause screens
+  function showTrofei(ov) {
+    if (!trofeiReady) return;
+    const anchor = ov.querySelector("[data-start]") || ov.querySelector("[data-resume]") || ov.querySelector("p.blink");
+    let box = ov.querySelector(".ai-trofei");
+    if (!anchor) { if (box) box.remove(); return; }
+    const html = trofeiHTML();
+    if (!html) return;
+    if (!box) { box = document.createElement("div"); box.className = "ai-trofei"; }
+    if (box.innerHTML !== html) box.innerHTML = html;
+    const before = anchor.matches("[data-resume]") ? null : anchor;
+    if (before) { if (box.nextElementSibling !== before) before.insertAdjacentElement("beforebegin", box); }
+    else { const after = ov.querySelector(".ai-pad") || ov.querySelector(".ai-quit") || anchor; if (after.nextElementSibling !== box) after.insertAdjacentElement("afterend", box); }
+  }
+  function loadTrofei() {
+    if (window.SalaTrofei) { trofeiReady = true; markSeen(trofei() || []); decorate(); return; }
+    const sc = document.createElement("script");
+    try { sc.src = new URL("trofei.js", me.src).href; } catch { return; }
+    sc.onload = () => { trofeiReady = true; markSeen(trofei() || []); decorate(); };
+    document.head.appendChild(sc);
   }
 
   // ---------- Ending the game from the pause menu ----------
@@ -309,6 +368,7 @@
   function start() {
     injectCss();
     applyPad();
+    loadTrofei();
     const ov = document.getElementById("overlay");
     if (!ov) return;
     observer = new MutationObserver(() => { extendPause(); decorate(); });
