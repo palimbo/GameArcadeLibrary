@@ -1,0 +1,629 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no, viewport-fit=cover">
+<title>Guerra dei Pinguini</title>
+<style>
+  :root {
+    --bg: #0a1828;
+    --fg: #f4f6ee;
+    --muted: #c8e8f8;
+    --pink: #5ad8ff;
+    --yellow: #8ae05a;
+    --red: #ff4a3a;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  html, body {
+    height: 100%;
+    background: var(--bg);
+    color: var(--fg);
+    font-family: system-ui, -apple-system, "Segoe UI", sans-serif;
+    overflow: hidden;
+    user-select: none;
+    -webkit-user-select: none;
+    touch-action: none;
+  }
+  #wrap { position: fixed; inset: 0; display: flex; align-items: center; justify-content: center; }
+  canvas { display: block; touch-action: none; border-radius: 6px; box-shadow: 0 0 0 2px #1a3a5a, 0 10px 40px rgba(0,0,0,0.6); }
+  #pauseBtn {
+    position: fixed; z-index: 3; display: none; right: 10px; top: calc(10px + env(safe-area-inset-top, 0px));
+    font: 700 13px system-ui, sans-serif; color: var(--fg);
+    background: rgba(0, 0, 0, 0.6); border: 1px solid rgba(244, 246, 238, 0.35);
+    border-radius: 8px; padding: 6px 10px; cursor: pointer;
+  }
+  #touch {
+    position: fixed; z-index: 2; display: none; left: 12px; right: 12px;
+    bottom: calc(14px + env(safe-area-inset-bottom, 0px));
+    justify-content: space-between; align-items: flex-end; pointer-events: none;
+  }
+  /* thumb stick: move along your end of the table; LANCIA rolls the ball you hold (stick up or down while throwing to angle it) */
+  #touch .stick { position: relative; width: 136px; height: 136px; border-radius: 50%; pointer-events: auto; touch-action: none;
+    border: 2px solid rgba(255, 200, 58, 0.6); background: radial-gradient(circle, rgba(255,200,58,0.14), rgba(255,200,58,0.04)); }
+  #touch .stick .knob { position: absolute; left: 50%; top: 50%; width: 58px; height: 58px; margin: -29px 0 0 -29px; border-radius: 50%;
+    background: rgba(255, 200, 58, 0.45); border: 2px solid rgba(255,255,255,0.7); box-shadow: 0 4px 10px rgba(0,0,0,0.4); pointer-events: none; }
+  #touch .stick .ring { position: absolute; inset: 10px; border-radius: 50%; border: 1px dashed rgba(244,246,238,0.25); pointer-events: none; }
+  #touch .jump { width: 96px; height: 96px; border-radius: 50%; pointer-events: auto; touch-action: none; color: var(--fg);
+    font: 800 13px system-ui, sans-serif; letter-spacing: 1px; border: 2px solid rgba(90, 216, 255, 0.9); background: rgba(90, 216, 255, 0.22); }
+  #touch .jump.on { background: rgba(90, 216, 255, 0.55); }
+  #touch.small .stick { width: 112px; height: 112px; }
+  #touch.small .stick .knob { width: 48px; height: 48px; margin: -24px 0 0 -24px; }
+  #touch.small .jump { width: 80px; height: 80px; font-size: 11px; }
+  #touch .btns { display: flex; flex-direction: column; align-items: center; gap: 10px; pointer-events: none; }
+  #touch .jump.axe { width: 64px; height: 64px; font-size: 11px; border-color: rgba(255, 244, 200, 0.9); background: rgba(255, 244, 200, 0.16); }
+  #touch .jump.axe.on { background: rgba(255, 244, 200, 0.5); }
+  #touch.small .jump.axe { width: 54px; height: 54px; font-size: 10px; }
+  #overlay {
+    position: fixed; inset: 0; z-index: 5;
+    display: flex; flex-direction: column; align-items: center; justify-content: flex-start;
+    gap: 14px; padding: 16px; text-align: center; overflow-y: auto;
+    background: rgba(10, 24, 40, 0.93);
+  }
+  #overlay > :first-child { margin-top: auto; }
+  #overlay > :last-child { margin-bottom: auto; }
+  #overlay.hidden { display: none; }
+  #homeLink {
+    position: fixed; top: calc(10px + env(safe-area-inset-top, 0px)); left: 10px; z-index: 6;
+    font: 600 13px/1 system-ui, sans-serif; color: #fff; text-decoration: none;
+    padding: 8px 12px; border-radius: 999px; background: rgba(0,0,0,.55);
+    border: 1px solid rgba(255,255,255,.25);
+  }
+  #homeLink:hover { background: rgba(0,0,0,.8); }
+  #overlay.hidden ~ #homeLink { display: none; }
+  @media (max-width: 700px) { #overlay { padding-top: calc(52px + env(safe-area-inset-top, 0px)); } }
+  #overlay h1 { font-size: clamp(32px, 10vw, 58px); font-weight: 900; font-style: italic; letter-spacing: 1px; color: var(--pink);
+    text-shadow: 3px 3px 0 #6a1a4a, 0 0 22px rgba(255,122,184,0.35); }
+  #overlay h2 { font-size: clamp(26px, 7vw, 42px); font-weight: 900; letter-spacing: 2px; color: var(--pink); }
+  #overlay h2.lose { color: var(--red); }
+  #overlay p { max-width: 540px; font-size: clamp(13px, 3.4vw, 16px); line-height: 1.55; }
+  #overlay p.muted { color: var(--muted); }
+  #overlay .pts { display: grid; grid-template-columns: repeat(2, auto); gap: 4px 18px; font-size: 13px; color: var(--muted); text-align: left; max-width: 560px; }
+  #overlay .pts b { color: var(--fg); }
+  #overlay .diff { display: flex; gap: 10px; flex-wrap: wrap; justify-content: center; }
+  #overlay button {
+    font: 800 15px system-ui, sans-serif; letter-spacing: 1.5px; color: var(--fg);
+    background: transparent; cursor: pointer;
+    border: 2px solid rgba(244,246,238,0.3); border-radius: 10px; padding: 9px 16px;
+  }
+  #overlay .diff button.on { border-color: var(--c); color: var(--c); box-shadow: 0 0 12px var(--c); }
+  #overlay button.start { border-color: var(--pink); color: #021a2a; background: var(--pink); padding: 11px 30px; box-shadow: 0 4px 0 #1a88a8; }
+  @media (max-height: 560px) {
+    #overlay { gap: 8px; }
+    #overlay h1 { font-size: 30px; }
+    #overlay p { font-size: 13px; line-height: 1.4; }
+    #overlay .help, #overlay .pts { display: none; }
+  }
+</style>
+</head>
+<body>
+<div id="wrap"><canvas id="game"></canvas></div>
+<div id="touch">
+  <div class="stick" aria-label="Levetta"><div class="ring"></div><div class="knob"></div></div>
+  <div class="btns"><button type="button" class="jump hop" aria-label="Lancia">LANCIA</button></div>
+</div>
+<button id="pauseBtn" type="button" aria-label="Pausa">❚❚</button>
+<div id="overlay"></div>
+<a id="homeLink" href="../../index.html">← Sala Giochi</a>
+
+
+<script>
+(() => {
+  "use strict";
+
+  const W = 640, H = 360, TAU = Math.PI * 2, TOP = 28;
+  // the long table: you at the left end, the rival at the right, a red line across the middle
+  const TX0 = 40, TX1 = 600, TY0 = 56, TY1 = 344, MIDX = (TX0 + TX1) / 2, BR = 9, CR = 15, NBALLS = 10, ROUND_T = 60;
+  const ZONE = [[TX0 + 20, TX0 + 100], [TX1 - 100, TX1 - 20]];
+  const RIVALS = [
+    { name: "KOALA", body: "#9a9aa8", belly: "#d8d8e0", ear: true, speed: 130, react: 0.4, aim: 28, hold: 0.48, dodge: 0.4 },
+    { name: "CASTORO", body: "#8a5a2a", belly: "#c89a6a", ear: false, speed: 145, react: 0.34, aim: 22, hold: 0.4, dodge: 0.5 },
+    { name: "PANDA", body: "#f4f4f4", belly: "#f4f4f4", ear: true, patch: true, speed: 160, react: 0.3, aim: 18, hold: 0.34, dodge: 0.6 },
+    { name: "VOLPE", body: "#e8782a", belly: "#f8e8d8", ear: true, pointy: true, speed: 175, react: 0.26, aim: 14, hold: 0.3, dodge: 0.68 },
+    { name: "TOPO", body: "#7a7a8a", belly: "#c8c8d0", ear: true, big: true, speed: 190, react: 0.22, aim: 11, hold: 0.26, dodge: 0.75 },
+    { name: "ORSO POLARE", body: "#f8f8ff", belly: "#e8e8f8", ear: true, speed: 185, react: 0.2, aim: 9, hold: 0.22, dodge: 0.82 },
+  ];
+
+  const DIFFICULTIES = {
+    facile:    { label: "FACILE",    color: "#7ed87a", desc: "2 occasioni · avversari lenti", lives: 2, k: 0.8 },
+    normale:   { label: "NORMALE",   color: "#5ad8ff", desc: "1 occasione", lives: 1, k: 1.12 },
+    difficile: { label: "DIFFICILE", color: "#ff5a5a", desc: "1 occasione · avversari svelti e precisi", lives: 1, k: 1.45 },
+  };
+  const DIFF_IDS = Object.keys(DIFFICULTIES);
+  const DIFF_KEY = "pinguini-difficulty";
+  const bestKey = (id) => `pinguini-best-${id}`;
+  function store(k, v) { try { localStorage.setItem(k, v); } catch { /* ignore */ } }
+  function load(k) { try { return localStorage.getItem(k); } catch { return null; } }
+  const rnd = (a, b) => a + Math.random() * (b - a);
+  const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
+
+  // ---------- Canvas ----------
+  const canvas = document.getElementById("game");
+  const ctx = canvas.getContext("2d");
+  const wrapEl = document.getElementById("wrap");
+  const overlay = document.getElementById("overlay");
+  const touchEl = document.getElementById("touch");
+  const pauseBtn = document.getElementById("pauseBtn");
+  let pxRatio = 1, touchMode = !!(window.matchMedia && matchMedia("(pointer: coarse)").matches);
+  function resize() {
+    const portrait = window.innerHeight > window.innerWidth;
+    const showTouch = touchMode && isPlaying();
+    touchEl.style.display = showTouch ? "flex" : "none";
+    touchEl.classList.toggle("small", !portrait && window.innerHeight < 480);
+    wrapEl.style.paddingBottom = showTouch && portrait ? "calc(170px + env(safe-area-inset-bottom, 0px))" : "0";
+    let availW = window.innerWidth - 8, availH = window.innerHeight - 8;
+    if (showTouch && portrait) availH -= 170;
+    if (showTouch && !portrait) {
+      const side = Math.max(...[...touchEl.children].map((el) => el.offsetWidth)) + 20;
+      if (window.innerWidth - 2 * side > 200) availW = window.innerWidth - 2 * side;
+    }
+    const s = Math.max(0.2, Math.min(availW / W, availH / H));
+    pxRatio = Math.min(3, s * (window.devicePixelRatio || 1));
+    canvas.style.width = W * s + "px";
+    canvas.style.height = H * s + "px";
+    canvas.width = Math.round(W * pxRatio);
+    canvas.height = Math.round(H * pxRatio);
+  }
+  window.addEventListener("resize", () => syncControls());
+
+  // ---------- Audio ----------
+  let audioCtx = null;
+  function beep(freq, dur, type = "square", vol = 0.04, slide = 0, delay = 0) {
+    if (!audioCtx) return;
+    const t = audioCtx.currentTime + delay;
+    const osc = audioCtx.createOscillator(), gain = audioCtx.createGain();
+    osc.type = type;
+    osc.frequency.setValueAtTime(freq, t);
+    if (slide) osc.frequency.exponentialRampToValueAtTime(Math.max(20, freq + slide), t + dur);
+    gain.gain.setValueAtTime(vol, t);
+    gain.gain.exponentialRampToValueAtTime(0.0001, t + dur);
+    osc.connect(gain).connect(audioCtx.destination);
+    osc.start(t); osc.stop(t + dur + 0.02);
+  }
+  const arp = (notes, gap, d, type = "square", vol = 0.04) => notes.forEach((f, i) => beep(f, d, type, vol, 0, i * gap));
+  let sfxN = 0;
+  const lim = (fn) => (...a) => { if (sfxN++ < 4) fn(...a); };
+  const sfx = {
+    roll: lim(() => beep(rnd(180, 240), 0.08, "triangle", 0.03, -60)),
+    clack: lim(() => beep(rnd(900, 1200), 0.03, "square", 0.02)),
+    wall: lim(() => beep(rnd(250, 300), 0.04, "triangle", 0.025)),
+    grab: lim(() => beep(660, 0.05, "square", 0.02, 200)),
+    bonk: () => { beep(160, 0.3, "sawtooth", 0.05, -100); arp([1568, 1319, 1568, 1319], 0.08, 0.08, "triangle", 0.03); },
+    whistle: () => { beep(2400, 0.3, "square", 0.02); beep(2600, 0.3, "square", 0.015); },
+    win: () => arp([523, 659, 784, 1047, 784, 1047], 0.08, 0.14, "square", 0.05),
+    lose: () => arp([392, 330, 262], 0.14, 0.2, "triangle", 0.05),
+    champ: () => arp([523, 659, 784, 1047, 1319, 1568, 2093], 0.08, 0.16, "square", 0.05),
+    over: () => arp([523, 466, 415, 392, 330, 262], 0.15, 0.24, "triangle", 0.05),
+  };
+
+  // ---------- State ----------
+  let difficulty = DIFFICULTIES[load(DIFF_KEY)] ? load(DIFF_KEY) : "normale";
+  let diff = DIFFICULTIES[difficulty];
+  let state = "menu", menu = null, pausedFrom = null, clock = 0;
+  let score = 0, bestCache = 0, lives = 1, match = 1, wins = [0, 0], roundN = 1, roundT = ROUND_T, hits = 0, matchesWon = 0;
+  let balls = [], chars = [], parts = [], popups = [], message = null, pause = 0, after = null;
+  let actHeld = false, wasHeld = false;
+  const keys = { left: false, right: false, up: false, down: false };
+  const stick = { x: 0, y: 0 };
+
+  // ---------- The table ----------
+  const rival = () => RIVALS[(match - 1) % RIVALS.length];
+  const side = (x) => (x < MIDX ? 0 : 1);
+  function rack() {
+    balls = [];
+    // five on each side, in a row near the middle
+    for (let i = 0; i < NBALLS; i++) {
+      const s = i < 5 ? 0 : 1, j = i % 5;
+      balls.push({ x: s === 0 ? MIDX - 60 : MIDX + 60, y: TY0 + 40 + j * (TY1 - TY0 - 80) / 4, vx: 0, vy: 0, held: null, owner: -1 });
+    }
+    chars = [0, 1].map((t) => ({ team: t, x: t === 0 ? ZONE[0][0] + 30 : ZONE[1][1] - 30, y: (TY0 + TY1) / 2, hold: null, stun: 0, cd: 0, think: 0, tx: 0, ty: 0, aimT: 0, face: t === 0 ? 1 : -1, walk: 0 }));
+  }
+  function count(s) { return balls.filter((b) => (b.held ? b.held.team === s : side(b.x) === s)).length; }
+  function throwBall(c, aimDy) {
+    const b = c.hold; if (!b) return;
+    c.hold = null; b.held = null;
+    const dir = c.team === 0 ? 1 : -1, speed = 420;
+    b.x = c.x + dir * (CR + BR + 2); b.y = c.y;
+    const a = clamp(aimDy, -1, 1) * 0.42;
+    b.vx = Math.cos(a) * speed * dir; b.vy = Math.sin(a) * speed; b.owner = c.team;
+    c.cd = 0.25; sfx.roll();
+  }
+  function physics(dt) {
+    for (const b of balls) {
+      if (b.held) { b.x = b.held.x + (b.held.team === 0 ? 1 : -1) * 12; b.y = b.held.y + 6; continue; }
+      // each half of the table tilts gently down towards its own end, so the balls come to whoever must play them
+      b.vx += (side(b.x) === 0 ? -1 : 1) * 70 * dt;
+      b.x += b.vx * dt; b.y += b.vy * dt;
+      const f = Math.pow(0.75, dt); b.vx *= f; b.vy *= f;
+      if (Math.abs(b.vy) < 4) b.vy = 0;
+      if (b.y < TY0 + BR) { b.y = TY0 + BR; b.vy = Math.abs(b.vy) * 0.8; sfx.wall(); }
+      if (b.y > TY1 - BR) { b.y = TY1 - BR; b.vy = -Math.abs(b.vy) * 0.8; sfx.wall(); }
+      if (b.x < TX0 + BR) { b.x = TX0 + BR; b.vx = Math.abs(b.vx) * 0.35; sfx.wall(); }
+      if (b.x > TX1 - BR) { b.x = TX1 - BR; b.vx = -Math.abs(b.vx) * 0.35; sfx.wall(); }
+    }
+    // balls knock into each other
+    for (let i = 0; i < balls.length; i++) for (let j = i + 1; j < balls.length; j++) {
+      const a = balls[i], b = balls[j]; if (a.held || b.held) continue;
+      const dx = b.x - a.x, dy = b.y - a.y, d = Math.hypot(dx, dy);
+      if (d >= BR * 2 || d === 0) continue;
+      const nx = dx / d, ny = dy / d, ov = (BR * 2 - d) / 2;
+      a.x -= nx * ov; a.y -= ny * ov; b.x += nx * ov; b.y += ny * ov;
+      const rv = (b.vx - a.vx) * nx + (b.vy - a.vy) * ny;
+      if (rv < 0) { a.vx += rv * nx * 0.95; a.vy += rv * ny * 0.95; b.vx -= rv * nx * 0.95; b.vy -= rv * ny * 0.95; if (rv < -60) sfx.clack(); }
+    }
+    // a fast ball coming at someone knocks them over; a slow one is caught
+    for (const b of balls) {
+      if (b.held) continue;
+      for (const c of chars) {
+        const dx = b.x - c.x, dy = b.y - c.y, d = Math.hypot(dx, dy);
+        if (d >= CR + BR) continue;
+        const sp = Math.hypot(b.vx, b.vy), toward = (c.team === 0 ? -b.vx : b.vx) > 0;
+        if (sp > 150 && toward && c.stun <= 0) {
+          c.stun = 2; hits += b.owner === 0 && c.team === 1 ? 1 : 0;
+          if (b.owner === 0 && c.team === 1) { const pts = 300 * match; score += pts; popups.push({ x: c.x, y: c.y - 24, text: `+${pts}`, color: "#5ad8ff", t: 0 }); }
+          if (c.hold) { const h = c.hold; c.hold = null; h.held = null; h.vx = (c.team === 0 ? 1 : -1) * 40; h.vy = rnd(-40, 40); }
+          b.vx = -b.vx * 0.3; b.vy = b.vy * 0.5 + rnd(-40, 40);
+          sfx.bonk(); for (let i = 0; i < 8; i++) parts.push({ x: c.x, y: c.y - 10, vx: rnd(-80, 80), vy: rnd(-90, 10), t: 0, life: 0.6, color: "#ffd23a" });
+        } else {
+          const nx = dx / (d || 1), ny = dy / (d || 1);
+          b.x = c.x + nx * (CR + BR); b.y = c.y + ny * (CR + BR);
+          if (!c.hold && c.stun <= 0 && c.cd <= 0 && side(b.x) === c.team && sp < 260) { c.hold = b; b.held = c; b.vx = b.vy = 0; sfx.grab(); }
+          else { const vn = b.vx * nx + b.vy * ny; if (vn < 0) { b.vx -= 1.6 * vn * nx; b.vy -= 1.6 * vn * ny; } }
+        }
+      }
+    }
+  }
+
+  // ---------- The two players ----------
+  function moveChar(c, dx, dy, speed, dt) {
+    const len = Math.hypot(dx, dy); if (len < 0.05) { c.walk = 0; return; }
+    const k = Math.min(1, len); c.walk += dt * 10;
+    c.x = clamp(c.x + dx / len * k * speed * dt, ZONE[c.team][0], ZONE[c.team][1]);
+    c.y = clamp(c.y + dy / len * k * speed * dt, TY0 + CR, TY1 - CR);
+  }
+  function updatePlayer(c, dt) {
+    const mx = clamp((keys.right ? 1 : 0) - (keys.left ? 1 : 0) + stick.x, -1, 1), my = clamp((keys.down ? 1 : 0) - (keys.up ? 1 : 0) + stick.y, -1, 1);
+    const press = actHeld && !wasHeld; wasHeld = actHeld;
+    if (c.stun > 0) return;
+    moveChar(c, mx, my, 160, dt);
+    if (press && c.hold) throwBall(c, my);
+  }
+  function updateRival(c, dt) {
+    if (c.stun > 0) return;
+    const r = rival(), lap = 1 + 0.15 * Math.floor((match - 1) / RIVALS.length), sp = r.speed * diff.k * lap;
+    c.think -= dt;
+    if (c.think <= 0) {
+      c.think = r.react / (diff.k * lap) * rnd(0.7, 1.3);
+      // a fast ball heading this way: step out of its line
+      const me = chars[0];
+      const threat = balls.find((b) => !b.held && b.vx > 150 && b.x < c.x && Math.abs((b.y + b.vy * (c.x - b.x) / b.vx) - c.y) < CR + BR + 6);
+      if (threat && Math.random() < r.dodge * diff.k * lap) { const ty = threat.y + threat.vy * (c.x - threat.x) / threat.vx; c.tx = c.x; c.ty = ty > c.y ? c.y - 60 : c.y + 60; c.dodging = 0.5; }
+      else if (c.hold) { c.tx = ZONE[1][0] + 30; c.ty = me.y + rnd(-1, 1) * r.aim; }
+      else {
+        // go for the nearest ball on this side
+        let best = null, bd = 1e9;
+        for (const b of balls) { if (b.held || side(b.x) !== 1) continue; const d = Math.hypot(b.x - c.x, b.y - c.y) + (b.x < ZONE[1][0] ? 60 : 0); if (d < bd) { bd = d; best = b; } }
+        if (best) { c.tx = best.x; c.ty = best.y; } else { c.tx = ZONE[1][1] - 30; c.ty = (TY0 + TY1) / 2; }
+      }
+    }
+    if (c.dodging > 0) c.dodging -= dt;
+    moveChar(c, (c.tx - c.x) / 20, (c.ty - c.y) / 20, sp, dt);
+    if (c.hold && c.dodging <= 0) {
+      c.aimT += dt;
+      if (c.aimT > r.hold / (diff.k * lap)) { c.aimT = 0; const me = chars[0]; throwBall(c, clamp((c.y - me.y) / 140 + rnd(-1, 1) * r.aim / 160, -1, 1)); }
+    } else c.aimT = 0;
+  }
+
+  // ---------- Rounds and matches ----------
+  function endRound(reason) {
+    const a = count(0), b = count(1);
+    let winner = a < b ? 0 : b < a ? 1 : -1;
+    if (reason === "all0") winner = 1; else if (reason === "all1") winner = 0;
+    sfx.whistle();
+    if (winner === 0) {
+      wins[0]++; const pts = 1000 * match + 100 * Math.max(0, b - a) * match; score += pts; sfx.win();
+      message = { text: reason ? "TUTTE DI LÀ!" : "ROUND VINTO!", sub: `${a} palle da te, ${b} da lui · +${pts.toLocaleString("it-IT")}`, t: 0, long: true };
+    } else if (winner === 1) {
+      wins[1]++; sfx.lose();
+      message = { text: reason ? "SOMMERSO DI PALLE!" : "ROUND PERSO", sub: `${a} palle da te, ${b} da lui`, t: 0, long: true };
+    } else message = { text: "PAREGGIO", sub: `${a} a ${b}: si rigioca`, t: 0, long: true };
+    roundN++;
+    pause = 2.6;
+    after = wins[0] >= 2 ? "matchWon" : wins[1] >= 2 ? "matchLost" : "round";
+  }
+  function startRound() {
+    rack(); roundT = ROUND_T;
+    message = { text: `ROUND ${roundN}`, sub: `${rival().name} · ${wins[0]} a ${wins[1]}`, t: 0 };
+    pause = 1.2; after = null;
+  }
+  function startMatch() {
+    wins = [0, 0]; roundN = 1;
+    startRound();
+    message = { text: `PARTITA ${match}: ${rival().name}`, sub: "liberati delle palle: chi ne ha meno vince il round", t: 0, long: true };
+    pause = 1.6;
+  }
+
+  // ---------- Flow ----------
+  const isPlaying = () => state === "play";
+  function startGame() {
+    if (!audioCtx) { try { audioCtx = new (window.AudioContext || window.webkitAudioContext)(); } catch { audioCtx = null; } }
+    if (audioCtx && audioCtx.state === "suspended") audioCtx.resume();
+    score = 0; lives = diff.lives; match = 1; hits = 0; matchesWon = 0; parts = []; popups = [];
+    bestCache = parseInt(load(bestKey(difficulty)), 10) || 0;
+    startMatch();
+    state = "play";
+    menu = null;
+    overlay.classList.add("hidden");
+    syncControls();
+    last = performance.now();
+  }
+  function gameOver() {
+    state = "over";
+    const prev = parseInt(load(bestKey(difficulty)), 10) || 0;
+    const record = score > prev;
+    if (record) store(bestKey(difficulty), String(score));
+    sfx.over();
+    menu = () => showOverlay(
+      `<h2 class="lose">FUORI DAL TORNEO</h2>
+       <p>Punteggio: <b>${score.toLocaleString("it-IT")}</b> · ${matchesWon} ${matchesWon === 1 ? "avversario battuto" : "avversari battuti"} · ${hits} ${hits === 1 ? "colpo a segno" : "colpi a segno"} · ${diff.label}</p>
+       ${record ? "<p style='color:var(--pink)'>★ NUOVO RECORD! ★</p>" : ""}
+       ${difficultyHTML()}
+       <button class="start" data-start>NUOVO TORNEO</button>`
+    );
+    menu();
+    syncControls();
+  }
+  function togglePause() {
+    if (isPlaying()) {
+      pausedFrom = state; state = "paused";
+      showOverlay(`<h2>PAUSA</h2><button class="start" data-resume>CONTINUA</button><p class="muted">Premi P per continuare</p>`);
+    } else if (state === "paused") {
+      state = pausedFrom; overlay.classList.add("hidden"); last = performance.now();
+    }
+    syncControls();
+  }
+  // the pause menu can end the game (shared/iniziali.js): it ends here the usual way, saving the record
+  window.addEventListener("sala:termina", () => { if (state !== "paused") return; state = pausedFrom; overlay.classList.add("hidden"); gameOver(); syncControls(); });
+  function syncControls() {
+    pauseBtn.style.display = isPlaying() && touchMode ? "block" : "none";
+    resize();
+  }
+  pauseBtn.addEventListener("click", () => togglePause());
+  function showOverlay(html) { overlay.innerHTML = html; overlay.classList.remove("hidden"); }
+  function difficultyHTML() {
+    const buttons = DIFF_IDS.map((id) => {
+      const d = DIFFICULTIES[id];
+      return `<button type="button" data-diff="${id}" class="${id === difficulty ? "on" : ""}" style="--c:${d.color}">${d.label}</button>`;
+    }).join("");
+    const best = parseInt(load(bestKey(difficulty)), 10);
+    return `<div class="diff">${buttons}</div><p class="muted">${diff.desc}${best ? ` · Record: ${best.toLocaleString("it-IT")}` : ""}</p>`;
+  }
+  function setDifficulty(id) { if (!DIFFICULTIES[id]) return; difficulty = id; diff = DIFFICULTIES[id]; store(DIFF_KEY, id); if (menu) menu(); }
+  function showTitle() {
+    menu = showTitle;
+    showOverlay(
+      `<h1>GUERRA DEI PINGUINI</h1>
+       <p>Un pinguino e un rivale ai due capi di un lungo tavolo, dieci palle in mezzo. Prendile e tirale dall'altra parte: chi viene colpito da una palla veloce resta stordito per due secondi. Allo scadere del minuto vince il round chi ha meno palle nella sua metà, e chi se le ritrova tutte e dieci perde subito. Vinci due round e passi al prossimo avversario.</p>
+       <div class="pts">
+         <span><b>Lancio</b></span><span>una palla lenta che ti tocca la prendi · LANCIA la tira dritta, con la levetta in su o in giù la tiri di sbieco · una palla veloce che arriva addosso stordisce</span>
+         <span><b>Punti</b></span><span>colpo a segno 300 × partita · round vinto 1.000 × partita più 100 × partita per ogni palla di scarto · partita vinta 2.000 × partita</span>
+       </div>
+       ${touchMode
+         ? `<p class="muted help">Levetta per muoverti nella tua zona · tocca LANCIA</p>`
+         : `<p class="muted help">Frecce o WASD per muoverti · SPAZIO (o J) per lanciare · P pausa</p>`}
+       ${difficultyHTML()}
+       <button class="start" data-start>AL TAVOLO!</button>`
+    );
+  }
+  overlay.addEventListener("click", (e) => {
+    const d = e.target.closest("[data-diff]");
+    if (d) { setDifficulty(d.dataset.diff); return; }
+    if (e.target.closest("[data-start]")) startGame();
+    if (e.target.closest("[data-resume]")) togglePause();
+  });
+
+  // ---------- Input ----------
+  const KEYMAP = { arrowleft: "left", a: "left", arrowright: "right", d: "right", arrowup: "up", w: "up", arrowdown: "down", s: "down" };
+  const ACTKEYS = [" ", "j", "x", "k"];
+  window.addEventListener("keydown", (e) => {
+    const k = e.key.toLowerCase();
+    if ([" ", "arrowup", "arrowdown", "arrowleft", "arrowright"].includes(k)) e.preventDefault();
+    if (state === "menu" || state === "over") {
+      if (e.key === "Enter") startGame();
+      else if (["1", "2", "3"].includes(k)) setDifficulty(DIFF_IDS[+k - 1]);
+      return;
+    }
+    if (k === "p" || k === "escape") { if (!e.repeat) togglePause(); return; }
+    if (state === "paused") { if (e.key === "Enter") togglePause(); return; }
+    if (ACTKEYS.includes(k)) actHeld = true;
+    if (KEYMAP[k]) keys[KEYMAP[k]] = true;
+  });
+  window.addEventListener("keyup", (e) => { const k = e.key.toLowerCase(); if (KEYMAP[k]) keys[KEYMAP[k]] = false; if (ACTKEYS.includes(k)) actHeld = false; });
+  window.addEventListener("blur", () => { for (const k in keys) keys[k] = false; actHeld = false; stick.x = stick.y = 0; if (isPlaying()) togglePause(); });
+  {
+    const b = touchEl.querySelector(".hop");
+    b.addEventListener("pointerdown", (e) => { e.preventDefault(); actHeld = true; b.classList.add("on"); });
+    for (const ev of ["pointerup", "pointercancel", "pointerleave"]) b.addEventListener(ev, () => { actHeld = false; b.classList.remove("on"); });
+  }
+  const stickEl = touchEl.querySelector(".stick"), knob = stickEl.querySelector(".knob");
+  let stickId = null;
+  function stickAt(e) {
+    const r = stickEl.getBoundingClientRect(), max = r.width / 2 - 14;
+    let dx = e.clientX - (r.left + r.width / 2), dy = e.clientY - (r.top + r.height / 2);
+    const len = Math.hypot(dx, dy);
+    if (len > max) { dx *= max / len; dy *= max / len; }
+    knob.style.transform = `translate(${dx}px, ${dy}px)`;
+    const f = (v) => { const a = Math.abs(v) / max; return a < 0.2 ? 0 : Math.sign(v) * Math.min(1, (a - 0.2) / 0.5); };
+    stick.x = f(dx); stick.y = f(dy);
+  }
+  const stickEnd = (e) => { if (e.pointerId !== stickId) return; stickId = null; knob.style.transform = ""; stick.x = stick.y = 0; };
+  stickEl.addEventListener("pointerdown", (e) => { e.preventDefault(); stickId = e.pointerId; try { stickEl.setPointerCapture(e.pointerId); } catch { /* ignore */ } stickAt(e); });
+  stickEl.addEventListener("pointermove", (e) => { if (e.pointerId === stickId) stickAt(e); });
+  for (const ev of ["pointerup", "pointercancel", "lostpointercapture"]) stickEl.addEventListener(ev, stickEnd);
+  window.addEventListener("pointerdown", (e) => { if (e.pointerType === "touch" && !touchMode) { touchMode = true; syncControls(); if (menu) menu(); } }, true);
+
+
+  // ---------- Update ----------
+  function update(dt) {
+    clock += dt; sfxN = 0;
+    if (window.__bot) window.__bot(dt);
+    for (const p of parts) { p.t += dt; p.x += p.vx * dt; p.y += p.vy * dt; p.vy += 200 * dt; }
+    parts = parts.filter((p) => p.t < p.life);
+    for (const p of popups) { p.t += dt; p.y -= 20 * dt; }
+    popups = popups.filter((p) => p.t < 1.1);
+    if (message) { message.t += dt; if (message.t > (message.long ? 2.6 : 1.6)) message = null; }
+    if (state !== "play") return;
+    if (pause > 0) {
+      pause -= dt;
+      if (pause <= 0) {
+        const a = after; after = null;
+        if (a === "round") startRound();
+        else if (a === "matchWon") {
+          matchesWon++; const pts = 2000 * match; score += pts; sfx.champ();
+          message = { text: `${rival().name} BATTUTO!`, sub: `+${pts.toLocaleString("it-IT")}`, t: 0, long: true };
+          match++; pause = 2.6; after = "nextMatch";
+        } else if (a === "matchLost") {
+          lives--;
+          if (lives > 0) { message = { text: "PARTITA PERSA", sub: "ultima occasione: la rivincita!", t: 0, long: true }; pause = 2.4; after = "rematch"; }
+          else gameOver();
+        } else if (a === "nextMatch" || a === "rematch") startMatch();
+      }
+      return;
+    }
+    roundT -= dt;
+    for (const c of chars) { if (c.stun > 0) c.stun -= dt; if (c.cd > 0) c.cd -= dt; }
+    updatePlayer(chars[0], dt);
+    updateRival(chars[1], dt);
+    physics(dt);
+    if (count(0) >= NBALLS) return endRound("all0");
+    if (count(1) >= NBALLS) return endRound("all1");
+    if (roundT <= 0) { roundT = 0; endRound(null); }
+  }
+
+  // ---------- Drawing ----------
+  function drawTable() {
+    ctx.fillStyle = "#0a1828"; ctx.fillRect(0, TOP, W, H - TOP);
+    ctx.fillStyle = "#6a3a1a"; ctx.beginPath(); ctx.roundRect(TX0 - 14, TY0 - 14, TX1 - TX0 + 28, TY1 - TY0 + 28, 18); ctx.fill();
+    ctx.fillStyle = "#8a5a2a"; ctx.fillRect(TX0 - 6, TY0 - 6, TX1 - TX0 + 12, 4); ctx.fillRect(TX0 - 6, TY1 + 2, TX1 - TX0 + 12, 4);
+    const g = ctx.createLinearGradient(0, TY0, 0, TY1);
+    g.addColorStop(0, "#d8f0fa"); g.addColorStop(1, "#b8dcf0");
+    ctx.fillStyle = g; ctx.fillRect(TX0, TY0, TX1 - TX0, TY1 - TY0);
+    // each end is tinted, and the middle line is red
+    ctx.fillStyle = "rgba(58,122,216,0.12)"; ctx.fillRect(TX0, TY0, MIDX - TX0, TY1 - TY0);
+    ctx.fillStyle = "rgba(216,90,58,0.1)"; ctx.fillRect(MIDX, TY0, TX1 - MIDX, TY1 - TY0);
+    ctx.fillStyle = "#e83a3a"; ctx.fillRect(MIDX - 2, TY0, 4, TY1 - TY0);
+    ctx.strokeStyle = "rgba(40,80,120,0.25)"; ctx.setLineDash([4, 6]); ctx.lineWidth = 2;
+    ctx.strokeRect(ZONE[0][0] - CR, TY0 + 2, ZONE[0][1] - ZONE[0][0] + CR * 2, TY1 - TY0 - 4);
+    ctx.strokeRect(ZONE[1][0] - CR, TY0 + 2, ZONE[1][1] - ZONE[1][0] + CR * 2, TY1 - TY0 - 4);
+    ctx.setLineDash([]);
+  }
+  function drawPenguin(c) {
+    const x = c.x, y = c.y, bob = c.walk ? Math.sin(c.walk) * 1.5 : 0, f = c.face;
+    ctx.fillStyle = "rgba(0,0,0,0.18)"; ctx.beginPath(); ctx.ellipse(x + 3, y + 14, 14, 5, 0, 0, TAU); ctx.fill();
+    ctx.save(); if (c.stun > 0) { ctx.translate(x, y); ctx.rotate(Math.sin(clock * 8) * 0.3); ctx.translate(-x, -y); }
+    ctx.fillStyle = "#1a2a3a"; ctx.beginPath(); ctx.ellipse(x, y + bob, 13, 16, 0, 0, TAU); ctx.fill();
+    ctx.fillStyle = "#f8f8ff"; ctx.beginPath(); ctx.ellipse(x + f * 3, y + 3 + bob, 8, 11, 0, 0, TAU); ctx.fill();
+    ctx.fillStyle = "#ffa82a"; ctx.beginPath(); ctx.moveTo(x + f * 10, y - 6 + bob); ctx.lineTo(x + f * 17, y - 4 + bob); ctx.lineTo(x + f * 10, y - 2 + bob); ctx.fill();
+    ctx.fillStyle = "#ffffff"; ctx.beginPath(); ctx.arc(x + f * 5, y - 7 + bob, 3, 0, TAU); ctx.fill();
+    ctx.fillStyle = "#1a1a1a"; ctx.beginPath(); ctx.arc(x + f * 6, y - 7 + bob, 1.5, 0, TAU); ctx.fill();
+    ctx.fillStyle = "#3a7ae8"; ctx.fillRect(x - 9, y - 2 + bob, 18, 3);
+    ctx.fillStyle = "#ffa82a"; ctx.fillRect(x - 8, y + 14, 6, 3); ctx.fillRect(x + 2, y + 14, 6, 3);
+    ctx.restore();
+  }
+  function drawRival(c) {
+    const r = rival(), x = c.x, y = c.y, bob = c.walk ? Math.sin(c.walk) * 1.5 : 0, f = c.face;
+    ctx.fillStyle = "rgba(0,0,0,0.18)"; ctx.beginPath(); ctx.ellipse(x + 3, y + 14, 14, 5, 0, 0, TAU); ctx.fill();
+    ctx.save(); if (c.stun > 0) { ctx.translate(x, y); ctx.rotate(Math.sin(clock * 8) * 0.3); ctx.translate(-x, -y); }
+    ctx.fillStyle = r.body; ctx.strokeStyle = "rgba(0,0,0,0.3)"; ctx.lineWidth = 1;
+    if (r.ear) {
+      const er = r.big ? 8 : 6;
+      if (r.pointy) { ctx.beginPath(); ctx.moveTo(x - 10, y - 10 + bob); ctx.lineTo(x - 6, y - 24 + bob); ctx.lineTo(x - 1, y - 12 + bob); ctx.moveTo(x + 10, y - 10 + bob); ctx.lineTo(x + 6, y - 24 + bob); ctx.lineTo(x + 1, y - 12 + bob); ctx.fill(); }
+      else { ctx.fillStyle = r.patch ? "#1a1a1a" : r.body; ctx.beginPath(); ctx.arc(x - 9, y - 13 + bob, er, 0, TAU); ctx.arc(x + 9, y - 13 + bob, er, 0, TAU); ctx.fill(); ctx.stroke(); }
+    }
+    ctx.fillStyle = r.body; ctx.beginPath(); ctx.ellipse(x, y + bob, 14, 16, 0, 0, TAU); ctx.fill(); ctx.stroke();
+    ctx.fillStyle = r.belly; ctx.beginPath(); ctx.ellipse(x + f * 2, y + 5 + bob, 8, 9, 0, 0, TAU); ctx.fill();
+    if (r.patch) { ctx.fillStyle = "#1a1a1a"; ctx.beginPath(); ctx.ellipse(x - 5, y - 6 + bob, 4, 3, 0.4, 0, TAU); ctx.ellipse(x + 5, y - 6 + bob, 4, 3, -0.4, 0, TAU); ctx.fill(); ctx.fillRect(x - 13, y + 2 + bob, 4, 8); ctx.fillRect(x + 9, y + 2 + bob, 4, 8); }
+    ctx.fillStyle = "#ffffff"; ctx.beginPath(); ctx.arc(x - 4 + f, y - 6 + bob, 2.4, 0, TAU); ctx.arc(x + 4 + f, y - 6 + bob, 2.4, 0, TAU); ctx.fill();
+    ctx.fillStyle = "#1a1a1a"; ctx.beginPath(); ctx.arc(x - 4 + f * 1.8, y - 6 + bob, 1.3, 0, TAU); ctx.arc(x + 4 + f * 1.8, y - 6 + bob, 1.3, 0, TAU); ctx.fill();
+    ctx.fillStyle = "#2a1a1a"; ctx.beginPath(); ctx.arc(x + f * 3, y - 1 + bob, 2.2, 0, TAU); ctx.fill();
+    ctx.restore();
+  }
+  function drawStun(c) {
+    if (c.stun <= 0) return;
+    for (let i = 0; i < 3; i++) { const a = clock * 5 + i * TAU / 3; ctx.fillStyle = "#ffd23a"; ctx.font = "900 10px system-ui"; ctx.textAlign = "center"; ctx.fillText("★", c.x + Math.cos(a) * 14, c.y - 24 + Math.sin(a) * 4); }
+  }
+  function drawHud() {
+    ctx.fillStyle = "rgba(10,24,40,0.96)"; ctx.fillRect(0, 0, W, TOP);
+    ctx.textBaseline = "middle"; ctx.textAlign = "left";
+    const x0 = touchMode ? 130 : 10;
+    ctx.fillStyle = "#ffffff"; ctx.font = "900 15px system-ui"; ctx.fillText(score.toLocaleString("it-IT"), x0, 14);
+    ctx.fillStyle = "#c8e8f8"; ctx.font = "700 9px system-ui"; ctx.fillText(`REC ${Math.max(bestCache, score).toLocaleString("it-IT")}`, x0 + 80, 9);
+    ctx.fillStyle = "#5ad8ff"; ctx.font = "900 10px system-ui"; ctx.fillText(`PARTITA ${match}`, x0 + 80, 21);
+    // the count of balls on each side, the clock and the rounds won
+    ctx.textAlign = "center";
+    const a = count(0), b = count(1);
+    ctx.fillStyle = "#3a7ae8"; ctx.fillRect(300, 4, 30, 20); ctx.fillStyle = "#d85a3a"; ctx.fillRect(400, 4, 30, 20);
+    ctx.fillStyle = "#ffffff"; ctx.font = "900 15px system-ui"; ctx.fillText(String(a), 315, 15); ctx.fillText(String(b), 415, 15);
+    ctx.fillStyle = roundT < 10 ? "#ff5a5a" : "#c8e8f8"; ctx.font = "900 13px system-ui"; ctx.fillText(String(Math.ceil(roundT)), 365, 15);
+    ctx.fillStyle = "#ffd23a"; ctx.font = "900 10px system-ui";
+    ctx.fillText("●".repeat(wins[0]) + "○".repeat(2 - wins[0]), 284, 15); ctx.fillText("●".repeat(wins[1]) + "○".repeat(2 - wins[1]), 446, 15);
+    ctx.textAlign = "right"; ctx.fillStyle = "#ffd23a"; ctx.font = "900 11px system-ui";
+    ctx.fillText("♥".repeat(Math.max(0, lives)), touchMode ? W - 60 : W - 14, 14);
+    ctx.textBaseline = "alphabetic";
+  }
+  function draw() {
+    ctx.setTransform(pxRatio, 0, 0, pxRatio, 0, 0);
+    if (!balls.length) rack();
+    drawTable();
+    ctx.textAlign = "center"; ctx.font = "900 12px system-ui"; ctx.fillStyle = "rgba(20,50,80,0.4)";
+    ctx.fillText("PINGUINO", (TX0 + MIDX) / 2, TY1 - 8); ctx.fillText(rival().name, (MIDX + TX1) / 2, TY1 - 8);
+    const all = [...chars];
+    for (const b of balls) if (!b.held) { ctx.fillStyle = "rgba(0,0,0,0.15)"; ctx.beginPath(); ctx.ellipse(b.x + 2, b.y + 3, BR, BR * 0.6, 0, 0, TAU); ctx.fill(); }
+    for (const b of balls) if (!b.held) {
+      const gr = ctx.createRadialGradient(b.x - 3, b.y - 3, 1, b.x, b.y, BR);
+      gr.addColorStop(0, "#ffffff"); gr.addColorStop(1, b.owner === 1 ? "#ff8a6a" : b.owner === 0 ? "#6aa8ff" : "#c8c8d8");
+      ctx.fillStyle = gr; ctx.beginPath(); ctx.arc(b.x, b.y, BR, 0, TAU); ctx.fill();
+    }
+    for (const c of all) { c.team === 0 ? drawPenguin(c) : drawRival(c); }
+    for (const b of balls) if (b.held) { ctx.fillStyle = "#ffffff"; ctx.strokeStyle = "#5a7a9a"; ctx.lineWidth = 1.5; ctx.beginPath(); ctx.arc(b.x, b.y, BR, 0, TAU); ctx.fill(); ctx.stroke(); }
+    for (const c of all) drawStun(c);
+    for (const p of parts) { ctx.globalAlpha = Math.max(0, 1 - p.t / p.life); ctx.fillStyle = p.color; ctx.fillRect(p.x - 2, p.y - 2, 4, 4); }
+    ctx.globalAlpha = 1;
+    for (const p of popups) {
+      ctx.globalAlpha = Math.max(0, 1 - p.t / 1.1);
+      ctx.textAlign = "center"; ctx.font = "900 13px system-ui";
+      ctx.lineWidth = 3; ctx.strokeStyle = "#0a1828"; ctx.strokeText(p.text, p.x, p.y); ctx.fillStyle = p.color; ctx.fillText(p.text, p.x, p.y);
+    }
+    ctx.globalAlpha = 1;
+    if (state === "menu") return;
+    drawHud();
+    if (message) {
+      ctx.globalAlpha = Math.min(1, ((message.long ? 2.6 : 1.6) - message.t) * 2);
+      ctx.textAlign = "center"; ctx.font = "italic 900 26px system-ui"; ctx.fillStyle = "#ffd23a";
+      ctx.lineWidth = 6; ctx.strokeStyle = "#0a1828"; ctx.strokeText(message.text, W / 2, 170); ctx.fillText(message.text, W / 2, 170);
+      if (message.sub) { ctx.font = "800 13px system-ui"; ctx.fillStyle = "#ffffff"; ctx.lineWidth = 4; ctx.strokeText(message.sub, W / 2, 190); ctx.fillText(message.sub, W / 2, 190); }
+      ctx.globalAlpha = 1;
+    }
+  }
+
+  // ---------- Loop ----------
+  const STEP = 1 / 120;
+  let last = performance.now(), acc = 0;
+  function frame(now) {
+    const dt = Math.min(0.1, (now - last) / 1000);
+    last = now;
+    if (isPlaying()) {
+      acc += dt;
+      while (acc >= STEP && isPlaying()) { update(STEP); acc -= STEP; }
+    } else { acc = 0; update(dt); }
+    draw();
+    requestAnimationFrame(frame);
+  }
+  syncControls();
+  showTitle();
+  requestAnimationFrame(frame);
+})();
+</script>
+<script src="../../shared/iniziali.js" data-record="pinguini-best-" data-kind="score"></script>
+</body>
+</html>
+
