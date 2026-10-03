@@ -4,7 +4,7 @@ Raccolta di giochi arcade per il browser. Ogni gioco è un singolo file HTML sen
 
 ## 🕹️ Sala Giochi — `index.html`
 
-Apri `index.html` nella cartella principale per la pagina di raccolta: mostra tutti i 142 giochi con copertina, genere, comandi e i tuoi record per ogni difficoltà (Facile, Normale, Difficile). Tocca «Gioca» per avviare un gioco; in ogni gioco il pulsante «← Sala Giochi» in alto a sinistra (visibile nei menu) riporta alla raccolta.
+Apri `index.html` nella cartella principale per la pagina di raccolta: mostra tutti i 143 giochi con copertina, genere, comandi e i tuoi record per ogni difficoltà (Facile, Normale, Difficile). Tocca «Gioca» per avviare un gioco; in ogni gioco il pulsante «← Sala Giochi» in alto a sinistra (visibile nei menu) riporta alla raccolta.
 
 **Iniziali del record:** quando batti un record compare la schermata da sala giochi per inserire le tue tre iniziali (frecce ↑ ↓ per cambiare lettera, ← → per spostarti, oppure scrivile direttamente; su telefono i tasti ▲ ▼ e OK). Le iniziali vengono salvate insieme al record e compaiono nei menu del gioco e nella Sala Giochi. Il codice è condiviso da tutti i giochi in `shared/iniziali.js`.
 
@@ -12,7 +12,7 @@ Apri `index.html` nella cartella principale per la pagina di raccolta: mostra tu
 
 **Comandi touch: levetta o frecce:** in cima alla Sala Giochi e nel menu di pausa di ogni gioco con la levetta si sceglie se usare la levetta analogica o una croce di frecce. Con le frecce il tocco viene agganciato a una delle otto direzioni (le quattro principali hanno la zona più larga, così le diagonali si prendono solo di proposito) e spinto fino in fondo; la scelta vale per tutti i giochi e resta memorizzata. Funziona anche nei giochi con due levette (la sfida a due di *Pugni di Fuoco*, muovi e spara di *Assalto Robotico*).
 
-**Trofei:** ogni gioco ha tre trofei a punteggio: 🥉 **Bronzo** (la soglia in qualsiasi difficoltà), 🥈 **Argento** (a Normale o Difficile) e 🥇 **Oro** (a Difficile); nei giochi a tempo (*Corsa al Tramonto*, *Crystal Wars*) conta finire entro un certo tempo. I trofei si calcolano dai record salvati, quindi quelli già fatti si sbloccano da soli; quando un record nuovo ne conquista uno compare un avviso in alto. Le soglie sono nella schermata iniziale, in pausa e a fine partita di ogni gioco; in Sala Giochi ogni cabinato mostra i suoi trofei, in cima c'è il totale (su 426) con il numero di giochi giocati e il filtro **Già giocati** mostra solo i giochi con almeno un record. Le soglie vengono dalle partite di prova di un bot per circa un terzo dei giochi e sono stimate sulle regole di punteggio per gli altri (`shared/trofei.js`).
+**Trofei:** ogni gioco ha tre trofei a punteggio: 🥉 **Bronzo** (la soglia in qualsiasi difficoltà), 🥈 **Argento** (a Normale o Difficile) e 🥇 **Oro** (a Difficile); nei giochi a tempo (*Corsa al Tramonto*, *Crystal Wars*) conta finire entro un certo tempo. I trofei si calcolano dai record salvati, quindi quelli già fatti si sbloccano da soli; quando un record nuovo ne conquista uno compare un avviso in alto. Le soglie sono nella schermata iniziale, in pausa e a fine partita di ogni gioco; in Sala Giochi ogni cabinato mostra i suoi trofei, in cima c'è il totale (su 429) con il numero di giochi giocati e il filtro **Già giocati** mostra solo i giochi con almeno un record. Le soglie vengono dalle partite di prova di un bot per circa un terzo dei giochi e sono stimate sulle regole di punteggio per gli altri (`shared/trofei.js`).
 
 **Generi:** ogni gioco appartiene a una o più famiglie di generi (🚀 Sparatutto, 🪜 Piattaforme, 🎯 Azione e riflessi, 🌀 Labirinti, ⚽ Sport, 🧩 Rompicapo, 🏁 Corse e veicoli, 🏰 Strategia e difesa, 🥊 Picchiaduro, 🗝️ Avventura, 🎵 Ritmo e musica): per esempio *Cripta degli Eroi* è avventura, sparatutto e labirinto. Le famiglie sono le etichette colorate di ogni cabinato. Sotto la ricerca una fila di pulsanti, con il numero di giochi di ciascuna famiglia, mostra solo quel genere (toccandolo di nuovo si torna a *Tutti i generi*); anche toccare un'etichetta su un cabinato filtra per quella famiglia. Un gioco con più famiglie compare in ognuna. La scelta resta memorizzata e si combina con la ricerca e con *Già giocati*. Su telefono la fila scorre di lato.
 
@@ -2196,3 +2196,18 @@ L'hockey da tavolo dei bar e delle sale giochi, quello con gli omini sulle stecc
 - **Touch:** levetta e pulsante TIRO
 
 Per giocare apri `games/hockey-a-manopole/index.html` nel browser.
+
+### 🗝️ La Chiave del Mago — `games/la-chiave-del-mago/index.html`
+
+Ispirato a *Solomon's Key* (1986): un rompicapo d'azione nelle sale di un castello. In ogni sala c'è una chiave da prendere e una porta da raggiungere, e il mago ha una bacchetta che crea e distrugge blocchi.
+
+- **La bacchetta:** MAGIA crea un blocco di mattoni nella casella davanti al mago, o lo fa sparire se c'è già. Accucciato (levetta giù) lavora sulla casella davanti e un piano più in basso, per gettare ponti. La pietra grigia non si tocca. Non si crea un blocco sopra la porta, un oggetto, uno specchio o un mostro
+- **Il mago:** cammina, salta al massimo due blocchi e in aria si sposta di una casella. La prima spinta di levetta lo gira, tenendola cammina. Una testata contro un blocco di mattoni lo crepa, la seconda lo rompe
+- **I mostri:** i goblin camminano sul loro piano e corrono verso di te se ti vedono; i fantasmi volano in diagonale e rimbalzano sui blocchi; i draghi stanno fermi e sputano fuoco quando sei alla loro altezza (prima la bocca diventa incandescente). Gli specchi ne fanno uscire di nuovi. Tutti si eliminano con le palle di fuoco (due per ogni giara) e chi cammina si spiaccica se gli togli il pavimento. Un blocco ferma goblin, fantasmi e fiammate
+- **Sale:** dieci sale disegnate a mano, poi ricominciano con mostri più svelti e specchi più frequenti. Ogni sala ha un tempo (la candela a destra): se finisce perdi una vita e la sala ricomincia
+- **Punti:** chiave 500 · sala 1.000 più 20 per ogni secondo rimasto · goblin 200, fantasma 300, drago 600 · mostro spiaccicato 400 (drago 800) · gemma 1.000 · giara 100 · vita extra a 30.000 e a 80.000
+- **Difficoltà:** Facile (4 vite, 100 secondi per sala, mostri lenti), Normale (3 vite, 80 secondi), Difficile (3 vite, 65 secondi, mostri svelti, specchi frequenti); record separati per ogni difficoltà
+- **Comandi:** frecce o `WASD` (su salta, giù accucciati) · `Spazio` o `J` magia · `K` o `X` fuoco · `P` pausa
+- **Touch:** levetta (su salta, giù accucciati), pulsante grande MAGIA e piccolo FUOCO
+
+Per giocare apri `games/la-chiave-del-mago/index.html` nel browser.
