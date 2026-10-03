@@ -9,6 +9,8 @@
   "use strict";
   // record key prefix → [bronzo, argento, oro] (and t for times)
   const DATA = {
+    "manopole-best-": [1500, 4400, 3100],   // hockey-a-manopole (bot)
+    "forza-best-": [4700, 14000, 9800],   // pugno-da-record (bot)
     "trappola-best-": [4500, 14000, 10000],   // trappola-aliena (bot)
     "pachinko-best-": [2800, 8300, 5800],   // pachinko-della-fortuna (bot)
     "rotola-best-": [3200, 9500, 6700],   // rotola-e-centra (bot)
