@@ -4,7 +4,7 @@ Raccolta di giochi arcade per il browser. Ogni gioco è un singolo file HTML sen
 
 ## 🕹️ Sala Giochi — `index.html`
 
-Apri `index.html` nella cartella principale per la pagina di raccolta: mostra tutti i 143 giochi con copertina, genere, comandi e i tuoi record per ogni difficoltà (Facile, Normale, Difficile). Tocca «Gioca» per avviare un gioco; in ogni gioco il pulsante «← Sala Giochi» in alto a sinistra (visibile nei menu) riporta alla raccolta.
+Apri `index.html` nella cartella principale per la pagina di raccolta: mostra tutti i 144 giochi con copertina, genere, comandi e i tuoi record per ogni difficoltà (Facile, Normale, Difficile). Tocca «Gioca» per avviare un gioco; in ogni gioco il pulsante «← Sala Giochi» in alto a sinistra (visibile nei menu) riporta alla raccolta.
 
 **Iniziali del record:** quando batti un record compare la schermata da sala giochi per inserire le tue tre iniziali (frecce ↑ ↓ per cambiare lettera, ← → per spostarti, oppure scrivile direttamente; su telefono i tasti ▲ ▼ e OK). Le iniziali vengono salvate insieme al record e compaiono nei menu del gioco e nella Sala Giochi. Il codice è condiviso da tutti i giochi in `shared/iniziali.js`.
 
@@ -12,7 +12,7 @@ Apri `index.html` nella cartella principale per la pagina di raccolta: mostra tu
 
 **Comandi touch: levetta o frecce:** in cima alla Sala Giochi e nel menu di pausa di ogni gioco con la levetta si sceglie se usare la levetta analogica o una croce di frecce. Con le frecce il tocco viene agganciato a una delle otto direzioni (le quattro principali hanno la zona più larga, così le diagonali si prendono solo di proposito) e spinto fino in fondo; la scelta vale per tutti i giochi e resta memorizzata. Funziona anche nei giochi con due levette (la sfida a due di *Pugni di Fuoco*, muovi e spara di *Assalto Robotico*).
 
-**Trofei:** ogni gioco ha tre trofei a punteggio: 🥉 **Bronzo** (la soglia in qualsiasi difficoltà), 🥈 **Argento** (a Normale o Difficile) e 🥇 **Oro** (a Difficile); nei giochi a tempo (*Corsa al Tramonto*, *Crystal Wars*) conta finire entro un certo tempo. I trofei si calcolano dai record salvati, quindi quelli già fatti si sbloccano da soli; quando un record nuovo ne conquista uno compare un avviso in alto. Le soglie sono nella schermata iniziale, in pausa e a fine partita di ogni gioco; in Sala Giochi ogni cabinato mostra i suoi trofei, in cima c'è il totale (su 429) con il numero di giochi giocati e il filtro **Già giocati** mostra solo i giochi con almeno un record. Le soglie vengono dalle partite di prova di un bot per circa un terzo dei giochi e sono stimate sulle regole di punteggio per gli altri (`shared/trofei.js`).
+**Trofei:** ogni gioco ha tre trofei a punteggio: 🥉 **Bronzo** (la soglia in qualsiasi difficoltà), 🥈 **Argento** (a Normale o Difficile) e 🥇 **Oro** (a Difficile); nei giochi a tempo (*Corsa al Tramonto*, *Crystal Wars*) conta finire entro un certo tempo. I trofei si calcolano dai record salvati, quindi quelli già fatti si sbloccano da soli; quando un record nuovo ne conquista uno compare un avviso in alto. Le soglie sono nella schermata iniziale, in pausa e a fine partita di ogni gioco; in Sala Giochi ogni cabinato mostra i suoi trofei, in cima c'è il totale (su 432) con il numero di giochi giocati e il filtro **Già giocati** mostra solo i giochi con almeno un record. Le soglie vengono dalle partite di prova di un bot per circa un terzo dei giochi e sono stimate sulle regole di punteggio per gli altri (`shared/trofei.js`).
 
 **Generi:** ogni gioco appartiene a una o più famiglie di generi (🚀 Sparatutto, 🪜 Piattaforme, 🎯 Azione e riflessi, 🌀 Labirinti, ⚽ Sport, 🧩 Rompicapo, 🏁 Corse e veicoli, 🏰 Strategia e difesa, 🥊 Picchiaduro, 🗝️ Avventura, 🎵 Ritmo e musica): per esempio *Cripta degli Eroi* è avventura, sparatutto e labirinto. Le famiglie sono le etichette colorate di ogni cabinato. Sotto la ricerca una fila di pulsanti, con il numero di giochi di ciascuna famiglia, mostra solo quel genere (toccandolo di nuovo si torna a *Tutti i generi*); anche toccare un'etichetta su un cabinato filtra per quella famiglia. Un gioco con più famiglie compare in ognuna. La scelta resta memorizzata e si combina con la ricerca e con *Già giocati*. Su telefono la fila scorre di lato.
 
@@ -2211,3 +2211,18 @@ Ispirato a *Solomon's Key* (1986): un rompicapo d'azione nelle sale di un castel
 - **Touch:** levetta (su salta, giù accucciati), pulsante grande MAGIA e piccolo FUOCO
 
 Per giocare apri `games/la-chiave-del-mago/index.html` nel browser.
+
+### 🔔 Campanelle Volanti — `games/campanelle-volanti/index.html`
+
+Ispirato a *TwinBee* (1985): uno sparatutto verticale allegro, con una navicella tonda contro fragole, tazze, carote, api e cipolle volanti, sopra un mare pieno di isole.
+
+- **Le campanelle:** spara a una nuvola e ne esce una campanella. Ogni colpo la fa rimbalzare verso l'alto, e ogni quattro colpi cambia colore: gialla, bianca, azzurra, verde, rossa e di nuovo gialla. Quando ha il colore che vuoi, smetti di sparare e prendila. Se cade in fondo è persa
+- **I colori:** gialla dà punti (500, 1.000, 1.500, 2.000, 3.000, poi 5.000 se le prendi gialle di fila); bianca il doppio colpo; azzurra più velocità (fino a 3); verde due navicelle gemelle che sparano con te per 20 secondi; rossa uno scudo che para tre colpi. I poteri sono nel pannello a destra
+- **Le bombe:** BOMBA sgancia una bomba che cade poco più avanti, sul terreno: distrugge i cannoni che ti sparano (200) e le casette (400), che lasciano una mela (500) o una torta (1.000) da prendere
+- **Stage:** un minuto di ondate (la barra "verso il capo"), poi arriva il capo: il Pentolone, la Cipolla Gigante o la Teiera Furiosa, ognuno con tre tipi di raffica. Sconfitto il capo (5.000 × stage) si passa allo stage successivo, più fitto e veloce
+- **Vite:** un colpo toglie una vita, il doppio colpo, lo scudo e i gemelli (resta un livello di velocità) · vita extra a 30.000 e a 100.000
+- **Difficoltà:** Facile (4 vite, nemici più lenti e meno colpi), Normale (3 vite), Difficile (3 vite, nemici svelti, colpi fitti); record separati per ogni difficoltà
+- **Comandi:** frecce o `WASD` · tieni premuto `Spazio` (o `J`) per sparare · `K` o `X` per la bomba · `P` pausa
+- **Touch:** levetta, pulsante grande SPARA (tienilo premuto) e piccolo BOMBA
+
+Per giocare apri `games/campanelle-volanti/index.html` nel browser.
