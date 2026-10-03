@@ -4,7 +4,7 @@ Raccolta di giochi arcade per il browser. Ogni gioco è un singolo file HTML sen
 
 ## 🕹️ Sala Giochi — `index.html`
 
-Apri `index.html` nella cartella principale per la pagina di raccolta: mostra tutti i 145 giochi con copertina, genere, comandi e i tuoi record per ogni difficoltà (Facile, Normale, Difficile). Tocca «Gioca» per avviare un gioco; in ogni gioco il pulsante «← Sala Giochi» in alto a sinistra (visibile nei menu) riporta alla raccolta.
+Apri `index.html` nella cartella principale per la pagina di raccolta: mostra tutti i 146 giochi con copertina, genere, comandi e i tuoi record per ogni difficoltà (Facile, Normale, Difficile). Tocca «Gioca» per avviare un gioco; in ogni gioco il pulsante «← Sala Giochi» in alto a sinistra (visibile nei menu) riporta alla raccolta.
 
 **Iniziali del record:** quando batti un record compare la schermata da sala giochi per inserire le tue tre iniziali (frecce ↑ ↓ per cambiare lettera, ← → per spostarti, oppure scrivile direttamente; su telefono i tasti ▲ ▼ e OK). Le iniziali vengono salvate insieme al record e compaiono nei menu del gioco e nella Sala Giochi. Il codice è condiviso da tutti i giochi in `shared/iniziali.js`.
 
@@ -12,7 +12,7 @@ Apri `index.html` nella cartella principale per la pagina di raccolta: mostra tu
 
 **Comandi touch: levetta o frecce:** in cima alla Sala Giochi e nel menu di pausa di ogni gioco con la levetta si sceglie se usare la levetta analogica o una croce di frecce. Con le frecce il tocco viene agganciato a una delle otto direzioni (le quattro principali hanno la zona più larga, così le diagonali si prendono solo di proposito) e spinto fino in fondo; la scelta vale per tutti i giochi e resta memorizzata. Funziona anche nei giochi con due levette (la sfida a due di *Pugni di Fuoco*, muovi e spara di *Assalto Robotico*).
 
-**Trofei:** ogni gioco ha tre trofei a punteggio: 🥉 **Bronzo** (la soglia in qualsiasi difficoltà), 🥈 **Argento** (a Normale o Difficile) e 🥇 **Oro** (a Difficile); nei giochi a tempo (*Corsa al Tramonto*, *Crystal Wars*) conta finire entro un certo tempo. I trofei si calcolano dai record salvati, quindi quelli già fatti si sbloccano da soli; quando un record nuovo ne conquista uno compare un avviso in alto. Le soglie sono nella schermata iniziale, in pausa e a fine partita di ogni gioco; in Sala Giochi ogni cabinato mostra i suoi trofei, in cima c'è il totale (su 435) con il numero di giochi giocati e il filtro **Già giocati** mostra solo i giochi con almeno un record. Le soglie vengono dalle partite di prova di un bot per circa un terzo dei giochi e sono stimate sulle regole di punteggio per gli altri (`shared/trofei.js`).
+**Trofei:** ogni gioco ha tre trofei a punteggio: 🥉 **Bronzo** (la soglia in qualsiasi difficoltà), 🥈 **Argento** (a Normale o Difficile) e 🥇 **Oro** (a Difficile); nei giochi a tempo (*Corsa al Tramonto*, *Crystal Wars*) conta finire entro un certo tempo. I trofei si calcolano dai record salvati, quindi quelli già fatti si sbloccano da soli; quando un record nuovo ne conquista uno compare un avviso in alto. Le soglie sono nella schermata iniziale, in pausa e a fine partita di ogni gioco; in Sala Giochi ogni cabinato mostra i suoi trofei, in cima c'è il totale (su 438) con il numero di giochi giocati e il filtro **Già giocati** mostra solo i giochi con almeno un record. Le soglie vengono dalle partite di prova di un bot per circa un terzo dei giochi e sono stimate sulle regole di punteggio per gli altri (`shared/trofei.js`).
 
 **Generi:** ogni gioco appartiene a una o più famiglie di generi (🚀 Sparatutto, 🪜 Piattaforme, 🎯 Azione e riflessi, 🌀 Labirinti, ⚽ Sport, 🧩 Rompicapo, 🏁 Corse e veicoli, 🏰 Strategia e difesa, 🥊 Picchiaduro, 🗝️ Avventura, 🎵 Ritmo e musica): per esempio *Cripta degli Eroi* è avventura, sparatutto e labirinto. Le famiglie sono le etichette colorate di ogni cabinato. Sotto la ricerca una fila di pulsanti, con il numero di giochi di ciascuna famiglia, mostra solo quel genere (toccandolo di nuovo si torna a *Tutti i generi*); anche toccare un'etichetta su un cabinato filtra per quella famiglia. Un gioco con più famiglie compare in ognuna. La scelta resta memorizzata e si combina con la ricerca e con *Già giocati*. Su telefono la fila scorre di lato.
 
@@ -2241,3 +2241,18 @@ Ispirato a *Penguin-Kun Wars* (1985): un pinguino e un rivale ai due capi di un 
 - **Touch:** levetta e pulsante LANCIA
 
 Per giocare apri `games/guerra-dei-pinguini/index.html` nel browser.
+
+### 🔧 Tubi e Topi — `games/tubi-e-topi/index.html`
+
+Ispirato a *Frisky Tom* (1981): sei l'idraulico, e l'acqua deve scendere dal serbatoio, lungo un tubo pieno di curve, fino alla vasca dove un ippopotamo aspetta il bagno. Ma il tubo è pieno di topi.
+
+- **Il tubo:** l'idraulico ci cammina sopra e ci si arrampica; la levetta lo porta avanti o indietro lungo il tubo nella direzione che indichi (alle curve cambia direzione con la levetta). L'acqua avanza fino al primo buco, e solo con il tubo intero arriva alla vasca
+- **La chiave inglese:** con un pezzo di ricambio in mano, CHIAVE davanti a un buco (cerchiato in rosso) lo aggiusta. I pezzi si prendono passando sopra una delle tre casse, uno alla volta. Senza pezzo, la chiave colpisce i topi e le bombe vicini
+- **I topi:** escono dai buchi nel muro, corrono lungo il tubo e si fermano a rosicchiarlo ("gnam"): se non li scacci in tempo staccano un pezzo. Se ti corrono addosso ti fanno perdere l'equilibrio per un attimo. Dallo stage 2 arrivano i topi rossi con la bomba: la lasciano sul tubo e, se non la calci via prima che il conto alla rovescia finisca, salta via un pezzo di tubo da tre caselle
+- **La vasca:** si riempie quando l'acqua arriva fin lì e si svuota quando il tubo è rotto (con il tubo intero e l'acqua ancora in viaggio resta ferma). Piena al 100% si passa allo stage successivo, con un tubo nuovo e più topi; se si svuota del tutto perdi una vita
+- **Punti:** acqua nella vasca 10 per ogni punto di livello · topo 100 × stage · bomba calciata 200 × stage · tubo aggiustato 50 · vasca piena 1.000 × stage
+- **Difficoltà:** Facile (4 vite, topi lenti e pochi, la vasca si svuota piano), Normale (3 vite), Difficile (3 vite, topi svelti e tanti, la vasca si svuota in fretta); record separati per ogni difficoltà
+- **Comandi:** frecce o `WASD` per seguire il tubo · `Spazio` (o `J`) per la chiave · `P` pausa
+- **Touch:** levetta e pulsante CHIAVE
+
+Per giocare apri `games/tubi-e-topi/index.html` nel browser.
