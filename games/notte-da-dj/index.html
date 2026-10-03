@@ -1,0 +1,777 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no, viewport-fit=cover">
+<title>Notte da DJ</title>
+<style>
+  :root {
+    --bg: #06081a;
+    --fg: #f4f6ee;
+    --muted: #b8c4e8;
+    --cyan: #3ae8ff;
+    --red: #ff3a5a;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  html, body {
+    height: 100%;
+    background: var(--bg);
+    color: var(--fg);
+    font-family: system-ui, -apple-system, "Segoe UI", sans-serif;
+    overflow: hidden;
+    user-select: none;
+    -webkit-user-select: none;
+    touch-action: none;
+  }
+  #wrap { position: fixed; inset: 0; display: flex; align-items: center; justify-content: center; }
+  canvas { display: block; touch-action: none; border-radius: 6px; box-shadow: 0 0 0 2px #1a2a5a, 0 10px 40px rgba(0,0,0,0.6); }
+  #pauseBtn {
+    position: fixed; z-index: 3; display: none; right: 10px; top: calc(10px + env(safe-area-inset-top, 0px));
+    font: 700 13px system-ui, sans-serif; color: var(--fg);
+    background: rgba(0, 0, 0, 0.6); border: 1px solid rgba(244, 246, 238, 0.35);
+    border-radius: 8px; padding: 6px 10px; cursor: pointer;
+  }
+  #touch {
+    position: fixed; z-index: 2; display: none; left: 12px; right: 12px;
+    bottom: calc(14px + env(safe-area-inset-bottom, 0px));
+    justify-content: space-between; align-items: flex-end; pointer-events: none;
+  }
+  /* the turntable works like a thumb stick: touch it, or flick it up and down, to scratch */
+  #touch .stick { position: relative; width: 136px; height: 136px; border-radius: 50%; pointer-events: auto; touch-action: none;
+    border: 2px solid rgba(255, 58, 90, 0.75);
+    background: repeating-radial-gradient(circle, #15151f 0 3px, #22222e 3px 5px); }
+  #touch .stick .ring { position: absolute; inset: 40px; border-radius: 50%; background: rgba(255, 58, 90, 0.55); pointer-events: none; }
+  #touch .stick .knob { position: absolute; left: 50%; top: 50%; width: 58px; height: 58px; margin: -29px 0 0 -29px; border-radius: 50%;
+    background: rgba(255, 58, 90, 0.35); border: 2px solid rgba(255,255,255,0.7); box-shadow: 0 4px 10px rgba(0,0,0,0.4); pointer-events: none; }
+  #touch .stick.on { border-color: #fff; }
+  #touch.small .stick { width: 112px; height: 112px; }
+  #touch.small .stick .ring { inset: 32px; }
+  #touch.small .stick .knob { width: 48px; height: 48px; margin: -24px 0 0 -24px; }
+  /* five keys like the real controller: three white below, two black above, in between */
+  #touch .pad { position: relative; width: 186px; height: 126px; pointer-events: none; }
+  #touch .pad button { position: absolute; pointer-events: auto; touch-action: none; border-radius: 10px; font: 800 11px system-ui, sans-serif; }
+  #touch .pad .w { width: 58px; height: 64px; bottom: 0; color: #20243a; background: rgba(244, 246, 238, 0.82); border: 2px solid #fff; }
+  #touch .pad .b { width: 52px; height: 56px; top: 0; color: #fff; background: rgba(40, 110, 220, 0.55); border: 2px solid rgba(120, 190, 255, 0.95); }
+  #touch .pad .w.on { background: #fff; box-shadow: 0 0 14px #fff; }
+  #touch .pad .b.on { background: rgba(80, 160, 255, 0.95); box-shadow: 0 0 14px #4aa8ff; }
+  #touch.small .pad { transform: scale(0.84); transform-origin: right bottom; }
+  #overlay {
+    position: fixed; inset: 0; z-index: 5;
+    display: flex; flex-direction: column; align-items: center; justify-content: flex-start;
+    gap: 14px; padding: 16px; text-align: center; overflow-y: auto;
+    background: rgba(6, 8, 26, 0.93);
+  }
+  #overlay > :first-child { margin-top: auto; }
+  #overlay > :last-child { margin-bottom: auto; }
+  #overlay.hidden { display: none; }
+  #homeLink {
+    position: fixed; top: calc(10px + env(safe-area-inset-top, 0px)); left: 10px; z-index: 6;
+    font: 600 13px/1 system-ui, sans-serif; color: #fff; text-decoration: none;
+    padding: 8px 12px; border-radius: 999px; background: rgba(0,0,0,.55);
+    border: 1px solid rgba(255,255,255,.25);
+  }
+  #homeLink:hover { background: rgba(0,0,0,.8); }
+  #overlay.hidden ~ #homeLink { display: none; }
+  @media (max-width: 700px) { #overlay { padding-top: calc(52px + env(safe-area-inset-top, 0px)); } }
+  #overlay h1 { font-size: clamp(32px, 10vw, 58px); font-weight: 900; font-style: italic; letter-spacing: 1px; color: var(--cyan);
+    text-shadow: 3px 3px 0 #a0103a, 0 0 22px rgba(58,232,255,0.45); }
+  #overlay h2 { font-size: clamp(26px, 7vw, 42px); font-weight: 900; letter-spacing: 2px; color: var(--cyan); }
+  #overlay h2.lose { color: var(--red); }
+  #overlay p { max-width: 540px; font-size: clamp(13px, 3.4vw, 16px); line-height: 1.55; }
+  #overlay p.muted { color: var(--muted); }
+  #overlay .pts { display: grid; grid-template-columns: repeat(2, auto); gap: 4px 18px; font-size: 13px; color: var(--muted); text-align: left; max-width: 560px; }
+  #overlay .pts b { color: var(--fg); }
+  #overlay .diff { display: flex; gap: 10px; flex-wrap: wrap; justify-content: center; }
+  #overlay button {
+    font: 800 15px system-ui, sans-serif; letter-spacing: 1.5px; color: var(--fg);
+    background: transparent; cursor: pointer;
+    border: 2px solid rgba(244,246,238,0.3); border-radius: 10px; padding: 9px 16px;
+  }
+  #overlay .diff button.on { border-color: var(--c); color: var(--c); box-shadow: 0 0 12px var(--c); }
+  #overlay button.start { border-color: var(--cyan); color: #04202a; background: var(--cyan); padding: 11px 30px; box-shadow: 0 4px 0 #0a7a9a; }
+  @media (max-height: 560px) {
+    #overlay { gap: 8px; }
+    #overlay h1 { font-size: 30px; }
+    #overlay p { font-size: 13px; line-height: 1.4; }
+    #overlay .help, #overlay .pts { display: none; }
+  }
+</style>
+</head>
+<body>
+<div id="wrap"><canvas id="game"></canvas></div>
+<div id="touch">
+  <div class="stick" aria-label="Giradischi"><div class="ring"></div><div class="knob"></div></div>
+  <div class="pad">
+    <button type="button" class="b" data-k="2" style="left:32px" aria-label="Tasto 2"></button>
+    <button type="button" class="b" data-k="4" style="left:96px" aria-label="Tasto 4"></button>
+    <button type="button" class="w" data-k="1" style="left:0" aria-label="Tasto 1"></button>
+    <button type="button" class="w" data-k="3" style="left:64px" aria-label="Tasto 3"></button>
+    <button type="button" class="w" data-k="5" style="left:128px" aria-label="Tasto 5"></button>
+  </div>
+</div>
+<button id="pauseBtn" type="button" aria-label="Pausa">❚❚</button>
+<div id="overlay"></div>
+<a id="homeLink" href="../../index.html">← Sala Giochi</a>
+
+
+<script>
+(() => {
+  "use strict";
+
+  const W = 640, H = 360, TAU = Math.PI * 2, TOP = 28;
+  // the lanes: the turntable on the left, then the five keys (white, black, white, black, white)
+  const LW = [54, 40, 32, 40, 32, 40], LX = [];
+  { let x = 20; for (let i = 0; i < 6; i++) { LX.push(x); x += LW[i] + (i === 0 ? 6 : 2); } }
+  const LEND = LX[5] + LW[5], JY = 290;
+  const PX = 300, PY = 36, PW = 328, PH = 314;
+  const WIN = [0.042, 0.085, 0.13], JUDGE = [
+    { name: "GREAT", pts: 300, col: "#ffe84a" },
+    { name: "GOOD", pts: 150, col: "#4ae8ff" },
+    { name: "BAD", pts: 40, col: "#ff9a4a" },
+    { name: "POOR", pts: 0, col: "#ff4a6a" },
+  ];
+  const SCALE = [0, 2, 4, 7, 9];
+  // the night's set list, one genre after the other; after the last one it starts again, faster
+  const SONGS = [
+    { name: "Primo Disco", genre: "HOUSE", bpm: 118, root: 57, prog: [0, 5, 7, 5], style: 0, hue: 280 },
+    { name: "Rime di Strada", genre: "HIP HOP", bpm: 94, root: 55, prog: [0, 3, 5, 3], style: 1, hue: 30 },
+    { name: "Fabbrica di Luci", genre: "TECHNO", bpm: 132, root: 52, prog: [0, 0, 3, 5], style: 2, hue: 190 },
+    { name: "Corsa Notturna", genre: "EUROBEAT", bpm: 148, root: 60, prog: [9, 5, 7, 0], style: 3, hue: 330 },
+    { name: "Giungla Elettrica", genre: "JUNGLE", bpm: 164, root: 58, prog: [0, 8, 3, 10], style: 4, hue: 120 },
+    { name: "Alba sulla Pista", genre: "TRANCE", bpm: 140, root: 62, prog: [9, 5, 0, 7], style: 5, hue: 220 },
+  ];
+  const MEASURES = 28;
+
+  const DIFFICULTIES = {
+    facile:    { label: "FACILE",    color: "#7ed87a", desc: "canzoni più lente · meno note · il pubblico perdona di più", tempo: 0.9, dense: 0.7, gain: 1.3, drain: 0.6 },
+    normale:   { label: "NORMALE",   color: "#3ae8ff", desc: "il ritmo giusto", tempo: 1, dense: 1, gain: 1, drain: 1 },
+    difficile: { label: "DIFFICILE", color: "#ff5a5a", desc: "canzoni più veloci · più note, accordi e scratch · il pubblico è esigente", tempo: 1.08, dense: 1.25, gain: 0.9, drain: 1.4 },
+  };
+  const DIFF_IDS = Object.keys(DIFFICULTIES);
+  const DIFF_KEY = "dj-difficulty";
+  const bestKey = (id) => `dj-best-${id}`;
+  function store(k, v) { try { localStorage.setItem(k, v); } catch { /* ignore */ } }
+  function load(k) { try { return localStorage.getItem(k); } catch { return null; } }
+  const impresa = (id) => window.dispatchEvent(new CustomEvent("sala:impresa", { detail: id }));
+  let scratchRun = 0;
+  const rnd = (a, b) => a + Math.random() * (b - a);
+  const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
+
+  // ---------- Canvas ----------
+  const canvas = document.getElementById("game");
+  const ctx = canvas.getContext("2d");
+  const wrapEl = document.getElementById("wrap");
+  const overlay = document.getElementById("overlay");
+  const touchEl = document.getElementById("touch");
+  const pauseBtn = document.getElementById("pauseBtn");
+  let pxRatio = 1, touchMode = !!(window.matchMedia && matchMedia("(pointer: coarse)").matches);
+  function resize() {
+    const portrait = window.innerHeight > window.innerWidth;
+    const showTouch = touchMode && isPlaying();
+    touchEl.style.display = showTouch ? "flex" : "none";
+    touchEl.classList.toggle("small", !portrait && window.innerHeight < 480);
+    wrapEl.style.paddingBottom = showTouch && portrait ? "calc(170px + env(safe-area-inset-bottom, 0px))" : "0";
+    let availW = window.innerWidth - 8, availH = window.innerHeight - 8;
+    if (showTouch && portrait) availH -= 170;
+    if (showTouch && !portrait) {
+      const side = Math.max(...[...touchEl.children].map((el) => el.getBoundingClientRect().width)) + 20;
+      if (window.innerWidth - 2 * side > 200) availW = window.innerWidth - 2 * side;
+    }
+    const s = Math.max(0.2, Math.min(availW / W, availH / H));
+    pxRatio = Math.min(3, s * (window.devicePixelRatio || 1));
+    canvas.style.width = W * s + "px";
+    canvas.style.height = H * s + "px";
+    canvas.width = Math.round(W * pxRatio);
+    canvas.height = Math.round(H * pxRatio);
+  }
+  window.addEventListener("resize", () => syncControls());
+
+  // ---------- Music ----------
+  // drums and bass play by themselves; the melody is in the notes, and you only hear it if you play it
+  let audioCtx = null, master = null, audioStart = 0, scheduled = 0;
+  const hz = (m) => 440 * Math.pow(2, (m - 69) / 12);
+  function tone(when, freq, dur, type, vol, slide = 0) {
+    const o = audioCtx.createOscillator(), g = audioCtx.createGain();
+    o.type = type; o.frequency.setValueAtTime(freq, when);
+    if (slide) o.frequency.exponentialRampToValueAtTime(Math.max(20, freq + slide), when + dur);
+    g.gain.setValueAtTime(vol, when); g.gain.exponentialRampToValueAtTime(0.0001, when + dur);
+    o.connect(g).connect(master); o.start(when); o.stop(when + dur + 0.02);
+  }
+  let noiseBuf = null;
+  function hiss(when, dur, vol, freq, type = "bandpass", sweep = 0) {
+    if (!noiseBuf) { noiseBuf = audioCtx.createBuffer(1, audioCtx.sampleRate, audioCtx.sampleRate); const d = noiseBuf.getChannelData(0); for (let i = 0; i < d.length; i++) d[i] = Math.random() * 2 - 1; }
+    const s = audioCtx.createBufferSource(), f = audioCtx.createBiquadFilter(), g = audioCtx.createGain();
+    s.buffer = noiseBuf; f.type = type; f.frequency.setValueAtTime(freq, when); f.Q.value = sweep ? 4 : 1;
+    if (sweep) f.frequency.exponentialRampToValueAtTime(freq * sweep, when + dur);
+    g.gain.setValueAtTime(vol, when); g.gain.exponentialRampToValueAtTime(0.0001, when + dur);
+    s.connect(f).connect(g).connect(master); s.start(when, Math.random() * 0.5, dur + 0.02);
+  }
+  const kick = (w, v = 0.24) => tone(w, 150, 0.17, "sine", v, -110);
+  const snare = (w, v = 0.16) => { hiss(w, 0.14, v, 1800); tone(w, 210, 0.06, "triangle", v * 0.3); };
+  const hat = (w, v = 0.05, open = false) => hiss(w, open ? 0.11 : 0.035, v, 8500, "highpass");
+  function bass(w, note, dur, v = 0.12, type = "triangle") { tone(w, hz(note), dur, type, v); }
+  // schedules the backing track a little ahead of the song clock
+  function scheduleMusic() {
+    if (!audioCtx || !song || state !== "play") return;
+    const ahead = songT + 0.25, beat = 60 / song.bpm, sd = beat / 4;
+    while (scheduled * sd < ahead && scheduled < song.steps) {
+      const st = scheduled, when = audioStart + st * sd;
+      if (when > audioCtx.currentTime - 0.01) {
+        const s16 = st % 16, bar = Math.floor(st / 16), chord = song.prog[bar % 4], root = song.root + chord - 24;
+        switch (song.style) {
+          case 0: // house: four on the floor, claps, open hats on the off-beat
+            if (s16 % 4 === 0) kick(when);
+            if (s16 === 4 || s16 === 12) snare(when, 0.13);
+            if (s16 % 4 === 2) { hat(when, 0.07, true); bass(when, root + 12, sd * 1.6, 0.12); }
+            break;
+          case 1: { // hip hop: a lazy swung beat
+            const sw = st % 2 === 1 ? sd * 0.25 : 0;
+            if ([0, 7, 10].includes(s16)) { kick(when, 0.26); bass(when, root + (s16 === 7 ? 7 : 0), beat * 0.9, 0.14, "sine"); }
+            if (s16 === 4 || s16 === 12) snare(when, 0.18);
+            if (st % 2 === 0 || Math.random() < 0.3) hat(when + sw, st % 4 === 0 ? 0.06 : 0.035);
+            break;
+          }
+          case 2: // techno: kicks, ticking hats and a rolling bass
+            if (s16 % 4 === 0) kick(when, 0.26);
+            else bass(when, root + (s16 % 4 === 2 ? 12 : 0), sd * 0.8, 0.07, "sawtooth");
+            hat(when, s16 % 4 === 2 ? 0.07 : 0.025, s16 % 4 === 2);
+            if (s16 === 12 && bar % 2) snare(when, 0.08);
+            break;
+          case 3: // eurobeat: snare on two and four, octave bass
+            if (s16 % 4 === 0) kick(when);
+            if (s16 === 4 || s16 === 12) snare(when, 0.15);
+            if (s16 % 2 === 0) bass(when, root + (s16 % 4 === 2 ? 12 : 0), sd * 1.7, 0.11, "square");
+            if (s16 % 4 === 2) hat(when, 0.06, true);
+            break;
+          case 4: // jungle: chopped break and a long sub bass
+            if (s16 === 0 || s16 === 10) kick(when, 0.26);
+            if (s16 === 4 || s16 === 12) snare(when, 0.17);
+            if (s16 === 7 || s16 === 14) snare(when, 0.06);
+            if (s16 % 2 === 0) hat(when, 0.04);
+            if (s16 === 0) bass(when, root, beat * 2.5, 0.16, "sine");
+            break;
+          default: // trance: off-beat bass and a long pad
+            if (s16 % 4 === 0) kick(when);
+            if (s16 % 4 === 2) { bass(when, root + 12, sd * 1.5, 0.11, "sawtooth"); hat(when, 0.06, true); }
+            if (s16 === 0) for (const k of [0, 4, 7]) tone(when, hz(song.root + chord + k - 12 + (k === 4 && [3, 8, 10].includes(chord % 12) ? -1 : 0)), beat * 3.8, "sawtooth", 0.01);
+        }
+        if (song.style !== 5 && s16 === 0 && bar % 2 === 0) for (const k of [0, 7]) tone(when, hz(song.root + chord + k - 12), beat * 7, "sawtooth", 0.006);
+      }
+      scheduled++;
+    }
+  }
+  // the sound of a key: the melody note it is meant to play
+  function keysound(pitch) {
+    if (!audioCtx || pitch == null) return;
+    const w = audioCtx.currentTime;
+    tone(w, hz(pitch), 0.24, "square", 0.045);
+    tone(w, hz(pitch + 12), 0.12, "triangle", 0.03);
+  }
+  function scratchSound() { if (audioCtx) hiss(audioCtx.currentTime, 0.12, 0.2, 700, "bandpass", 4); }
+  const sfx = {
+    clear: () => { if (!audioCtx) return; [523, 659, 784, 1047, 784, 1047, 1319].forEach((f, i) => tone(audioCtx.currentTime + i * 0.08, f, 0.14, "square", 0.04)); },
+    fail: () => { if (!audioCtx) return; hiss(audioCtx.currentTime, 1.4, 0.06, 2600); [523, 466, 415, 392, 330, 262].forEach((f, i) => tone(audioCtx.currentTime + i * 0.15, f, 0.24, "triangle", 0.05)); },
+  };
+
+  // ---------- State ----------
+  let difficulty = DIFFICULTIES[load(DIFF_KEY)] ? load(DIFF_KEY) : "normale";
+  let diff = DIFFICULTIES[difficulty];
+  let state = "menu", menu = null, pausedFrom = null, stateT = 0, clock = 0;
+  let score = 0, stage = 1, bestCache = 0, gauge = 22, combo = 0, maxCombo = 0;
+  let song = null, notes = [], songT = 0, counts = [0, 0, 0, 0], judgeShow = null, message = null, sparks = [], result = null;
+  const keyFlash = [0, 0, 0, 0, 0, 0], held = [false, false, false, false, false, false], lanePitch = [null, 60, 62, 64, 67, 69];
+  let discSpin = 0, scratchAnim = 0, eq = new Array(16).fill(0);
+
+  // ---------- The chart ----------
+  // the notes are the melody: a walk on the pentatonic scale, where higher notes sit on keys further right,
+  // so runs look like staircases; scratches open the phrases, chords and quick notes come later in the night
+  function makeSong(n) {
+    const base = SONGS[(n - 1) % SONGS.length], lap = Math.floor((n - 1) / SONGS.length);
+    const bpm = Math.round(base.bpm * diff.tempo * (1 + 0.12 * lap));
+    const lvl = Math.min(9, n - 1 + lap * 2);
+    const beat = 60 / bpm, sd = beat / 4, measures = Math.round(MEASURES * bpm / 120);
+    const s = { ...base, bpm, lvl, steps: (measures + 1) * 16 + 8 };
+    const f = clamp(120 / bpm, 0.8, 1.3), dense = diff.dense;
+    const pE = Math.min(0.7, (0.14 + 0.07 * lvl) * dense * f);
+    const p16 = lvl >= 3 ? Math.min(0.32, 0.035 * (lvl - 2) * dense * f) * (sd < 0.1 ? 0.3 : 1) : 0;
+    const pChord = lvl >= 1 ? Math.min(0.3, (0.05 + 0.035 * lvl) * dense) : 0;
+    const list = [];
+    let p = 4, lastKey = 0, lastT = -9;
+    const keyOf = (q) => 1 + Math.floor(q / 2);
+    const pitchOf = (q) => s.root + 12 + SCALE[q % 5] + 12 * Math.floor(q / 5);
+    const melody = (t) => {
+      let q;
+      do { q = clamp(p + [-2, -1, -1, 1, 1, 2, 3, -3][Math.floor(Math.random() * 8)], 0, 9); } while (keyOf(q) === lastKey && t - lastT < 0.18);
+      p = q; lastKey = keyOf(q); lastT = t;
+      list.push({ t, lane: lastKey, pitch: pitchOf(q), hit: -1 });
+      return q;
+    };
+    for (let m = 1; m <= measures; m++) {
+      const phraseEnd = m % 4 === 0, t0 = m * 16 * sd;
+      // scratches
+      const scr = [];
+      if (m % 4 === 1 || (lvl >= 2 && m % 2 === 1)) scr.push(0);
+      if (lvl >= 4 && Math.random() < 0.3 * dense) scr.push(8);
+      if (lvl >= 6 && scr[0] === 0 && Math.random() < 0.25 * dense) scr.push(2);
+      for (const st of scr) list.push({ t: t0 + st * sd, lane: 0, pitch: null, hit: -1 });
+      for (let b = 0; b < 4; b++) {
+        if (phraseEnd && b === 3) continue;
+        const tq = t0 + b * 4 * sd;
+        const scratchHere = scr.includes(b * 4);
+        if (!(scratchHere && lvl < 3) && Math.random() < 0.82) {
+          const q = melody(tq);
+          if (Math.random() < pChord && !scratchHere) {
+            const q2 = q >= 5 ? q - 4 - Math.floor(Math.random() * 2) : q + 4 + Math.floor(Math.random() * 2);
+            list.push({ t: tq, lane: keyOf(q2), pitch: pitchOf(q2), hit: -1 });
+          }
+        }
+        if (Math.random() < pE * (phraseEnd ? 0.5 : 1) && !scr.includes(b * 4 + 2)) {
+          if (Math.random() < p16) melody(tq + sd);
+          melody(tq + 2 * sd);
+          if (Math.random() < p16) melody(tq + 3 * sd);
+        }
+      }
+    }
+    list.sort((a, b) => a.t - b.t || a.lane - b.lane);
+    s.len = (measures + 1) * 16 * sd;
+    return { s, list };
+  }
+
+  // ---------- Flow ----------
+  const isPlaying = () => ["intro", "play", "clear", "fail"].includes(state);
+  function startGame() {
+    if (!audioCtx) { try { audioCtx = new (window.AudioContext || window.webkitAudioContext)(); master = audioCtx.createGain(); master.gain.value = 0.9; master.connect(audioCtx.destination); } catch { audioCtx = null; } }
+    if (audioCtx && audioCtx.state === "suspended") audioCtx.resume();
+    score = 0; stage = 1; combo = 0; maxCombo = 0; scratchRun = 0;
+    bestCache = parseInt(load(bestKey(difficulty)), 10) || 0;
+    beginSong();
+    menu = null;
+    overlay.classList.add("hidden");
+    syncControls();
+    last = performance.now();
+  }
+  function beginSong() {
+    const m = makeSong(stage);
+    song = m.s; notes = m.list; songT = -1.2; scheduled = 0; counts = [0, 0, 0, 0]; gauge = 22; result = null;
+    message = { text: `CANZONE ${stage} · ${song.genre}`, sub: `«${song.name}» · ${song.bpm} BPM · ${notes.length} note`, t: 0 };
+    state = "intro"; stateT = 2;
+  }
+  function syncAudio() { if (audioCtx) audioStart = audioCtx.currentTime - songT; }
+  function judge(note, j) {
+    note.hit = j; counts[j]++;
+    if (j <= 1) {
+      combo++; maxCombo = Math.max(maxCombo, combo);
+      gauge = Math.min(100, gauge + (j === 0 ? 1 : 0.5) * 200 * diff.gain / notes.length);
+      for (let k = 0; k < 7; k++) sparks.push({ x: LX[note.lane] + LW[note.lane] / 2, y: JY, vx: rnd(-90, 90), vy: rnd(-160, -30), t: 0, c: JUDGE[j].col });
+    } else { combo = 0; gauge = Math.max(2, gauge - 1.5 * diff.drain); }
+    score += Math.round(JUDGE[j].pts * (1 + Math.min(combo, 100) / 100) * (1 + 0.15 * (stage - 1)));
+    if (note.lane === 0) { if (j <= 1) { if (++scratchRun === 20) impresa("scratch"); } else scratchRun = 0; }
+    judgeShow = { j, t: 0 };
+  }
+  function missNote(note) {
+    note.hit = 3; counts[3]++;
+    if (window.__miss) window.__miss++;
+    combo = 0; judgeShow = { j: 3, t: 0 };
+    if (note.lane === 0) scratchRun = 0;
+    gauge = Math.max(2, gauge - 5 * diff.drain * (window.__god ? 0 : 1));
+  }
+  // a press on a lane: the closest note still to play in that lane, if close enough in time
+  function press(lane, t) {
+    keyFlash[lane] = 0.14;
+    if (lane === 0) { scratchAnim = 0.25; discSpin += 1.6; }
+    eq[Math.floor(Math.random() * 16)] = 1;
+    if (state !== "play") { if (lane === 0) scratchSound(); else keysound(lanePitch[lane]); return; }
+    let best = null;
+    for (const n of notes) {
+      if (n.t > t + WIN[2]) break;
+      if (n.lane !== lane || n.hit >= 0) continue;
+      if (Math.abs(n.t - t) <= WIN[2] && (!best || Math.abs(n.t - t) < Math.abs(best.t - t))) best = n;
+    }
+    if (lane === 0) scratchSound();
+    else {
+      // with nothing to hit, the key plays the next note of its lane (or the last one)
+      if (!best) for (const n of notes) { if (n.lane === lane && n.hit < 0 && n.t > t) { lanePitch[lane] = n.pitch; break; } if (n.t > t + 1) break; }
+      keysound(best ? best.pitch : lanePitch[lane]);
+    }
+    if (!best) return;
+    if (best.pitch != null) lanePitch[lane] = best.pitch;
+    const e = Math.abs(best.t - t);
+    judge(best, e <= WIN[0] ? 0 : e <= WIN[1] ? 1 : 2);
+  }
+  const exScore = () => (2 * counts[0] + counts[1]) / (2 * (notes.length || 1));
+  function grade() {
+    const r = exScore() * 9;
+    return r >= 8 ? "AAA" : r >= 7 ? "AA" : r >= 6 ? "A" : r >= 5 ? "B" : r >= 4 ? "C" : r >= 3 ? "D" : r >= 2 ? "E" : "F";
+  }
+  function endSong() {
+    const g = grade(), full = counts[2] === 0 && counts[3] === 0;
+    if (gauge < 80) {
+      state = "fail"; stateT = 3.4; result = { g, ok: false };
+      message = { text: "IL PUBBLICO FISCHIA!", sub: `groove al ${Math.floor(gauge)}%: ne serviva almeno 80 · voto ${g}`, t: 0, long: true };
+      sfx.fail();
+      return;
+    }
+    const bonus = 1000 * stage + ({ AAA: 3000, AA: 2000, A: 1200, B: 600, C: 300 }[g] || 0) * stage + (full ? 2000 * stage : 0);
+    score += bonus;
+    result = { g, ok: true, full };
+    message = { text: `${full ? "COMBO PIENA! " : ""}CANZONE SUPERATA`, sub: `great ${counts[0]} · good ${counts[1]} · bad ${counts[2]} · poor ${counts[3]} · bonus ${bonus.toLocaleString("it-IT")}`, t: 0, long: true };
+    if (full) impresa("combo");
+    if (g === "AAA") impresa("aaa");
+    sfx.clear(); state = "clear"; stateT = 3.4;
+  }
+  function gameOver() {
+    state = "over";
+    const prev = parseInt(load(bestKey(difficulty)), 10) || 0;
+    const record = score > prev;
+    if (record) store(bestKey(difficulty), String(score));
+    menu = () => showOverlay(
+      `<h2 class="lose">SERATA FINITA</h2>
+       <p>Punteggio: <b>${score.toLocaleString("it-IT")}</b> · ${stage > 1 ? `${stage - 1} ${stage - 1 === 1 ? "canzone superata" : "canzoni superate"}` : "nessuna canzone superata"} · combo massima ${maxCombo} · ${diff.label}</p>
+       ${record ? "<p style='color:var(--cyan)'>★ NUOVO RECORD! ★</p>" : ""}
+       ${difficultyHTML()}
+       <button class="start" data-start>UN ALTRO SET</button>`
+    );
+    menu();
+    syncControls();
+  }
+  function togglePause() {
+    if (isPlaying()) {
+      pausedFrom = state; state = "paused";
+      if (audioCtx) audioCtx.suspend();
+      showOverlay(`<h2>PAUSA</h2><button class="start" data-resume>CONTINUA</button><p class="muted">Premi P per continuare · la canzone riparte da un attimo prima</p>`);
+    } else if (state === "paused") {
+      state = pausedFrom; overlay.classList.add("hidden"); last = performance.now();
+      // back a little, so the music doesn't restart in the middle of a phrase
+      if (state === "play") { songT -= 1.5; scheduled = Math.max(0, Math.floor(songT / (60 / song.bpm / 4))); }
+      if (audioCtx) audioCtx.resume().then(syncAudio);
+      syncAudio();
+    }
+    syncControls();
+  }
+  // the pause menu can end the game (shared/iniziali.js): it ends here the usual way, saving the record
+  window.addEventListener("sala:termina", () => { if (state !== "paused") return; state = pausedFrom; overlay.classList.add("hidden"); if (audioCtx) audioCtx.resume(); gameOver(); syncControls(); });
+  function syncControls() {
+    pauseBtn.style.display = isPlaying() && touchMode ? "block" : "none";
+    resize();
+  }
+  pauseBtn.addEventListener("click", () => togglePause());
+  function showOverlay(html) { overlay.innerHTML = html; overlay.classList.remove("hidden"); }
+  function difficultyHTML() {
+    const buttons = DIFF_IDS.map((id) => {
+      const d = DIFFICULTIES[id];
+      return `<button type="button" data-diff="${id}" class="${id === difficulty ? "on" : ""}" style="--c:${d.color}">${d.label}</button>`;
+    }).join("");
+    const best = parseInt(load(bestKey(difficulty)), 10);
+    return `<div class="diff">${buttons}</div><p class="muted">${diff.desc}${best ? ` · Record: ${best.toLocaleString("it-IT")}` : ""}</p>`;
+  }
+  function setDifficulty(id) { if (!DIFFICULTIES[id]) return; difficulty = id; diff = DIFFICULTIES[id]; store(DIFF_KEY, id); if (menu) menu(); }
+  function showTitle() {
+    menu = showTitle;
+    showOverlay(
+      `<h1>NOTTE DA DJ</h1>
+       <p>Stanotte la consolle è tua. Le note scendono nelle sei corsie: suona il tasto giusto quando ogni nota tocca la linea rossa, e la melodia la suoni tu: se manchi una nota, nella canzone resta un buco. Le note rosse si suonano girando il disco. Ogni nota presa riempie la barra del groove: a fine canzone deve arrivare almeno all'80%, se no il pubblico fischia e la serata finisce.</p>
+       <div class="pts">
+         <span><b>Precisione</b></span><span>GREAT 300 · GOOD 150 · BAD 40 · ogni nota di fila aggiunge l'1% (fino al doppio)</span>
+         <span><b>Note</b></span><span>bianche e blu sui cinque tasti · rosse sul disco · due note insieme: premile insieme</span>
+         <span><b>Canzone</b></span><span>bonus 1.000 e un voto da F ad AAA · combo piena 2.000 · house, hip hop, techno, eurobeat, jungle e trance</span>
+       </div>
+       ${touchMode
+         ? `<p class="muted help">Disco a sinistra: toccalo o spingilo su e giù per lo scratch · i cinque tasti a destra, come sulla consolle vera</p>`
+         : `<p class="muted help">Tasti Z S X D C (bianco, nero, bianco, nero, bianco) · disco: Spazio o Maiusc · P pausa · alza il volume!</p>`}
+       ${difficultyHTML()}
+       <button class="start" data-start>ACCENDI LA CONSOLLE</button>`
+    );
+  }
+  overlay.addEventListener("click", (e) => {
+    const d = e.target.closest("[data-diff]");
+    if (d) { setDifficulty(d.dataset.diff); return; }
+    if (e.target.closest("[data-start]")) startGame();
+    if (e.target.closest("[data-resume]")) togglePause();
+  });
+
+  // ---------- Input ----------
+  // the moment of a press, on the song clock, between two updates
+  let lastStepWall = performance.now();
+  const nowT = () => songT + Math.min(0.05, (performance.now() - lastStepWall) / 1000);
+  const KEYMAP = { " ": 0, shift: 0, z: 1, s: 2, x: 3, d: 4, c: 5 };
+  window.addEventListener("keydown", (e) => {
+    const k = e.key.toLowerCase();
+    if ([" ", "arrowup", "arrowdown", "arrowleft", "arrowright"].includes(k)) e.preventDefault();
+    if (state === "menu" || state === "over") {
+      if (e.key === "Enter") startGame();
+      else if (["1", "2", "3"].includes(k)) setDifficulty(DIFF_IDS[+k - 1]);
+      return;
+    }
+    if (k === "p" || k === "escape") { if (!e.repeat) togglePause(); return; }
+    if (state === "paused") { if (e.key === "Enter") togglePause(); return; }
+    if (e.repeat) return;
+    const lane = KEYMAP[k];
+    if (lane !== undefined) { held[lane] = true; press(lane, nowT()); }
+  });
+  window.addEventListener("keyup", (e) => { const lane = KEYMAP[e.key.toLowerCase()]; if (lane !== undefined) held[lane] = false; });
+  window.addEventListener("blur", () => { held.fill(false); if (isPlaying()) togglePause(); });
+  // the five keys of the touch pad
+  for (const b of touchEl.querySelectorAll(".pad button")) {
+    const lane = +b.dataset.k;
+    b.addEventListener("pointerdown", (e) => { e.preventDefault(); try { b.setPointerCapture(e.pointerId); } catch { /* ignore */ } held[lane] = true; b.classList.add("on"); press(lane, nowT()); });
+    for (const ev of ["pointerup", "pointercancel", "lostpointercapture"]) b.addEventListener(ev, () => { held[lane] = false; b.classList.remove("on"); });
+  }
+  // the turntable: a touch scratches, and so does every flick of the stick up or down
+  const stickEl = touchEl.querySelector(".stick"), knob = stickEl.querySelector(".knob");
+  let stickId = null, flickDir = 0;
+  function stickAt(e) {
+    const r = stickEl.getBoundingClientRect(), max = r.width / 2 - 14;
+    let dx = e.clientX - (r.left + r.width / 2), dy = e.clientY - (r.top + r.height / 2);
+    const len = Math.hypot(dx, dy);
+    if (len > max) { dx *= max / len; dy *= max / len; }
+    knob.style.transform = `translate(${dx}px, ${dy}px)`;
+    const v = dy / max;
+    if (Math.abs(v) > 0.5 && Math.sign(v) !== flickDir) { flickDir = Math.sign(v); press(0, nowT()); }
+    else if (Math.abs(v) < 0.2) flickDir = 0;
+  }
+  const stickEnd = (e) => { if (e.pointerId !== stickId) return; stickId = null; knob.style.transform = ""; held[0] = false; stickEl.classList.remove("on"); };
+  stickEl.addEventListener("pointerdown", (e) => {
+    e.preventDefault(); stickId = e.pointerId; try { stickEl.setPointerCapture(e.pointerId); } catch { /* ignore */ }
+    held[0] = true; stickEl.classList.add("on"); flickDir = 0;
+    press(0, nowT());
+    // the touch itself was the scratch: a flick has to go past the middle before it counts again
+    const r = stickEl.getBoundingClientRect(), v = (e.clientY - (r.top + r.height / 2)) / (r.width / 2 - 14);
+    if (Math.abs(v) > 0.5) flickDir = Math.sign(v);
+    stickAt(e);
+  });
+  stickEl.addEventListener("pointermove", (e) => { if (e.pointerId === stickId) stickAt(e); });
+  for (const ev of ["pointerup", "pointercancel", "lostpointercapture"]) stickEl.addEventListener(ev, stickEnd);
+  window.addEventListener("pointerdown", (e) => { if (e.pointerType === "touch" && !touchMode) { touchMode = true; syncControls(); if (menu) menu(); } }, true);
+
+  // ---------- Update ----------
+  function update(dt) {
+    clock += dt;
+    lastStepWall = performance.now();
+    if (window.__bot) window.__bot(dt);
+    for (let i = 0; i < 6; i++) if (keyFlash[i] > 0) keyFlash[i] -= dt;
+    for (let i = 0; i < 16; i++) eq[i] = Math.max(0, eq[i] - dt * 2.5);
+    if (scratchAnim > 0) scratchAnim -= dt;
+    discSpin += dt * (song ? song.bpm / 60 : 2) * 1.2;
+    for (const s of sparks) { s.t += dt; s.x += s.vx * dt; s.y += s.vy * dt; s.vy += 300 * dt; }
+    sparks = sparks.filter((s) => s.t < 0.5);
+    if (judgeShow) { judgeShow.t += dt; if (judgeShow.t > 0.7) judgeShow = null; }
+    if (message) { message.t += dt; if (message.t > (message.long ? 3 : 2)) message = null; }
+    if (state === "intro") { stateT -= dt; if (stateT <= 0) { state = "play"; syncAudio(); } return; }
+    if (state === "clear" || state === "fail") {
+      stateT -= dt;
+      if (stateT <= 0) { if (state === "clear") { stage++; beginSong(); } else gameOver(); }
+      return;
+    }
+    if (state !== "play") return;
+    songT += dt;
+    // keep the song clock on the audio clock
+    if (audioCtx && audioCtx.state === "running" && !window.__fast) { const a = audioCtx.currentTime - audioStart, d = a - songT; if (Math.abs(d) > 0.25) syncAudio(); else songT += d * 0.05; }
+    scheduleMusic();
+    for (const n of notes) { if (n.t > songT) break; if (n.hit < 0 && songT - n.t > WIN[2]) missNote(n); }
+    if (songT > song.len + 0.3) endSong();
+  }
+
+  // ---------- Drawing ----------
+  const beatPhase = () => (song && state === "play" ? (songT * song.bpm / 60) % 1 : (clock * 2) % 1);
+  function rrect(x, y, w, h, r) { ctx.beginPath(); ctx.roundRect ? ctx.roundRect(x, y, w, h, r) : ctx.rect(x, y, w, h); }
+  function drawLanes() {
+    ctx.fillStyle = "#06081a"; ctx.fillRect(0, TOP, W, H - TOP);
+    ctx.fillStyle = "#0c0f26"; ctx.fillRect(LX[0] - 6, TOP, LEND - LX[0] + 12, H - TOP);
+    for (let i = 0; i < 6; i++) {
+      const black = i === 2 || i === 4;
+      ctx.fillStyle = i === 0 ? "#160a18" : black ? "#0a1430" : "#12142a";
+      ctx.fillRect(LX[i], TOP, LW[i], JY - TOP);
+      if (held[i] || keyFlash[i] > 0) {
+        const g = ctx.createLinearGradient(0, JY, 0, JY - 160);
+        const c = i === 0 ? "255,58,90" : black ? "74,168,255" : "244,246,238";
+        g.addColorStop(0, `rgba(${c},0.35)`); g.addColorStop(1, `rgba(${c},0)`);
+        ctx.fillStyle = g; ctx.fillRect(LX[i], JY - 160, LW[i], 160);
+      }
+    }
+    // measure lines
+    if (song) {
+      const beat = 60 / song.bpm, sp = speed();
+      for (let m = Math.max(0, Math.floor(songT / (beat * 4))); ; m++) {
+        const y = JY - (m * beat * 4 - songT) * sp;
+        if (y < TOP) break;
+        ctx.fillStyle = "rgba(255,255,255,0.12)"; ctx.fillRect(LX[0], y, LEND - LX[0], 1);
+      }
+    }
+    // the judgement line
+    const pulse = Math.max(0, 1 - beatPhase() * 3);
+    ctx.fillStyle = `rgba(255,58,90,${0.25 + pulse * 0.2})`; ctx.fillRect(LX[0] - 6, JY - 5, LEND - LX[0] + 12, 10);
+    ctx.fillStyle = "#ff3a5a"; ctx.fillRect(LX[0] - 6, JY - 2, LEND - LX[0] + 12, 4);
+    // the controller under the lanes: the turntable and the keys
+    ctx.fillStyle = "#14172e"; ctx.fillRect(LX[0] - 6, JY + 6, LEND - LX[0] + 12, 40);
+    const cx = LX[0] + LW[0] / 2, cy = JY + 26;
+    ctx.fillStyle = "#1a1a22"; ctx.beginPath(); ctx.arc(cx, cy, 18, 0, TAU); ctx.fill();
+    ctx.strokeStyle = "rgba(255,255,255,0.08)"; ctx.lineWidth = 1;
+    for (const r of [9, 12, 15]) { ctx.beginPath(); ctx.arc(cx, cy, r, 0, TAU); ctx.stroke(); }
+    ctx.fillStyle = keyFlash[0] > 0 || held[0] ? "#ff7a8a" : "#ff3a5a"; ctx.beginPath(); ctx.arc(cx, cy, 6, 0, TAU); ctx.fill();
+    ctx.strokeStyle = "#ffffff"; ctx.lineWidth = 2; ctx.beginPath(); ctx.moveTo(cx, cy); ctx.lineTo(cx + Math.cos(discSpin) * 16, cy + Math.sin(discSpin) * 16); ctx.stroke();
+    for (let i = 1; i < 6; i++) {
+      const black = i === 2 || i === 4, on = held[i] || keyFlash[i] > 0;
+      ctx.fillStyle = black ? (on ? "#6ab8ff" : "#1a3a7a") : (on ? "#ffffff" : "#b8bccc");
+      rrect(LX[i] + 3, JY + (black ? 10 : 14), LW[i] - 6, black ? 24 : 28, 3); ctx.fill();
+    }
+    // the groove gauge: it must reach the red part (80%) by the end of the song
+    const gy = JY + 52, segs = 50, sw = (LEND - LX[0]) / segs, lit = Math.floor(gauge / 2);
+    for (let i = 0; i < segs; i++) {
+      const hi = i >= 40;
+      ctx.fillStyle = i < lit ? (hi ? (Math.floor(clock * 10 + i) % 3 ? "#ff3a5a" : "#ffb0b8") : "#3ae8ff") : (hi ? "rgba(255,58,90,0.18)" : "rgba(58,232,255,0.12)");
+      ctx.fillRect(LX[0] + i * sw, gy, sw - 1, 9);
+    }
+    ctx.fillStyle = gauge >= 80 ? "#ff8a9a" : "#ffffff"; ctx.font = "900 10px system-ui"; ctx.textAlign = "right"; ctx.textBaseline = "middle";
+    ctx.fillText(`${Math.floor(gauge)}%`, PX - 3, gy + 5);
+    ctx.textBaseline = "alphabetic";
+  }
+  const speed = () => 240 * Math.sqrt((song ? song.bpm : 120) / 125);
+  function drawNotes() {
+    if (!song) return;
+    const sp = speed();
+    for (const n of notes) {
+      if (n.hit >= 0 && n.hit < 3) continue;
+      const y = JY - (n.t - songT) * sp;
+      if (y < TOP - 10) break;
+      if (y > H) continue;
+      const black = n.lane === 2 || n.lane === 4;
+      ctx.globalAlpha = n.hit === 3 ? 0.3 : 1;
+      ctx.fillStyle = n.lane === 0 ? "#ff3a5a" : black ? "#4aa8ff" : "#f4f6ee";
+      ctx.fillRect(LX[n.lane] + 1, y - 4, LW[n.lane] - 2, 8);
+      ctx.fillStyle = "rgba(255,255,255,0.5)"; ctx.fillRect(LX[n.lane] + 1, y - 4, LW[n.lane] - 2, 2);
+      ctx.globalAlpha = 1;
+    }
+  }
+  // the screen on the right: the club, the crowd and the DJ at the console
+  function drawClub() {
+    const hue = song ? song.hue : 280, b = beatPhase(), pulse = Math.max(0, 1 - b * 3);
+    ctx.save(); rrect(PX, PY, PW, PH, 8); ctx.clip();
+    const g = ctx.createLinearGradient(0, PY, 0, PY + PH);
+    g.addColorStop(0, `hsl(${hue},60%,8%)`); g.addColorStop(1, `hsl(${hue},55%,${18 + pulse * 6}%)`);
+    ctx.fillStyle = g; ctx.fillRect(PX, PY, PW, PH);
+    // city through the windows
+    for (let i = 0; i < 14; i++) {
+      const bw = 18 + (i * 37) % 17, bh = 50 + (i * 53) % 70, bx = PX + i * 24 - 6;
+      ctx.fillStyle = `hsl(${hue},30%,6%)`; ctx.fillRect(bx, PY + 150 - bh, bw, bh);
+      ctx.fillStyle = `hsla(${(hue + 40) % 360},90%,70%,0.5)`;
+      for (let wy = PY + 158 - bh; wy < PY + 144; wy += 9) for (let wx = bx + 3; wx < bx + bw - 3; wx += 6) if (((wx * 7 + wy * 13) >> 2) % 3 === 0) ctx.fillRect(wx, wy, 2, 3);
+    }
+    // lasers from the booth
+    const by = PY + PH - 92, bx0 = PX + PW / 2;
+    ctx.globalCompositeOperation = "lighter";
+    for (let i = 0; i < 6; i++) {
+      const a = -Math.PI / 2 + Math.sin(clock * (0.7 + i * 0.13) + i * 1.7) * 1.1;
+      ctx.strokeStyle = `hsla(${(hue + i * 50 + clock * 40) % 360},100%,60%,${0.25 + pulse * 0.35})`; ctx.lineWidth = 2;
+      ctx.beginPath(); ctx.moveTo(bx0 + (i - 2.5) * 30, by); ctx.lineTo(bx0 + (i - 2.5) * 30 + Math.cos(a) * 400, by + Math.sin(a) * 400); ctx.stroke();
+    }
+    ctx.globalCompositeOperation = "source-over";
+    // the equaliser on the wall
+    for (let i = 0; i < 16; i++) {
+      const h = 6 + (eq[i] * 40) + pulse * 10 * ((i * 7) % 3 === 0 ? 1 : 0.4);
+      for (let y = 0; y < h; y += 4) { ctx.fillStyle = y > 34 ? "#ff3a5a" : y > 22 ? "#ffd23a" : "#3ae8ff"; ctx.fillRect(PX + 84 + i * 10, PY + 186 - y, 8, 3); }
+    }
+    // the DJ behind the console
+    const dj = PX + PW / 2, bob = Math.abs(Math.sin((song && state === "play" ? songT : clock) * Math.PI * (song ? song.bpm : 120) / 60)) * 4;
+    ctx.fillStyle = "#2a2a3a"; ctx.beginPath(); ctx.ellipse(dj, by - 18 + bob * 0.5, 22, 28, 0, 0, TAU); ctx.fill();
+    ctx.fillStyle = "#ffd8b0"; ctx.beginPath(); ctx.arc(dj, by - 56 + bob, 13, 0, TAU); ctx.fill();
+    ctx.fillStyle = "#1a1a1a"; ctx.beginPath(); ctx.arc(dj, by - 60 + bob, 13, Math.PI, TAU); ctx.fill();
+    ctx.fillStyle = "#111"; ctx.fillRect(dj - 9, by - 58 + bob, 18, 4);
+    ctx.strokeStyle = "#ff3a5a"; ctx.lineWidth = 4; ctx.beginPath(); ctx.arc(dj, by - 58 + bob, 16, Math.PI * 1.05, Math.PI * 1.95); ctx.stroke();
+    ctx.fillStyle = "#ff3a5a"; ctx.fillRect(dj - 19, by - 60 + bob, 6, 11); ctx.fillRect(dj + 13, by - 60 + bob, 6, 11);
+    // arms: the left one scratches, the right one plays the keys
+    const sa = scratchAnim > 0 ? Math.sin(scratchAnim * 60) * 8 : 0;
+    ctx.strokeStyle = "#ffd8b0"; ctx.lineWidth = 6; ctx.lineCap = "round";
+    ctx.beginPath(); ctx.moveTo(dj - 16, by - 32 + bob); ctx.lineTo(dj - 44 + sa, by - 4); ctx.stroke();
+    const kp = Math.max(...keyFlash.slice(1)) > 0 ? 4 : 0;
+    ctx.beginPath(); ctx.moveTo(dj + 16, by - 32 + bob); ctx.lineTo(dj + 42, by - 6 + kp); ctx.stroke();
+    // the console
+    ctx.fillStyle = "#101020"; ctx.beginPath(); ctx.moveTo(dj - 110, by); ctx.lineTo(dj + 110, by); ctx.lineTo(dj + 124, by + 44); ctx.lineTo(dj - 124, by + 44); ctx.fill();
+    ctx.fillStyle = `hsla(${hue},90%,60%,${0.4 + pulse * 0.6})`; ctx.fillRect(dj - 118, by + 20, 236, 3);
+    for (const sx of [-60, 60]) {
+      ctx.fillStyle = "#2a2a36"; ctx.beginPath(); ctx.ellipse(dj + sx, by + 2, 26, 7, 0, 0, TAU); ctx.fill();
+      ctx.fillStyle = "#0a0a0e"; ctx.beginPath(); ctx.ellipse(dj + sx, by + 1, 21, 5.5, 0, 0, TAU); ctx.fill();
+      ctx.fillStyle = "#ff3a5a"; ctx.beginPath(); ctx.ellipse(dj + sx, by + 1, 6, 1.6, 0, 0, TAU); ctx.fill();
+    }
+    // the crowd: the higher the groove, the more hands in the air
+    for (let i = 0; i < 13; i++) {
+      const x = PX + 10 + i * 25 + (i % 2) * 6, hype = gauge / 100, ph = ((i * 0.37) % 1);
+      const jump = Math.max(0, Math.sin((b + ph) * TAU)) * (2 + hype * 9);
+      const y = PY + PH - 6 - jump, up = (i * 7) % 10 < hype * 11;
+      ctx.fillStyle = `hsl(${(hue + 200 + i * 23) % 360},35%,${12 + (i % 3) * 3}%)`;
+      ctx.beginPath(); ctx.ellipse(x, y + 6, 12, 18, 0, 0, TAU); ctx.fill();
+      ctx.beginPath(); ctx.arc(x, y - 16, 8, 0, TAU); ctx.fill();
+      if (up) { ctx.strokeStyle = ctx.fillStyle; ctx.lineWidth = 4; ctx.beginPath(); ctx.moveTo(x - 7, y - 6); ctx.lineTo(x - 13, y - 34 - jump * 0.5); ctx.moveTo(x + 7, y - 6); ctx.lineTo(x + 12, y - 32 - jump * 0.5); ctx.stroke(); }
+    }
+    // what's playing
+    if (song) {
+      ctx.textAlign = "left"; ctx.fillStyle = `hsl(${hue},100%,72%)`; ctx.font = "italic 900 22px system-ui"; ctx.fillText(song.genre, PX + 12, PY + 26);
+      ctx.fillStyle = "#ffffff"; ctx.font = "800 11px system-ui"; ctx.fillText(`«${song.name}» · ${song.bpm} BPM`, PX + 12, PY + 42);
+    }
+    ctx.restore();
+    ctx.strokeStyle = "rgba(255,255,255,0.18)"; ctx.lineWidth = 2; rrect(PX, PY, PW, PH, 8); ctx.stroke();
+  }
+  function outlined(text, x, y, font, fill, lw = 5) {
+    ctx.font = font; ctx.lineWidth = lw; ctx.strokeStyle = "#06081a"; ctx.strokeText(text, x, y); ctx.fillStyle = fill; ctx.fillText(text, x, y);
+  }
+  function drawHud() {
+    ctx.fillStyle = "rgba(6,8,26,0.96)"; ctx.fillRect(0, 0, W, TOP);
+    ctx.textBaseline = "middle"; ctx.textAlign = "left";
+    const x0 = touchMode ? 130 : 10;
+    ctx.fillStyle = "#ffffff"; ctx.font = "900 15px system-ui"; ctx.fillText(score.toLocaleString("it-IT"), x0, 14);
+    ctx.fillStyle = "#b8c4e8"; ctx.font = "700 9px system-ui"; ctx.fillText(`REC ${Math.max(bestCache, score).toLocaleString("it-IT")}`, x0 + 96, 9);
+    ctx.fillStyle = "#3ae8ff"; ctx.font = "900 10px system-ui"; ctx.fillText(song ? `CANZONE ${stage} · ${diff.label}` : "", x0 + 96, 21);
+    if (song && state === "play") { ctx.fillStyle = "rgba(255,255,255,0.5)"; ctx.fillRect(PX, TOP - 3, PW * clamp(songT / song.len, 0, 1), 3); }
+    ctx.textBaseline = "alphabetic";
+    const mid = (LX[0] + LEND) / 2;
+    if (judgeShow) {
+      const J = JUDGE[judgeShow.j], blink = judgeShow.j === 0 ? `hsl(${(clock * 900) % 360},100%,70%)` : J.col;
+      const txt = J.name + (judgeShow.j <= 1 && combo > 1 ? ` ${combo}` : "");
+      ctx.globalAlpha = Math.min(1, (0.7 - judgeShow.t) * 4);
+      ctx.textAlign = "center"; outlined(txt, mid, 210, "italic 900 22px system-ui", blink);
+      ctx.globalAlpha = 1;
+    }
+  }
+  function draw() {
+    ctx.setTransform(pxRatio, 0, 0, pxRatio, 0, 0);
+    if (!song && state === "menu") { const m = makeSong(1); song = m.s; notes = m.list; songT = 3; }
+    drawLanes();
+    drawNotes();
+    drawClub();
+    for (const s of sparks) { ctx.globalAlpha = Math.max(0, 1 - s.t / 0.5); ctx.fillStyle = s.c; ctx.fillRect(s.x - 2, s.y - 2, 4, 4); }
+    ctx.globalAlpha = 1;
+    if (state === "menu") return;
+    drawHud();
+    const cx = PX + PW / 2;
+    ctx.textAlign = "center";
+    if (state === "intro" && stateT < 1.2) outlined(stateT > 0.6 ? "PRONTI?" : "VIA!", cx, 150, "italic 900 34px system-ui", "#ffffff", 6);
+    if (result && (state === "clear" || state === "fail")) outlined(result.g, cx, 186, "italic 900 64px system-ui", result.ok ? "#ffe84a" : "#ff4a6a", 8);
+    if (message) {
+      const lifeT = message.long ? 3 : 2;
+      ctx.globalAlpha = Math.min(1, (lifeT - message.t) * 2);
+      outlined(message.text, cx, 106, "italic 900 20px system-ui", state === "fail" ? "#ff4a6a" : "#3ae8ff");
+      if (message.sub) outlined(message.sub, cx, 124, "800 10px system-ui", "#ffffff", 4);
+      ctx.globalAlpha = 1;
+    }
+  }
+
+  // ---------- Loop ----------
+  const STEP = 1 / 120;
+  let last = performance.now(), acc = 0;
+  function frame(now) {
+    const dt = Math.min(0.1, (now - last) / 1000);
+    last = now;
+    if (isPlaying()) {
+      acc += dt;
+      while (acc >= STEP && isPlaying()) { update(STEP); acc -= STEP; }
+    } else { acc = 0; update(dt); }
+    draw();
+    requestAnimationFrame(frame);
+  }
+  syncControls();
+  showTitle();
+  requestAnimationFrame(frame);
+})();
+</script>
+<script src="../../shared/iniziali.js" data-record="dj-best-" data-kind="score"></script>
+</body>
+</html>

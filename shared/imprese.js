@@ -9,6 +9,11 @@
   "use strict";
   // record key prefix of the game (as in trofei.js) → its feats
   const LIST = {
+    "dj-best-": [   // notte-da-dj
+      { id: "combo", name: "Combo piena", desc: "finisci una canzone senza nessun BAD e nessun POOR" },
+      { id: "scratch", name: "Re dello scratch", desc: "prendi 20 scratch di fila senza sbagliarne uno" },
+      { id: "aaa", name: "Tripla A", desc: "supera una canzone con il voto AAA" },
+    ],
     "soccorso-best-": [   // soccorso-lunare
       { id: "piazzola", name: "Atterraggio di precisione", desc: "posati sulla piazzola più piccola, quella da 150" },
       { id: "ondata", name: "Ondata perfetta", desc: "salva tutti e sei gli astronauti di un'ondata senza perdere moduli" },

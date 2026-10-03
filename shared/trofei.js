@@ -9,6 +9,7 @@
   "use strict";
   // record key prefix → [bronzo, argento, oro] (and t for times)
   const DATA = {
+    "dj-best-": [44000, 132000, 92000],   // notte-da-dj (bot)
     "soccorso-best-": [5000, 15000, 10500],   // soccorso-lunare (bot)
     "pallino-best-": [7200, 21600, 15100],   // il-viaggio-di-pallino (bot)
     "tubi-best-": [12500, 38000, 26600],   // tubi-e-topi (bot)
