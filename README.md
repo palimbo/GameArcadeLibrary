@@ -4,7 +4,7 @@ Raccolta di giochi arcade per il browser. Ogni gioco è un singolo file HTML sen
 
 ## 🕹️ Sala Giochi — `index.html`
 
-Apri `index.html` nella cartella principale per la pagina di raccolta: mostra tutti i 138 giochi con copertina, genere, comandi e i tuoi record per ogni difficoltà (Facile, Normale, Difficile). Tocca «Gioca» per avviare un gioco; in ogni gioco il pulsante «← Sala Giochi» in alto a sinistra (visibile nei menu) riporta alla raccolta.
+Apri `index.html` nella cartella principale per la pagina di raccolta: mostra tutti i 139 giochi con copertina, genere, comandi e i tuoi record per ogni difficoltà (Facile, Normale, Difficile). Tocca «Gioca» per avviare un gioco; in ogni gioco il pulsante «← Sala Giochi» in alto a sinistra (visibile nei menu) riporta alla raccolta.
 
 **Iniziali del record:** quando batti un record compare la schermata da sala giochi per inserire le tue tre iniziali (frecce ↑ ↓ per cambiare lettera, ← → per spostarti, oppure scrivile direttamente; su telefono i tasti ▲ ▼ e OK). Le iniziali vengono salvate insieme al record e compaiono nei menu del gioco e nella Sala Giochi. Il codice è condiviso da tutti i giochi in `shared/iniziali.js`.
 
@@ -12,7 +12,7 @@ Apri `index.html` nella cartella principale per la pagina di raccolta: mostra tu
 
 **Comandi touch: levetta o frecce:** in cima alla Sala Giochi e nel menu di pausa di ogni gioco con la levetta si sceglie se usare la levetta analogica o una croce di frecce. Con le frecce il tocco viene agganciato a una delle otto direzioni (le quattro principali hanno la zona più larga, così le diagonali si prendono solo di proposito) e spinto fino in fondo; la scelta vale per tutti i giochi e resta memorizzata. Funziona anche nei giochi con due levette (la sfida a due di *Pugni di Fuoco*, muovi e spara di *Assalto Robotico*).
 
-**Trofei:** ogni gioco ha tre trofei a punteggio: 🥉 **Bronzo** (la soglia in qualsiasi difficoltà), 🥈 **Argento** (a Normale o Difficile) e 🥇 **Oro** (a Difficile); nei giochi a tempo (*Corsa al Tramonto*, *Crystal Wars*) conta finire entro un certo tempo. I trofei si calcolano dai record salvati, quindi quelli già fatti si sbloccano da soli; quando un record nuovo ne conquista uno compare un avviso in alto. Le soglie sono nella schermata iniziale, in pausa e a fine partita di ogni gioco; in Sala Giochi ogni cabinato mostra i suoi trofei, in cima c'è il totale (su 414) con il numero di giochi giocati e il filtro **Già giocati** mostra solo i giochi con almeno un record. Le soglie vengono dalle partite di prova di un bot per circa un terzo dei giochi e sono stimate sulle regole di punteggio per gli altri (`shared/trofei.js`).
+**Trofei:** ogni gioco ha tre trofei a punteggio: 🥉 **Bronzo** (la soglia in qualsiasi difficoltà), 🥈 **Argento** (a Normale o Difficile) e 🥇 **Oro** (a Difficile); nei giochi a tempo (*Corsa al Tramonto*, *Crystal Wars*) conta finire entro un certo tempo. I trofei si calcolano dai record salvati, quindi quelli già fatti si sbloccano da soli; quando un record nuovo ne conquista uno compare un avviso in alto. Le soglie sono nella schermata iniziale, in pausa e a fine partita di ogni gioco; in Sala Giochi ogni cabinato mostra i suoi trofei, in cima c'è il totale (su 417) con il numero di giochi giocati e il filtro **Già giocati** mostra solo i giochi con almeno un record. Le soglie vengono dalle partite di prova di un bot per circa un terzo dei giochi e sono stimate sulle regole di punteggio per gli altri (`shared/trofei.js`).
 
 **Generi:** ogni gioco appartiene a una o più famiglie di generi (🚀 Sparatutto, 🪜 Piattaforme, 🎯 Azione e riflessi, 🌀 Labirinti, ⚽ Sport, 🧩 Rompicapo, 🏁 Corse e veicoli, 🏰 Strategia e difesa, 🥊 Picchiaduro, 🗝️ Avventura, 🎵 Ritmo e musica): per esempio *Cripta degli Eroi* è avventura, sparatutto e labirinto. Le famiglie sono le etichette colorate di ogni cabinato. Sotto la ricerca una fila di pulsanti, con il numero di giochi di ciascuna famiglia, mostra solo quel genere (toccandolo di nuovo si torna a *Tutti i generi*); anche toccare un'etichetta su un cabinato filtra per quella famiglia. Un gioco con più famiglie compare in ognuna. La scelta resta memorizzata e si combina con la ricerca e con *Già giocati*. Su telefono la fila scorre di lato.
 
@@ -2138,3 +2138,18 @@ Lo skee-ball delle sale giochi: una pista in salita con una gobba in fondo e un 
 - **Touch:** levetta e pulsante TIRA (tienilo premuto e lascia)
 
 Per giocare apri `games/rotola-e-centra/index.html` nel browser.
+
+### 🎰 Pachinko della Fortuna — `games/pachinko-della-fortuna/index.html`
+
+Il pachinko delle sale giochi giapponesi: un pannello verticale pieno di chiodi d'ottone in cui le biglie entrano dall'alto e rimbalzano fino in fondo.
+
+- **La manopola:** l'unica cosa che controlli è la forza del lancio, cioè il punto in cui le biglie entrano in cima al pannello (il triangolino rosa). Tenendo premuto LANCIA ne parte una ogni tre decimi di secondo. Non tutti i punti rendono uguale: come nel pachinko vero, conviene trovare il "corridoio" buono e restarci
+- **Le tasche:** la tasca centrale (AVVIO) dà 3 biglie e fa girare i rulli; i due tulipani ai lati ne danno 4. Le biglie che arrivano in fondo sono perse. La finestra dei rulli al centro è un ostacolo: le biglie ci girano intorno
+- **I rulli e la febbre:** quando i primi due numeri sono uguali c'è l'ATTESA; con tre numeri uguali scatta la FEBBRE: la grande porta in basso si apre per 9 secondi e ogni biglia che ci entra ne vale 13. Le biglie entrate nella tasca mentre i rulli girano restano in attesa (fino a quattro)
+- **Punti:** ogni biglia vinta 10 · febbre 500 per la prima, 1.000 per la seconda e così via
+- **Fine:** quando le biglie sono finite e il pannello è vuoto
+- **Difficoltà:** Facile (300 biglie, la febbre arriva più spesso), Normale (200 biglie), Difficile (150 biglie, febbre più rara); record separati per ogni difficoltà
+- **Comandi:** frecce o `A` `D` per la forza · tieni premuto `Spazio` (o `J`) per lanciare · `P` pausa
+- **Touch:** levetta per la manopola, pulsante LANCIA (tienilo premuto)
+
+Per giocare apri `games/pachinko-della-fortuna/index.html` nel browser.
