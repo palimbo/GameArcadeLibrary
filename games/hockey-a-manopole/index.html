@@ -136,6 +136,9 @@
   const bestKey = (id) => `manopole-best-${id}`;
   function store(k, v) { try { localStorage.setItem(k, v); } catch { /* ignore */ } }
   function load(k) { try { return localStorage.getItem(k); } catch { return null; } }
+  // the feats of shared/imprese.js: the game only announces them, the hall keeps them
+  const impresa = (id) => window.dispatchEvent(new CustomEvent("sala:impresa", { detail: id }));
+  let maxDown = 0;
   const rnd = (a, b) => a + Math.random() * (b - a);
   const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
 
@@ -229,7 +232,7 @@
     const gx = p.team === 0 ? RX1 + 10 : RX0 - 10;
     const dx = gx - puck.x, dy = aimY - puck.y, d = Math.hypot(dx, dy) || 1;
     puck.vx = dx / d * power; puck.vy = dy / d * power;
-    p.struck = true; sfx.hit();
+    p.struck = true; sfx.hit(); puck.last = p;
     if (p.team === 0) shotsTaken++;
   }
   function physics(dt) {
@@ -259,7 +262,7 @@
       const nx = dx / d, ny = dy / d;
       puck.x = p.x + nx * m; puck.y = p.y + ny * m;
       const rvx = puck.vx - p.vx, rvy = puck.vy - p.vy, vn = rvx * nx + rvy * ny;
-      if (vn < 0) { puck.vx -= 1.7 * vn * nx; puck.vy -= 1.7 * vn * ny; if (Math.abs(vn) > 60) sfx.hit(); }
+      if (vn < 0) { puck.last = p; puck.vx -= 1.7 * vn * nx; puck.vy -= 1.7 * vn * ny; if (Math.abs(vn) > 60) sfx.hit(); }
     }
     const sp = Math.hypot(puck.vx, puck.vy);
     if (sp > 700) { puck.vx *= 700 / sp; puck.vy *= 700 / sp; }
@@ -271,11 +274,12 @@
   function goal(team) {
     if (team === 0) {
       mine++; goalsFor++;
+      if (puck.last && puck.last.team === 0 && puck.last.slot.role === "P") impresa("portiere");
       const pts = 100 * match; score += pts;
       popups.push({ x: RX1 - 40, y: MID - 30, text: `+${pts}`, color: "#4ac8ff", t: 0 });
       message = { text: "GOL!", sub: `${mine} - ${theirs}`, t: 0 }; sfx.goal();
     } else {
-      theirs++; goalsAgainst++;
+      theirs++; goalsAgainst++; maxDown = Math.max(maxDown, theirs - mine);
       message = { text: "GOL SUBITO", sub: `${mine} - ${theirs}`, t: 0 }; sfx.against();
     }
     for (let i = 0; i < 24; i++) parts.push({ x: puck.x, y: puck.y, vx: rnd(-160, 160), vy: rnd(-160, 160), t: 0, life: rnd(0.4, 0.9), color: team === 0 ? "#4ac8ff" : "#ff5a5a" });
@@ -286,6 +290,8 @@
   }
   function endMatch(won) {
     if (won) {
+      if (theirs === 0 && mine >= 3) impresa("cappotto");
+      if (maxDown >= 2) impresa("rimonta");
       const bonus = 500 * match + 100 * match * (mine - theirs);
       score += bonus; sfx.win();
       message = { text: `${TEAMS[(match - 1) % TEAMS.length][0]} BATTUTI!`, sub: `${mine} - ${theirs} · bonus +${bonus.toLocaleString("it-IT")}`, t: 0, long: true };
@@ -297,7 +303,7 @@
     }
   }
   function startMatch() {
-    mine = 0; theirs = 0; matchT = 120; overtime = false;
+    mine = 0; theirs = 0; matchT = 120; overtime = false; maxDown = 0;
     buildTeams(); faceoff(0);
     message = { text: `PARTITA ${match}`, sub: `contro ${TEAMS[(match - 1) % TEAMS.length][0]} · vince chi arriva a ${WINS}`, t: 0, long: true };
     pause = 1.2; after = null;

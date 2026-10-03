@@ -90,6 +90,12 @@
   #overlay .ai-trofei { display: flex; flex-wrap: wrap; gap: 6px; justify-content: center; max-width: 560px; pointer-events: auto; }
   #overlay .ai-trofei span { font: 600 12px system-ui, sans-serif; padding: 4px 9px; border-radius: 999px; border: 1px solid rgba(255,255,255,0.18); color: rgba(255,255,255,0.55); background: rgba(0,0,0,0.25); }
   #overlay .ai-trofei span.got { color: #ffe9a8; border-color: #ffd34d; background: rgba(255,211,77,0.14); }
+  #overlay .ai-imprese { display: flex; flex-wrap: wrap; gap: 6px; justify-content: center; align-items: center; max-width: 600px; pointer-events: auto; }
+  #overlay .ai-imprese button { font: 600 12px system-ui, sans-serif; padding: 4px 9px; border-radius: 999px; border: 1px dashed rgba(255,255,255,0.25); color: rgba(255,255,255,0.6); background: rgba(0,0,0,0.25); cursor: pointer; letter-spacing: 0; box-shadow: none; }
+  #overlay .ai-imprese button.got { color: #d8f8ff; border: 1px solid #7ad8ff; background: rgba(122,216,255,0.14); }
+  #overlay .ai-imprese button.ai-sel { outline: 2px solid #7ad8ff; }
+  #overlay .ai-imprese p { flex-basis: 100%; margin: 0; font: 12px system-ui, sans-serif; color: #c8e8f8; }
+  #ai-toast.imp { background: #7ad8ff; color: #021a2a; }
   #ai-toast { position: fixed; left: 50%; top: calc(14px + env(safe-area-inset-top, 0px)); z-index: 101; transform: translate(-50%, -140%); transition: transform .35s ease;
     font: 800 14px system-ui, sans-serif; color: #1a1400; background: #ffd34d; padding: 9px 16px; border-radius: 12px; box-shadow: 0 6px 20px rgba(0,0,0,.45); pointer-events: none; white-space: nowrap; }
   #ai-toast.on { transform: translate(-50%, 0); }`;
@@ -219,6 +225,7 @@
       }
     }
     showTrofei(ov);
+    showImprese(ov);
     if (observer) observer.observe(ov, { childList: true, subtree: true, characterData: true });
   }
   // ---------- Touch controls: thumb stick or arrow pad ----------
@@ -281,17 +288,35 @@
     if (fresh.length) set(SEEN_KEY, JSON.stringify([...seen]));
     return fresh;
   }
-  let toastT = null;
-  function toast(text) {
+  // the pop-ups at the top wait their turn, so a trophy and a feat won together are both read
+  let toastQ = [], toastBusy = false;
+  function toast(text, cls) { toastQ.push({ text, cls }); if (!toastBusy) nextToast(); }
+  function nextToast() {
+    const t = toastQ.shift();
+    if (!t) { toastBusy = false; return; }
+    toastBusy = true;
     let el = document.getElementById("ai-toast");
     if (!el) { el = document.createElement("div"); el.id = "ai-toast"; document.body.appendChild(el); }
-    el.textContent = text; void el.offsetWidth; el.classList.add("on");
-    clearTimeout(toastT); toastT = setTimeout(() => el.classList.remove("on"), 3200);
+    el.textContent = t.text; el.className = t.cls || ""; void el.offsetWidth; el.classList.add("on");
+    chime(t.cls ? [988, 1319, 1760] : [880, 1320]);
+    setTimeout(() => { el.classList.remove("on"); setTimeout(nextToast, 400); }, 3000);
+  }
+  let chimeCtx = null;
+  function chime(notes) {
+    try {
+      if (!window.AudioContext) return;
+      chimeCtx = chimeCtx || new AudioContext();
+      const c = chimeCtx, o = c.createOscillator(), g = c.createGain();
+      o.type = "triangle";
+      notes.forEach((f, i) => o.frequency.setValueAtTime(f, c.currentTime + i * 0.12));
+      g.gain.setValueAtTime(0.05, c.currentTime); g.gain.exponentialRampToValueAtTime(0.0001, c.currentTime + 0.14 * notes.length + 0.2);
+      o.connect(g).connect(c.destination); o.start(); o.stop(c.currentTime + 0.14 * notes.length + 0.22);
+    } catch { /* ignore */ }
   }
   function checkTrofei() {
     const list = trofei(); if (!list) return;
     const fresh = markSeen(list);
-    fresh.forEach((t, i) => setTimeout(() => { toast(`🏆 ${t.icon} Trofeo ${t.name.toLowerCase()} sbloccato!`); try { if (window.AudioContext) { const c = new AudioContext(), o = c.createOscillator(), g = c.createGain(); o.type = "triangle"; o.frequency.setValueAtTime(880, c.currentTime); o.frequency.setValueAtTime(1320, c.currentTime + 0.12); g.gain.setValueAtTime(0.05, c.currentTime); g.gain.exponentialRampToValueAtTime(0.0001, c.currentTime + 0.4); o.connect(g).connect(c.destination); o.start(); o.stop(c.currentTime + 0.42); } } catch { /* ignore */ } }, i * 3500));
+    for (const t of fresh) toast(`🏆 ${t.icon} Trofeo ${t.name.toLowerCase()} sbloccato!`);
   }
   function trofeiHTML() {
     const list = trofei(); if (!list) return "";
@@ -312,11 +337,54 @@
     else { const after = ov.querySelector(".ai-pad") || ov.querySelector(".ai-quit") || anchor; if (after.nextElementSibling !== box) after.insertAdjacentElement("afterend", box); }
   }
   function loadTrofei() {
-    if (window.SalaTrofei) { trofeiReady = true; markSeen(trofei() || []); decorate(); return; }
+    if (window.SalaTrofei) { trofeiReady = true; markSeen(trofei() || []); decorate(); }
+    else {
+      const sc = document.createElement("script");
+      try { sc.src = new URL("trofei.js", me.src).href; } catch { return; }
+      sc.onload = () => { trofeiReady = true; markSeen(trofei() || []); decorate(); };
+      document.head.appendChild(sc);
+    }
+    loadImprese();
+  }
+
+  // ---------- Feats (shared/imprese.js) ----------
+  // The game sends "sala:impresa" with the feat's id at the moment it happens; it is saved once and announced.
+  let impReady = false, impQueue = [];
+  function imprese() { return window.SalaImprese && BASE ? window.SalaImprese.status(BASE) : null; }
+  function gotFeat(id) {
+    if (!impReady) { impQueue.push(id); return; }
+    const f = window.SalaImprese.unlock(BASE, id);
+    if (!f) return;
+    toast(`🏅 Impresa: ${f.name}!`, "imp");
+    const ov = document.getElementById("overlay"); if (ov) showImprese(ov);
+  }
+  window.addEventListener("sala:impresa", (e) => gotFeat(String(e.detail)));
+  function loadImprese() {
+    const ready = () => { impReady = true; const q = impQueue; impQueue = []; q.forEach(gotFeat); decorate(); };
+    if (window.SalaImprese) { ready(); return; }
     const sc = document.createElement("script");
-    try { sc.src = new URL("trofei.js", me.src).href; } catch { return; }
-    sc.onload = () => { trofeiReady = true; markSeen(trofei() || []); decorate(); };
+    try { sc.src = new URL("imprese.js", me.src).href; } catch { return; }
+    sc.onload = ready;
     document.head.appendChild(sc);
+  }
+  // one short row of names; a tap on a name shows what the feat asks for
+  let impSel = -1;
+  function impreseHTML() {
+    const list = imprese(); if (!list) return "";
+    const sel = list[impSel];
+    return list.map((f, i) => `<button type="button" data-imp="${i}" class="${f.got ? "got" : ""}${i === impSel ? " ai-sel" : ""}" title="${f.desc}">🏅 ${f.name}${f.got ? " ✓" : ""}</button>`).join("")
+      + (sel ? `<p>${sel.name}: ${sel.desc}${sel.got ? " · fatta!" : ""}</p>` : "");
+  }
+  // the feats sit just under the trophies in the title, game over and pause screens
+  function showImprese(ov) {
+    if (!impReady) return;
+    const html = impreseHTML();
+    let box = ov.querySelector(".ai-imprese");
+    const after = ov.querySelector(".ai-trofei");
+    if (!html || !after) { if (box) box.remove(); return; }
+    if (!box) { box = document.createElement("div"); box.className = "ai-imprese"; }
+    if (box.innerHTML !== html) box.innerHTML = html;
+    if (after.nextElementSibling !== box) after.insertAdjacentElement("afterend", box);
   }
 
   // ---------- Ending the game from the pause menu ----------
@@ -353,6 +421,13 @@
     setTimeout(() => { if (modal || pending.length) leaveAfter = true; else goHome(); }, 600);
   }
   document.addEventListener("click", (e) => {
+    const ib = e.target.closest("[data-imp]");
+    if (ib) {
+      e.stopPropagation(); e.preventDefault();
+      impSel = impSel === +ib.dataset.imp ? -1 : +ib.dataset.imp;
+      const ov = document.getElementById("overlay"); if (ov) showImprese(ov);
+      return;
+    }
     const pb = e.target.closest("[data-pad]");
     if (pb) {
       e.stopPropagation(); e.preventDefault(); set(PAD_KEY, pb.dataset.pad); applyPad();
