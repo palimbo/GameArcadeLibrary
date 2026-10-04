@@ -9,6 +9,11 @@
   "use strict";
   // record key prefix of the game (as in trofei.js) → its feats
   const LIST = {
+    "botte-best-": [   // botte-da-strada
+      { id: "senza", name: "Senza un graffio", desc: "finisci una missione senza perdere vite" },
+      { id: "tris", name: "Tre in un colpo", desc: "colpisci tre Corvi con un colpo solo (un barile lanciato fa al caso tuo)" },
+      { id: "mani", name: "A mani nude", desc: "stendi un Bestione senza usare armi contro di lui" },
+    ],
     "dj-best-": [   // notte-da-dj
       { id: "combo", name: "Combo piena", desc: "finisci una canzone senza nessun BAD e nessun POOR" },
       { id: "scratch", name: "Re dello scratch", desc: "prendi 20 scratch di fila senza sbagliarne uno" },
