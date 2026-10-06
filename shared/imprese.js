@@ -9,6 +9,11 @@
   "use strict";
   // record key prefix of the game (as in trofei.js) → its feats
   const LIST = {
+    "ombra-best-": [   // il-ninja-dell-ombra
+      { id: "maestro", name: "Il maestro è battuto", desc: "sconfiggi il Signore delle Nebbie e libera la principessa" },
+      { id: "parata", name: "Lama che para", desc: "respingi 5 proiettili con la spada nella stessa tappa" },
+      { id: "illeso", name: "Come un'ombra", desc: "supera una tappa senza perdere vite" },
+    ],
     "sedici-best-": [   // sedici-battiti
       { id: "combo", name: "Combo piena", desc: "finisci una canzone senza mancare neanche un segnale" },
       { id: "ss", name: "Voto SS", desc: "fai almeno 950.000 punti in una canzone" },

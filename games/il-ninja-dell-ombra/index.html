@@ -1,0 +1,771 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no, viewport-fit=cover">
+<title>Il Ninja dell'Ombra</title>
+<style>
+  :root {
+    --bg: #0a0e18;
+    --fg: #f4f6ee;
+    --muted: #c8d0e8;
+    --pink: #ff5a5a;
+    --yellow: #ffd23a;
+    --red: #ff4a3a;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  html, body {
+    height: 100%;
+    background: var(--bg);
+    color: var(--fg);
+    font-family: system-ui, -apple-system, "Segoe UI", sans-serif;
+    overflow: hidden;
+    user-select: none;
+    -webkit-user-select: none;
+    touch-action: none;
+  }
+  #wrap { position: fixed; inset: 0; display: flex; align-items: center; justify-content: center; }
+  canvas { display: block; touch-action: none; border-radius: 6px; box-shadow: 0 0 0 2px #2a2a5a, 0 10px 40px rgba(0,0,0,0.6); }
+  #pauseBtn {
+    position: fixed; z-index: 3; display: none; right: 10px; top: calc(10px + env(safe-area-inset-top, 0px));
+    font: 700 13px system-ui, sans-serif; color: var(--fg);
+    background: rgba(0, 0, 0, 0.6); border: 1px solid rgba(244, 246, 238, 0.35);
+    border-radius: 8px; padding: 6px 10px; cursor: pointer;
+  }
+  #touch {
+    position: fixed; z-index: 2; display: none; left: 12px; right: 12px;
+    bottom: calc(14px + env(safe-area-inset-bottom, 0px));
+    justify-content: space-between; align-items: flex-end; pointer-events: none;
+  }
+  /* thumb stick: run left and right, push it up to aim the shuriken upwards, down + SALTO drops from a branch; the big COLPO throws (sword when close), the small SALTO leaps */
+  #touch .stick { position: relative; width: 136px; height: 136px; border-radius: 50%; pointer-events: auto; touch-action: none;
+    border: 2px solid rgba(255, 90, 90, 0.6); background: radial-gradient(circle, rgba(255,90,90,0.14), rgba(255,90,90,0.04)); }
+  #touch .stick .knob { position: absolute; left: 50%; top: 50%; width: 58px; height: 58px; margin: -29px 0 0 -29px; border-radius: 50%;
+    background: rgba(255, 90, 90, 0.45); border: 2px solid rgba(255,255,255,0.7); box-shadow: 0 4px 10px rgba(0,0,0,0.4); pointer-events: none; }
+  #touch .stick .ring { position: absolute; inset: 10px; border-radius: 50%; border: 1px dashed rgba(244,246,238,0.25); pointer-events: none; }
+  #touch .jump { width: 96px; height: 96px; border-radius: 50%; pointer-events: auto; touch-action: none; color: var(--fg);
+    font: 800 13px system-ui, sans-serif; letter-spacing: 1px; border: 2px solid rgba(255, 90, 90, 0.9); background: rgba(255, 90, 90, 0.22); }
+  #touch .jump.on { background: rgba(255, 90, 90, 0.55); }
+  #touch.small .stick { width: 112px; height: 112px; }
+  #touch.small .stick .knob { width: 48px; height: 48px; margin: -24px 0 0 -24px; }
+  #touch.small .jump { width: 80px; height: 80px; font-size: 11px; }
+  #touch .btns { display: flex; flex-direction: column; align-items: center; gap: 10px; pointer-events: none; }
+  #touch .jump.axe { width: 64px; height: 64px; font-size: 11px; border-color: rgba(255, 244, 200, 0.9); background: rgba(255, 244, 200, 0.16); }
+  #touch .jump.axe.on { background: rgba(255, 244, 200, 0.5); }
+  #touch.small .jump.axe { width: 54px; height: 54px; font-size: 10px; }
+  #overlay {
+    position: fixed; inset: 0; z-index: 5;
+    display: flex; flex-direction: column; align-items: center; justify-content: flex-start;
+    gap: 14px; padding: 16px; text-align: center; overflow-y: auto;
+    background: rgba(10, 14, 24, 0.93);
+  }
+  #overlay > :first-child { margin-top: auto; }
+  #overlay > :last-child { margin-bottom: auto; }
+  #overlay.hidden { display: none; }
+  #homeLink {
+    position: fixed; top: calc(10px + env(safe-area-inset-top, 0px)); left: 10px; z-index: 6;
+    font: 600 13px/1 system-ui, sans-serif; color: #fff; text-decoration: none;
+    padding: 8px 12px; border-radius: 999px; background: rgba(0,0,0,.55);
+    border: 1px solid rgba(255,255,255,.25);
+  }
+  #homeLink:hover { background: rgba(0,0,0,.8); }
+  #overlay.hidden ~ #homeLink { display: none; }
+  @media (max-width: 700px) { #overlay { padding-top: calc(52px + env(safe-area-inset-top, 0px)); } }
+  #overlay h1 { font-size: clamp(32px, 10vw, 58px); font-weight: 900; font-style: italic; letter-spacing: 1px; color: var(--pink);
+    text-shadow: 3px 3px 0 #1a1a4a, 0 0 22px rgba(255,90,90,0.35); }
+  #overlay h2 { font-size: clamp(26px, 7vw, 42px); font-weight: 900; letter-spacing: 2px; color: var(--pink); }
+  #overlay h2.lose { color: var(--red); }
+  #overlay p { max-width: 540px; font-size: clamp(13px, 3.4vw, 16px); line-height: 1.55; }
+  #overlay p.muted { color: var(--muted); }
+  #overlay .pts { display: grid; grid-template-columns: repeat(2, auto); gap: 4px 18px; font-size: 13px; color: var(--muted); text-align: left; max-width: 560px; }
+  #overlay .pts b { color: var(--fg); }
+  #overlay .diff { display: flex; gap: 10px; flex-wrap: wrap; justify-content: center; }
+  #overlay button {
+    font: 800 15px system-ui, sans-serif; letter-spacing: 1.5px; color: var(--fg);
+    background: transparent; cursor: pointer;
+    border: 2px solid rgba(244,246,238,0.3); border-radius: 10px; padding: 9px 16px;
+  }
+  #overlay .diff button.on { border-color: var(--c); color: var(--c); box-shadow: 0 0 12px var(--c); }
+  #overlay button.start { border-color: var(--pink); color: #2a0202; background: var(--pink); padding: 11px 30px; box-shadow: 0 4px 0 #a81a1a; }
+  @media (max-height: 560px) {
+    #overlay { gap: 8px; }
+    #overlay h1 { font-size: 30px; }
+    #overlay p { font-size: 13px; line-height: 1.4; }
+    #overlay .help, #overlay .pts { display: none; }
+  }
+</style>
+</head>
+<body>
+<div id="wrap"><canvas id="game"></canvas></div>
+<div id="touch">
+  <div class="stick" aria-label="Levetta"><div class="ring"></div><div class="knob"></div></div>
+  <div class="btns"><button type="button" class="jump axe" aria-label="Salto">SALTO</button><button type="button" class="jump hop" aria-label="Colpo">COLPO</button></div>
+</div>
+<button id="pauseBtn" type="button" aria-label="Pausa">❚❚</button>
+<div id="overlay"></div>
+<a id="homeLink" href="../../index.html">← Sala Giochi</a>
+
+
+<script>
+(() => {
+  "use strict";
+
+  const W = 640, H = 360, TAU = Math.PI * 2, TOP = 28;
+  const GROUND = 324, GRAV = 1100, JUMP = 600;
+  // the way to the castle: the wood, the river, the castle walls, then the tower where the princess is held
+  const STAGES = [
+    { name: "IL BOSCO", kind: "wood", len: 2600 },
+    { name: "IL FIUME", kind: "river", len: 2300 },
+    { name: "LE MURA DEL CASTELLO", kind: "wall", len: 2400 },
+    { name: "LA TORRE", kind: "tower", len: W },
+  ];
+  const SEASONS = [
+    { name: "PRIMAVERA", leaf: "#e88ab8", leaf2: "#c86a98", grass: "#5aa84a", sky: ["#3a2a5a", "#c88ab0"] },
+    { name: "ESTATE", leaf: "#3a8a3a", leaf2: "#2a6a2a", grass: "#4a9a3a", sky: ["#1a3a6a", "#7ab0d8"] },
+    { name: "AUTUNNO", leaf: "#e88a2a", leaf2: "#b85a1a", grass: "#8a8a3a", sky: ["#3a1a2a", "#e8905a"] },
+    { name: "INVERNO", leaf: "#e8eef8", leaf2: "#b8c8e0", grass: "#d8e0ec", sky: ["#0a1430", "#5a6a9a"] },
+  ];
+  const FOES = {
+    ninja: { hp: 1, speed: 120, pts: 100, col: "#3a5ad8", throwT: [1.3, 2.4] },
+    red:   { hp: 1, speed: 150, pts: 200, col: "#d83a3a", throwT: [1, 1.9], double: true },
+    monk:  { hp: 2, speed: 50, pts: 300, col: "#c8501a", throwT: [2.2, 3.4], fire: true },
+    boss:  { hp: 6, speed: 0, pts: 3000, col: "#8a3ad8", throwT: [1.8, 2.6], boss: true },
+  };
+
+  const DIFFICULTIES = {
+    facile:    { label: "FACILE",    color: "#7ed87a", desc: "5 vite · pochi nemici alla volta · shuriken più lenti", lives: 5, maxFoes: 2, spawn: 2.2, shot: 0.8, fan: 1 },
+    normale:   { label: "NORMALE",   color: "#ff5a5a", desc: "3 vite · un colpo e sei fuori, come il vero ninja", lives: 3, maxFoes: 3, spawn: 1.6, shot: 1.1, fan: 2 },
+    difficile: { label: "DIFFICILE", color: "#ff3a8a", desc: "3 vite · nemici fitti, svelti e precisi", lives: 3, maxFoes: 4, spawn: 1.2, shot: 1.3, fan: 3 },
+  };
+  const DIFF_IDS = Object.keys(DIFFICULTIES);
+  const DIFF_KEY = "ombra-difficulty";
+  const bestKey = (id) => `ombra-best-${id}`;
+  function store(k, v) { try { localStorage.setItem(k, v); } catch { /* ignore */ } }
+  function load(k) { try { return localStorage.getItem(k); } catch { return null; } }
+  const impresa = (id) => window.dispatchEvent(new CustomEvent("sala:impresa", { detail: id }));
+  let stageLost = false, deflects = 0, stageKills = 0;
+  // the gate at the end of a stretch opens only after this many foes
+  const quota = () => 8 + 3 * stage + 2 * lap;
+  const rnd = (a, b) => a + Math.random() * (b - a);
+  const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
+
+  // ---------- Canvas ----------
+  const canvas = document.getElementById("game");
+  const ctx = canvas.getContext("2d");
+  const wrapEl = document.getElementById("wrap");
+  const overlay = document.getElementById("overlay");
+  const touchEl = document.getElementById("touch");
+  const pauseBtn = document.getElementById("pauseBtn");
+  let pxRatio = 1, touchMode = !!(window.matchMedia && matchMedia("(pointer: coarse)").matches);
+  function resize() {
+    const portrait = window.innerHeight > window.innerWidth;
+    const showTouch = touchMode && isPlaying();
+    touchEl.style.display = showTouch ? "flex" : "none";
+    touchEl.classList.toggle("small", !portrait && window.innerHeight < 480);
+    wrapEl.style.paddingBottom = showTouch && portrait ? "calc(170px + env(safe-area-inset-bottom, 0px))" : "0";
+    let availW = window.innerWidth - 8, availH = window.innerHeight - 8;
+    if (showTouch && portrait) availH -= 170;
+    if (showTouch && !portrait) {
+      const side = Math.max(...[...touchEl.children].map((el) => el.offsetWidth)) + 20;
+      if (window.innerWidth - 2 * side > 200) availW = window.innerWidth - 2 * side;
+    }
+    const s = Math.max(0.2, Math.min(availW / W, availH / H));
+    pxRatio = Math.min(3, s * (window.devicePixelRatio || 1));
+    canvas.style.width = W * s + "px";
+    canvas.style.height = H * s + "px";
+    canvas.width = Math.round(W * pxRatio);
+    canvas.height = Math.round(H * pxRatio);
+  }
+  window.addEventListener("resize", () => syncControls());
+
+  // ---------- Audio ----------
+  let audioCtx = null;
+  function beep(freq, dur, type = "square", vol = 0.04, slide = 0, delay = 0) {
+    if (!audioCtx) return;
+    const t = audioCtx.currentTime + delay;
+    const osc = audioCtx.createOscillator(), gain = audioCtx.createGain();
+    osc.type = type;
+    osc.frequency.setValueAtTime(freq, t);
+    if (slide) osc.frequency.exponentialRampToValueAtTime(Math.max(20, freq + slide), t + dur);
+    gain.gain.setValueAtTime(vol, t);
+    gain.gain.exponentialRampToValueAtTime(0.0001, t + dur);
+    osc.connect(gain).connect(audioCtx.destination);
+    osc.start(t); osc.stop(t + dur + 0.02);
+  }
+  const arp = (notes, gap, d, type = "square", vol = 0.04) => notes.forEach((f, i) => beep(f, d, type, vol, 0, i * gap));
+  let sfxN = 0;
+  const lim = (fn) => (...a) => { if (sfxN++ < 4) fn(...a); };
+  const sfx = {
+    jump: lim(() => beep(380, 0.1, "triangle", 0.025, 300)),
+    throw: lim(() => beep(1400, 0.06, "square", 0.015, -600)),
+    slash: lim(() => { beep(900, 0.06, "sawtooth", 0.02, -500); beep(300, 0.05, "square", 0.015); }),
+    clang: lim(() => arp([1760, 2349], 0.02, 0.06, "square", 0.03)),
+    kill: lim(() => arp([523, 392, 262], 0.04, 0.08, "square", 0.035)),
+    fire: lim(() => beep(160, 0.3, "sawtooth", 0.03, 120)),
+    land: lim(() => beep(140, 0.03, "triangle", 0.02)),
+    clear: () => arp([523, 659, 784, 1047, 784, 1047, 1319, 1568], 0.08, 0.14, "square", 0.045),
+    die: () => arp([784, 659, 523, 392, 262], 0.09, 0.16, "triangle", 0.05),
+    oneup: () => arp([1047, 1319, 1568, 2093], 0.06, 0.1, "square", 0.04),
+    over: () => arp([523, 466, 415, 392, 330, 262], 0.15, 0.24, "triangle", 0.05),
+    boss: () => { beep(110, 0.5, "sawtooth", 0.05, -40); beep(165, 0.5, "square", 0.03, -60); },
+  };
+
+  // ---------- State ----------
+  let difficulty = DIFFICULTIES[load(DIFF_KEY)] ? load(DIFF_KEY) : "normale";
+  let diff = DIFFICULTIES[difficulty];
+  let state = "menu", menu = null, pausedFrom = null, clock = 0;
+  let score = 0, bestCache = 0, lives = 3, stage = 0, lap = 0, nextLife = 20000, kills = 0;
+  let K = null, foes = [], shots = [], plats = [], parts = [], popups = [], message = null, camX = 0, spawnT = 0, deadT = 0, clearT = 0, bossOn = false, nextId = 1;
+  let actHeld = false, wasAct = false, jumpHeld = false, wasJump = false;
+  const keys = { left: false, right: false, up: false, down: false };
+  const stick = { x: 0, y: 0 };
+  const S = () => STAGES[stage], SEA = () => SEASONS[lap % SEASONS.length];
+  const lapK = () => 1 + 0.2 * lap;
+
+  // ---------- Stages ----------
+  // one-way ledges (branches, logs, wall steps): you land on them from above, and drop through with down + jump
+  function buildStage() {
+    plats = []; foes = []; shots = []; camX = 0; spawnT = 1.5; bossOn = false; deflects = 0; stageLost = false; stageKills = 0;
+    const st = S();
+    if (st.kind === "wood") {
+      for (let x = 220; x < st.len - 120; x += rnd(150, 210)) {
+        const side = Math.random() < 0.5 ? -1 : 1;
+        plats.push({ x: x + side * 40 - 35, y: 236, w: 70, tree: x }, { x: x - side * 40 - 40, y: 160, w: 80, tree: x });
+      }
+    } else if (st.kind === "river") {
+      for (let x = 160; x < st.len - 120; x += rnd(140, 200)) plats.push({ x, y: rnd(244, 262), w: rnd(70, 100), log: true });
+      for (let x = 300; x < st.len - 200; x += rnd(320, 420)) plats.push({ x, y: 176, w: 60, rock: true });
+    } else if (st.kind === "wall") {
+      for (let x = 120; x < st.len - 150; x += rnd(260, 340)) { plats.push({ x, y: 250, w: rnd(160, 220), wall: true }); plats.push({ x: x + 60, y: 176, w: rnd(90, 130), wall: true }); }
+    } else {
+      plats.push({ x: 70, y: 240, w: 140, wall: true }, { x: W - 210, y: 240, w: 140, wall: true }, { x: W / 2 - 80, y: 165, w: 160, wall: true });
+    }
+    K = { x: 60, y: GROUND, vx: 0, vy: 0, face: 1, ground: true, drop: 0, slash: 0, inv: 2, anim: 0, cool: 0, dead: false };
+    message = { text: `${S().name}`, sub: `${SEA().name}${lap ? ` · giro ${lap + 1}` : ""} · ${st.kind === "tower" ? "il Signore delle Nebbie tiene prigioniera la principessa Kiri" : `sconfiggi ${quota()} nemici e il portale in fondo si apre`}`, t: 0, long: true };
+    if (st.kind === "tower") { K.x = 80; startBoss(); }
+  }
+  function startBoss() {
+    const b = addFoe("boss", W - 120, 165 - 0);
+    b.hp = Math.round(FOES.boss.hp * lapK()); b.max = b.hp; b.onPlat = true; b.tele = 2;
+    bossOn = true; sfx.boss();
+  }
+  function addFoe(kind, x, y) {
+    const F = FOES[kind];
+    const e = { id: nextId++, kind, F, x, y, vx: 0, vy: 0, face: -1, hp: F.hp, ground: false, throwT: rnd(1, 2) / diff.shot, anim: 0, seen: new Set(), hit: 0, jumpT: rnd(1, 3), dead: false };
+    foes.push(e);
+    return e;
+  }
+  function spawnFoe() {
+    const st = S();
+    if (st.kind === "tower") return;
+    const n = foes.filter((e) => !e.dead).length;
+    if (n >= diff.maxFoes + (lap > 0 ? 1 : 0)) return;
+    if (K.x > st.len - 260 && stageKills >= quota()) return;
+    const r = Math.random(), pMonk = st.kind === "wall" ? 0.35 : st.kind === "river" ? 0.25 : 0.12, pRed = Math.min(0.5, 0.1 + 0.12 * stage + 0.15 * lap);
+    const kind = r < pMonk ? "monk" : r < pMonk + pRed ? "red" : "ninja";
+    const side = Math.random() < 0.6 ? 1 : -1;
+    // ninjas also drop from the treetops
+    if (kind !== "monk" && st.kind === "wood" && Math.random() < 0.35) { const e = addFoe(kind, camX + rnd(120, W - 60), TOP - 10); e.vy = 60; return; }
+    const x = side > 0 ? camX + W + 20 : Math.max(camX - 20, 0);
+    if (x <= 0 && side < 0) return;
+    const e = addFoe(kind, x, GROUND); e.ground = true; e.face = -side;
+  }
+
+  // ---------- Flow ----------
+  const isPlaying = () => state === "play";
+  function startGame() {
+    if (!audioCtx) { try { audioCtx = new (window.AudioContext || window.webkitAudioContext)(); } catch { audioCtx = null; } }
+    if (audioCtx && audioCtx.state === "suspended") audioCtx.resume();
+    score = 0; lives = diff.lives; stage = 0; lap = 0; nextLife = 20000; kills = 0; deadT = 0; clearT = 0; parts = []; popups = [];
+    bestCache = parseInt(load(bestKey(difficulty)), 10) || 0;
+    buildStage();
+    state = "play";
+    menu = null;
+    overlay.classList.add("hidden");
+    syncControls();
+    last = performance.now();
+  }
+  function addScore(n, x, y, col = "#ffe8a0") {
+    score += n;
+    if (x !== undefined) popups.push({ x, y, text: `+${n}`, col, t: 0 });
+    if (score >= nextLife) { lives++; nextLife += 30000; sfx.oneup(); message = { text: "VITA EXTRA!", t: 0 }; }
+  }
+  function burst(x, y, col, n = 10) { for (let i = 0; i < n; i++) parts.push({ x, y, vx: rnd(-120, 120), vy: rnd(-160, 40), t: 0, life: rnd(0.3, 0.6), col }); }
+  function stageClear(rescued) {
+    if (!stageLost) impresa("illeso");
+    const bonus = (rescued ? 5000 : 2000) * (stage + 1) * lapK();
+    addScore(Math.round(bonus));
+    clearT = rescued ? 4 : 2.6; sfx.clear();
+    foes = []; shots = [];
+    message = rescued ? { text: "LA PRINCIPESSA È LIBERA!", sub: `bonus ${Math.round(bonus).toLocaleString("it-IT")} · ma il Signore delle Nebbie la rapisce di nuovo…`, t: 0, long: true }
+      : { text: "PERCORSO SUPERATO!", sub: `bonus ${Math.round(bonus).toLocaleString("it-IT")}`, t: 0 };
+  }
+  function gameOver() {
+    state = "over";
+    const prev = parseInt(load(bestKey(difficulty)), 10) || 0;
+    const record = score > prev;
+    if (record) store(bestKey(difficulty), String(score));
+    sfx.over();
+    menu = () => showOverlay(
+      `<h2 class="lose">IL NINJA È CADUTO</h2>
+       <p>Punteggio: <b>${score.toLocaleString("it-IT")}</b> · ${S().name.toLowerCase()} (${SEA().name.toLowerCase()}) · ${kills} ${kills === 1 ? "nemico sconfitto" : "nemici sconfitti"} · ${diff.label}</p>
+       ${record ? "<p style='color:var(--pink)'>★ NUOVO RECORD! ★</p>" : ""}
+       ${difficultyHTML()}
+       <button class="start" data-start>DI NUOVO NEL BOSCO</button>`
+    );
+    menu();
+    syncControls();
+  }
+  function togglePause() {
+    if (isPlaying()) {
+      pausedFrom = state; state = "paused";
+      showOverlay(`<h2>PAUSA</h2><button class="start" data-resume>CONTINUA</button><p class="muted">Premi P per continuare</p>`);
+    } else if (state === "paused") {
+      state = pausedFrom; overlay.classList.add("hidden"); last = performance.now();
+    }
+    syncControls();
+  }
+  // the pause menu can end the game (shared/iniziali.js): it ends here the usual way, saving the record
+  window.addEventListener("sala:termina", () => { if (state !== "paused") return; state = pausedFrom; overlay.classList.add("hidden"); gameOver(); syncControls(); });
+  function syncControls() {
+    pauseBtn.style.display = isPlaying() && touchMode ? "block" : "none";
+    resize();
+  }
+  pauseBtn.addEventListener("click", () => togglePause());
+  function showOverlay(html) { overlay.innerHTML = html; overlay.classList.remove("hidden"); }
+  function difficultyHTML() {
+    const buttons = DIFF_IDS.map((id) => {
+      const d = DIFFICULTIES[id];
+      return `<button type="button" data-diff="${id}" class="${id === difficulty ? "on" : ""}" style="--c:${d.color}">${d.label}</button>`;
+    }).join("");
+    const best = parseInt(load(bestKey(difficulty)), 10);
+    return `<div class="diff">${buttons}</div><p class="muted">${diff.desc}${best ? ` · Record: ${best.toLocaleString("it-IT")}` : ""}</p>`;
+  }
+  function setDifficulty(id) { if (!DIFFICULTIES[id]) return; difficulty = id; diff = DIFFICULTIES[id]; store(DIFF_KEY, id); if (menu) menu(); }
+  function showTitle() {
+    menu = showTitle;
+    showOverlay(
+      `<h1>IL NINJA DELL'OMBRA</h1>
+       <p>Il Signore delle Nebbie ha rapito la principessa Kiri. Il ninja dell'Ombra attraversa il bosco, il fiume e le mura del castello fino alla torre. Salta altissimo fino ai rami, lancia shuriken e da vicino sfodera la spada, che respinge anche gli shuriken e il fuoco dei nemici. Basta un colpo per cadere, quindi occhi aperti.</p>
+       <div class="pts">
+         <span><b>Colpo</b></span><span>lancia uno shuriken davanti (con la levetta in su, in diagonale verso l'alto) · se un nemico o un proiettile è vicino, sfodera la spada</span>
+         <span><b>Salto</b></span><span>altissimo, fino ai rami e alle sporgenze · giù + SALTO per scendere da un ramo</span>
+         <span><b>Nemici</b></span><span>ninja blu e rossi (lanciano shuriken), monaci (sputano fuoco, servono due colpi) e alla torre il Signore delle Nebbie</span>
+         <span><b>Punti</b></span><span>ninja 100-200 · monaco 300 · proiettile respinto 50 · Signore delle Nebbie 3.000 · percorso 2.000 × tappa · principessa 5.000 × 4</span>
+       </div>
+       ${touchMode
+         ? `<p class="muted help">Levetta: corri (in su mira in alto, in giù per scendere) · COLPO · SALTO</p>`
+         : `<p class="muted help">Frecce o WASD per correre (su: mira in alto) · SPAZIO o J colpo · K o X salto (giù + salto per scendere) · P pausa</p>`}
+       ${difficultyHTML()}
+       <button class="start" data-start>NELL'OMBRA!</button>`
+    );
+  }
+  overlay.addEventListener("click", (e) => {
+    const d = e.target.closest("[data-diff]");
+    if (d) { setDifficulty(d.dataset.diff); return; }
+    if (e.target.closest("[data-start]")) startGame();
+    if (e.target.closest("[data-resume]")) togglePause();
+  });
+
+  // ---------- Input ----------
+  const KEYMAP = { arrowleft: "left", a: "left", arrowright: "right", d: "right", arrowup: "up", w: "up", arrowdown: "down", s: "down" };
+  const ACTKEYS = [" ", "j"];
+  window.addEventListener("keydown", (e) => {
+    const k = e.key.toLowerCase();
+    if ([" ", "arrowup", "arrowdown", "arrowleft", "arrowright"].includes(k)) e.preventDefault();
+    if (state === "menu" || state === "over") {
+      if (e.key === "Enter") startGame();
+      else if (["1", "2", "3"].includes(k)) setDifficulty(DIFF_IDS[+k - 1]);
+      return;
+    }
+    if (k === "p" || k === "escape") { if (!e.repeat) togglePause(); return; }
+    if (state === "paused") { if (e.key === "Enter") togglePause(); return; }
+    if (ACTKEYS.includes(k)) actHeld = true;
+    if (KEYMAP[k]) keys[KEYMAP[k]] = true;
+  });
+  window.addEventListener("keyup", (e) => { const k = e.key.toLowerCase(); if (KEYMAP[k]) keys[KEYMAP[k]] = false; if (ACTKEYS.includes(k)) actHeld = false; });
+  window.addEventListener("blur", () => { for (const k in keys) keys[k] = false; actHeld = false; stick.x = stick.y = 0; if (isPlaying()) togglePause(); });
+  {
+    const b = touchEl.querySelector(".hop");
+    b.addEventListener("pointerdown", (e) => { e.preventDefault(); actHeld = true; b.classList.add("on"); });
+    for (const ev of ["pointerup", "pointercancel", "pointerleave"]) b.addEventListener(ev, () => { actHeld = false; b.classList.remove("on"); });
+  }
+  const stickEl = touchEl.querySelector(".stick"), knob = stickEl.querySelector(".knob");
+  let stickId = null;
+  function stickAt(e) {
+    const r = stickEl.getBoundingClientRect(), max = r.width / 2 - 14;
+    let dx = e.clientX - (r.left + r.width / 2), dy = e.clientY - (r.top + r.height / 2);
+    const len = Math.hypot(dx, dy);
+    if (len > max) { dx *= max / len; dy *= max / len; }
+    knob.style.transform = `translate(${dx}px, ${dy}px)`;
+    const f = (v) => { const a = Math.abs(v) / max; return a < 0.2 ? 0 : Math.sign(v) * Math.min(1, (a - 0.2) / 0.5); };
+    stick.x = f(dx); stick.y = f(dy);
+  }
+  const stickEnd = (e) => { if (e.pointerId !== stickId) return; stickId = null; knob.style.transform = ""; stick.x = stick.y = 0; };
+  stickEl.addEventListener("pointerdown", (e) => { e.preventDefault(); stickId = e.pointerId; try { stickEl.setPointerCapture(e.pointerId); } catch { /* ignore */ } stickAt(e); });
+  stickEl.addEventListener("pointermove", (e) => { if (e.pointerId === stickId) stickAt(e); });
+  for (const ev of ["pointerup", "pointercancel", "lostpointercapture"]) stickEl.addEventListener(ev, stickEnd);
+  window.addEventListener("pointerdown", (e) => { if (e.pointerType === "touch" && !touchMode) { touchMode = true; syncControls(); if (menu) menu(); } }, true);
+
+
+  {
+    const JUMPKEYS = ["k", "x"];
+    window.addEventListener("keydown", (e) => { if (JUMPKEYS.includes(e.key.toLowerCase()) && isPlaying()) jumpHeld = true; });
+    window.addEventListener("keyup", (e) => { if (JUMPKEYS.includes(e.key.toLowerCase())) jumpHeld = false; });
+    window.addEventListener("blur", () => { jumpHeld = false; });
+    const b = touchEl.querySelector(".axe");
+    b.addEventListener("pointerdown", (e) => { e.preventDefault(); jumpHeld = true; b.classList.add("on"); });
+    for (const ev of ["pointerup", "pointercancel", "pointerleave"]) b.addEventListener(ev, () => { jumpHeld = false; b.classList.remove("on"); });
+  }
+
+  // ---------- Physics ----------
+  // falls and lands on the ground or on a ledge (from above only)
+  function fall(o, dt, dropping) {
+    const py = o.y;
+    o.vy += GRAV * dt; o.y += o.vy * dt;
+    o.ground = false;
+    if (o.vy >= 0) {
+      if (!dropping) for (const p of plats) if (o.x > p.x - 4 && o.x < p.x + p.w + 4 && py <= p.y + 0.5 && o.y >= p.y) { o.y = p.y; o.vy = 0; o.ground = true; o.plat = p; return; }
+      if (o.y >= GROUND) { o.y = GROUND; o.vy = 0; o.ground = true; o.plat = null; }
+    }
+  }
+  const inWater = (o) => S().kind === "river" && o.y >= GROUND - 1;
+
+  // ---------- The ninja ----------
+  function updateNinja(dt) {
+    const act = actHeld && !wasAct; wasAct = actHeld;
+    const jmp = jumpHeld && !wasJump; wasJump = jumpHeld;
+    const mx = clamp((keys.right ? 1 : 0) - (keys.left ? 1 : 0) + stick.x, -1, 1), up = keys.up || stick.y < -0.45, down = keys.down || stick.y > 0.45;
+    if (K.inv > 0) K.inv -= dt;
+    if (K.slash > 0) K.slash -= dt;
+    if (K.cool > 0) K.cool -= dt;
+    if (K.drop > 0) K.drop -= dt;
+    const sp = 150 * (inWater(K) ? 0.6 : 1);
+    K.vx = mx * sp;
+    if (mx) K.face = Math.sign(mx);
+    K.x += K.vx * dt; K.anim += Math.abs(K.vx) * dt * 0.06;
+    const lo = S().kind === "tower" ? 14 : Math.max(14, camX + 14), hi = S().kind === "tower" ? W - 14 : S().len - (stageKills >= quota() ? 10 : 70);
+    K.x = clamp(K.x, lo, hi);
+    if (jmp && K.ground) {
+      if (down && K.plat) { K.drop = 0.25; K.ground = false; K.y += 2; }
+      else { K.vy = -JUMP * (inWater(K) ? 0.85 : 1); K.ground = false; sfx.jump(); }
+    }
+    const was = K.ground;
+    fall(K, dt, K.drop > 0);
+    if (K.ground && !was) sfx.land();
+    if (act && K.cool <= 0) {
+      // close to a foe or to something flying at him: the sword; otherwise a shuriken
+      const near = foes.some((e) => !e.dead && Math.abs(e.x - K.x) < 52 && Math.abs(e.y - K.y) < 46) || shots.some((s) => !s.mine && Math.hypot(s.x - K.x, s.y - (K.y - 20)) < 56);
+      if (near) { K.slash = 0.22; K.cool = 0.26; sfx.slash(); slash(); }
+      else if (shots.filter((s) => s.mine).length < 3) {
+        const a = up ? -Math.PI / 4 : 0;
+        shots.push({ x: K.x + K.face * 10, y: K.y - 26, vx: Math.cos(a) * 420 * K.face, vy: Math.sin(a) * 420, mine: true, kind: "star", t: 0 });
+        K.cool = 0.2; K.throwT = 0.15; sfx.throw();
+      }
+    }
+    if (K.throwT > 0) K.throwT -= dt;
+  }
+  function slash() {
+    for (const e of foes) if (!e.dead && Math.abs(e.x - K.x) < 56 && (e.x - K.x) * K.face > -16 && Math.abs(e.y - K.y) < 50) hitFoe(e, 2);
+    for (const s of shots) if (!s.mine && Math.hypot(s.x - K.x, s.y - (K.y - 20)) < 60) {
+      // sent back the way it came
+      s.mine = true; s.vx = -s.vx * 1.2; s.vy = s.kind === "fire" ? -160 : -Math.abs(s.vy); s.deflected = true;
+      sfx.clang(); burst(s.x, s.y, "#ffffff", 6); addScore(50, s.x, s.y - 10);
+      if (++deflects === 5) impresa("parata");
+    }
+  }
+  function hitFoe(e, dmg) {
+    e.hp -= dmg; e.hit = 0.15;
+    if (e.hp > 0) { burst(e.x, e.y - 20, "#ffffff", 4); return; }
+    e.dead = true; e.deadT = 0; e.vy = -200; kills++; stageKills++; sfx.kill();
+    burst(e.x, e.y - 20, e.F.col, 14);
+    addScore(Math.round(e.F.pts * lapK()), e.x, e.y - 40);
+    if (e.F.boss) { impresa("maestro"); bossOn = false; stageClear(true); }
+  }
+  function killNinja(why) {
+    if (K.inv > 0 || K.dead || clearT > 0) return;
+    K.dead = true; deadT = 1.6; sfx.die(); stageLost = true;
+    burst(K.x, K.y - 20, "#3ab84a", 18);
+    message = { text: why, sub: lives > 1 ? `${lives - 1} ${lives - 1 === 1 ? "vita rimasta" : "vite rimaste"}` : "", t: 0 };
+  }
+
+  // ---------- Foes ----------
+  function updateFoe(e, dt) {
+    const F = e.F;
+    if (e.hit > 0) e.hit -= dt;
+    if (e.dead) { e.deadT += dt; e.vy += GRAV * dt; e.y += e.vy * dt; return; }
+    if (F.boss) {
+      // the master: vanishes and reappears on a ledge, then throws a fan of stars
+      e.tele -= dt; e.throwT -= dt;
+      if (e.tele <= 0) {
+        const spots = plats.map((p) => ({ x: p.x + p.w / 2, y: p.y })).concat([{ x: W - 80, y: GROUND }, { x: 120, y: GROUND }]).filter((p) => Math.abs(p.x - K.x) > 140);
+        const s = spots[Math.floor(Math.random() * spots.length)];
+        burst(e.x, e.y - 20, "#c8a8ff", 12); e.x = s.x; e.y = s.y; e.tele = rnd(2.4, 3.6) / lapK(); e.throwT = Math.min(e.throwT, 0.8); burst(e.x, e.y - 20, "#c8a8ff", 12);
+      }
+      e.face = K.x < e.x ? -1 : 1;
+      if (e.throwT <= 0) {
+        e.throwT = rnd(...F.throwT) / diff.shot / lapK();
+        const a0 = Math.atan2(K.y - 24 - (e.y - 26), K.x - e.x);
+        const fan = Math.min(3, diff.fan + (lap > 0 ? 1 : 0)), spread = [[0], [-0.14, 0.14], [-0.25, 0, 0.25]][fan - 1];
+        for (const da of spread) shots.push({ x: e.x, y: e.y - 26, vx: Math.cos(a0 + da) * 210 * diff.shot, vy: Math.sin(a0 + da) * 210 * diff.shot, kind: "star", t: 0 });
+        sfx.throw();
+      }
+      return;
+    }
+    e.throwT -= dt; e.jumpT -= dt;
+    const dx = K.x - e.x;
+    // ninjas see the stars coming and some of them jump over
+    if (!F.fire && e.ground) for (const s of shots) if (s.mine && !e.seen.has(s) && Math.abs(s.x - e.x) < 110 && Math.sign(e.x - s.x) === Math.sign(s.vx)) { e.seen.add(s); if (Math.random() < 0.22 * diff.shot) { e.vy = -JUMP * 0.8; e.ground = false; } }
+    e.face = Math.sign(dx) || e.face;
+    // monks keep their distance; ninjas close in, and jump to Kage's height now and then
+    const want = F.fire ? (Math.abs(dx) > 200 ? Math.sign(dx) : Math.abs(dx) < 140 ? -Math.sign(dx) * 0.5 : 0) : Math.abs(dx) > 70 ? Math.sign(dx) : 0;
+    e.x += want * F.speed * (inWater(e) ? 0.6 : 1) * lapK() * dt; e.anim += Math.abs(want) * dt * 8;
+    if (!F.fire && e.ground && e.jumpT <= 0) { e.jumpT = rnd(1.5, 3.5); if (K.y < e.y - 40 || Math.random() < 0.3) { e.vy = -JUMP * rnd(0.85, 1); e.ground = false; } }
+    fall(e, dt, false);
+    // throwing: when lined up with Kage (or, for monks, within range of the arc)
+    const lined = Math.abs(K.y - e.y) < 30;
+    if (e.throwT <= 0 && Math.abs(dx) < 420 && (lined || F.fire) && e.x > camX - 10 && e.x < camX + W + 10) {
+      e.throwT = rnd(...F.throwT) / diff.shot / (1 + 0.1 * lap);
+      if (F.fire) { shots.push({ x: e.x + e.face * 10, y: e.y - 30, vx: e.face * clamp(Math.abs(dx) * 0.9, 90, 260), vy: -230, kind: "fire", t: 0 }); sfx.fire(); }
+      else {
+        shots.push({ x: e.x + e.face * 10, y: e.y - 26, vx: e.face * 230 * diff.shot, vy: 0, kind: "star", t: 0 });
+        if (F.double) shots.push({ x: e.x + e.face * 10, y: e.y - 26, vx: e.face * 230 * diff.shot, vy: -70, kind: "star", t: 0 });
+        sfx.throw();
+      }
+    }
+    // touching an enemy ninja is deadly too
+    if (Math.abs(dx) < 16 && Math.abs(K.y - e.y) < 34) killNinja(F.fire ? "TRAVOLTO DAL MONACO" : "COLPITO DA UN NINJA");
+  }
+  function updateShots(dt) {
+    for (const s of shots) {
+      s.t += dt;
+      if (s.kind === "fire") s.vy += 420 * dt;
+      s.x += s.vx * dt; s.y += s.vy * dt;
+      if (s.mine) {
+        for (const e of foes) if (!e.dead && Math.abs(e.x - s.x) < (e.F.boss ? 16 : 13) && s.y > e.y - 40 && s.y < e.y + 2) { hitFoe(e, s.deflected ? 2 : 1); s.gone = true; break; }
+      } else if (!K.dead && K.inv <= 0 && Math.abs(s.x - K.x) < 9 && s.y > K.y - 38 && s.y < K.y + 2) { killNinja(s.kind === "fire" ? "BRUCIATO DAL FUOCO" : "COLPITO DA UNO SHURIKEN"); s.gone = true; }
+      if (s.y > GROUND + 4 || s.x < camX - 60 || s.x > camX + W + 60 || s.y < TOP - 40 || s.t > 4) s.gone = true;
+    }
+    shots = shots.filter((s) => !s.gone);
+  }
+
+  // ---------- Update ----------
+  function update(dt) {
+    clock += dt; sfxN = 0;
+    if (window.__bot) window.__bot(dt);
+    for (const p of parts) { p.t += dt; p.x += p.vx * dt; p.y += p.vy * dt; p.vy += 300 * dt; }
+    parts = parts.filter((p) => p.t < p.life);
+    for (const p of popups) { p.t += dt; p.y -= 25 * dt; }
+    popups = popups.filter((p) => p.t < 1);
+    if (message) { message.t += dt; if (message.t > (message.long ? 3.2 : 2.2)) message = null; }
+    if (state !== "play") return;
+    if (clearT > 0) {
+      clearT -= dt;
+      if (clearT <= 0) { stage++; if (stage >= STAGES.length) { stage = 0; lap++; } buildStage(); }
+      return;
+    }
+    if (deadT > 0) {
+      deadT -= dt;
+      if (deadT <= 0) {
+        lives--;
+        if (lives <= 0) { gameOver(); return; }
+        K.dead = false; K.inv = 2.2; K.vy = 0;
+        shots = [];
+        for (const e of foes) if (!e.dead && !e.F.boss && Math.abs(e.x - K.x) < 160) { e.dead = true; e.deadT = 1; }
+      }
+      return;
+    }
+    updateNinja(dt);
+    for (const e of foes) updateFoe(e, dt);
+    foes = foes.filter((e) => !(e.dead && e.deadT > 1.2) && e.x > camX - 300 && e.x < camX + W + 300);
+    updateShots(dt);
+    if (S().kind !== "tower") {
+      camX = clamp(K.x - W * 0.4, 0, S().len - W);
+      spawnT -= dt;
+      if (spawnT <= 0) { spawnT = rnd(0.7, 1.3) * diff.spawn / (1 + 0.15 * lap + 0.08 * stage); spawnFoe(); }
+      if (K.x >= S().len - 40 && !K.dead && stageKills >= quota()) stageClear(false);
+    } else camX = 0;
+  }
+
+  // ---------- Drawing ----------
+  function drawScenery() {
+    const st = S(), sea = SEA(), cx = camX;
+    const g = ctx.createLinearGradient(0, TOP, 0, GROUND);
+    g.addColorStop(0, sea.sky[0]); g.addColorStop(1, sea.sky[1]);
+    ctx.fillStyle = g; ctx.fillRect(0, TOP, W, H - TOP);
+    ctx.fillStyle = "#f8f0d8"; ctx.beginPath(); ctx.arc(520, 80, 22, 0, TAU); ctx.fill();
+    // far hills and the castle on the horizon
+    ctx.fillStyle = "rgba(20,20,50,0.45)"; ctx.beginPath(); ctx.moveTo(0, 250);
+    for (let x = 0; x <= W; x += 16) ctx.lineTo(x, 210 - Math.abs(Math.sin((x + cx * 0.15) * 0.01)) * 50);
+    ctx.lineTo(W, GROUND); ctx.lineTo(0, GROUND); ctx.fill();
+    const castleX = 520 - cx * 0.05 * (st.kind === "tower" ? 0 : 1);
+    ctx.fillStyle = "rgba(10,10,30,0.55)"; ctx.fillRect(castleX - 30, 150, 60, 60); ctx.beginPath(); ctx.moveTo(castleX - 40, 150); ctx.lineTo(castleX, 120); ctx.lineTo(castleX + 40, 150); ctx.fill(); ctx.fillRect(castleX - 18, 108, 36, 20); ctx.beginPath(); ctx.moveTo(castleX - 26, 110); ctx.lineTo(castleX, 90); ctx.lineTo(castleX + 26, 110); ctx.fill();
+    if (st.kind === "wood") {
+      // tree trunks and their crowns (the branches are the ledges)
+      for (const p of plats) {
+        if (p.tree === undefined || p.y !== 160) continue;
+        const x = p.tree - cx; if (x < -120 || x > W + 120) continue;
+        ctx.fillStyle = "#3a2a1a"; ctx.fillRect(x - 9, TOP, 18, GROUND - TOP);
+        ctx.fillStyle = sea.leaf2; ctx.beginPath(); ctx.arc(x, TOP + 20, 70, 0, TAU); ctx.fill();
+        ctx.fillStyle = sea.leaf; ctx.beginPath(); ctx.arc(x - 20, TOP + 10, 50, 0, TAU); ctx.arc(x + 30, TOP + 30, 46, 0, TAU); ctx.fill();
+      }
+      ctx.fillStyle = sea.grass; ctx.fillRect(0, GROUND, W, H - GROUND);
+    } else if (st.kind === "river") {
+      // the far bank, then the river all the way to the front: logs float on it, the ninja wades in it
+      ctx.fillStyle = sea.grass; ctx.fillRect(0, 214, W, 12);
+      const wg = ctx.createLinearGradient(0, 226, 0, H); wg.addColorStop(0, "#3a6aaa"); wg.addColorStop(1, "#1a2a5a");
+      ctx.fillStyle = wg; ctx.fillRect(0, 226, W, H - 226);
+      ctx.strokeStyle = "rgba(255,255,255,0.25)"; ctx.lineWidth = 1.5;
+      for (let i = 0; i < 18; i++) { const x = ((i * 97 - cx - clock * 30) % W + W) % W, y = 236 + (i * 23) % 110; ctx.beginPath(); ctx.moveTo(x, y); ctx.lineTo(x + 18, y); ctx.stroke(); }
+    } else {
+      // the castle walls: big stones
+      ctx.fillStyle = "#4a4a5a"; ctx.fillRect(0, 100, W, GROUND - 100);
+      ctx.strokeStyle = "rgba(0,0,0,0.25)"; ctx.lineWidth = 1;
+      for (let r = 0; r < 12; r++) for (let i = -1; i < 12; i++) ctx.strokeRect(i * 60 + (r % 2) * 30 - cx % 60, 100 + r * 19, 60, 19);
+      ctx.fillStyle = "#3a3a48"; for (let i = -1; i < 12; i++) ctx.fillRect(i * 60 - cx % 60, 88, 34, 14);
+      ctx.fillStyle = "#6a6a5a"; ctx.fillRect(0, GROUND, W, H - GROUND);
+    }
+    // the ledges
+    for (const p of plats) {
+      const x = p.x - cx; if (x + p.w < -10 || x > W + 10) continue;
+      if (p.tree !== undefined) { ctx.fillStyle = "#4a3220"; ctx.fillRect(x, p.y, p.w, 7); ctx.fillStyle = sea.leaf; ctx.beginPath(); ctx.arc(x + (p.x < p.tree ? 6 : p.w - 6), p.y - 2, 9, 0, TAU); ctx.fill(); }
+      else if (p.log) { ctx.fillStyle = "#7a5a3a"; ctx.fillRect(x, p.y, p.w, 9); ctx.fillStyle = "#5a3a1a"; ctx.beginPath(); ctx.arc(x, p.y + 4.5, 4.5, 0, TAU); ctx.arc(x + p.w, p.y + 4.5, 4.5, 0, TAU); ctx.fill(); }
+      else if (p.rock) { ctx.fillStyle = "#5a5a64"; ctx.beginPath(); ctx.moveTo(x - 6, 236); ctx.lineTo(x + 4, p.y + 4); ctx.lineTo(x + p.w - 4, p.y + 4); ctx.lineTo(x + p.w + 6, 236); ctx.fill(); ctx.fillStyle = "#7a7a84"; ctx.fillRect(x, p.y, p.w, 5); }
+      else { ctx.fillStyle = "#5a5a6a"; ctx.fillRect(x, p.y, p.w, 10); ctx.fillStyle = "#7a7a8a"; ctx.fillRect(x, p.y, p.w, 3); }
+    }
+    if (st.kind !== "tower") {
+      // the way out: a gate at the end of the stretch
+      const gx = st.len - 30 - cx;
+      if (gx < W + 40) { ctx.fillStyle = "#c83a2a"; ctx.fillRect(gx - 26, GROUND - 90, 8, 90); ctx.fillRect(gx + 18, GROUND - 90, 8, 90); ctx.fillRect(gx - 36, GROUND - 96, 72, 9); ctx.fillRect(gx - 30, GROUND - 76, 60, 6); if (stageKills < quota()) { ctx.fillStyle = "rgba(60,40,30,0.9)"; for (let i = -16; i <= 16; i += 8) ctx.fillRect(gx + i - 2, GROUND - 70, 4, 70); } }
+    } else {
+      // the princess, tied up at the top of the tower
+      ctx.fillStyle = "#ff8ab8"; ctx.beginPath(); ctx.moveTo(W / 2 - 9, 165); ctx.lineTo(W / 2, 135); ctx.lineTo(W / 2 + 9, 165); ctx.fill();
+      ctx.fillStyle = "#ffd8b0"; ctx.beginPath(); ctx.arc(W / 2, 130, 6, 0, TAU); ctx.fill();
+      ctx.fillStyle = "#1a1a1a"; ctx.beginPath(); ctx.arc(W / 2, 127, 6, Math.PI, TAU); ctx.fill();
+    }
+    if (SEA().name === "INVERNO") { ctx.fillStyle = "rgba(255,255,255,0.8)"; for (let i = 0; i < 40; i++) ctx.fillRect(((i * 53 - clock * 20) % W + W) % W, TOP + ((i * 31 + clock * 40) % (H - TOP)), 2, 2); }
+    if (SEA().name === "PRIMAVERA" || SEA().name === "AUTUNNO") { ctx.fillStyle = SEA().leaf; for (let i = 0; i < 16; i++) ctx.fillRect(((i * 79 - clock * 30) % W + W) % W, TOP + ((i * 47 + clock * 35) % (H - TOP)), 3, 2); }
+  }
+  // a ninja, drawn from the feet up and facing right (mirrored when facing left)
+  function drawFigure(x, y, face, col, opts = {}) {
+    ctx.save(); ctx.translate(x - camX, y); ctx.scale(face * (opts.big || 1), opts.big || 1);
+    ctx.lineCap = "round";
+    const run = opts.run || 0, s = Math.sin(run) * 7, air = opts.air;
+    ctx.strokeStyle = col; ctx.lineWidth = 5;
+    ctx.beginPath(); ctx.moveTo(-2, -16); ctx.lineTo(air ? -9 : -4 - s, air ? -6 : 0); ctx.moveTo(2, -16); ctx.lineTo(air ? 9 : 4 + s, air ? -8 : 0); ctx.stroke();
+    ctx.fillStyle = col; ctx.beginPath(); ctx.moveTo(-6, -16); ctx.lineTo(6, -16); ctx.lineTo(7, -32); ctx.lineTo(-7, -32); ctx.closePath(); ctx.fill();
+    if (opts.robe) { ctx.beginPath(); ctx.moveTo(-10, 0); ctx.lineTo(10, 0); ctx.lineTo(7, -32); ctx.lineTo(-7, -32); ctx.fill(); }
+    // arm: thrown forward when attacking
+    ctx.strokeStyle = col; ctx.lineWidth = 4;
+    ctx.beginPath(); ctx.moveTo(2, -29); ctx.lineTo(opts.throwing ? 15 : 8, opts.throwing ? -32 : -20); ctx.stroke();
+    ctx.fillStyle = opts.skin || col; ctx.beginPath(); ctx.arc(0, -38, 6.5, 0, TAU); ctx.fill();
+    if (opts.mask) { ctx.fillStyle = "#ffd8b0"; ctx.fillRect(1, -40, 6, 3); ctx.fillStyle = "#1a1a1a"; ctx.fillRect(4, -40, 2, 2); }
+    if (opts.hair) {
+      // Kage's long hair and red headband, streaming behind
+      ctx.fillStyle = "#1a1a1a"; ctx.beginPath(); ctx.moveTo(-3, -44); ctx.quadraticCurveTo(-18, -44 + Math.sin(clock * 10) * 3, -24, -32 + Math.sin(clock * 8) * 4); ctx.lineTo(-4, -36); ctx.fill();
+      ctx.fillStyle = "#e82a2a"; ctx.fillRect(-6, -43, 12, 3); ctx.beginPath(); ctx.moveTo(-6, -42); ctx.lineTo(-16, -40 + Math.sin(clock * 12) * 3); ctx.lineTo(-6, -39); ctx.fill();
+      ctx.fillStyle = "#1a1a1a"; ctx.fillRect(3, -39, 2, 2);
+    }
+    if (opts.bald) { ctx.fillStyle = "#e8b890"; ctx.beginPath(); ctx.arc(0, -38, 6.5, 0, TAU); ctx.fill(); ctx.fillStyle = "#1a1a1a"; ctx.fillRect(3, -39, 2, 2); }
+    if (opts.white) { ctx.fillStyle = "#f0f0ff"; ctx.beginPath(); ctx.moveTo(-6, -44); ctx.lineTo(-16, -26); ctx.lineTo(-2, -36); ctx.fill(); }
+    if (opts.slash) {
+      ctx.strokeStyle = "rgba(220,240,255,0.9)"; ctx.lineWidth = 3;
+      const k = 1 - opts.slash / 0.22;
+      ctx.beginPath(); ctx.arc(4, -26, 34, -1.4 + k * 1.6, -0.2 + k * 1.6); ctx.stroke();
+      ctx.strokeStyle = "#e8e8f0"; ctx.lineWidth = 2; ctx.beginPath(); ctx.moveTo(8, -24); ctx.lineTo(8 + Math.cos(-1 + k * 2) * 28, -24 + Math.sin(-1 + k * 2) * 28); ctx.stroke();
+    }
+    ctx.restore();
+  }
+  function drawShot(s) {
+    const x = s.x - camX;
+    if (s.kind === "fire") {
+      const g = ctx.createRadialGradient(x, s.y, 1, x, s.y, 9); g.addColorStop(0, "#ffffa0"); g.addColorStop(0.5, "#ff8a2a"); g.addColorStop(1, "rgba(255,60,0,0)");
+      ctx.fillStyle = g; ctx.beginPath(); ctx.arc(x, s.y, 9, 0, TAU); ctx.fill(); return;
+    }
+    ctx.save(); ctx.translate(x, s.y); ctx.rotate(s.t * 25);
+    ctx.fillStyle = s.mine ? "#e8e8f0" : "#ffd23a";
+    ctx.beginPath(); for (let i = 0; i < 8; i++) { const r = i % 2 ? 2 : 6, a = i * Math.PI / 4; ctx.lineTo(Math.cos(a) * r, Math.sin(a) * r); } ctx.fill();
+    ctx.restore();
+  }
+  function drawHud() {
+    ctx.fillStyle = "rgba(10,14,24,0.96)"; ctx.fillRect(0, 0, W, TOP);
+    ctx.textBaseline = "middle"; ctx.textAlign = "left";
+    const x0 = touchMode ? 130 : 10;
+    ctx.fillStyle = "#ffffff"; ctx.font = "900 15px system-ui"; ctx.fillText(score.toLocaleString("it-IT"), x0, 14);
+    ctx.fillStyle = "#c8d0e8"; ctx.font = "700 9px system-ui"; ctx.fillText(`REC ${Math.max(bestCache, score).toLocaleString("it-IT")}`, x0 + 82, 9);
+    ctx.fillStyle = "#ff5a5a"; ctx.font = "900 9px system-ui"; ctx.fillText(`${S().name} · ${SEA().name}`, x0 + 82, 20);
+    ctx.font = "900 9px system-ui"; const lw = ctx.measureText(`${S().name} · ${SEA().name}`).width;
+    ctx.fillStyle = "#ffffff"; ctx.font = "900 11px system-ui"; ctx.fillText(`♥ ${lives}`, Math.max(x0 + 200, x0 + 82 + lw + 14), 14);
+    // how far along the stretch, or the master's strength
+    const bx = touchMode ? W - 230 : W - 180;
+    if (S().kind !== "tower") {
+      ctx.fillStyle = "rgba(255,255,255,0.15)"; ctx.fillRect(bx, 11, 150, 6);
+      ctx.fillStyle = "#ff5a5a"; ctx.fillRect(bx, 11, 150 * clamp(K.x / S().len, 0, 1), 6);
+      ctx.fillStyle = "#ffffff"; ctx.fillRect(bx + 150 * clamp(K.x / S().len, 0, 1) - 1, 8, 3, 12);
+      const q = quota(), done = stageKills >= q;
+      ctx.fillStyle = done ? "#7aff7a" : "#ffffff"; ctx.font = "900 9px system-ui"; ctx.textAlign = "right"; ctx.fillText(done ? "PORTALE APERTO ✓" : `NEMICI ${stageKills}/${q}`, bx - 8, 14); ctx.textAlign = "left";
+    } else {
+      const b = foes.find((e) => e.F.boss && !e.dead);
+      ctx.fillStyle = "#ffffff"; ctx.font = "900 8px system-ui"; ctx.fillText("SIGNORE DELLE NEBBIE", bx, 7);
+      ctx.fillStyle = "rgba(255,255,255,0.15)"; ctx.fillRect(bx, 13, 150, 6);
+      if (b) { ctx.fillStyle = "#c88aff"; ctx.fillRect(bx, 13, 150 * b.hp / b.max, 6); }
+    }
+    ctx.textBaseline = "alphabetic";
+  }
+  function outlined(text, x, y, font, fill, lw = 5) {
+    ctx.font = font; ctx.lineWidth = lw; ctx.strokeStyle = "#0a0e18"; ctx.strokeText(text, x, y); ctx.fillStyle = fill; ctx.fillText(text, x, y);
+  }
+  function draw() {
+    ctx.setTransform(pxRatio, 0, 0, pxRatio, 0, 0);
+    if (!K) { buildStage(); message = null; addFoe("ninja", 420, GROUND).ground = true; const m = addFoe("monk", 560, GROUND); m.ground = true; }
+    drawScenery();
+    for (const e of foes) {
+      if (e.dead && Math.floor(clock * 14) % 2) continue;
+      const o = { run: e.anim, air: !e.ground, throwing: e.throwT > 0 && e.throwT < 0.2 };
+      if (e.kind === "monk") Object.assign(o, { robe: true, bald: true, big: 1.1 });
+      else if (e.F.boss) Object.assign(o, { mask: true, white: true, big: 1.25, throwing: e.throwT < 0.3 });
+      else o.mask = true;
+      ctx.globalAlpha = e.hit > 0 ? 0.5 : 1;
+      drawFigure(e.x, e.y, e.face, e.F.col, o);
+      ctx.globalAlpha = 1;
+    }
+    if (K && !(K.inv > 0 && Math.floor(clock * 14) % 2) && !(K.dead && Math.floor(clock * 10) % 2)) drawFigure(K.x, K.y, K.face, "#2a8a4a", { run: K.anim, air: !K.ground, hair: true, skin: "#ffd8b0", throwing: K.throwT > 0, slash: K.slash > 0 ? K.slash : 0 });
+    for (const s of shots) drawShot(s);
+    for (const p of parts) { ctx.globalAlpha = Math.max(0, 1 - p.t / p.life); ctx.fillStyle = p.col; ctx.fillRect(p.x - camX - 2, p.y - 2, 4, 4); }
+    ctx.globalAlpha = 1;
+    ctx.textAlign = "center";
+    for (const p of popups) { ctx.globalAlpha = Math.max(0, 1 - p.t); outlined(p.text, p.x - camX, p.y, "900 11px system-ui", p.col, 3); }
+    ctx.globalAlpha = 1;
+    if (state === "menu") return;
+    drawHud();
+    if (message) {
+      const lifeT = message.long ? 3.2 : 2.2;
+      ctx.globalAlpha = Math.min(1, (lifeT - message.t) * 2);
+      ctx.textAlign = "center"; outlined(message.text, W / 2, 96, "italic 900 26px system-ui", "#ff5a5a", 6);
+      if (message.sub) outlined(message.sub, W / 2, 118, "800 12px system-ui", "#ffffff", 4);
+      ctx.globalAlpha = 1;
+    }
+  }
+
+  // ---------- Loop ----------
+  const STEP = 1 / 120;
+  let last = performance.now(), acc = 0;
+  function frame(now) {
+    const dt = Math.min(0.1, (now - last) / 1000);
+    last = now;
+    if (isPlaying()) {
+      acc += dt;
+      while (acc >= STEP && isPlaying()) { update(STEP); acc -= STEP; }
+    } else { acc = 0; update(dt); }
+    draw();
+    requestAnimationFrame(frame);
+  }
+  syncControls();
+  showTitle();
+  requestAnimationFrame(frame);
+})();
+</script>
+<script src="../../shared/iniziali.js" data-record="ombra-best-" data-kind="score"></script>
+</body>
+</html>
+
