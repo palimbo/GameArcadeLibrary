@@ -1,0 +1,906 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no, viewport-fit=cover">
+<title>Le Scale del Demone</title>
+<style>
+  :root {
+    --bg: #0e0c14;
+    --fg: #f4f6ee;
+    --muted: #d8d0b8;
+    --pink: #ffd23a;
+    --yellow: #8ae05a;
+    --red: #ff4a3a;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  html, body {
+    height: 100%;
+    background: var(--bg);
+    color: var(--fg);
+    font-family: system-ui, -apple-system, "Segoe UI", sans-serif;
+    overflow: hidden;
+    user-select: none;
+    -webkit-user-select: none;
+    touch-action: none;
+  }
+  #wrap { position: fixed; inset: 0; display: flex; align-items: center; justify-content: center; }
+  canvas { display: block; touch-action: none; border-radius: 6px; box-shadow: 0 0 0 2px #1a3a5a, 0 10px 40px rgba(0,0,0,0.6); }
+  #pauseBtn {
+    position: fixed; z-index: 3; display: none; right: 10px; top: calc(10px + env(safe-area-inset-top, 0px));
+    font: 700 13px system-ui, sans-serif; color: var(--fg);
+    background: rgba(0, 0, 0, 0.6); border: 1px solid rgba(244, 246, 238, 0.35);
+    border-radius: 8px; padding: 6px 10px; cursor: pointer;
+  }
+  #touch {
+    position: fixed; z-index: 2; display: none; left: 12px; right: 12px;
+    bottom: calc(14px + env(safe-area-inset-bottom, 0px));
+    justify-content: space-between; align-items: flex-end; pointer-events: none;
+  }
+  /* thumb stick: walk the corridors; hold SPADA to draw the sword (put it away and the shield in front stops the spells) */
+  #touch .stick { position: relative; width: 136px; height: 136px; border-radius: 50%; pointer-events: auto; touch-action: none;
+    border: 2px solid rgba(255, 210, 58, 0.6); background: radial-gradient(circle, rgba(255,210,58,0.14), rgba(255,210,58,0.04)); }
+  #touch .stick .knob { position: absolute; left: 50%; top: 50%; width: 58px; height: 58px; margin: -29px 0 0 -29px; border-radius: 50%;
+    background: rgba(255, 210, 58, 0.45); border: 2px solid rgba(255,255,255,0.7); box-shadow: 0 4px 10px rgba(0,0,0,0.4); pointer-events: none; }
+  #touch .stick .ring { position: absolute; inset: 10px; border-radius: 50%; border: 1px dashed rgba(244,246,238,0.25); pointer-events: none; }
+  #touch .jump { width: 96px; height: 96px; border-radius: 50%; pointer-events: auto; touch-action: none; color: var(--fg);
+    font: 800 13px system-ui, sans-serif; letter-spacing: 1px; border: 2px solid rgba(255, 210, 58, 0.9); background: rgba(255, 210, 58, 0.22); }
+  #touch .jump.on { background: rgba(255, 210, 58, 0.55); }
+  #touch.small .stick { width: 112px; height: 112px; }
+  #touch.small .stick .knob { width: 48px; height: 48px; margin: -24px 0 0 -24px; }
+  #touch.small .jump { width: 80px; height: 80px; font-size: 11px; }
+  #touch .btns { display: flex; flex-direction: column; align-items: center; gap: 10px; pointer-events: none; }
+  #touch .jump.axe { width: 64px; height: 64px; font-size: 11px; border-color: rgba(255, 244, 200, 0.9); background: rgba(255, 244, 200, 0.16); }
+  #touch .jump.axe.on { background: rgba(255, 244, 200, 0.5); }
+  #touch.small .jump.axe { width: 54px; height: 54px; font-size: 10px; }
+  #overlay {
+    position: fixed; inset: 0; z-index: 5;
+    display: flex; flex-direction: column; align-items: center; justify-content: flex-start;
+    gap: 14px; padding: 16px; text-align: center; overflow-y: auto;
+    background: rgba(14, 12, 20, 0.93);
+  }
+  #overlay > :first-child { margin-top: auto; }
+  #overlay > :last-child { margin-bottom: auto; }
+  #overlay.hidden { display: none; }
+  #homeLink {
+    position: fixed; top: calc(10px + env(safe-area-inset-top, 0px)); left: 10px; z-index: 6;
+    font: 600 13px/1 system-ui, sans-serif; color: #fff; text-decoration: none;
+    padding: 8px 12px; border-radius: 999px; background: rgba(0,0,0,.55);
+    border: 1px solid rgba(255,255,255,.25);
+  }
+  #homeLink:hover { background: rgba(0,0,0,.8); }
+  #overlay.hidden ~ #homeLink { display: none; }
+  @media (max-width: 700px) { #overlay { padding-top: calc(52px + env(safe-area-inset-top, 0px)); } }
+  #overlay h1 { font-size: clamp(32px, 10vw, 58px); font-weight: 900; font-style: italic; letter-spacing: 1px; color: var(--pink);
+    text-shadow: 3px 3px 0 #5a1a6a, 0 0 22px rgba(255,210,58,0.35); }
+  #overlay h2 { font-size: clamp(26px, 7vw, 42px); font-weight: 900; letter-spacing: 2px; color: var(--pink); }
+  #overlay h2.lose { color: var(--red); }
+  #overlay p { max-width: 540px; font-size: clamp(13px, 3.4vw, 16px); line-height: 1.55; }
+  #overlay p.muted { color: var(--muted); }
+  #overlay .pts { display: grid; grid-template-columns: repeat(2, auto); gap: 4px 18px; font-size: 13px; color: var(--muted); text-align: left; max-width: 560px; }
+  #overlay .pts b { color: var(--fg); }
+  #overlay .diff { display: flex; gap: 10px; flex-wrap: wrap; justify-content: center; }
+  #overlay button {
+    font: 800 15px system-ui, sans-serif; letter-spacing: 1.5px; color: var(--fg);
+    background: transparent; cursor: pointer;
+    border: 2px solid rgba(244,246,238,0.3); border-radius: 10px; padding: 9px 16px;
+  }
+  #overlay .diff button.on { border-color: var(--c); color: var(--c); box-shadow: 0 0 12px var(--c); }
+  #overlay button.start { border-color: var(--pink); color: #2a1a02; background: var(--pink); padding: 11px 30px; box-shadow: 0 4px 0 #a8781a; }
+  @media (max-height: 560px) {
+    #overlay { gap: 8px; }
+    #overlay h1 { font-size: 30px; }
+    #overlay p { font-size: 13px; line-height: 1.4; }
+    #overlay .help, #overlay .pts { display: none; }
+  }
+</style>
+</head>
+<body>
+<div id="wrap"><canvas id="game"></canvas></div>
+<div id="touch">
+  <div class="stick" aria-label="Levetta"><div class="ring"></div><div class="knob"></div></div>
+  <div class="btns"><button type="button" class="jump hop" aria-label="Spada">SPADA</button></div>
+</div>
+<button id="pauseBtn" type="button" aria-label="Pausa">❚❚</button>
+<div id="overlay"></div>
+<a id="homeLink" href="../../index.html">← Sala Giochi</a>
+
+
+<script>
+(() => {
+  "use strict";
+
+  const W = 640, H = 360, TAU = Math.PI * 2, TOP = 28;
+  // each floor of the tower is a maze of COLS × ROWS rooms; walls are bits of each room: N 1 · E 2 · S 4 · W 8
+  const COLS = 18, ROWS = 9, CS = 34, MX = (W - COLS * CS) / 2, MY = TOP + (H - TOP - ROWS * CS) / 2;
+  const DIRS = [{ dx: 0, dy: -1, b: 1 }, { dx: 1, dy: 0, b: 2 }, { dx: 0, dy: 1, b: 4 }, { dx: -1, dy: 0, b: 8 }];
+  const OPP = [2, 3, 0, 1];
+  // the monsters. hp: how long they last against the sword · atk: health they take from Gilberto per second of contact
+  const KINDS = {
+    slime:  { name: "Gelatina verde", hp: 0.25, atk: 70, speed: 1.0, pts: 100 },
+    blue:   { name: "Gelatina blu", hp: 0.6, atk: 90, speed: 1.35, pts: 200 },
+    knight: { name: "Cavaliere nero", hp: 3, atk: 30, speed: 1.25, pts: 500 },
+    red:    { name: "Cavaliere rosso", hp: 5, atk: 40, speed: 1.5, pts: 800 },
+    mage:   { name: "Mago", hp: 0.2, atk: 20, speed: 0, pts: 300 },
+    ghost:  { name: "Fantasma", hp: 0.5, atk: 50, speed: 0.75, pts: 400 },
+    wisp:   { name: "Fuoco fatuo", hp: 0.3, atk: 60, speed: 1.1, pts: 50 },
+    demon:  { name: "Il Demone", hp: 8, atk: 45, speed: 0.9, pts: 5000 },
+  };
+  // what makes the floor's treasure appear (always written at the top)
+  const QUESTS = [
+    { id: "slimes", text: "sconfiggi tutte le gelatine" },
+    { id: "mage", text: "sconfiggi un mago", needs: "mage" },
+    { id: "fastkey", text: "prendi la chiave entro 15 secondi" },
+    { id: "knight", text: "sconfiggi un cavaliere", needs: "knight" },
+    { id: "still", text: "resta fermo 3 secondi con la spada sguainata" },
+    { id: "doorfirst", text: "tocca la porta prima di avere la chiave" },
+    { id: "block", text: "para 2 incantesimi con lo scudo", needs: "mage" },
+  ];
+  const TREASURES = [
+    { id: "sword", name: "SPADA D'ARGENTO", sub: "colpi più forti" },
+    { id: "armor", name: "ARMATURA", sub: "i mostri ti fanno meno male" },
+    { id: "boots", name: "STIVALI", sub: "cammini più svelto" },
+    { id: "candle", name: "CANDELA", sub: "vedi dove compariranno i maghi" },
+    { id: "potion", name: "POZIONE", sub: "salute piena" },
+    { id: "hourglass", name: "CLESSIDRA", sub: "+20 secondi" },
+    { id: "gem", name: "GEMMA", sub: "+2.000 punti" },
+  ];
+
+  const DIFFICULTIES = {
+    facile:    { label: "FACILE",    color: "#7ed87a", desc: "4 vite · 80 secondi a piano · meno mostri, e fanno meno male", lives: 4, time: 80, hurt: 0.9, more: 0.8, bolt: 4.2 },
+    normale:   { label: "NORMALE",   color: "#ffd23a", desc: "3 vite · 70 secondi a piano", lives: 3, time: 70, hurt: 1.4, more: 1, bolt: 5 },
+    difficile: { label: "DIFFICILE", color: "#ff5a5a", desc: "3 vite · 60 secondi a piano · più mostri, più forti, incantesimi più veloci", lives: 3, time: 60, hurt: 1.8, more: 1.3, bolt: 6 },
+  };
+  const DIFF_IDS = Object.keys(DIFFICULTIES);
+  const DIFF_KEY = "demone-difficulty";
+  const bestKey = (id) => `demone-best-${id}`;
+  function store(k, v) { try { localStorage.setItem(k, v); } catch { /* ignore */ } }
+  function load(k) { try { return localStorage.getItem(k); } catch { return null; } }
+  const impresa = (id) => window.dispatchEvent(new CustomEvent("sala:impresa", { detail: id }));
+  let treasureRun = 0;
+  const rnd = (a, b) => a + Math.random() * (b - a);
+  const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
+
+  // ---------- Canvas ----------
+  const canvas = document.getElementById("game");
+  const ctx = canvas.getContext("2d");
+  const wrapEl = document.getElementById("wrap");
+  const overlay = document.getElementById("overlay");
+  const touchEl = document.getElementById("touch");
+  const pauseBtn = document.getElementById("pauseBtn");
+  let pxRatio = 1, touchMode = !!(window.matchMedia && matchMedia("(pointer: coarse)").matches);
+  function resize() {
+    const portrait = window.innerHeight > window.innerWidth;
+    const showTouch = touchMode && isPlaying();
+    touchEl.style.display = showTouch ? "flex" : "none";
+    touchEl.classList.toggle("small", !portrait && window.innerHeight < 480);
+    wrapEl.style.paddingBottom = showTouch && portrait ? "calc(170px + env(safe-area-inset-bottom, 0px))" : "0";
+    let availW = window.innerWidth - 8, availH = window.innerHeight - 8;
+    if (showTouch && portrait) availH -= 170;
+    if (showTouch && !portrait) {
+      const side = Math.max(...[...touchEl.children].map((el) => el.offsetWidth)) + 20;
+      if (window.innerWidth - 2 * side > 200) availW = window.innerWidth - 2 * side;
+    }
+    const s = Math.max(0.2, Math.min(availW / W, availH / H));
+    pxRatio = Math.min(3, s * (window.devicePixelRatio || 1));
+    canvas.style.width = W * s + "px";
+    canvas.style.height = H * s + "px";
+    canvas.width = Math.round(W * pxRatio);
+    canvas.height = Math.round(H * pxRatio);
+  }
+  window.addEventListener("resize", () => syncControls());
+
+  // ---------- Audio ----------
+  let audioCtx = null;
+  function beep(freq, dur, type = "square", vol = 0.04, slide = 0, delay = 0) {
+    if (!audioCtx) return;
+    const t = audioCtx.currentTime + delay;
+    const osc = audioCtx.createOscillator(), gain = audioCtx.createGain();
+    osc.type = type;
+    osc.frequency.setValueAtTime(freq, t);
+    if (slide) osc.frequency.exponentialRampToValueAtTime(Math.max(20, freq + slide), t + dur);
+    gain.gain.setValueAtTime(vol, t);
+    gain.gain.exponentialRampToValueAtTime(0.0001, t + dur);
+    osc.connect(gain).connect(audioCtx.destination);
+    osc.start(t); osc.stop(t + dur + 0.02);
+  }
+  const arp = (notes, gap, d, type = "square", vol = 0.04) => notes.forEach((f, i) => beep(f, d, type, vol, 0, i * gap));
+  let sfxN = 0;
+  const lim = (fn) => (...a) => { if (sfxN++ < 4) fn(...a); };
+  const sfx = {
+    step: lim(() => beep(rnd(150, 180), 0.03, "triangle", 0.012)),
+    clang: lim(() => { beep(rnd(900, 1100), 0.05, "square", 0.025); beep(rnd(300, 360), 0.07, "sawtooth", 0.02); }),
+    kill: lim(() => arp([660, 880, 1175], 0.04, 0.07, "square", 0.035)),
+    ouch: lim(() => beep(180, 0.1, "sawtooth", 0.03, -60)),
+    spell: lim(() => beep(1200, 0.25, "sine", 0.03, -900)),
+    block: lim(() => arp([1568, 2093], 0.03, 0.06, "square", 0.035)),
+    zap: lim(() => { beep(220, 0.3, "sawtooth", 0.05, -150); }),
+    poof: lim(() => beep(500, 0.15, "triangle", 0.025, 400)),
+    key: () => arp([784, 988, 1175, 1568], 0.07, 0.12, "square", 0.045),
+    chest: () => arp([523, 659, 784, 1047, 1319], 0.06, 0.1, "square", 0.04),
+    quest: () => arp([1047, 1319, 1568], 0.06, 0.08, "triangle", 0.05),
+    clear: () => arp([523, 659, 784, 1047, 784, 1047, 1319, 1568], 0.08, 0.14, "square", 0.045),
+    die: () => arp([784, 659, 523, 392, 262], 0.09, 0.16, "triangle", 0.05),
+    oneup: () => arp([1047, 1319, 1568, 2093], 0.06, 0.1, "square", 0.04),
+    over: () => arp([523, 466, 415, 392, 330, 262], 0.15, 0.24, "triangle", 0.05),
+    roar: () => { beep(90, 0.6, "sawtooth", 0.06, 40); beep(60, 0.6, "square", 0.04); },
+    tick: lim(() => beep(1400, 0.03, "square", 0.02)),
+  };
+
+  // ---------- State ----------
+  let difficulty = DIFFICULTIES[load(DIFF_KEY)] ? load(DIFF_KEY) : "normale";
+  let diff = DIFFICULTIES[difficulty];
+  let state = "menu", menu = null, pausedFrom = null, clock = 0;
+  let score = 0, bestCache = 0, lives = 3, floor = 1, nextLife = 20000, kills = 0;
+  let walls = [], gil = null, mobs = [], bolts = [], parts = [], popups = [], message = null;
+  let keyAt = null, doorAt = null, hasKey = false, chest = null, quest = null, questDone = false, gotTreasure = false;
+  let timeLeft = 70, floorT = 0, wispT = 0, deadT = 0, clearT = 0, stillT = 0, blocks = 0, killedSlimes = 0, startAt = null;
+  const items = new Set();
+  let actHeld = false;
+  const keys = { left: false, right: false, up: false, down: false };
+  const stick = { x: 0, y: 0 };
+
+  // ---------- The maze ----------
+  const inside = (c, r) => c >= 0 && r >= 0 && c < COLS && r < ROWS;
+  const open = (c, r, d) => inside(c + DIRS[d].dx, r + DIRS[d].dy) && !(walls[r][c] & DIRS[d].b);
+  function carve(c, r, d) { walls[r][c] &= ~DIRS[d].b; walls[r + DIRS[d].dy][c + DIRS[d].dx] &= ~DIRS[OPP[d]].b; }
+  // a winding maze with a few extra openings, so there's always more than one way round a monster
+  function makeMaze() {
+    walls = Array.from({ length: ROWS }, () => new Array(COLS).fill(15));
+    const seen = Array.from({ length: ROWS }, () => new Array(COLS).fill(false));
+    const stack = [[Math.floor(Math.random() * COLS), Math.floor(Math.random() * ROWS)]];
+    seen[stack[0][1]][stack[0][0]] = true;
+    while (stack.length) {
+      const [c, r] = stack[stack.length - 1];
+      const ds = [0, 1, 2, 3].filter((d) => { const nc = c + DIRS[d].dx, nr = r + DIRS[d].dy; return inside(nc, nr) && !seen[nr][nc]; });
+      if (!ds.length) { stack.pop(); continue; }
+      const d = ds[Math.floor(Math.random() * ds.length)];
+      carve(c, r, d);
+      const nc = c + DIRS[d].dx, nr = r + DIRS[d].dy; seen[nr][nc] = true; stack.push([nc, nr]);
+    }
+    let extra = Math.round(COLS * ROWS * 0.14);
+    while (extra > 0) {
+      const c = Math.floor(Math.random() * COLS), r = Math.floor(Math.random() * ROWS), d = Math.floor(Math.random() * 4);
+      if (open(c, r, d) || !inside(c + DIRS[d].dx, r + DIRS[d].dy)) continue;
+      carve(c, r, d); extra--;
+    }
+  }
+  // distances from a room to every other, walking the corridors
+  function distMap(c0, r0) {
+    const d = Array.from({ length: ROWS }, () => new Array(COLS).fill(Infinity));
+    d[r0][c0] = 0; const q = [[c0, r0]];
+    for (let i = 0; i < q.length; i++) {
+      const [c, r] = q[i];
+      for (let k = 0; k < 4; k++) if (open(c, r, k)) { const nc = c + DIRS[k].dx, nr = r + DIRS[k].dy; if (d[nr][nc] === Infinity) { d[nr][nc] = d[r][c] + 1; q.push([nc, nr]); } }
+    }
+    return d;
+  }
+  function farthest(dm, minFrom = []) {
+    let best = null, bd = -1;
+    for (let r = 0; r < ROWS; r++) for (let c = 0; c < COLS; c++) {
+      if (dm[r][c] === Infinity || minFrom.some(([a, b]) => Math.abs(a - c) + Math.abs(b - r) < 4)) continue;
+      const v = dm[r][c] + Math.random() * 3;
+      if (v > bd) { bd = v; best = [c, r]; }
+    }
+    return best;
+  }
+
+  // ---------- Movers ----------
+  // something that walks from room to room: it sits in a room (c, r) or is on its way to the next one (t from 0 to 1)
+  function mover(c, r) { return { c, r, tc: c, tr: r, t: 0, dir: -1, face: 2 }; }
+  const px = (m) => m.c + (m.tc - m.c) * m.t, py = (m) => m.r + (m.tr - m.r) * m.t;
+  const atCenter = (m) => m.dir < 0;
+  function startMove(m, d) { m.dir = d; m.tc = m.c + DIRS[d].dx; m.tr = m.r + DIRS[d].dy; m.t = 0; m.face = d; }
+  // moves along; returns true each time it reaches a room
+  function advance(m, sp, dt) {
+    if (m.dir < 0) return false;
+    m.t += sp * dt;
+    if (m.t >= 1) { m.c = m.tc; m.r = m.tr; m.t = 0; m.dir = -1; return true; }
+    return false;
+  }
+  function reverse(m) { const d = OPP[m.dir]; [m.c, m.tc] = [m.tc, m.c]; [m.r, m.tr] = [m.tr, m.r]; m.t = 1 - m.t; m.dir = d; m.face = d; }
+
+  // ---------- Floors ----------
+  function addMob(kind, c, r) {
+    const K = KINDS[kind], m = mover(c, r);
+    Object.assign(m, { kind, K, hp: K.hp * (kind === "demon" ? 1 + 0.3 * (floor / 5 - 1) : 1), hit: 0, vis: kind !== "mage", wait: rnd(0.5, 2.5), cast: false, x: c, y: r, id: Math.random() });
+    mobs.push(m);
+    return m;
+  }
+  function buildFloor() {
+    makeMaze();
+    mobs = []; bolts = []; chest = null; hasKey = false; questDone = false; gotTreasure = false;
+    const s = [Math.floor(Math.random() * 3), Math.floor(Math.random() * ROWS)];
+    startAt = s;
+    const dm = distMap(s[0], s[1]);
+    const demonFloor = floor % 5 === 0;
+    keyAt = demonFloor ? null : farthest(dm);
+    doorAt = farthest(distMap(...(keyAt || s)), keyAt ? [keyAt, s] : [s]);
+    const n = (k) => Math.max(0, Math.round(k * diff.more));
+    const spots = [];
+    for (let r = 0; r < ROWS; r++) for (let c = 0; c < COLS; c++) if (dm[r][c] >= 5) spots.push([c, r]);
+    const take = () => spots.splice(Math.floor(Math.random() * spots.length), 1)[0];
+    const slimes = n(Math.min(7, 3 + floor / 2));
+    for (let i = 0; i < slimes; i++) { const p = take(); if (p) addMob(floor >= 4 && i % 3 === 0 ? "blue" : "slime", ...p); }
+    if (floor >= 2) for (let i = 0; i < n(Math.min(3, 1 + Math.floor((floor - 2) / 3))); i++) addMob("mage", 0, 0).wait = rnd(2, 5);
+    if (floor >= 2) for (let i = 0; i < n(Math.min(3, 1 + Math.floor((floor - 2) / 4))); i++) { const p = take(); if (p) addMob(floor >= 7 && i === 0 ? "red" : "knight", ...p); }
+    if (floor >= 7) for (let i = 0; i < n(Math.min(3, 1 + Math.floor((floor - 7) / 5))); i++) { const p = take(); if (p) addMob("ghost", ...p); }
+    if (demonFloor) { const p = farthest(dm); addMob("demon", ...p); }
+    // the treasure of the floor: one of the quests this floor can offer
+    const kinds = new Set(mobs.map((m) => (m.kind === "red" ? "knight" : m.kind)));
+    const ok = QUESTS.filter((q) => !q.needs || kinds.has(q.needs));
+    quest = ok[(floor * 5 + Math.floor(Math.random() * 3)) % ok.length];
+    killedSlimes = 0; blocks = 0; stillT = 0;
+  }
+  function placeGil() {
+    gil = mover(startAt[0], startAt[1]); gil.face = 1;
+    Object.assign(gil, { hp: 100, hurt: 0, inv: 2 });
+  }
+  function startFloor() {
+    buildFloor();
+    const hp = gil ? gil.hp : 100;
+    placeGil(); gil.hp = Math.min(100, hp + 25);
+    timeLeft = diff.time; floorT = 0; wispT = 0;
+    message = { text: floor % 5 === 0 ? `PIANO ${floor} · IL DEMONE` : `PIANO ${floor}`, sub: floor % 5 === 0 ? "la chiave ce l'ha lui: sconfiggilo!" : "trova la chiave, poi la porta", t: 0 };
+  }
+
+  // ---------- Flow ----------
+  const isPlaying = () => state === "play";
+  function startGame() {
+    if (!audioCtx) { try { audioCtx = new (window.AudioContext || window.webkitAudioContext)(); } catch { audioCtx = null; } }
+    if (audioCtx && audioCtx.state === "suspended") audioCtx.resume();
+    score = 0; lives = diff.lives; floor = 1; nextLife = 30000; kills = 0; deadT = 0; clearT = 0; parts = []; popups = []; gil = null; treasureRun = 0;
+    items.clear();
+    bestCache = parseInt(load(bestKey(difficulty)), 10) || 0;
+    startFloor();
+    state = "play";
+    menu = null;
+    overlay.classList.add("hidden");
+    syncControls();
+    last = performance.now();
+  }
+  function addScore(n, x, y, col = "#ffe8a0") {
+    score += n;
+    if (x !== undefined) popups.push({ x, y, text: `+${n.toLocaleString("it-IT")}`, col, t: 0 });
+    if (score >= nextLife) { lives++; nextLife += 70000; sfx.oneup(); message = { text: "VITA EXTRA!", t: 0 }; }
+  }
+  function burst(x, y, col, n = 10) { for (let i = 0; i < n; i++) parts.push({ x, y, vx: rnd(-90, 90), vy: rnd(-90, 90), t: 0, life: rnd(0.3, 0.6), col }); }
+  const sx = (c) => MX + (c + 0.5) * CS, sy = (r) => MY + (r + 0.5) * CS;
+  function floorClear() {
+    if (floorT < 20) impresa("lampo");
+    if (gotTreasure) { if (++treasureRun === 5) impresa("tesori"); } else treasureRun = 0;
+    const bonus = 1000 + Math.ceil(timeLeft) * 20;
+    addScore(bonus * (1 + Math.floor((floor - 1) / 5)));
+    clearT = 2.2; sfx.clear();
+    message = { text: `PIANO ${floor} SUPERATO!`, sub: `+${(bonus * (1 + Math.floor((floor - 1) / 5))).toLocaleString("it-IT")}${gotTreasure ? " · con il tesoro" : ""}`, t: 0 };
+  }
+  function loseLife(why) {
+    deadT = 1.8; sfx.die();
+    message = { text: why, sub: lives > 1 ? `${lives - 1} ${lives - 1 === 1 ? "vita rimasta" : "vite rimaste"}` : "", t: 0 };
+    burst(sx(px(gil)), sy(py(gil)), "#ffd23a", 18);
+  }
+  function gameOver() {
+    state = "over";
+    const prev = parseInt(load(bestKey(difficulty)), 10) || 0;
+    const record = score > prev;
+    if (record) store(bestKey(difficulty), String(score));
+    sfx.over();
+    menu = () => showOverlay(
+      `<h2 class="lose">LA TORRE HA VINTO</h2>
+       <p>Punteggio: <b>${score.toLocaleString("it-IT")}</b> · piano ${floor} · ${kills} ${kills === 1 ? "mostro sconfitto" : "mostri sconfitti"} · ${diff.label}</p>
+       ${record ? "<p style='color:var(--pink)'>★ NUOVO RECORD! ★</p>" : ""}
+       ${difficultyHTML()}
+       <button class="start" data-start>RIPROVA</button>`
+    );
+    menu();
+    syncControls();
+  }
+  function togglePause() {
+    if (isPlaying()) {
+      pausedFrom = state; state = "paused";
+      showOverlay(`<h2>PAUSA</h2><button class="start" data-resume>CONTINUA</button><p class="muted">Premi P per continuare</p>`);
+    } else if (state === "paused") {
+      state = pausedFrom; overlay.classList.add("hidden"); last = performance.now();
+    }
+    syncControls();
+  }
+  // the pause menu can end the game (shared/iniziali.js): it ends here the usual way, saving the record
+  window.addEventListener("sala:termina", () => { if (state !== "paused") return; state = pausedFrom; overlay.classList.add("hidden"); gameOver(); syncControls(); });
+  function syncControls() {
+    pauseBtn.style.display = isPlaying() && touchMode ? "block" : "none";
+    resize();
+  }
+  pauseBtn.addEventListener("click", () => togglePause());
+  function showOverlay(html) { overlay.innerHTML = html; overlay.classList.remove("hidden"); }
+  function difficultyHTML() {
+    const buttons = DIFF_IDS.map((id) => {
+      const d = DIFFICULTIES[id];
+      return `<button type="button" data-diff="${id}" class="${id === difficulty ? "on" : ""}" style="--c:${d.color}">${d.label}</button>`;
+    }).join("");
+    const best = parseInt(load(bestKey(difficulty)), 10);
+    return `<div class="diff">${buttons}</div><p class="muted">${diff.desc}${best ? ` · Record: ${best.toLocaleString("it-IT")}` : ""}</p>`;
+  }
+  function setDifficulty(id) { if (!DIFFICULTIES[id]) return; difficulty = id; diff = DIFFICULTIES[id]; store(DIFF_KEY, id); if (menu) menu(); }
+  function showTitle() {
+    menu = showTitle;
+    showOverlay(
+      `<h1>LE SCALE DEL DEMONE</h1>
+       <p>Il Demone tiene prigioniera Kiara in cima alla torre. Gilberto, il cavaliere d'oro, sale piano dopo piano: in ogni labirinto deve trovare la chiave e poi la porta per le scale, prima che finisca il tempo. Con la spada sguainata sconfigge i mostri; con la spada nel fodero lo scudo davanti para gli incantesimi dei maghi.</p>
+       <div class="pts">
+         <span><b>Spada</b></span><span>tieni premuto SPADA: chi tocchi perde forza, e tu molta meno · senza spada i mostri ti fanno male di più</span>
+         <span><b>Scudo</b></span><span>con la spada nel fodero, guarda verso l'incantesimo che arriva e lo scudo lo ferma</span>
+         <span><b>Tesoro</b></span><span>ogni piano ne nasconde uno: in alto c'è scritto cosa fare perché compaia (spada d'argento, armatura, stivali, candela, pozione…)</span>
+         <span><b>Mostri</b></span><span>gelatine, maghi, cavalieri, fantasmi e ogni 5 piani il Demone · finito il tempo arrivano i fuochi fatui</span>
+         <span><b>Punti</b></span><span>mostri 100-800 · Demone 5.000 · chiave 200 · piano 1.000 più 20 per secondo rimasto · tesoro 1.000</span>
+       </div>
+       ${touchMode
+         ? `<p class="muted help">Levetta: cammina · tieni premuto SPADA</p>`
+         : `<p class="muted help">Frecce o WASD per camminare · tieni premuto SPAZIO o J per la spada · P pausa</p>`}
+       ${difficultyHTML()}
+       <button class="start" data-start>SALI NELLA TORRE</button>`
+    );
+  }
+  overlay.addEventListener("click", (e) => {
+    const d = e.target.closest("[data-diff]");
+    if (d) { setDifficulty(d.dataset.diff); return; }
+    if (e.target.closest("[data-start]")) startGame();
+    if (e.target.closest("[data-resume]")) togglePause();
+  });
+
+  // ---------- Input ----------
+  const KEYMAP = { arrowleft: "left", a: "left", arrowright: "right", d: "right", arrowup: "up", w: "up", arrowdown: "down", s: "down" };
+  const ACTKEYS = [" ", "j", "x", "k"];
+  window.addEventListener("keydown", (e) => {
+    const k = e.key.toLowerCase();
+    if ([" ", "arrowup", "arrowdown", "arrowleft", "arrowright"].includes(k)) e.preventDefault();
+    if (state === "menu" || state === "over") {
+      if (e.key === "Enter") startGame();
+      else if (["1", "2", "3"].includes(k)) setDifficulty(DIFF_IDS[+k - 1]);
+      return;
+    }
+    if (k === "p" || k === "escape") { if (!e.repeat) togglePause(); return; }
+    if (state === "paused") { if (e.key === "Enter") togglePause(); return; }
+    if (ACTKEYS.includes(k)) actHeld = true;
+    if (KEYMAP[k]) keys[KEYMAP[k]] = true;
+  });
+  window.addEventListener("keyup", (e) => { const k = e.key.toLowerCase(); if (KEYMAP[k]) keys[KEYMAP[k]] = false; if (ACTKEYS.includes(k)) actHeld = false; });
+  window.addEventListener("blur", () => { for (const k in keys) keys[k] = false; actHeld = false; stick.x = stick.y = 0; if (isPlaying()) togglePause(); });
+  {
+    const b = touchEl.querySelector(".hop");
+    b.addEventListener("pointerdown", (e) => { e.preventDefault(); actHeld = true; b.classList.add("on"); });
+    for (const ev of ["pointerup", "pointercancel", "pointerleave"]) b.addEventListener(ev, () => { actHeld = false; b.classList.remove("on"); });
+  }
+  const stickEl = touchEl.querySelector(".stick"), knob = stickEl.querySelector(".knob");
+  let stickId = null;
+  function stickAt(e) {
+    const r = stickEl.getBoundingClientRect(), max = r.width / 2 - 14;
+    let dx = e.clientX - (r.left + r.width / 2), dy = e.clientY - (r.top + r.height / 2);
+    const len = Math.hypot(dx, dy);
+    if (len > max) { dx *= max / len; dy *= max / len; }
+    knob.style.transform = `translate(${dx}px, ${dy}px)`;
+    const f = (v) => { const a = Math.abs(v) / max; return a < 0.2 ? 0 : Math.sign(v) * Math.min(1, (a - 0.2) / 0.5); };
+    stick.x = f(dx); stick.y = f(dy);
+  }
+  const stickEnd = (e) => { if (e.pointerId !== stickId) return; stickId = null; knob.style.transform = ""; stick.x = stick.y = 0; };
+  stickEl.addEventListener("pointerdown", (e) => { e.preventDefault(); stickId = e.pointerId; try { stickEl.setPointerCapture(e.pointerId); } catch { /* ignore */ } stickAt(e); });
+  stickEl.addEventListener("pointermove", (e) => { if (e.pointerId === stickId) stickAt(e); });
+  for (const ev of ["pointerup", "pointercancel", "lostpointercapture"]) stickEl.addEventListener(ev, stickEnd);
+  window.addEventListener("pointerdown", (e) => { if (e.pointerType === "touch" && !touchMode) { touchMode = true; syncControls(); if (menu) menu(); } }, true);
+
+
+  // ---------- Gilberto ----------
+  function wantDir() {
+    const ix = clamp((keys.right ? 1 : 0) - (keys.left ? 1 : 0) + stick.x, -1, 1), iy = clamp((keys.down ? 1 : 0) - (keys.up ? 1 : 0) + stick.y, -1, 1);
+    if (!ix && !iy) return [];
+    const hd = ix > 0 ? 1 : 3, vd = iy > 0 ? 2 : 0;
+    return Math.abs(ix) >= Math.abs(iy) ? [hd, ...(iy ? [vd] : [])] : [vd, ...(ix ? [hd] : [])];
+  }
+  function updateGil(dt) {
+    const sword = actHeld;
+    const sp = (sword ? 2.2 : 2.7) * (items.has("boots") ? 1.18 : 1);
+    const want = wantDir();
+    if (want.length) gil.face = want[0];
+    if (gil.dir >= 0 && want.length && want[0] === OPP[gil.dir]) reverse(gil);
+    if (advance(gil, sp, dt)) sfx.step();
+    if (atCenter(gil)) {
+      const d = want.find((k) => open(gil.c, gil.r, k));
+      if (d !== undefined) { startMove(gil, d); gil.face = want[0]; }
+    }
+    // standing still with the sword out
+    if (sword && !want.length) { stillT += dt; if (stillT >= 3) questMet("still"); } else stillT = 0;
+    if (gil.inv > 0) gil.inv -= dt;
+    if (gil.hurt > 0) gil.hurt -= dt;
+    arrive();
+  }
+  // what is in the room Gilberto is standing in (checked near the middle of it)
+  function arrive() {
+    const c = Math.round(px(gil)), r = Math.round(py(gil));
+    if (Math.abs(px(gil) - c) > 0.3 || Math.abs(py(gil) - r) > 0.3) return;
+    if (keyAt && !hasKey && c === keyAt[0] && r === keyAt[1]) {
+      hasKey = true; sfx.key(); addScore(200, sx(c), sy(r) - 10);
+      if (floorT <= 15) questMet("fastkey");
+    }
+    if (doorAt && c === doorAt[0] && r === doorAt[1]) { if (hasKey) floorClear(); else questMet("doorfirst"); }
+    if (chest && chest.c === c && chest.r === r) takeChest();
+  }
+  function questMet(id) {
+    if (!quest || questDone || quest.id !== id) return;
+    questDone = true; sfx.quest();
+    // the chest appears far enough away to walk to
+    const dm = distMap(gil.c, gil.r);
+    const opts = [];
+    for (let r = 0; r < ROWS; r++) for (let c = 0; c < COLS; c++) if (dm[r][c] >= 3 && dm[r][c] <= 10) opts.push([c, r]);
+    const p = opts[Math.floor(Math.random() * opts.length)] || [gil.c, gil.r];
+    chest = { c: p[0], r: p[1], t: 0 };
+    message = { text: "È COMPARSO IL TESORO!", sub: "cercalo nel labirinto", t: 0 };
+  }
+  function takeChest() {
+    const owned = TREASURES.filter((t) => !["potion", "hourglass", "gem"].includes(t.id) && !items.has(t.id));
+    const pool = owned.length && Math.random() < 0.6 ? owned : TREASURES.filter((t) => ["potion", "hourglass", "gem"].includes(t.id));
+    const T = pool[Math.floor(Math.random() * pool.length)];
+    if (T.id === "potion") gil.hp = 100;
+    else if (T.id === "hourglass") timeLeft += 20;
+    else if (T.id === "gem") addScore(2000);
+    else items.add(T.id);
+    addScore(1000, sx(chest.c), sy(chest.r) - 10, "#ffd23a");
+    gotTreasure = true; sfx.chest();
+    message = { text: T.name, sub: T.sub, t: 0 };
+    chest = null;
+  }
+  function hurtGil(amount) {
+    if (gil.inv > 0) return;
+    gil.hp -= amount * diff.hurt * (items.has("armor") ? 0.7 : 1) * (1 + 0.04 * Math.max(0, floor - 5));
+    gil.hurt = 0.15;
+    if (gil.hp <= 0) { gil.hp = 0; loseLife("GILBERTO È CADUTO"); }
+  }
+
+  // ---------- Monsters ----------
+  function lineOfSight(c0, r0, c1, r1) {
+    if (c0 !== c1 && r0 !== r1) return -1;
+    const d = c1 > c0 ? 1 : c1 < c0 ? 3 : r1 > r0 ? 2 : 0;
+    let c = c0, r = r0;
+    while (c !== c1 || r !== r1) { if (!open(c, r, d)) return -1; c += DIRS[d].dx; r += DIRS[d].dy; }
+    return d;
+  }
+  function chaseDir(m) {
+    const dm = distMap(gil.c, gil.r);
+    let best = -1, bd = Infinity;
+    for (let d = 0; d < 4; d++) if (open(m.c, m.r, d)) { const v = dm[m.r + DIRS[d].dy][m.c + DIRS[d].dx]; if (v < bd) { bd = v; best = d; } }
+    return best;
+  }
+  function wanderDir(m) {
+    const ds = [0, 1, 2, 3].filter((d) => open(m.c, m.r, d));
+    const fwd = ds.filter((d) => d !== OPP[m.face]);
+    const pool = fwd.length ? fwd : ds;
+    return pool[Math.floor(Math.random() * pool.length)];
+  }
+  function updateMob(m, dt) {
+    const K = m.K;
+    if (m.hit > 0) m.hit -= dt;
+    if (m.kind === "mage") {
+      m.wait -= dt;
+      if (!m.vis) {
+        if (m.wait <= 0) {
+          // appears somewhere in a straight, open line from Gilberto
+          const opts = [];
+          for (let d = 0; d < 4; d++) { let c = gil.c, r = gil.r, k = 0; while (open(c, r, d) && k < 7) { c += DIRS[d].dx; r += DIRS[d].dy; k++; if (k >= 2) opts.push([c, r, OPP[d]]); } }
+          if (opts.length) { const o = opts[Math.floor(Math.random() * opts.length)]; m.c = m.tc = o[0]; m.r = m.tr = o[1]; m.face = o[2]; m.vis = true; m.wait = 2.4; m.cast = false; sfx.poof(); }
+          else m.wait = 0.5;
+        } else if (items.has("candle") && m.wait < 0.8) m.hint = true;
+      } else {
+        m.hint = false;
+        if (!m.cast && m.wait < 1.5) {
+          m.cast = true;
+          const d = lineOfSight(m.c, m.r, gil.c, gil.r);
+          bolts.push({ x: m.c, y: m.r, d: d >= 0 ? d : m.face, from: "mage", dmg: 45 }); sfx.spell();
+        }
+        if (m.wait <= 0) { m.vis = false; m.wait = rnd(2.5, 5) / diff.more; sfx.poof(); }
+      }
+      m.x = m.c; m.y = m.r;
+      return;
+    }
+    if (m.kind === "ghost" || m.kind === "wisp") {
+      // through the walls, straight at Gilberto; the ghost fades in and out
+      const dx = px(gil) - m.x, dy = py(gil) - m.y, d = Math.hypot(dx, dy) || 1;
+      m.x += dx / d * K.speed * dt; m.y += dy / d * K.speed * dt;
+      if (m.kind === "ghost") { m.blink = (m.blink || 0) + dt; m.vis = m.blink % 4 < 2.6; }
+      return;
+    }
+    // walkers: slimes wander (and stop now and then), knights and the Demon come after Gilberto when close
+    const sp = K.speed * (m.wait > 0 ? 0 : 1) * (1 + 0.03 * Math.max(0, floor - 5));
+    if (m.wait > 0) { m.wait -= dt; }
+    if (advance(m, sp, dt) || (atCenter(m) && m.wait <= 0)) {
+      if (m.kind === "slime" || m.kind === "blue") {
+        if (Math.random() < 0.18) m.wait = rnd(0.6, 1.6);
+        else { const d = wanderDir(m); if (d !== undefined) startMove(m, d); }
+      } else {
+        const near = Math.abs(m.c - gil.c) + Math.abs(m.r - gil.r) <= (m.kind === "demon" ? 30 : 8);
+        const d = near && Math.random() < 0.85 ? chaseDir(m) : wanderDir(m);
+        if (d !== undefined && d >= 0) startMove(m, d);
+      }
+    }
+    m.x = px(m); m.y = py(m);
+    // the Demon breathes fire down the corridors
+    if (m.kind === "demon") {
+      m.fire = (m.fire || 2.5) - dt;
+      if (m.fire <= 0 && atCenter(m)) { const d = lineOfSight(m.c, m.r, gil.c, gil.r); if (d >= 0) { bolts.push({ x: m.c, y: m.r, d, from: "demon", dmg: 50 }); sfx.zap(); m.fire = 3; } }
+    }
+  }
+  // touching: with the sword out the monster loses strength fast and Gilberto a little; without it, Gilberto loses a lot
+  function contacts(dt) {
+    const sword = actHeld, gx = px(gil), gy = py(gil);
+    for (const m of mobs) {
+      if (m.dead || !m.vis) continue;
+      const rad = m.kind === "demon" ? 0.95 : 0.7;
+      if (Math.abs(m.x - gx) > rad || Math.abs(m.y - gy) > rad) continue;
+      if (sword) {
+        m.hp -= dt * (items.has("sword") ? 3 : 2); m.hit = 0.1;
+        if (Math.random() < dt * 14) sfx.clang();
+        hurtGil(m.K.atk * 0.5 * dt * (m.kind === "slime" || m.kind === "blue" ? 0.4 : 1));
+        if (m.hp <= 0) killMob(m);
+      } else { hurtGil(m.K.atk * dt); if (Math.random() < dt * 8) sfx.ouch(); }
+      if (state !== "play" || deadT > 0) return;
+    }
+  }
+  function killMob(m) {
+    m.dead = true; kills++; sfx.kill();
+    addScore(Math.round(m.K.pts * (1 + 0.1 * (floor - 1))), sx(m.x), sy(m.y) - 12);
+    burst(sx(m.x), sy(m.y), m.kind === "demon" ? "#c84aff" : "#a8ff7a", m.kind === "demon" ? 30 : 10);
+    if (m.kind === "slime" || m.kind === "blue") { killedSlimes++; if (!mobs.some((o) => !o.dead && (o.kind === "slime" || o.kind === "blue"))) questMet("slimes"); }
+    if (m.kind === "mage") questMet("mage");
+    if (m.kind === "knight" || m.kind === "red") questMet("knight");
+    if (m.kind === "demon") { impresa("demone"); keyAt = [Math.round(m.x), Math.round(m.y)]; sfx.roar(); message = { text: "IL DEMONE È SCONFITTO!", sub: "ha lasciato cadere la chiave", t: 0 }; }
+  }
+  function updateBolts(dt) {
+    for (const b of bolts) {
+      const sp = diff.bolt * (b.from === "demon" ? 0.8 : 1), D = DIRS[b.d];
+      const before = [Math.round(b.x), Math.round(b.y)];
+      b.x += D.dx * sp * dt; b.y += D.dy * sp * dt;
+      // stopped by a wall when it would leave its room through one
+      const cx = Math.round(b.x - D.dx * 0.01), cy = Math.round(b.y - D.dy * 0.01);
+      if ((D.dx && Math.abs(b.x - before[0]) >= 0.5 && !open(before[0], before[1], b.d)) || (D.dy && Math.abs(b.y - before[1]) >= 0.5 && !open(before[0], before[1], b.d)) || !inside(cx, cy)) { b.gone = true; continue; }
+      if (Math.abs(b.x - px(gil)) < 0.45 && Math.abs(b.y - py(gil)) < 0.45) {
+        b.gone = true;
+        if (!actHeld && gil.face === OPP[b.d] && b.from === "mage") { sfx.block(); burst(sx(b.x), sy(b.y), "#ffffff", 8); addScore(10); if (++blocks >= 2) questMet("block"); }
+        else if (!actHeld && gil.face === OPP[b.d] && b.from === "demon") { sfx.block(); gil.hp -= 10 * diff.hurt; burst(sx(b.x), sy(b.y), "#ff8a3a", 8); }
+        else { sfx.zap(); hurtGil(b.dmg); gil.inv = Math.max(gil.inv, 0.6); burst(sx(b.x), sy(b.y), "#ff5aff", 10); }
+      }
+    }
+    bolts = bolts.filter((b) => !b.gone);
+  }
+
+  // ---------- Update ----------
+  function update(dt) {
+    clock += dt; sfxN = 0;
+    if (window.__bot) window.__bot(dt);
+    for (const p of parts) { p.t += dt; p.x += p.vx * dt; p.y += p.vy * dt; }
+    parts = parts.filter((p) => p.t < p.life);
+    for (const p of popups) { p.t += dt; p.y -= 20 * dt; }
+    popups = popups.filter((p) => p.t < 1.2);
+    if (message) { message.t += dt; if (message.t > 2.4) message = null; }
+    if (state !== "play") return;
+    if (deadT > 0) {
+      deadT -= dt;
+      if (deadT <= 0) {
+        lives--;
+        if (lives <= 0) { gameOver(); return; }
+        // same floor, from the start; the monsters already beaten stay beaten
+        placeGil(); gil.hp = 100; bolts = []; timeLeft = Math.max(timeLeft, 30);
+        mobs = mobs.filter((m) => m.kind !== "wisp");
+        for (const m of mobs) if (!m.dead && Math.abs(m.c - gil.c) + Math.abs(m.r - gil.r) < 4) { m.c = m.tc = COLS - 1 - m.c; m.t = 0; m.dir = -1; }
+      }
+      return;
+    }
+    if (clearT > 0) { clearT -= dt; if (clearT <= 0) { floor++; startFloor(); } return; }
+    floorT += dt;
+    const before = Math.ceil(timeLeft);
+    timeLeft -= dt;
+    if (timeLeft <= 10 && Math.ceil(timeLeft) !== before && timeLeft > 0) sfx.tick();
+    if (timeLeft <= 0) {
+      timeLeft = 0; wispT -= dt;
+      if (wispT <= 0) { wispT = 5; const m = addMob("wisp", Math.random() < 0.5 ? 0 : COLS - 1, Math.floor(Math.random() * ROWS)); m.x = m.c; m.y = m.r; if (!message) message = { text: "I FUOCHI FATUI!", sub: "il tempo è finito: sbrigati", t: 0 }; }
+    }
+    updateGil(dt);
+    if (clearT > 0) return;
+    for (const m of mobs) if (!m.dead) updateMob(m, dt);
+    contacts(dt);
+    if (deadT > 0) return;
+    updateBolts(dt);
+    mobs = mobs.filter((m) => !m.dead);
+    if (chest) chest.t += dt;
+  }
+
+  // ---------- Drawing ----------
+  const PAL = [["#1e2a1a", "#8a8a7a", "#5a5a4a"], ["#1a1e2e", "#7a8aa8", "#4a5a7a"], ["#2a1a1a", "#a88a7a", "#6a4a3a"], ["#221a2e", "#9a7ab8", "#5a4a7a"]];
+  function drawMaze() {
+    const P = PAL[Math.floor((floor - 1) / 5) % PAL.length];
+    ctx.fillStyle = "#0a0a10"; ctx.fillRect(0, TOP, W, H - TOP);
+    ctx.fillStyle = P[0]; ctx.fillRect(MX, MY, COLS * CS, ROWS * CS);
+    ctx.fillStyle = "rgba(255,255,255,0.03)";
+    for (let r = 0; r < ROWS; r++) for (let c = 0; c < COLS; c++) if ((r + c) % 2) ctx.fillRect(MX + c * CS, MY + r * CS, CS, CS);
+    ctx.strokeStyle = P[1]; ctx.lineWidth = 4; ctx.lineCap = "square";
+    ctx.beginPath();
+    for (let r = 0; r < ROWS; r++) for (let c = 0; c < COLS; c++) {
+      const x = MX + c * CS, y = MY + r * CS, w = walls[r][c];
+      if (w & 1) { ctx.moveTo(x, y); ctx.lineTo(x + CS, y); }
+      if (w & 8) { ctx.moveTo(x, y); ctx.lineTo(x, y + CS); }
+      if (c === COLS - 1 && (w & 2)) { ctx.moveTo(x + CS, y); ctx.lineTo(x + CS, y + CS); }
+      if (r === ROWS - 1 && (w & 4)) { ctx.moveTo(x, y + CS); ctx.lineTo(x + CS, y + CS); }
+    }
+    ctx.stroke();
+    ctx.strokeStyle = P[2]; ctx.lineWidth = 1.5; ctx.stroke();
+  }
+  function drawDoor() {
+    if (!doorAt) return;
+    const x = sx(doorAt[0]), y = sy(doorAt[1]);
+    ctx.fillStyle = "#3a2a1a"; ctx.beginPath(); ctx.moveTo(x - 11, y + 13); ctx.lineTo(x - 11, y - 4); ctx.arc(x, y - 4, 11, Math.PI, 0); ctx.lineTo(x + 11, y + 13); ctx.fill();
+    ctx.strokeStyle = hasKey ? "#ffd23a" : "#8a6a3a"; ctx.lineWidth = 2; ctx.stroke();
+    ctx.fillStyle = hasKey ? `rgba(255,210,58,${0.4 + 0.3 * Math.sin(clock * 6)})` : "#1a120a"; ctx.fillRect(x - 7, y - 4, 14, 17);
+    ctx.fillStyle = "#ffd23a"; ctx.beginPath(); ctx.arc(x + 4, y + 5, 1.5, 0, TAU); ctx.fill();
+  }
+  function drawKey() {
+    if (!keyAt || hasKey) return;
+    const x = sx(keyAt[0]), y = sy(keyAt[1]) + Math.sin(clock * 4) * 2;
+    ctx.strokeStyle = "#ffd23a"; ctx.lineWidth = 3;
+    ctx.beginPath(); ctx.arc(x - 5, y, 4, 0, TAU); ctx.moveTo(x - 1, y); ctx.lineTo(x + 9, y); ctx.moveTo(x + 6, y); ctx.lineTo(x + 6, y + 4); ctx.moveTo(x + 9, y); ctx.lineTo(x + 9, y + 4); ctx.stroke();
+  }
+  function drawChest() {
+    if (!chest) return;
+    const x = sx(chest.c), y = sy(chest.r), pop = Math.min(1, chest.t * 3);
+    ctx.save(); ctx.translate(x, y); ctx.scale(pop, pop);
+    ctx.fillStyle = `rgba(255,230,120,${0.25 + 0.15 * Math.sin(clock * 8)})`; ctx.beginPath(); ctx.arc(0, 0, 15, 0, TAU); ctx.fill();
+    ctx.fillStyle = "#a8641e"; ctx.fillRect(-10, -6, 20, 13); ctx.fillStyle = "#c87a2a"; ctx.fillRect(-10, -10, 20, 5);
+    ctx.fillStyle = "#ffd23a"; ctx.fillRect(-10, -5, 20, 2); ctx.fillRect(-2, -6, 4, 5);
+    ctx.restore();
+  }
+  function drawGil() {
+    if (deadT > 0 && Math.floor(clock * 10) % 2) return;
+    if (gil.inv > 0 && deadT <= 0 && Math.floor(clock * 12) % 2) return;
+    const x = sx(px(gil)), y = sy(py(gil)), f = gil.face, sword = actHeld && deadT <= 0;
+    const bob = gil.dir >= 0 ? Math.abs(Math.sin(clock * 12)) * 1.5 : 0;
+    ctx.save(); ctx.translate(x, y - bob);
+    // body: golden armour
+    ctx.fillStyle = gil.hurt > 0 ? "#ff8a8a" : "#e8b830"; ctx.beginPath(); ctx.ellipse(0, 3, 8, 9, 0, 0, TAU); ctx.fill();
+    ctx.fillStyle = "#c8981a"; ctx.fillRect(-8, 4, 16, 3);
+    // helmet with a red plume
+    ctx.fillStyle = "#f0c840"; ctx.beginPath(); ctx.arc(0, -7, 7, 0, TAU); ctx.fill();
+    ctx.fillStyle = "#1a1a1a"; const vx = [0, 3, 0, -3][f], vy = [-3, 0, 2, 0][f]; if (f !== 0) ctx.fillRect(-4 + vx, -8 + vy, 8, 2);
+    ctx.fillStyle = "#d82a2a"; ctx.beginPath(); ctx.ellipse(0, -15, 3, 4, 0, 0, TAU); ctx.fill();
+    // the shield in front when the sword is put away, the sword when it's out
+    const D = DIRS[f];
+    if (!sword) {
+      ctx.fillStyle = "#4a7ad8"; ctx.strokeStyle = "#ffd23a"; ctx.lineWidth = 1.5;
+      ctx.beginPath(); ctx.ellipse(D.dx * 10, D.dy * 9 + 2, D.dx ? 3 : 7, D.dx ? 8 : 4, 0, 0, TAU); ctx.fill(); ctx.stroke();
+    } else {
+      ctx.strokeStyle = items.has("sword") ? "#e8f0ff" : "#c8c8d0"; ctx.lineWidth = 3;
+      ctx.beginPath(); ctx.moveTo(D.dx * 6, D.dy * 6 + 2); ctx.lineTo(D.dx * 22, D.dy * 20 + 2); ctx.stroke();
+      ctx.strokeStyle = "#ffd23a"; ctx.lineWidth = 2; ctx.beginPath(); ctx.moveTo(D.dx * 7 - D.dy * 4, D.dy * 7 + 2 - D.dx * 4); ctx.lineTo(D.dx * 7 + D.dy * 4, D.dy * 7 + 2 + D.dx * 4); ctx.stroke();
+    }
+    ctx.restore();
+  }
+  function drawMob(m) {
+    const x = sx(m.x), y = sy(m.y), K = m.kind;
+    if (K === "mage" && !m.vis) {
+      if (m.hint) { ctx.strokeStyle = `rgba(200,140,255,${0.5 + 0.4 * Math.sin(clock * 20)})`; ctx.lineWidth = 2; ctx.beginPath(); ctx.arc(x, y, 10, 0, TAU); ctx.stroke(); }
+      return;
+    }
+    ctx.save(); ctx.translate(x, y);
+    if (m.hit > 0) ctx.translate(rnd(-1.5, 1.5), rnd(-1.5, 1.5));
+    if (K === "slime" || K === "blue") {
+      const s = 1 + Math.sin(clock * 6 + m.id * 10) * 0.12;
+      ctx.fillStyle = K === "blue" ? "#3a8aff" : "#4ad84a"; ctx.beginPath(); ctx.ellipse(0, 4, 10 * s, 8 / s, 0, Math.PI, 0); ctx.lineTo(10 * s, 8); ctx.lineTo(-10 * s, 8); ctx.fill();
+      ctx.fillStyle = "#fff"; ctx.fillRect(-5, -1, 3, 4); ctx.fillRect(2, -1, 3, 4); ctx.fillStyle = "#000"; ctx.fillRect(-4, 1, 2, 2); ctx.fillRect(3, 1, 2, 2);
+    } else if (K === "knight" || K === "red") {
+      ctx.fillStyle = K === "red" ? "#a82a2a" : "#3a3a4a"; ctx.beginPath(); ctx.ellipse(0, 3, 8, 9, 0, 0, TAU); ctx.fill();
+      ctx.fillStyle = K === "red" ? "#c83a3a" : "#5a5a6a"; ctx.beginPath(); ctx.arc(0, -7, 7, 0, TAU); ctx.fill();
+      ctx.fillStyle = "#ff3a3a"; ctx.fillRect(-4, -8, 8, 2);
+      const D = DIRS[m.face]; ctx.strokeStyle = "#a8a8b8"; ctx.lineWidth = 3; ctx.beginPath(); ctx.moveTo(D.dx * 6 + 6, D.dy * 6); ctx.lineTo(D.dx * 18 + 6, D.dy * 18 - 4); ctx.stroke();
+    } else if (K === "mage") {
+      const a = Math.min(1, (2.4 - m.wait) * 4, m.wait * 4);
+      ctx.globalAlpha = clamp(a, 0, 1);
+      ctx.fillStyle = "#7a3ad8"; ctx.beginPath(); ctx.moveTo(-9, 11); ctx.lineTo(0, -6); ctx.lineTo(9, 11); ctx.fill();
+      ctx.fillStyle = "#ffd0a8"; ctx.beginPath(); ctx.arc(0, -6, 5, 0, TAU); ctx.fill();
+      ctx.fillStyle = "#5a2aa8"; ctx.beginPath(); ctx.moveTo(-7, -8); ctx.lineTo(0, -20); ctx.lineTo(7, -8); ctx.fill();
+      if (!m.cast) { ctx.fillStyle = `rgba(255,120,255,${0.5 + 0.5 * Math.sin(clock * 30)})`; ctx.beginPath(); ctx.arc(0, -24, 3, 0, TAU); ctx.fill(); }
+    } else if (K === "ghost") {
+      ctx.globalAlpha = m.vis ? 0.85 : 0.15;
+      ctx.fillStyle = "#d8e8ff"; ctx.beginPath(); ctx.arc(0, -2, 9, Math.PI, 0); ctx.lineTo(9, 10); for (let i = 0; i < 4; i++) ctx.lineTo(9 - (i + 0.5) * 4.5, 6 + (i % 2) * 4); ctx.lineTo(-9, 10); ctx.fill();
+      ctx.fillStyle = "#1a1a3a"; ctx.fillRect(-5, -4, 3, 4); ctx.fillRect(2, -4, 3, 4);
+    } else if (K === "wisp") {
+      const g = ctx.createRadialGradient(0, 0, 1, 0, 0, 10); g.addColorStop(0, "#ffffff"); g.addColorStop(0.4, "#5affd8"); g.addColorStop(1, "rgba(90,255,216,0)");
+      ctx.fillStyle = g; ctx.beginPath(); ctx.arc(0, 0, 10 + Math.sin(clock * 15) * 2, 0, TAU); ctx.fill();
+    } else if (K === "demon") {
+      ctx.scale(1.6, 1.6);
+      ctx.fillStyle = "#6a1a8a"; ctx.beginPath(); ctx.ellipse(0, 3, 10, 10, 0, 0, TAU); ctx.fill();
+      ctx.fillStyle = "#8a2aaa"; ctx.beginPath(); ctx.arc(0, -7, 8, 0, TAU); ctx.fill();
+      ctx.fillStyle = "#e8d8a8"; ctx.beginPath(); ctx.moveTo(-7, -11); ctx.lineTo(-12, -19); ctx.lineTo(-4, -13); ctx.fill(); ctx.beginPath(); ctx.moveTo(7, -11); ctx.lineTo(12, -19); ctx.lineTo(4, -13); ctx.fill();
+      ctx.fillStyle = "#ffd23a"; ctx.fillRect(-5, -9, 3, 3); ctx.fillRect(2, -9, 3, 3);
+      ctx.fillStyle = "#4a0a5a"; ctx.beginPath(); ctx.moveTo(-10, 0); ctx.lineTo(-18, -6 + Math.sin(clock * 8) * 3); ctx.lineTo(-10, 6); ctx.fill(); ctx.beginPath(); ctx.moveTo(10, 0); ctx.lineTo(18, -6 + Math.sin(clock * 8) * 3); ctx.lineTo(10, 6); ctx.fill();
+    }
+    ctx.restore();
+    ctx.globalAlpha = 1;
+    if ((K === "knight" || K === "red" || K === "demon") && m.hp < m.K.hp * (K === "demon" ? 1 + 0.3 * (floor / 5 - 1) : 1)) {
+      const full = m.K.hp * (K === "demon" ? 1 + 0.3 * (floor / 5 - 1) : 1), w = K === "demon" ? 36 : 22;
+      ctx.fillStyle = "rgba(0,0,0,0.6)"; ctx.fillRect(x - w / 2, y - (K === "demon" ? 36 : 22), w, 3);
+      ctx.fillStyle = "#ff5a3a"; ctx.fillRect(x - w / 2, y - (K === "demon" ? 36 : 22), w * m.hp / full, 3);
+    }
+  }
+  function drawBolt(b) {
+    const x = sx(b.x), y = sy(b.y), col = b.from === "demon" ? "#ff7a2a" : "#ff5aff";
+    const g = ctx.createRadialGradient(x, y, 1, x, y, 9); g.addColorStop(0, "#ffffff"); g.addColorStop(0.4, col); g.addColorStop(1, "rgba(0,0,0,0)");
+    ctx.fillStyle = g; ctx.beginPath(); ctx.arc(x, y, 9, 0, TAU); ctx.fill();
+  }
+  function drawHud() {
+    ctx.fillStyle = "rgba(14,12,20,0.96)"; ctx.fillRect(0, 0, W, TOP);
+    ctx.textBaseline = "middle"; ctx.textAlign = "left";
+    const x0 = touchMode ? 130 : 10;
+    ctx.fillStyle = "#ffffff"; ctx.font = "900 15px system-ui"; ctx.fillText(score.toLocaleString("it-IT"), x0, 14);
+    ctx.fillStyle = "#d8d0b8"; ctx.font = "700 9px system-ui"; ctx.fillText(`REC ${Math.max(bestCache, score).toLocaleString("it-IT")}`, x0 + 76, 9);
+    ctx.fillStyle = "#ffd23a"; ctx.font = "900 9px system-ui"; ctx.fillText(`PIANO ${floor} · ♥ ${lives}`, x0 + 76, 20);
+    // health, time, key and the floor's treasure quest
+    const hx = x0 + 160;
+    ctx.fillStyle = "rgba(255,255,255,0.15)"; ctx.fillRect(hx, 6, 70, 7);
+    ctx.fillStyle = gil && gil.hp < 30 ? "#ff5a3a" : "#7aff7a"; ctx.fillRect(hx, 6, 70 * (gil ? gil.hp / 100 : 1), 7);
+    ctx.strokeStyle = "rgba(255,255,255,0.6)"; ctx.lineWidth = 1; ctx.strokeRect(hx + 0.5, 6.5, 69, 6);
+    ctx.fillStyle = timeLeft <= 10 ? (Math.floor(clock * 4) % 2 ? "#ff5a3a" : "#ffffff") : "#ffffff"; ctx.font = "900 10px system-ui";
+    ctx.fillText(`⏳ ${Math.ceil(timeLeft)}`, hx, 21);
+    ctx.fillStyle = hasKey ? "#ffd23a" : "rgba(255,255,255,0.25)"; ctx.fillText("🗝", hx + 42, 21);
+    const qx = hx + 82;
+    ctx.fillStyle = gotTreasure ? "#7aff7a" : questDone ? "#ffd23a" : "#d8d0b8"; ctx.font = "800 9px system-ui";
+    ctx.fillText(gotTreasure ? "TESORO PRESO ✓" : questDone ? "IL TESORO È COMPARSO!" : "TESORO:", qx, 9);
+    if (!gotTreasure && !questDone && quest) { ctx.fillStyle = "#ffffff"; ctx.font = "700 9px system-ui"; ctx.fillText(quest.text, qx, 20); }
+    // the treasures already found
+    let ix = touchMode ? W - 140 : W - 90;
+    ctx.font = "11px system-ui";
+    for (const [id, ic] of [["sword", "🗡"], ["armor", "🛡"], ["boots", "👢"], ["candle", "🕯"]]) { ctx.globalAlpha = items.has(id) ? 1 : 0.18; ctx.fillText(ic, ix, 14); ix += 20; }
+    ctx.globalAlpha = 1;
+    ctx.textBaseline = "alphabetic";
+  }
+  function outlined(text, x, y, font, fill, lw = 5) {
+    ctx.font = font; ctx.lineWidth = lw; ctx.strokeStyle = "#0e0c14"; ctx.strokeText(text, x, y); ctx.fillStyle = fill; ctx.fillText(text, x, y);
+  }
+  function draw() {
+    ctx.setTransform(pxRatio, 0, 0, pxRatio, 0, 0);
+    if (!walls.length) { buildFloor(); placeGil(); }
+    drawMaze();
+    drawDoor(); drawKey(); drawChest();
+    for (const m of mobs) if (!m.dead) drawMob(m);
+    drawGil();
+    for (const b of bolts) drawBolt(b);
+    for (const p of parts) { ctx.globalAlpha = Math.max(0, 1 - p.t / p.life); ctx.fillStyle = p.col; ctx.fillRect(p.x - 2, p.y - 2, 4, 4); }
+    ctx.globalAlpha = 1;
+    ctx.textAlign = "center";
+    for (const p of popups) { ctx.globalAlpha = Math.max(0, 1 - p.t / 1.2); outlined(p.text, p.x, p.y, "900 11px system-ui", p.col, 3); }
+    ctx.globalAlpha = 1;
+    if (state === "menu") return;
+    drawHud();
+    if (message) {
+      ctx.globalAlpha = Math.min(1, (2.4 - message.t) * 2);
+      ctx.textAlign = "center"; outlined(message.text, W / 2, 150, "italic 900 26px system-ui", "#ffd23a", 6);
+      if (message.sub) outlined(message.sub, W / 2, 172, "800 12px system-ui", "#ffffff", 4);
+      ctx.globalAlpha = 1;
+    }
+  }
+
+  // ---------- Loop ----------
+  const STEP = 1 / 120;
+  let last = performance.now(), acc = 0;
+  function frame(now) {
+    const dt = Math.min(0.1, (now - last) / 1000);
+    last = now;
+    if (isPlaying()) {
+      acc += dt;
+      while (acc >= STEP && isPlaying()) { update(STEP); acc -= STEP; }
+    } else { acc = 0; update(dt); }
+    draw();
+    requestAnimationFrame(frame);
+  }
+  syncControls();
+  showTitle();
+  requestAnimationFrame(frame);
+})();
+</script>
+<script src="../../shared/iniziali.js" data-record="demone-best-" data-kind="score"></script>
+</body>
+</html>
+

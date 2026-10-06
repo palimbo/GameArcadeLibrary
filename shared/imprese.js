@@ -9,6 +9,11 @@
   "use strict";
   // record key prefix of the game (as in trofei.js) → its feats
   const LIST = {
+    "demone-best-": [   // le-scale-del-demone
+      { id: "demone", name: "Ammazzademoni", desc: "sconfiggi il Demone, che aspetta ogni 5 piani" },
+      { id: "tesori", name: "Cacciatore di tesori", desc: "trova il tesoro in 5 piani di fila" },
+      { id: "lampo", name: "Piano lampo", desc: "esci da un piano in meno di 20 secondi" },
+    ],
     "botte-best-": [   // botte-da-strada
       { id: "senza", name: "Senza un graffio", desc: "finisci una missione senza perdere vite" },
       { id: "tris", name: "Tre in un colpo", desc: "colpisci tre Corvi con un colpo solo (un barile lanciato fa al caso tuo)" },
