@@ -9,6 +9,11 @@
   "use strict";
   // record key prefix of the game (as in trofei.js) → its feats
   const LIST = {
+    "colline-best-": [   // duello-sulle-colline
+      { id: "centro", name: "Tre in pieno", desc: "colpisci in pieno i carri nemici tre volte nella stessa battaglia" },
+      { id: "primo", name: "Al primo colpo", desc: "colpisci un nemico con il primo tiro di una battaglia" },
+      { id: "illeso", name: "Senza un graffio", desc: "vinci una battaglia senza subire danni" },
+    ],
     "demone-best-": [   // le-scale-del-demone
       { id: "demone", name: "Ammazzademoni", desc: "sconfiggi il Demone, che aspetta ogni 5 piani" },
       { id: "tesori", name: "Cacciatore di tesori", desc: "trova il tesoro in 5 piani di fila" },
