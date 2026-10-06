@@ -1,0 +1,629 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no, viewport-fit=cover">
+<title>Sedici Battiti</title>
+<style>
+  :root {
+    --bg: #100a1e;
+    --fg: #f4f6ee;
+    --muted: #e0c8f0;
+    --cyan: #ff8a3a;
+    --red: #ff3a5a;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  html, body {
+    height: 100%;
+    background: var(--bg);
+    color: var(--fg);
+    font-family: system-ui, -apple-system, "Segoe UI", sans-serif;
+    overflow: hidden;
+    user-select: none;
+    -webkit-user-select: none;
+    touch-action: none;
+  }
+  #wrap { position: fixed; inset: 0; display: flex; align-items: center; justify-content: center; }
+  canvas { display: block; touch-action: none; border-radius: 6px; box-shadow: 0 0 0 2px #4a2a5a, 0 10px 40px rgba(0,0,0,0.6); }
+  #pauseBtn {
+    position: fixed; z-index: 3; display: none; right: 10px; top: calc(10px + env(safe-area-inset-top, 0px));
+    font: 700 13px system-ui, sans-serif; color: var(--fg);
+    background: rgba(0, 0, 0, 0.6); border: 1px solid rgba(244, 246, 238, 0.35);
+    border-radius: 8px; padding: 6px 10px; cursor: pointer;
+  }
+  #overlay {
+    position: fixed; inset: 0; z-index: 5;
+    display: flex; flex-direction: column; align-items: center; justify-content: flex-start;
+    gap: 14px; padding: 16px; text-align: center; overflow-y: auto;
+    background: rgba(16, 10, 30, 0.93);
+  }
+  #overlay > :first-child { margin-top: auto; }
+  #overlay > :last-child { margin-bottom: auto; }
+  #overlay.hidden { display: none; }
+  #homeLink {
+    position: fixed; top: calc(10px + env(safe-area-inset-top, 0px)); left: 10px; z-index: 6;
+    font: 600 13px/1 system-ui, sans-serif; color: #fff; text-decoration: none;
+    padding: 8px 12px; border-radius: 999px; background: rgba(0,0,0,.55);
+    border: 1px solid rgba(255,255,255,.25);
+  }
+  #homeLink:hover { background: rgba(0,0,0,.8); }
+  #overlay.hidden ~ #homeLink { display: none; }
+  @media (max-width: 700px) { #overlay { padding-top: calc(52px + env(safe-area-inset-top, 0px)); } }
+  #overlay h1 { font-size: clamp(32px, 10vw, 58px); font-weight: 900; font-style: italic; letter-spacing: 1px; color: var(--cyan);
+    text-shadow: 3px 3px 0 #6a1a8a, 0 0 22px rgba(255,138,58,0.45); }
+  #overlay h2 { font-size: clamp(26px, 7vw, 42px); font-weight: 900; letter-spacing: 2px; color: var(--cyan); }
+  #overlay h2.lose { color: var(--red); }
+  #overlay p { max-width: 540px; font-size: clamp(13px, 3.4vw, 16px); line-height: 1.55; }
+  #overlay p.muted { color: var(--muted); }
+  #overlay .pts { display: grid; grid-template-columns: repeat(2, auto); gap: 4px 18px; font-size: 13px; color: var(--muted); text-align: left; max-width: 560px; }
+  #overlay .pts b { color: var(--fg); }
+  #overlay .diff { display: flex; gap: 10px; flex-wrap: wrap; justify-content: center; }
+  #overlay button {
+    font: 800 15px system-ui, sans-serif; letter-spacing: 1.5px; color: var(--fg);
+    background: transparent; cursor: pointer;
+    border: 2px solid rgba(244,246,238,0.3); border-radius: 10px; padding: 9px 16px;
+  }
+  #overlay .diff button.on { border-color: var(--c); color: var(--c); box-shadow: 0 0 12px var(--c); }
+  #overlay button.start { border-color: var(--cyan); color: #2a1002; background: var(--cyan); padding: 11px 30px; box-shadow: 0 4px 0 #a8501a; }
+  @media (max-height: 560px) {
+    #overlay { gap: 8px; }
+    #overlay h1 { font-size: 30px; }
+    #overlay p { font-size: 13px; line-height: 1.4; }
+    #overlay .help, #overlay .pts { display: none; }
+  }
+</style>
+</head>
+<body>
+<div id="wrap"><canvas id="game"></canvas></div>
+<div id="touch"></div>
+<button id="pauseBtn" type="button" aria-label="Pausa">❚❚</button>
+<div id="overlay"></div>
+<a id="homeLink" href="../../index.html">← Sala Giochi</a>
+
+
+<script>
+(() => {
+  "use strict";
+
+  // landscape: the grid on the left and the song on the right; portrait (phones held upright): the grid on top, as wide as the screen
+  let W = 640, H = 360, portrait = false;
+  const TAU = Math.PI * 2, TOP = 28;
+  // the 4 × 4 panels: each one has its own note, higher rows sound higher
+  let PS = 75, GAP = 8, GX = 22, GY = TOP + 4, IX = 366, IY = TOP;
+  const gridW = () => 4 * PS + 3 * GAP;
+  function layout(p) {
+    portrait = p;
+    if (p) { W = 360; H = 640; PS = 80; GAP = 7; GX = (W - gridW()) / 2; GY = TOP + 10; IX = 18; IY = GY + gridW() + 4; }
+    else { W = 640; H = 360; PS = 75; GAP = 8; GX = 22; GY = TOP + 4; IX = 366; IY = TOP; }
+  }
+  const APP = 0.85;   // how long a marker grows on its panel before the beat
+  const SCALE = [0, 2, 4, 7, 9];
+  const JUDGE = [
+    { name: "PERFETTO", w: 1, col: "#ffe84a" },
+    { name: "OTTIMO", w: 0.7, col: "#5ae8ff" },
+    { name: "BENE", w: 0.4, col: "#8aff8a" },
+    { name: "MANCATO", w: 0, col: "#ff5a6a" },
+  ];
+  const RANKS = [[1000000, "EXC"], [980000, "SSS"], [950000, "SS"], [900000, "S"], [850000, "A"], [800000, "B"], [700000, "C"], [500000, "D"], [0, "E"]];
+  // the set: one song after the other, then again, faster
+  const SONGS = [
+    { name: "Passi di Danza", genre: "HOUSE", bpm: 120, root: 57, prog: [0, 5, 7, 5], style: 0, hue: 30 },
+    { name: "Pioggia di Neon", genre: "SYNTHPOP", bpm: 126, root: 60, prog: [9, 5, 0, 7], style: 5, hue: 300 },
+    { name: "Sabbia e Sole", genre: "GROOVE", bpm: 100, root: 55, prog: [0, 3, 5, 3], style: 1, hue: 45 },
+    { name: "Pixel in Fuga", genre: "CHIPTUNE", bpm: 138, root: 52, prog: [0, 0, 3, 5], style: 2, hue: 160 },
+    { name: "Cuore a Mille", genre: "EUROBEAT", bpm: 152, root: 62, prog: [9, 5, 7, 0], style: 3, hue: 350 },
+    { name: "Corsa nella Giungla", genre: "JUNGLE", bpm: 166, root: 58, prog: [0, 8, 3, 10], style: 4, hue: 110 },
+  ];
+  const MEASURES = 26;
+
+  const DIFFICULTIES = {
+    facile:    { label: "FACILE",    color: "#7ed87a", desc: "canzoni più lente · meno segnali · la prima canzone si supera con 650.000", tempo: 0.9, dense: 0.7, win: 1.2, clear: 650000 },
+    normale:   { label: "NORMALE",   color: "#ff8a3a", desc: "la prima canzone si supera con 700.000 punti su 1.000.000", tempo: 1, dense: 1, win: 1, clear: 700000 },
+    difficile: { label: "DIFFICILE", color: "#ff5a5a", desc: "canzoni più veloci · più segnali e coppie · la prima canzone si supera con 750.000", tempo: 1.08, dense: 1.25, win: 0.9, clear: 750000 },
+  };
+  const DIFF_IDS = Object.keys(DIFFICULTIES);
+  const DIFF_KEY = "sedici-difficulty";
+  const bestKey = (id) => `sedici-best-${id}`;
+  function store(k, v) { try { localStorage.setItem(k, v); } catch { /* ignore */ } }
+  function load(k) { try { return localStorage.getItem(k); } catch { return null; } }
+  const impresa = (id) => window.dispatchEvent(new CustomEvent("sala:impresa", { detail: id }));
+  const rnd = (a, b) => a + Math.random() * (b - a);
+  // the crowd gets pickier: each song needs 15.000 more than the one before (up to 900.000)
+  const need = () => Math.min(900000, diff.clear + 15000 * (stage - 1));
+  const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
+  const panelX = (i) => GX + (i % 4) * (PS + GAP), panelY = (i) => GY + Math.floor(i / 4) * (PS + GAP);
+
+  // ---------- Canvas ----------
+  const canvas = document.getElementById("game");
+  const ctx = canvas.getContext("2d");
+  const wrapEl = document.getElementById("wrap");
+  const overlay = document.getElementById("overlay");
+  const pauseBtn = document.getElementById("pauseBtn");
+  let pxRatio = 1, touchMode = !!(window.matchMedia && matchMedia("(pointer: coarse)").matches);
+  function resize() {
+    layout(window.innerHeight > window.innerWidth * 1.15);
+    const s = Math.max(0.2, Math.min((window.innerWidth - 8) / W, (window.innerHeight - 8) / H));
+    pxRatio = Math.min(3, s * (window.devicePixelRatio || 1));
+    canvas.style.width = W * s + "px";
+    canvas.style.height = H * s + "px";
+    canvas.width = Math.round(W * pxRatio);
+    canvas.height = Math.round(H * pxRatio);
+  }
+  window.addEventListener("resize", () => syncControls());
+
+  // ---------- Music ----------
+  // drums and bass play by themselves; the melody is in the notes, and you only hear it if you play it
+  let audioCtx = null, master = null, audioStart = 0, scheduled = 0;
+  const hz = (m) => 440 * Math.pow(2, (m - 69) / 12);
+  function tone(when, freq, dur, type, vol, slide = 0) {
+    const o = audioCtx.createOscillator(), g = audioCtx.createGain();
+    o.type = type; o.frequency.setValueAtTime(freq, when);
+    if (slide) o.frequency.exponentialRampToValueAtTime(Math.max(20, freq + slide), when + dur);
+    g.gain.setValueAtTime(vol, when); g.gain.exponentialRampToValueAtTime(0.0001, when + dur);
+    o.connect(g).connect(master); o.start(when); o.stop(when + dur + 0.02);
+  }
+  let noiseBuf = null;
+  function hiss(when, dur, vol, freq, type = "bandpass", sweep = 0) {
+    if (!noiseBuf) { noiseBuf = audioCtx.createBuffer(1, audioCtx.sampleRate, audioCtx.sampleRate); const d = noiseBuf.getChannelData(0); for (let i = 0; i < d.length; i++) d[i] = Math.random() * 2 - 1; }
+    const s = audioCtx.createBufferSource(), f = audioCtx.createBiquadFilter(), g = audioCtx.createGain();
+    s.buffer = noiseBuf; f.type = type; f.frequency.setValueAtTime(freq, when); f.Q.value = sweep ? 4 : 1;
+    if (sweep) f.frequency.exponentialRampToValueAtTime(freq * sweep, when + dur);
+    g.gain.setValueAtTime(vol, when); g.gain.exponentialRampToValueAtTime(0.0001, when + dur);
+    s.connect(f).connect(g).connect(master); s.start(when, Math.random() * 0.5, dur + 0.02);
+  }
+  const kick = (w, v = 0.24) => tone(w, 150, 0.17, "sine", v, -110);
+  const snare = (w, v = 0.16) => { hiss(w, 0.14, v, 1800); tone(w, 210, 0.06, "triangle", v * 0.3); };
+  const hat = (w, v = 0.05, open = false) => hiss(w, open ? 0.11 : 0.035, v, 8500, "highpass");
+  function bass(w, note, dur, v = 0.12, type = "triangle") { tone(w, hz(note), dur, type, v); }
+  // schedules the backing track a little ahead of the song clock
+  function scheduleMusic() {
+    if (!audioCtx || !song || state !== "play") return;
+    const ahead = songT + 0.25, beat = 60 / song.bpm, sd = beat / 4;
+    while (scheduled * sd < ahead && scheduled < song.steps) {
+      const st = scheduled, when = audioStart + st * sd;
+      if (when > audioCtx.currentTime - 0.01) {
+        const s16 = st % 16, bar = Math.floor(st / 16), chord = song.prog[bar % 4], root = song.root + chord - 24;
+        switch (song.style) {
+          case 0: // house: four on the floor, claps, open hats on the off-beat
+            if (s16 % 4 === 0) kick(when);
+            if (s16 === 4 || s16 === 12) snare(when, 0.13);
+            if (s16 % 4 === 2) { hat(when, 0.07, true); bass(when, root + 12, sd * 1.6, 0.12); }
+            break;
+          case 1: { // hip hop: a lazy swung beat
+            const sw = st % 2 === 1 ? sd * 0.25 : 0;
+            if ([0, 7, 10].includes(s16)) { kick(when, 0.26); bass(when, root + (s16 === 7 ? 7 : 0), beat * 0.9, 0.14, "sine"); }
+            if (s16 === 4 || s16 === 12) snare(when, 0.18);
+            if (st % 2 === 0 || Math.random() < 0.3) hat(when + sw, st % 4 === 0 ? 0.06 : 0.035);
+            break;
+          }
+          case 2: // techno: kicks, ticking hats and a rolling bass
+            if (s16 % 4 === 0) kick(when, 0.26);
+            else bass(when, root + (s16 % 4 === 2 ? 12 : 0), sd * 0.8, 0.07, "sawtooth");
+            hat(when, s16 % 4 === 2 ? 0.07 : 0.025, s16 % 4 === 2);
+            if (s16 === 12 && bar % 2) snare(when, 0.08);
+            break;
+          case 3: // eurobeat: snare on two and four, octave bass
+            if (s16 % 4 === 0) kick(when);
+            if (s16 === 4 || s16 === 12) snare(when, 0.15);
+            if (s16 % 2 === 0) bass(when, root + (s16 % 4 === 2 ? 12 : 0), sd * 1.7, 0.11, "square");
+            if (s16 % 4 === 2) hat(when, 0.06, true);
+            break;
+          case 4: // jungle: chopped break and a long sub bass
+            if (s16 === 0 || s16 === 10) kick(when, 0.26);
+            if (s16 === 4 || s16 === 12) snare(when, 0.17);
+            if (s16 === 7 || s16 === 14) snare(when, 0.06);
+            if (s16 % 2 === 0) hat(when, 0.04);
+            if (s16 === 0) bass(when, root, beat * 2.5, 0.16, "sine");
+            break;
+          default: // trance: off-beat bass and a long pad
+            if (s16 % 4 === 0) kick(when);
+            if (s16 % 4 === 2) { bass(when, root + 12, sd * 1.5, 0.11, "sawtooth"); hat(when, 0.06, true); }
+            if (s16 === 0) for (const k of [0, 4, 7]) tone(when, hz(song.root + chord + k - 12 + (k === 4 && [3, 8, 10].includes(chord % 12) ? -1 : 0)), beat * 3.8, "sawtooth", 0.01);
+        }
+        if (song.style !== 5 && s16 === 0 && bar % 2 === 0) for (const k of [0, 7]) tone(when, hz(song.root + chord + k - 12), beat * 7, "sawtooth", 0.006);
+      }
+      scheduled++;
+    }
+  }
+  // the sound of a key: the melody note it is meant to play
+  function keysound(pitch) {
+    if (!audioCtx || pitch == null) return;
+    const w = audioCtx.currentTime;
+    tone(w, hz(pitch), 0.24, "square", 0.045);
+    tone(w, hz(pitch + 12), 0.12, "triangle", 0.03);
+  }
+  const sfx = {
+    clear: () => { if (!audioCtx) return; [523, 659, 784, 1047, 784, 1047, 1319].forEach((f, i) => tone(audioCtx.currentTime + i * 0.08, f, 0.14, "square", 0.04)); },
+    fail: () => { if (!audioCtx) return; [523, 466, 415, 392, 330, 262].forEach((f, i) => tone(audioCtx.currentTime + i * 0.15, f, 0.24, "triangle", 0.05)); },
+  };
+
+  // ---------- State ----------
+  let difficulty = DIFFICULTIES[load(DIFF_KEY)] ? load(DIFF_KEY) : "normale";
+  let diff = DIFFICULTIES[difficulty];
+  let state = "menu", menu = null, pausedFrom = null, stateT = 0, clock = 0;
+  let score = 0, songScore = 0, stage = 1, bestCache = 0, combo = 0, maxCombo = 0, songCombo = 0, comboRun = 0;
+  let song = null, notes = [], songT = 0, counts = [0, 0, 0, 0], message = null, result = null, bar = [];
+  const flash = new Array(16).fill(0), held = new Array(16).fill(false), shows = new Array(16).fill(null);
+  const pitchOf = (i) => { const d = (3 - Math.floor(i / 4)) * 2 + (i % 4); return song.root + 12 + SCALE[d % 5] + 12 * Math.floor(d / 5); };
+
+  // ---------- The chart ----------
+  // each bar draws a shape on the grid: a row, a column, the outer ring, a diagonal, a zigzag, mirrored pairs
+  function shapePanels(kind) {
+    const r = Math.floor(Math.random() * 4), c = Math.floor(Math.random() * 4), rev = Math.random() < 0.5;
+    let seq;
+    switch (kind) {
+      case 0: seq = [0, 1, 2, 3].map((k) => r * 4 + k); break;
+      case 1: seq = [3, 2, 1, 0].map((k) => k * 4 + c); break;
+      case 2: { const ring = [0, 1, 2, 3, 7, 11, 15, 14, 13, 12, 8, 4], s = Math.floor(Math.random() * 12); seq = ring.slice(s).concat(ring.slice(0, s)); break; }
+      case 3: seq = Math.random() < 0.5 ? [12, 9, 6, 3] : [15, 10, 5, 0]; break;
+      case 4: { const r2 = (r + 1 + Math.floor(Math.random() * 3)) % 4; seq = [0, 1, 2, 3].flatMap((k) => [r * 4 + k, r2 * 4 + k]); break; }
+      default: seq = Array.from({ length: 8 }, () => Math.floor(Math.random() * 16));
+    }
+    return rev ? seq.reverse() : seq;
+  }
+  function makeSong(n) {
+    const base = SONGS[(n - 1) % SONGS.length], lap = Math.floor((n - 1) / SONGS.length);
+    const bpm = Math.round(base.bpm * diff.tempo * (1 + 0.12 * lap));
+    const lvl = Math.min(9, n - 1 + lap * 2);
+    const beat = 60 / bpm, sd = beat / 4, measures = Math.round(MEASURES * bpm / 120);
+    const s = { ...base, bpm, lvl, steps: (measures + 1) * 16 + 8 };
+    const f = clamp(120 / bpm, 0.8, 1.3), dense = diff.dense;
+    const pE = Math.min(0.75, (0.18 + 0.07 * lvl) * dense * f);
+    const p16 = lvl >= 4 ? Math.min(0.25, 0.03 * (lvl - 3) * dense * f) * (sd < 0.1 ? 0.3 : 1) : 0;
+    const pPair = lvl >= 1 ? Math.min(0.3, (0.06 + 0.035 * lvl) * dense) : 0;
+    const list = [];
+    let last = -1, lastT = -9;
+    for (let m = 1; m <= measures; m++) {
+      const seq = shapePanels(Math.floor(Math.random() * (lvl >= 2 ? 6 : 4)));
+      let k = 0;
+      const put = (t) => {
+        let p = seq[k++ % seq.length];
+        if (p === last && t - lastT < 0.3) p = (p + 5) % 16;
+        list.push({ t, p, hit: -1 }); last = p; lastT = t;
+        return p;
+      };
+      const phraseEnd = m % 4 === 0;
+      for (let b = 0; b < 4; b++) {
+        if (phraseEnd && b === 3) continue;
+        const tq = (m * 16 + b * 4) * sd;
+        if (Math.random() < 0.85) {
+          const p = put(tq);
+          // a mirrored pair, tapped together
+          if (b % 2 === 0 && Math.random() < pPair) { const q = Math.floor(p / 4) * 4 + 3 - (p % 4); if (q !== p) list.push({ t: tq, p: q, hit: -1 }); }
+        }
+        if (Math.random() < pE * (phraseEnd ? 0.5 : 1)) {
+          if (Math.random() < p16) put(tq + sd);
+          put(tq + 2 * sd);
+          if (Math.random() < p16) put(tq + 3 * sd);
+        }
+      }
+    }
+    list.sort((a, b) => a.t - b.t || a.p - b.p);
+    s.len = (measures + 1) * 16 * sd;
+    return { s, list };
+  }
+
+  // ---------- Flow ----------
+  const isPlaying = () => ["intro", "play", "clear", "fail"].includes(state);
+  function startGame() {
+    if (!audioCtx) { try { audioCtx = new (window.AudioContext || window.webkitAudioContext)(); master = audioCtx.createGain(); master.gain.value = 0.9; master.connect(audioCtx.destination); } catch { audioCtx = null; } }
+    if (audioCtx && audioCtx.state === "suspended") audioCtx.resume();
+    score = 0; stage = 1; combo = 0; maxCombo = 0; comboRun = 0;
+    bestCache = parseInt(load(bestKey(difficulty)), 10) || 0;
+    beginSong();
+    menu = null;
+    overlay.classList.add("hidden");
+    syncControls();
+    last = performance.now();
+  }
+  function beginSong() {
+    const m = makeSong(stage);
+    song = m.s; notes = m.list; songT = -1.4; scheduled = 0; counts = [0, 0, 0, 0]; songScore = 0; songCombo = 0; combo = 0; result = null;
+    bar = new Array(60).fill(-1);
+    message = { text: `CANZONE ${stage} · ${song.genre}`, sub: `«${song.name}» · ${song.bpm} BPM · per superarla ${need().toLocaleString("it-IT")}`, t: 0 };
+    state = "intro"; stateT = 2;
+  }
+  function syncAudio() { if (audioCtx) audioStart = audioCtx.currentTime - songT; }
+  // the song's score: 900.000 shared by the notes (by how well each was hit) and 100.000 by the longest run
+  function calcSongScore() {
+    const n = notes.length || 1;
+    return Math.round(900000 * (counts[0] + counts[1] * 0.7 + counts[2] * 0.4) / n + 100000 * songCombo / n);
+  }
+  function mark(note, j) {
+    note.hit = j; counts[j]++;
+    const seg = clamp(Math.floor(note.t / song.len * bar.length), 0, bar.length - 1);
+    if (bar[seg] < 0 || j > bar[seg]) bar[seg] = j;
+    shows[note.p] = { j, t: 0 };
+    if (j < 3) {
+      combo++; songCombo = Math.max(songCombo, combo); maxCombo = Math.max(maxCombo, combo); flash[note.p] = 0.3;
+      if (++comboRun === 100) impresa("cento");
+    } else { combo = 0; comboRun = 0; }
+    songScore = calcSongScore();
+  }
+  function missNote(n) { if (window.__miss) window.__miss++; mark(n, 3); }
+  // a tap on a panel: the closest marker still waiting there, if near enough in time
+  function press(p, t) {
+    held[p] = true; flash[p] = Math.max(flash[p], 0.12);
+    if (state !== "play") { if (song) keysound(pitchOf(p)); return; }
+    keysound(pitchOf(p));
+    const win = [0.045, 0.09, 0.14].map((w) => w * diff.win);
+    let best = null;
+    for (const n of notes) {
+      if (n.t > t + win[2]) break;
+      if (n.p !== p || n.hit >= 0) continue;
+      if (Math.abs(n.t - t) <= win[2] && (!best || Math.abs(n.t - t) < Math.abs(best.t - t))) best = n;
+    }
+    if (!best) return;
+    const e = Math.abs(best.t - t);
+    mark(best, e <= win[0] ? 0 : e <= win[1] ? 1 : 2);
+  }
+  const rankOf = (v) => RANKS.find((r) => v >= r[0])[1];
+  function endSong() {
+    songScore = calcSongScore();
+    const rk = rankOf(songScore), full = counts[3] === 0;
+    score += songScore;
+    if (songScore < need()) {
+      state = "fail"; stateT = 3.4; result = { rk, ok: false };
+      message = { text: "CANZONE NON SUPERATA", sub: `${songScore.toLocaleString("it-IT")} punti: ne servivano ${need().toLocaleString("it-IT")}`, t: 0, long: true };
+      sfx.fail();
+      return;
+    }
+    if (full) impresa("combo");
+    if (songScore >= 950000) impresa("ss");
+    result = { rk, ok: true, full };
+    message = { text: `${full ? "COMBO PIENA! " : ""}CANZONE SUPERATA`, sub: `${songScore.toLocaleString("it-IT")} punti · perfetti ${counts[0]} · ottimi ${counts[1]} · bene ${counts[2]} · mancati ${counts[3]}`, t: 0, long: true };
+    sfx.clear(); state = "clear"; stateT = 3.4;
+  }
+  function gameOver() {
+    state = "over";
+    const prev = parseInt(load(bestKey(difficulty)), 10) || 0;
+    const record = score > prev;
+    if (record) store(bestKey(difficulty), String(score));
+    menu = () => showOverlay(
+      `<h2 class="lose">FINE DEL CONCERTO</h2>
+       <p>Punteggio: <b>${score.toLocaleString("it-IT")}</b> · ${stage > 1 ? `${stage - 1} ${stage - 1 === 1 ? "canzone superata" : "canzoni superate"}` : "nessuna canzone superata"} · combo massima ${maxCombo} · ${diff.label}</p>
+       ${record ? "<p style='color:var(--cyan)'>★ NUOVO RECORD! ★</p>" : ""}
+       ${difficultyHTML()}
+       <button class="start" data-start>ANCORA UNA</button>`
+    );
+    menu();
+    syncControls();
+  }
+  function togglePause() {
+    if (isPlaying()) {
+      pausedFrom = state; state = "paused";
+      if (audioCtx) audioCtx.suspend();
+      showOverlay(`<h2>PAUSA</h2><button class="start" data-resume>CONTINUA</button><p class="muted">Premi P per continuare · la canzone riparte da un attimo prima</p>`);
+    } else if (state === "paused") {
+      state = pausedFrom; overlay.classList.add("hidden"); last = performance.now();
+      if (state === "play") { songT -= 1.5; scheduled = Math.max(0, Math.floor(songT / (60 / song.bpm / 4))); }
+      if (audioCtx) audioCtx.resume().then(syncAudio);
+      syncAudio();
+    }
+    syncControls();
+  }
+  // the pause menu can end the game (shared/iniziali.js): it ends here the usual way, saving the record
+  window.addEventListener("sala:termina", () => { if (state !== "paused") return; state = pausedFrom; overlay.classList.add("hidden"); if (audioCtx) audioCtx.resume(); gameOver(); syncControls(); });
+  function syncControls() {
+    pauseBtn.style.display = isPlaying() && touchMode ? "block" : "none";
+    resize();
+  }
+  pauseBtn.addEventListener("click", () => togglePause());
+  function showOverlay(html) { overlay.innerHTML = html; overlay.classList.remove("hidden"); }
+  function difficultyHTML() {
+    const buttons = DIFF_IDS.map((id) => {
+      const d = DIFFICULTIES[id];
+      return `<button type="button" data-diff="${id}" class="${id === difficulty ? "on" : ""}" style="--c:${d.color}">${d.label}</button>`;
+    }).join("");
+    const best = parseInt(load(bestKey(difficulty)), 10);
+    return `<div class="diff">${buttons}</div><p class="muted">${diff.desc}${best ? ` · Record: ${best.toLocaleString("it-IT")}` : ""}</p>`;
+  }
+  function setDifficulty(id) { if (!DIFFICULTIES[id]) return; difficulty = id; diff = DIFFICULTIES[id]; store(DIFF_KEY, id); if (menu) menu(); }
+  function showTitle() {
+    menu = showTitle;
+    showOverlay(
+      `<h1>SEDICI BATTITI</h1>
+       <p>Sedici quadri e una canzone. Su un quadro compare un segnale che cresce: toccalo quando riempie il quadro, a tempo con la musica. Ogni quadro ha la sua nota, così la melodia la suoni tu, e i segnali disegnano righe, colonne, giri e diagonali sulla griglia. Ogni canzone vale fino a 1.000.000 di punti: per superare la prima ne servono ${diff.clear.toLocaleString("it-IT")}, e il pubblico diventa più esigente a ogni canzone (15.000 in più ogni volta). Se non la superi, il concerto finisce.</p>
+       <div class="pts">
+         <span><b>Precisione</b></span><span>PERFETTO · OTTIMO · BENE: 900.000 punti si dividono tra i segnali, gli altri 100.000 vengono dalla serie più lunga</span>
+         <span><b>Voti</b></span><span>E · D · C (700.000) · B · A · S (900.000) · SS · SSS · EXC (tutto perfetto)</span>
+         <span><b>Coppie</b></span><span>due segnali alla stessa ora, a specchio: toccali insieme</span>
+       </div>
+       ${touchMode
+         ? `<p class="muted help">Tocca i quadri direttamente sullo schermo · si può usare più di un dito</p>`
+         : `<p class="muted help">Tastiera: 1 2 3 4 · Q W E R · A S D F · Z X C V (una riga di tasti per ogni riga di quadri), oppure il mouse · P pausa · alza il volume!</p>`}
+       ${difficultyHTML()}
+       <button class="start" data-start>SI COMINCIA!</button>`
+    );
+  }
+  overlay.addEventListener("click", (e) => {
+    const d = e.target.closest("[data-diff]");
+    if (d) { setDifficulty(d.dataset.diff); return; }
+    if (e.target.closest("[data-start]")) startGame();
+    if (e.target.closest("[data-resume]")) togglePause();
+  });
+
+  // ---------- Input ----------
+  let lastStepWall = performance.now();
+  const nowT = () => songT + Math.min(0.05, (performance.now() - lastStepWall) / 1000);
+  const KEYROWS = ["1234", "qwer", "asdf", "zxcv"];
+  const KEYMAP = {};
+  KEYROWS.forEach((row, r) => [...row].forEach((k, c) => { KEYMAP[k] = r * 4 + c; }));
+  window.addEventListener("keydown", (e) => {
+    const k = e.key.toLowerCase();
+    if ([" ", "arrowup", "arrowdown", "arrowleft", "arrowright"].includes(k)) e.preventDefault();
+    if (state === "menu" || state === "over") {
+      if (e.key === "Enter") startGame();
+      return;
+    }
+    if (k === "p" || k === "escape") { if (!e.repeat) togglePause(); return; }
+    if (state === "paused") { if (e.key === "Enter") togglePause(); return; }
+    if (e.repeat) return;
+    const p = KEYMAP[k];
+    if (p !== undefined) press(p, nowT());
+  });
+  window.addEventListener("keyup", (e) => { const p = KEYMAP[e.key.toLowerCase()]; if (p !== undefined) held[p] = false; });
+  window.addEventListener("blur", () => { held.fill(false); if (isPlaying()) togglePause(); });
+  // touch and mouse: straight on the panels (each finger on its own)
+  const fingers = new Map();
+  function panelAt(e) {
+    const r = canvas.getBoundingClientRect(), x = (e.clientX - r.left) / r.width * W, y = (e.clientY - r.top) / r.height * H;
+    const c = Math.floor((x - GX + GAP / 2) / (PS + GAP)), rw = Math.floor((y - GY + GAP / 2) / (PS + GAP));
+    return c >= 0 && c < 4 && rw >= 0 && rw < 4 ? rw * 4 + c : -1;
+  }
+  canvas.addEventListener("pointerdown", (e) => {
+    if (e.pointerType === "touch" && !touchMode) { touchMode = true; syncControls(); }
+    if (!isPlaying()) return;
+    e.preventDefault();
+    const p = panelAt(e);
+    if (p < 0) return;
+    fingers.set(e.pointerId, p);
+    press(p, nowT());
+  });
+  for (const ev of ["pointerup", "pointercancel"]) canvas.addEventListener(ev, (e) => { const p = fingers.get(e.pointerId); if (p !== undefined) { held[p] = false; fingers.delete(e.pointerId); } });
+  window.addEventListener("pointerdown", (e) => { if (e.pointerType === "touch" && !touchMode) { touchMode = true; syncControls(); if (menu) menu(); } }, true);
+
+  // ---------- Update ----------
+  function update(dt) {
+    clock += dt;
+    lastStepWall = performance.now();
+    if (window.__bot) window.__bot(dt);
+    for (let i = 0; i < 16; i++) { if (flash[i] > 0) flash[i] -= dt; if (shows[i]) { shows[i].t += dt; if (shows[i].t > 0.4) shows[i] = null; } }
+    if (message) { message.t += dt; if (message.t > (message.long ? 3 : 2)) message = null; }
+    if (state === "intro") { stateT -= dt; if (stateT <= 0) { state = "play"; syncAudio(); } return; }
+    if (state === "clear" || state === "fail") {
+      stateT -= dt;
+      if (stateT <= 0) { if (state === "clear") { stage++; beginSong(); } else gameOver(); }
+      return;
+    }
+    if (state !== "play") return;
+    songT += dt;
+    if (audioCtx && audioCtx.state === "running" && !window.__fast) { const a = audioCtx.currentTime - audioStart, d = a - songT; if (Math.abs(d) > 0.25) syncAudio(); else songT += d * 0.05; }
+    scheduleMusic();
+    const late = 0.14 * diff.win;
+    for (const n of notes) { if (n.t > songT) break; if (n.hit < 0 && songT - n.t > late) missNote(n); }
+    if (songT > song.len + 0.3) endSong();
+  }
+
+  // ---------- Drawing ----------
+  function rrect(x, y, w, h, r) { ctx.beginPath(); ctx.roundRect ? ctx.roundRect(x, y, w, h, r) : ctx.rect(x, y, w, h); }
+  function drawGrid() {
+    const hue = song ? song.hue : 30, beatF = song && state === "play" ? (songT * song.bpm / 60) % 1 : (clock * 2) % 1, pulse = Math.max(0, 1 - beatF * 3);
+    const g = ctx.createLinearGradient(0, TOP, 0, H);
+    g.addColorStop(0, `hsl(${hue},45%,9%)`); g.addColorStop(1, `hsl(${(hue + 40) % 360},45%,${14 + pulse * 3}%)`);
+    ctx.fillStyle = g; ctx.fillRect(0, TOP, W, H - TOP);
+    for (let i = 0; i < 16; i++) {
+      const x = panelX(i), y = panelY(i);
+      ctx.fillStyle = held[i] ? "#3a3450" : "#1c1828"; rrect(x, y, PS, PS, 8); ctx.fill();
+      ctx.strokeStyle = `hsla(${hue},70%,60%,${0.25 + pulse * 0.25})`; ctx.lineWidth = 1.5; ctx.stroke();
+      if (flash[i] > 0) { ctx.fillStyle = `rgba(255,255,255,${flash[i] * 1.2})`; rrect(x, y, PS, PS, 8); ctx.fill(); }
+    }
+    // the markers: a square growing from the middle of its panel, full right on the beat
+    if (song) for (const n of notes) {
+      if (n.t - songT > APP) break;
+      if (n.hit >= 0) continue;
+      const k = 1 - (n.t - songT) / APP, x = panelX(n.p) + PS / 2, y = panelY(n.p) + PS / 2;
+      if (k < 0) continue;
+      const s = Math.min(1, k) * (PS - 8), col = k > 0.85 ? "#ffe84a" : `hsl(${(hue + 180 + k * 120) % 360},90%,62%)`;
+      ctx.globalAlpha = k > 1 ? Math.max(0, 1 - (k - 1) * 4) : 0.25 + k * 0.75;
+      ctx.fillStyle = col; ctx.globalAlpha *= 0.35; rrect(x - s / 2, y - s / 2, s, s, 6); ctx.fill();
+      ctx.globalAlpha = k > 1 ? Math.max(0, 1 - (k - 1) * 4) : 0.4 + k * 0.6;
+      ctx.strokeStyle = col; ctx.lineWidth = 3; rrect(x - s / 2, y - s / 2, s, s, 6); ctx.stroke();
+      ctx.globalAlpha = 1;
+    }
+    // what each tap was worth
+    ctx.textAlign = "center"; ctx.textBaseline = "middle";
+    for (let i = 0; i < 16; i++) {
+      const sh = shows[i]; if (!sh) continue;
+      const J = JUDGE[sh.j], x = panelX(i) + PS / 2, y = panelY(i) + PS / 2 - sh.t * 20;
+      ctx.globalAlpha = Math.max(0, 1 - sh.t / 0.4);
+      ctx.font = "900 11px system-ui"; ctx.lineWidth = 3; ctx.strokeStyle = "#100a1e"; ctx.strokeText(J.name, x, y); ctx.fillStyle = J.col; ctx.fillText(J.name, x, y);
+      ctx.globalAlpha = 1;
+    }
+    ctx.textBaseline = "alphabetic";
+  }
+  function drawInfo() {
+    const x = IX, hue = song ? song.hue : 30, Y = IY;
+    ctx.textAlign = "left";
+    if (song) {
+      ctx.fillStyle = `hsl(${hue},100%,70%)`; ctx.font = "italic 900 22px system-ui"; ctx.fillText(song.genre, x, Y + 30);
+      ctx.fillStyle = "#ffffff"; ctx.font = "800 11px system-ui"; ctx.fillText(`«${song.name}» · ${song.bpm} BPM`, x, Y + 47);
+    }
+    if (state === "menu" || !song) return;
+    ctx.fillStyle = "#e0c8f0"; ctx.font = "800 9px system-ui"; ctx.fillText("PUNTI DELLA CANZONE", x, Y + 76);
+    ctx.fillStyle = "#ffffff"; ctx.font = "900 30px system-ui"; ctx.fillText(songScore.toLocaleString("it-IT"), x, Y + 106);
+    // the line to beat, on a bar from 0 to 1.000.000
+    const bw = portrait ? W - 2 * IX : 250, by = Y + 116;
+    ctx.fillStyle = "rgba(255,255,255,0.12)"; ctx.fillRect(x, by, bw, 8);
+    ctx.fillStyle = songScore >= need() ? "#7aff7a" : "#ff8a3a"; ctx.fillRect(x, by, bw * songScore / 1000000, 8);
+    ctx.fillStyle = "#ffffff"; ctx.fillRect(x + bw * need() / 1000000 - 1, by - 3, 2, 14);
+    ctx.font = "700 8px system-ui"; ctx.fillStyle = "#e0c8f0"; ctx.fillText(`per superarla: ${need().toLocaleString("it-IT")}`, x + bw * need() / 1000000 - 60, by + 22);
+    // combo
+    if (combo >= 5) {
+      if (portrait) { ctx.textAlign = "right"; ctx.fillStyle = "#ffe84a"; ctx.font = "italic 900 30px system-ui"; ctx.fillText(`${combo}`, W - 18, Y + 32); ctx.font = "900 10px system-ui"; ctx.fillText("DI FILA", W - 18, Y + 46); ctx.textAlign = "left"; }
+      else { ctx.fillStyle = "#ffe84a"; ctx.font = "italic 900 34px system-ui"; ctx.fillText(`${combo}`, x, Y + 182); const cw = ctx.measureText(`${combo}`).width; ctx.font = "900 11px system-ui"; ctx.fillText("DI FILA", x + cw + 8, Y + 182); }
+    }
+    // the music bar: the song in 60 slices, coloured by the worst tap in each
+    const mx = x, my = H - 46, sw = bw / bar.length;
+    for (let i = 0; i < bar.length; i++) {
+      const j = bar[i], played = song.len * (i + 1) / bar.length < songT;
+      ctx.fillStyle = j >= 0 ? JUDGE[j].col : played ? "rgba(255,255,255,0.25)" : "rgba(255,255,255,0.08)";
+      ctx.fillRect(mx + i * sw, my, sw - 1, 14);
+    }
+    ctx.fillStyle = "#ffffff"; ctx.fillRect(mx + bw * clamp(songT / song.len, 0, 1), my - 3, 2, 20);
+    ctx.fillStyle = "#e0c8f0"; ctx.font = "800 9px system-ui"; ctx.fillText(`TOTALE ${score.toLocaleString("it-IT")} · REC ${Math.max(bestCache, score).toLocaleString("it-IT")}`, mx, my + 30);
+  }
+  function outlined(text, x, y, font, fill, lw = 5) {
+    ctx.font = font; ctx.lineWidth = lw; ctx.strokeStyle = "#100a1e"; ctx.strokeText(text, x, y); ctx.fillStyle = fill; ctx.fillText(text, x, y);
+  }
+  function drawHud() {
+    ctx.fillStyle = "rgba(16,10,30,0.96)"; ctx.fillRect(0, 0, W, TOP);
+    ctx.textBaseline = "middle"; ctx.textAlign = "left";
+    const x0 = touchMode && !portrait ? 130 : 12;
+    ctx.fillStyle = "#ffffff"; ctx.font = "900 15px system-ui"; ctx.fillText((score + (state === "play" ? songScore : 0)).toLocaleString("it-IT"), x0, 14);
+    ctx.fillStyle = "#ff8a3a"; ctx.font = "900 10px system-ui";
+    if (portrait) { ctx.textAlign = "right"; ctx.fillText(`CANZONE ${stage} · ${diff.label}`, W - 12, 14); ctx.textAlign = "left"; }
+    else ctx.fillText(`CANZONE ${stage} · ${diff.label}`, x0 + 130, 14);
+    ctx.textBaseline = "alphabetic";
+  }
+  function draw() {
+    ctx.setTransform(pxRatio, 0, 0, pxRatio, 0, 0);
+    if (!song && state === "menu") { const m = makeSong(1); song = m.s; notes = m.list; songT = 6; bar = []; }
+    if (state === "menu") songT = 6 + (clock % 8);
+    drawGrid();
+    drawInfo();
+    if (state === "menu") return;
+    drawHud();
+    const cx = portrait ? W / 2 : IX + 125;
+    ctx.textAlign = "center";
+    if (state === "intro" && stateT < 1.2) outlined(stateT > 0.6 ? "PRONTI?" : "VIA!", GX + gridW() / 2, GY + gridW() / 2 + 8, "italic 900 38px system-ui", "#ffffff", 7);
+    if (result && (state === "clear" || state === "fail")) outlined(result.rk, GX + gridW() / 2, GY + gridW() / 2 + 28, "italic 900 80px system-ui", result.ok ? "#ffe84a" : "#ff5a6a", 9);
+    if (message) {
+      ctx.globalAlpha = Math.min(1, ((message.long ? 3 : 2) - message.t) * 2);
+      outlined(message.text, cx, H - 92, "italic 900 16px system-ui", state === "fail" ? "#ff5a6a" : "#ff8a3a", 5);
+      if (message.sub) { const parts = message.sub.split(" · "); const half = Math.ceil(parts.length / 2); outlined(parts.slice(0, half).join(" · "), cx, H - 76, "800 9px system-ui", "#ffffff", 3); if (parts.length > 1) outlined(parts.slice(half).join(" · "), cx, H - 64, "800 9px system-ui", "#ffffff", 3); }
+      ctx.globalAlpha = 1;
+    }
+  }
+
+  // ---------- Loop ----------
+  const STEP = 1 / 120;
+  let last = performance.now(), acc = 0;
+  function frame(now) {
+    const dt = Math.min(0.1, (now - last) / 1000);
+    last = now;
+    if (isPlaying()) {
+      acc += dt;
+      while (acc >= STEP && isPlaying()) { update(STEP); acc -= STEP; }
+    } else { acc = 0; update(dt); }
+    draw();
+    requestAnimationFrame(frame);
+  }
+  syncControls();
+  showTitle();
+  requestAnimationFrame(frame);
+})();
+</script>
+<script src="../../shared/iniziali.js" data-record="sedici-best-" data-kind="score"></script>
+</body>
+</html>

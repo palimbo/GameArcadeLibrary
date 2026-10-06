@@ -9,6 +9,11 @@
   "use strict";
   // record key prefix of the game (as in trofei.js) → its feats
   const LIST = {
+    "sedici-best-": [   // sedici-battiti
+      { id: "combo", name: "Combo piena", desc: "finisci una canzone senza mancare neanche un segnale" },
+      { id: "ss", name: "Voto SS", desc: "fai almeno 950.000 punti in una canzone" },
+      { id: "cento", name: "Cento di fila", desc: "prendi 100 segnali di fila senza mancarne uno" },
+    ],
     "colline-best-": [   // duello-sulle-colline
       { id: "centro", name: "Tre in pieno", desc: "colpisci in pieno i carri nemici tre volte nella stessa battaglia" },
       { id: "primo", name: "Al primo colpo", desc: "colpisci un nemico con il primo tiro di una battaglia" },
