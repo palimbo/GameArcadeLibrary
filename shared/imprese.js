@@ -9,6 +9,11 @@
   "use strict";
   // record key prefix of the game (as in trofei.js) → its feats
   const LIST = {
+    "ring-best-": [   // re-del-ring
+      { id: "campione", name: "Campione!", desc: "batti il Barone Nero e conquista la cintura" },
+      { id: "rapido", name: "Schienata lampo", desc: "vinci un incontro in meno di 30 secondi" },
+      { id: "rimonta", name: "Rimonta", desc: "vinci un incontro dopo essere sceso sotto il 25% di energia" },
+    ],
     "ombra-best-": [   // il-ninja-dell-ombra
       { id: "maestro", name: "Il maestro è battuto", desc: "sconfiggi il Signore delle Nebbie e libera la principessa" },
       { id: "parata", name: "Lama che para", desc: "respingi 5 proiettili con la spada nella stessa tappa" },

@@ -9,6 +9,7 @@
   "use strict";
   // record key prefix → [bronzo, argento, oro] (and t for times)
   const DATA = {
+    "ring-best-": [13000, 40000, 28000],   // re-del-ring (bot)
     "ombra-best-": [4500, 14000, 10000],   // il-ninja-dell-ombra (bot)
     "sedici-best-": [1500000, 4500000, 3150000],   // sedici-battiti (bot)
     "colline-best-": [4000, 11500, 8000],   // duello-sulle-colline (bot)
