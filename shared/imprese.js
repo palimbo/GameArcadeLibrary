@@ -9,6 +9,11 @@
   "use strict";
   // record key prefix of the game (as in trofei.js) → its feats
   const LIST = {
+    "gocce-best-": [   // gocce-in-battaglia
+      { id: "otto", name: "Otto in un colpo", desc: "conquista tutte e 8 le gocce intorno con una mossa sola" },
+      { id: "cappotto", name: "Cappotto", desc: "dalla terza sfida in poi, vinci senza lasciare all'avversario neanche una goccia" },
+      { id: "maestro", name: "Allievo del Maestro", desc: "batti il Gran Maestro, l'ottavo avversario" },
+    ],
     "ring-best-": [   // re-del-ring
       { id: "campione", name: "Campione!", desc: "batti il Barone Nero e conquista la cintura" },
       { id: "rapido", name: "Schienata lampo", desc: "vinci un incontro in meno di 30 secondi" },
