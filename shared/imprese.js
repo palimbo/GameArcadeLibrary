@@ -9,6 +9,11 @@
   "use strict";
   // record key prefix of the game (as in trofei.js) → its feats
   const LIST = {
+    "giada-best-": [   // tessere-di-giada
+      { id: "catena", name: "Catena di giada", desc: "fai 8 coppie di fila, ognuna a meno di 3 secondi dalla precedente" },
+      { id: "lampo", name: "Mani svelte", desc: "libera un tavolo con almeno il 40% del tempo ancora da usare" },
+      { id: "pulito", name: "Tavolo pulito", desc: "libera un tavolo senza coppie sbagliate, aiuti, rimescolate né tempo scaduto" },
+    ],
     "temerario-best-": [   // cavaliere-temerario
       { id: "drago", name: "Ammazzadraghi", desc: "sconfiggi il drago Brace e salva la principessa Dafne" },
       { id: "intatto", name: "Senza un graffio", desc: "supera 5 stanze di fila senza mai morire" },

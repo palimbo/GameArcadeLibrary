@@ -1,0 +1,611 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no, viewport-fit=cover">
+<title>Le Tessere di Giada</title>
+<style>
+  :root {
+    --bg: #0a1a14;
+    --fg: #f4f6ee;
+    --muted: #c0e8d4;
+    --cyan: #3ad89a;
+    --red: #ff3a5a;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  html, body {
+    height: 100%;
+    background: var(--bg);
+    color: var(--fg);
+    font-family: system-ui, -apple-system, "Segoe UI", sans-serif;
+    overflow: hidden;
+    user-select: none;
+    -webkit-user-select: none;
+    touch-action: none;
+  }
+  #wrap { position: fixed; inset: 0; display: flex; align-items: center; justify-content: center; }
+  canvas { display: block; touch-action: none; border-radius: 6px; box-shadow: 0 0 0 2px #2a5a44, 0 10px 40px rgba(0,0,0,0.6); }
+  #pauseBtn {
+    position: fixed; z-index: 3; display: none; right: 10px; top: calc(10px + env(safe-area-inset-top, 0px));
+    font: 700 13px system-ui, sans-serif; color: var(--fg);
+    background: rgba(0, 0, 0, 0.6); border: 1px solid rgba(244, 246, 238, 0.35);
+    border-radius: 8px; padding: 6px 10px; cursor: pointer;
+  }
+  #overlay {
+    position: fixed; inset: 0; z-index: 5;
+    display: flex; flex-direction: column; align-items: center; justify-content: flex-start;
+    gap: 14px; padding: 16px; text-align: center; overflow-y: auto;
+    background: rgba(10, 26, 20, 0.93);
+  }
+  #overlay > :first-child { margin-top: auto; }
+  #overlay > :last-child { margin-bottom: auto; }
+  #overlay.hidden { display: none; }
+  #homeLink {
+    position: fixed; top: calc(10px + env(safe-area-inset-top, 0px)); left: 10px; z-index: 6;
+    font: 600 13px/1 system-ui, sans-serif; color: #fff; text-decoration: none;
+    padding: 8px 12px; border-radius: 999px; background: rgba(0,0,0,.55);
+    border: 1px solid rgba(255,255,255,.25);
+  }
+  #homeLink:hover { background: rgba(0,0,0,.8); }
+  #overlay.hidden ~ #homeLink { display: none; }
+  @media (max-width: 700px) { #overlay { padding-top: calc(52px + env(safe-area-inset-top, 0px)); } }
+  #overlay h1 { font-size: clamp(32px, 10vw, 58px); font-weight: 900; font-style: italic; letter-spacing: 1px; color: var(--cyan);
+    text-shadow: 3px 3px 0 #8a1a2a, 0 0 22px rgba(58,216,154,0.45); }
+  #overlay h2 { font-size: clamp(26px, 7vw, 42px); font-weight: 900; letter-spacing: 2px; color: var(--cyan); }
+  #overlay h2.lose { color: var(--red); }
+  #overlay p { max-width: 540px; font-size: clamp(13px, 3.4vw, 16px); line-height: 1.55; }
+  #overlay p.muted { color: var(--muted); }
+  #overlay .pts { display: grid; grid-template-columns: repeat(2, auto); gap: 4px 18px; font-size: 13px; color: var(--muted); text-align: left; max-width: 560px; }
+  #overlay .pts b { color: var(--fg); }
+  #overlay .diff { display: flex; gap: 10px; flex-wrap: wrap; justify-content: center; }
+  #overlay button {
+    font: 800 15px system-ui, sans-serif; letter-spacing: 1.5px; color: var(--fg);
+    background: transparent; cursor: pointer;
+    border: 2px solid rgba(244,246,238,0.3); border-radius: 10px; padding: 9px 16px;
+  }
+  #overlay .diff button.on { border-color: var(--c); color: var(--c); box-shadow: 0 0 12px var(--c); }
+  #overlay button.start { border-color: var(--cyan); color: #02180e; background: var(--cyan); padding: 11px 30px; box-shadow: 0 4px 0 #1a8a5a; }
+  @media (max-height: 560px) {
+    #overlay { gap: 8px; }
+    #overlay h1 { font-size: 30px; }
+    #overlay p { font-size: 13px; line-height: 1.4; }
+    #overlay .help, #overlay .pts { display: none; }
+  }
+</style>
+</head>
+<body>
+<div id="wrap"><canvas id="game"></canvas></div>
+<div id="touch"></div>
+<button id="pauseBtn" type="button" aria-label="Pausa">❚❚</button>
+<div id="overlay"></div>
+<a id="homeLink" href="../../index.html">← Sala Giochi</a>
+
+
+<script>
+(() => {
+  "use strict";
+
+  const W = 640, H = 360, TAU = Math.PI * 2, TOP = 28;
+  // a tile: its face is TW × TH; positions are in half tiles, so a layer can sit half a tile across
+  const TW = 32, TH = 42, LX = 5, LY = 6;
+  // the boards: each layer is a list of rows ('#' = a tile) and its offset in half tiles
+  const BOARDS = [
+    { name: "La piramide", layers: [
+      [0, 0, ["..####..", ".######.", "########", "########", ".######.", "..####.."]],
+      [2, 2, ["######", "######", "######", "######"]],
+      [4, 4, ["####", "####"]],
+    ] },
+    { name: "Il ponte", layers: [
+      [0, 0, ["###....###", "##########", "##########", "##########", "###....###"]],
+      [0, 2, ["##......##", "##########", "##......##"]],
+      [2, 4, ["#......#"]],
+    ] },
+    { name: "La fortezza", layers: [
+      [0, 0, ["..######..", "##########", "##########", "##########", "..######.."]],
+      [2, 2, ["########", "########", "########"]],
+      [6, 4, ["####"]],
+      [9, 4, ["##"]],
+    ] },
+  ];
+  // 36 faces: dots, bamboo and numbers 1-9, four winds, three dragons, two flowers
+  const KINDS = 36;
+
+  const DIFFICULTIES = {
+    facile:    { label: "FACILE",    color: "#7ed87a", desc: "3 vite · tanto tempo · le tessere bloccate sono più scure · 3 aiuti per tavolo", lives: 3, time: 240, hints: 3, dim: true, wrong: 0, stuck: 5 },
+    normale:   { label: "NORMALE",   color: "#3ad89a", desc: "3 vite · 1 aiuto per tavolo · una coppia sbagliata costa 2 secondi", lives: 3, time: 185, hints: 1, dim: false, wrong: 2, stuck: 10 },
+    difficile: { label: "DIFFICILE", color: "#ff5a5a", desc: "2 vite · poco tempo · nessun aiuto · una coppia sbagliata costa 4 secondi", lives: 2, time: 160, hints: 0, dim: false, wrong: 4, stuck: 15 },
+  };
+  const DIFF_IDS = Object.keys(DIFFICULTIES);
+  const DIFF_KEY = "giada-difficulty";
+  const bestKey = (id) => `giada-best-${id}`;
+  function store(k, v) { try { localStorage.setItem(k, v); } catch { /* ignore */ } }
+  function load(k) { try { return localStorage.getItem(k); } catch { return null; } }
+  const impresa = (id) => window.dispatchEvent(new CustomEvent("sala:impresa", { detail: id }));
+  const rnd = (a, b) => a + Math.random() * (b - a);
+  const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
+
+  // ---------- Canvas ----------
+  const canvas = document.getElementById("game");
+  const ctx = canvas.getContext("2d");
+  const overlay = document.getElementById("overlay");
+  const pauseBtn = document.getElementById("pauseBtn");
+  let pxRatio = 1, touchMode = !!(window.matchMedia && matchMedia("(pointer: coarse)").matches);
+  function resize() {
+    const s = Math.max(0.2, Math.min((window.innerWidth - 8) / W, (window.innerHeight - 8) / H));
+    pxRatio = Math.min(3, s * (window.devicePixelRatio || 1));
+    canvas.style.width = W * s + "px";
+    canvas.style.height = H * s + "px";
+    canvas.width = Math.round(W * pxRatio);
+    canvas.height = Math.round(H * pxRatio);
+  }
+  window.addEventListener("resize", () => syncControls());
+
+  // ---------- Audio ----------
+  let audioCtx = null;
+  function beep(freq, dur, type = "square", vol = 0.04, slide = 0, delay = 0) {
+    if (!audioCtx) return;
+    const t = audioCtx.currentTime + delay;
+    const osc = audioCtx.createOscillator(), gain = audioCtx.createGain();
+    osc.type = type; osc.frequency.setValueAtTime(freq, t);
+    if (slide) osc.frequency.exponentialRampToValueAtTime(Math.max(20, freq + slide), t + dur);
+    gain.gain.setValueAtTime(vol, t); gain.gain.exponentialRampToValueAtTime(0.0001, t + dur);
+    osc.connect(gain).connect(audioCtx.destination); osc.start(t); osc.stop(t + dur + 0.02);
+  }
+  const arp = (notes, gap, d, type = "square", vol = 0.04) => notes.forEach((f, i) => beep(f, d, type, vol, 0, i * gap));
+  // a pentatonic scale: each pair in a chain plays the next note
+  const PENTA = [523, 587, 659, 784, 880, 1047, 1175, 1319, 1568, 1760];
+  const sfx = {
+    pick: () => beep(1200, 0.04, "triangle", 0.03),
+    pair: (n) => { const f = PENTA[Math.min(PENTA.length - 1, n - 1)]; beep(f, 0.18, "triangle", 0.05); beep(f * 1.5, 0.12, "sine", 0.025, 0, 0.05); },
+    no: () => beep(160, 0.12, "sawtooth", 0.03),
+    tick: () => beep(1400, 0.03, "square", 0.02),
+    shuffle: () => { for (let i = 0; i < 6; i++) beep(300 + Math.random() * 500, 0.05, "square", 0.02, 0, i * 0.05); },
+    hint: () => arp([880, 1320], 0.06, 0.1, "sine", 0.04),
+    clear: () => arp([523, 659, 784, 1047, 784, 1047, 1319, 1568], 0.08, 0.14, "triangle", 0.05),
+    lose: () => arp([523, 466, 415, 392, 330, 262], 0.15, 0.24, "triangle", 0.05),
+  };
+
+  // ---------- State ----------
+  let difficulty = DIFFICULTIES[load(DIFF_KEY)] ? load(DIFF_KEY) : "normale";
+  let diff = DIFFICULTIES[difficulty];
+  let state = "menu", menu = null, pausedFrom = null, clock = 0;
+  let score = 0, bestCache = 0, lives = 3, boardN = 0, cleared = 0, shapesDone = new Set();
+  let tiles = [], sel = null, cursor = null, timeLeft = 0, timeMax = 0, hints = 0, hint = null, chain = 0, lastPair = -99;
+  let phase = "intro", phaseT = 0, message = null, popups = [], gone = [], shake = null, ox = 0, oy = 0, boardClean = true;
+  const B = () => BOARDS[boardN % BOARDS.length];
+  const isPlaying = () => state === "play";
+
+  // ---------- The tiles ----------
+  function makeSlots(bd) {
+    const out = [];
+    bd.layers.forEach(([dx, dy, rows], z) => rows.forEach((row, r) => [...row].forEach((ch, c) => { if (ch === "#") out.push({ x: c * 2 + dx, y: r * 2 + dy, z }); })));
+    return out;
+  }
+  // a tile is free when nothing lies on it and one of its long sides (left or right) is open
+  function isFree(t, list = tiles) {
+    if (t.gone) return false;
+    let left = false, right = false;
+    for (const o of list) {
+      if (o === t || o.gone) continue;
+      if (o.z === t.z + 1 && Math.abs(o.x - t.x) < 2 && Math.abs(o.y - t.y) < 2) return false;
+      if (o.z === t.z && Math.abs(o.y - t.y) < 2) { if (o.x === t.x - 2) left = true; else if (o.x === t.x + 2) right = true; }
+    }
+    return !(left && right);
+  }
+  // the faces go in pairs taken away in a possible order, played backwards: so every deal can be finished
+  function deal(slots, faces = null) {
+    for (let tries = 0; tries < 200; tries++) {
+      const sim = slots.map((s) => ({ ...s, gone: false })), order = [];
+      let ok = true;
+      while (sim.some((s) => !s.gone)) {
+        const free = sim.filter((s) => isFree(s, sim));
+        if (free.length < 2) { ok = false; break; }
+        const a = free.splice(Math.floor(Math.random() * free.length), 1)[0], b = free[Math.floor(Math.random() * free.length)];
+        a.gone = b.gone = true; order.push([a, b]);
+      }
+      if (!ok) continue;
+      const kinds = faces ? faces.slice() : []; if (!faces) for (let i = 0; i < order.length; i++) kinds.push(i % KINDS);
+      for (let i = kinds.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); [kinds[i], kinds[j]] = [kinds[j], kinds[i]]; }
+      order.forEach(([a, b], i) => { a.kind = b.kind = kinds[i]; });
+      return sim.map((s) => ({ x: s.x, y: s.y, z: s.z, kind: s.kind, gone: false }));
+    }
+    return null;
+  }
+  function placeBoard() {
+    tiles = deal(makeSlots(B()));
+    // centre the board under the HUD
+    let x0 = 1e9, x1 = -1e9, y0 = 1e9, y1 = -1e9;
+    for (const t of tiles) { x0 = Math.min(x0, t.x); x1 = Math.max(x1, t.x + 2); y0 = Math.min(y0, t.y); y1 = Math.max(y1, t.y + 2); }
+    const zs = Math.max(...tiles.map((t) => t.z));
+    ox = Math.round((W - (x1 - x0) * TW / 2) / 2 - x0 * TW / 2 + zs * LX / 2);
+    oy = Math.round(TOP + (H - TOP - (y1 - y0) * TH / 2) / 2 - y0 * TH / 2 + zs * LY / 2);
+    tiles.sort((a, b) => a.z - b.z || a.y - b.y || a.x - b.x);
+  }
+  const rectOf = (t) => ({ x: ox + t.x * TW / 2 - t.z * LX, y: oy + t.y * TH / 2 - t.z * LY, w: TW - 1, h: TH - 1 });
+  function pairsLeft() {
+    const free = tiles.filter((t) => isFree(t)), out = [];
+    for (let i = 0; i < free.length; i++) for (let j = i + 1; j < free.length; j++) if (free[i].kind === free[j].kind) out.push([free[i], free[j]]);
+    return out;
+  }
+  // no pairs to take: the faces still on the table are dealt again, still solvable
+  function reshuffle() {
+    const left = tiles.filter((t) => !t.gone);
+    // the same faces, in new pairs
+    const counts = {}; for (const t of left) counts[t.kind] = (counts[t.kind] || 0) + 1;
+    const faces = []; for (const k in counts) for (let i = 0; i < counts[k] / 2; i++) faces.push(+k);
+    const again = deal(left.map((t) => ({ x: t.x, y: t.y, z: t.z })), faces);
+    if (!again) return;
+    tiles = tiles.filter((t) => t.gone).concat(again);
+    tiles.sort((a, b) => a.z - b.z || a.y - b.y || a.x - b.x);
+    sel = null; hint = null;
+    timeLeft = Math.max(1, timeLeft - diff.stuck);
+    boardClean = false;
+    sfx.shuffle();
+    message = { text: "NESSUNA COPPIA", sub: `le tessere si rimescolano · −${diff.stuck} secondi`, t: 0 };
+  }
+
+  // ---------- Flow ----------
+  function startBoard() {
+    placeBoard();
+    sel = null; hint = null; chain = 0; lastPair = -99; gone = []; boardClean = true;
+    const lap = Math.floor(boardN / BOARDS.length);
+    timeMax = timeLeft = Math.round(diff.time * Math.max(0.5, Math.pow(0.9, boardN)));
+    hints = diff.hints;
+    cursor = tiles.filter((t) => isFree(t))[0] || null;
+    phase = "intro"; phaseT = 1.4;
+    message = { text: B().name.toUpperCase(), sub: `tavolo ${boardN + 1}${lap ? ` · giro ${lap + 1}` : ""} · ${tiles.length} tessere · ${Math.floor(timeMax / 60)}:${String(timeMax % 60).padStart(2, "0")}`, t: 0 };
+  }
+  function startGame() {
+    if (!audioCtx) { try { audioCtx = new (window.AudioContext || window.webkitAudioContext)(); } catch { audioCtx = null; } }
+    if (audioCtx && audioCtx.state === "suspended") audioCtx.resume();
+    score = 0; lives = diff.lives; boardN = 0; cleared = 0; shapesDone = new Set(); popups = [];
+    bestCache = parseInt(load(bestKey(difficulty)), 10) || 0;
+    startBoard();
+    state = "play";
+    menu = null;
+    overlay.classList.add("hidden");
+    syncControls();
+    last = performance.now();
+  }
+  function choose(t) {
+    if (state !== "play" || phase !== "play" || !t || t.gone) return;
+    cursor = t;
+    if (!isFree(t)) { shake = { t: 0, tile: t }; sfx.no(); return; }
+    if (!sel || sel === t) { sel = sel === t ? null : t; sfx.pick(); return; }
+    if (sel.kind !== t.kind) {
+      if (diff.wrong) { timeLeft = Math.max(0.5, timeLeft - diff.wrong); popups.push({ x: rectOf(t).x + 16, y: rectOf(t).y, text: `−${diff.wrong} s`, col: "#ff8a8a", t: 0 }); }
+      boardClean = false;
+      shake = { t: 0, tile: t }; sfx.no(); sel = t; return;
+    }
+    // a pair!
+    const a = sel, b = t;
+    a.gone = b.gone = true; sel = null; hint = null;
+    chain = clock - lastPair <= 3 ? chain + 1 : 1; lastPair = clock;
+    if (chain === 8) impresa("catena");
+    const pts = 20 * Math.min(chain, 10) * (boardN + 1);
+    score += pts;
+    const ra = rectOf(a), rb = rectOf(b);
+    gone.push({ t: 0, tiles: [{ ...a, r: ra }, { ...b, r: rb }] });
+    popups.push({ x: (ra.x + rb.x) / 2 + 16, y: Math.min(ra.y, rb.y), text: chain > 1 ? `+${pts} · catena ${chain}` : `+${pts}`, col: chain > 1 ? "#ffe84a" : "#ffffff", t: 0 });
+    sfx.pair(chain);
+    if (cursor && cursor.gone) cursor = tiles.find((x) => isFree(x)) || null;
+    if (tiles.every((x) => x.gone)) return boardClear();
+    if (!pairsLeft().length) reshuffle();
+  }
+  function useHint() {
+    if (state !== "play" || phase !== "play" || hints <= 0) return;
+    const ps = pairsLeft(); if (!ps.length) return;
+    hints--; hint = { pair: ps[Math.floor(Math.random() * ps.length)], t: 0 }; chain = 0; boardClean = false; sfx.hint();
+  }
+  function boardClear() {
+    cleared++;
+    shapesDone.add(boardN % BOARDS.length);
+    if (boardClean) impresa("pulito");
+    if (timeLeft >= timeMax * 0.4) impresa("lampo");
+    const secs = Math.floor(timeLeft), bonus = (1000 + 10 * secs) * (boardN + 1);
+    score += bonus;
+    message = { text: "TAVOLO LIBERO!", sub: `${secs} secondi avanzati · bonus ${bonus.toLocaleString("it-IT")}`, t: 0, long: true };
+    sfx.clear(); phase = "clear"; phaseT = 3;
+  }
+  // time up: a life goes, and if there is one left the board goes on with some more time
+  function timeUp() {
+    lives--;
+    sfx.lose();
+    sel = null; hint = null; chain = 0; boardClean = false;
+    const more = Math.round(timeMax * 0.35);
+    message = { text: "TEMPO SCADUTO!", sub: lives > 0 ? `−1 vita · altri ${more} secondi per finire il tavolo` : "", t: 0, long: true };
+    phase = "fail"; phaseT = 2.6;
+  }
+  function gameOver() {
+    state = "over";
+    const prev = parseInt(load(bestKey(difficulty)), 10) || 0;
+    const record = score > prev;
+    if (record) store(bestKey(difficulty), String(score));
+    menu = () => showOverlay(
+      `<h2 class="lose">FINE DEL GIOCO</h2>
+       <p>Punteggio: <b>${score.toLocaleString("it-IT")}</b> · ${cleared} ${cleared === 1 ? "tavolo liberato" : "tavoli liberati"} · ${diff.label}</p>
+       ${record ? "<p style='color:var(--cyan)'>★ NUOVO RECORD! ★</p>" : ""}
+       ${difficultyHTML()}
+       <button class="start" data-start>UN ALTRO TAVOLO</button>`
+    );
+    menu();
+    syncControls();
+  }
+  function togglePause() {
+    if (isPlaying()) {
+      pausedFrom = state; state = "paused";
+      showOverlay(`<h2>PAUSA</h2><button class="start" data-resume>CONTINUA</button><p class="muted">Premi P per continuare</p>`);
+    } else if (state === "paused") {
+      state = pausedFrom; overlay.classList.add("hidden"); last = performance.now();
+    }
+    syncControls();
+  }
+  // the pause menu can end the game (shared/iniziali.js): it ends here the usual way, saving the record
+  window.addEventListener("sala:termina", () => { if (state !== "paused") return; state = pausedFrom; overlay.classList.add("hidden"); gameOver(); syncControls(); });
+  function syncControls() {
+    pauseBtn.style.display = isPlaying() && touchMode ? "block" : "none";
+    resize();
+  }
+  pauseBtn.addEventListener("click", () => togglePause());
+  function showOverlay(html) { overlay.innerHTML = html; overlay.classList.remove("hidden"); }
+  function difficultyHTML() {
+    const buttons = DIFF_IDS.map((id) => {
+      const d = DIFFICULTIES[id];
+      return `<button type="button" data-diff="${id}" class="${id === difficulty ? "on" : ""}" style="--c:${d.color}">${d.label}</button>`;
+    }).join("");
+    const best = parseInt(load(bestKey(difficulty)), 10);
+    return `<div class="diff">${buttons}</div><p class="muted">${diff.desc}${best ? ` · Record: ${best.toLocaleString("it-IT")}` : ""}</p>`;
+  }
+  function setDifficulty(id) { if (!DIFFICULTIES[id]) return; difficulty = id; diff = DIFFICULTIES[id]; store(DIFF_KEY, id); if (menu) menu(); }
+  function showTitle() {
+    menu = showTitle;
+    showOverlay(
+      `<h1>LE TESSERE DI GIADA</h1>
+       <p>Sul tavolo ci sono tessere impilate a forma di piramide, di ponte o di fortezza. Togli due tessere uguali alla volta, finché il tavolo è vuoto, prima che finisca il tempo. Si possono prendere solo le tessere libere: senza niente sopra e con il lato sinistro o il lato destro scoperto.</p>
+       <div class="pts">
+         <span><b>Le tessere</b></span><span>cerchi, bambù e numeri da 1 a 9, i quattro venti (N, E, S, O), tre draghi e due fiori: ognuna va con una uguale</span>
+         <span><b>Bloccate</b></span><span>se nessuna coppia è libera, le tessere si rimescolano, ma costa qualche secondo</span>
+         <span><b>Punti</b></span><span>coppia 20 × tavolo · le coppie a meno di 3 secondi l'una dall'altra fanno catena (× 2, × 3... fino a × 10) · tavolo liberato 1.000 più 10 per secondo avanzato, × tavolo</span>
+       </div>
+       ${touchMode
+         ? `<p class="muted help">Tocca una tessera e poi quella uguale${diff.hints ? " · AIUTO in alto mostra una coppia" : ""}</p>`
+         : `<p class="muted help">Clic su una tessera e poi su quella uguale, oppure frecce e SPAZIO${diff.hints ? " · H aiuto" : ""} · P pausa</p>`}
+       ${difficultyHTML()}
+       <button class="start" data-start>AL TAVOLO!</button>`
+    );
+  }
+  overlay.addEventListener("click", (e) => {
+    const d = e.target.closest("[data-diff]");
+    if (d) { setDifficulty(d.dataset.diff); return; }
+    if (e.target.closest("[data-start]")) startGame();
+    if (e.target.closest("[data-resume]")) togglePause();
+  });
+
+  // ---------- Input ----------
+  // the topmost tile under a point
+  function tileAt(x, y) {
+    for (let i = tiles.length - 1; i >= 0; i--) { const t = tiles[i]; if (t.gone) continue; const r = rectOf(t); if (x >= r.x && x < r.x + r.w + 1 && y >= r.y && y < r.y + r.h + 1) return t; }
+    return null;
+  }
+  const HINT_BOX = { x: 442, y: 4, w: 62, h: 20 };
+  // the cursor jumps to the nearest visible tile in that direction
+  function moveCursor(dx, dy) {
+    const vis = tiles.filter((t) => !t.gone && !tiles.some((o) => !o.gone && o.z === t.z + 1 && Math.abs(o.x - t.x) < 2 && Math.abs(o.y - t.y) < 2));
+    if (!cursor || cursor.gone) { cursor = vis[0] || null; return; }
+    const c = rectOf(cursor); let best = null, bd = 1e9;
+    for (const t of vis) {
+      if (t === cursor) continue;
+      const r = rectOf(t), ex = r.x - c.x, ey = r.y - c.y;
+      const along = ex * dx + ey * dy, side = Math.abs(ex * dy - ey * dx);
+      if (along < 6) continue;
+      const d = along + side * 2;
+      if (d < bd) { bd = d; best = t; }
+    }
+    if (best) cursor = best;
+  }
+  window.addEventListener("keydown", (e) => {
+    const k = e.key.toLowerCase();
+    if ([" ", "arrowup", "arrowdown", "arrowleft", "arrowright"].includes(k)) e.preventDefault();
+    if (state === "menu" || state === "over") {
+      if (e.key === "Enter") startGame();
+      else if (["1", "2", "3"].includes(k)) setDifficulty(DIFF_IDS[+k - 1]);
+      return;
+    }
+    if (k === "p" || k === "escape") { if (!e.repeat) togglePause(); return; }
+    if (state === "paused") { if (e.key === "Enter") togglePause(); return; }
+    const mv = { arrowleft: [-1, 0], a: [-1, 0], arrowright: [1, 0], d: [1, 0], arrowup: [0, -1], w: [0, -1], arrowdown: [0, 1], s: [0, 1] }[k];
+    if (mv) { moveCursor(mv[0], mv[1]); return; }
+    if (k === " " || k === "j" || e.key === "Enter") choose(cursor);
+    if (k === "h") useHint();
+    if (k === "x") sel = null;
+  });
+  window.addEventListener("blur", () => { if (isPlaying()) togglePause(); });
+  canvas.addEventListener("pointerdown", (e) => {
+    if (e.pointerType === "touch" && !touchMode) { touchMode = true; syncControls(); }
+    if (!isPlaying()) return;
+    e.preventDefault();
+    const r = canvas.getBoundingClientRect(), x = (e.clientX - r.left) / r.width * W, y = (e.clientY - r.top) / r.height * H;
+    if (diff.hints && x >= HINT_BOX.x - 6 && x <= HINT_BOX.x + HINT_BOX.w + 6 && y <= TOP + 4) { useHint(); return; }
+    const t = tileAt(x, y);
+    if (t) choose(t); else sel = null;
+  });
+  window.addEventListener("pointerdown", (e) => { if (e.pointerType === "touch" && !touchMode) { touchMode = true; syncControls(); if (menu) menu(); } }, true);
+
+  // ---------- Update ----------
+  function update(dt) {
+    clock += dt;
+    if (window.__bot) window.__bot(dt);
+    for (const g of gone) g.t += dt;
+    gone = gone.filter((g) => g.t < 0.5);
+    for (const p of popups) { p.t += dt; p.y -= 20 * dt; }
+    popups = popups.filter((p) => p.t < 1.2);
+    if (shake) { shake.t += dt; if (shake.t > 0.3) shake = null; }
+    if (hint) { hint.t += dt; if (hint.t > 2.5 || hint.pair[0].gone || hint.pair[1].gone) hint = null; }
+    if (message) { message.t += dt; if (message.t > (message.long ? 3 : 2)) message = null; }
+    if (state !== "play") return;
+    if (phase === "intro") { phaseT -= dt; if (phaseT <= 0) phase = "play"; return; }
+    if (phase === "clear") { phaseT -= dt; if (phaseT <= 0) { boardN++; startBoard(); } return; }
+    if (phase === "fail") { phaseT -= dt; if (phaseT <= 0) { if (lives <= 0) gameOver(); else { timeLeft = Math.round(timeMax * 0.35); phase = "play"; } } return; }
+    const before = Math.ceil(timeLeft);
+    timeLeft -= dt;
+    if (timeLeft <= 10 && Math.ceil(timeLeft) !== before) sfx.tick();
+    if (timeLeft <= 0) { timeLeft = 0; timeUp(); }
+  }
+
+  // ---------- Drawing ----------
+  const SUIT_COL = ["#d8402a", "#1a8a4a", "#1a5ac8"];
+  function dots(n, cx, cy) {
+    const P = { 1: [[0, 0]], 2: [[0, -1], [0, 1]], 3: [[-1, -1], [0, 0], [1, 1]], 4: [[-1, -1], [1, -1], [-1, 1], [1, 1]], 5: [[-1, -1], [1, -1], [0, 0], [-1, 1], [1, 1]],
+      6: [[-1, -1], [1, -1], [-1, 0], [1, 0], [-1, 1], [1, 1]], 7: [[-1, -1.2], [0, -1.2], [1, -1.2], [-1, 0.2], [1, 0.2], [-1, 1.2], [1, 1.2]], 8: [[-1, -1.2], [1, -1.2], [-1, -0.4], [1, -0.4], [-1, 0.4], [1, 0.4], [-1, 1.2], [1, 1.2]],
+      9: [[-1, -1], [0, -1], [1, -1], [-1, 0], [0, 0], [1, 0], [-1, 1], [0, 1], [1, 1]] }[n];
+    const r = n === 1 ? 9 : n <= 4 ? 5 : 3.6, sx = n <= 2 ? 0 : 8.5, sy = n <= 2 ? 9 : n >= 7 ? 9.5 : 10.5;
+    P.forEach(([x, y], i) => {
+      const c = n === 1 ? "#1a5ac8" : ["#1a5ac8", "#d8402a", "#1a8a4a"][i % 3];
+      ctx.fillStyle = c; ctx.beginPath(); ctx.arc(cx + x * sx, cy + y * sy, r, 0, TAU); ctx.fill();
+      ctx.fillStyle = "#f4efe0"; ctx.beginPath(); ctx.arc(cx + x * sx, cy + y * sy, r * 0.45, 0, TAU); ctx.fill();
+    });
+  }
+  function bamboo(n, cx, cy) {
+    if (n === 1) { // a little bird, as on the real tile
+      ctx.fillStyle = "#1a8a4a"; ctx.beginPath(); ctx.ellipse(cx, cy + 2, 8, 11, 0, 0, TAU); ctx.fill();
+      ctx.fillStyle = "#d8402a"; ctx.beginPath(); ctx.arc(cx, cy - 10, 5, 0, TAU); ctx.fill(); ctx.beginPath(); ctx.moveTo(cx + 4, cy - 10); ctx.lineTo(cx + 9, cy - 8); ctx.lineTo(cx + 4, cy - 7); ctx.fill();
+      return;
+    }
+    const cols = n <= 3 ? n : n <= 6 ? Math.ceil(n / 2) : 3, rows = Math.ceil(n / cols);
+    let k = 0;
+    for (let r = 0; r < rows; r++) for (let c = 0; c < cols && k < n; c++, k++) {
+      const x = cx + (c - (cols - 1) / 2) * 8, h = rows === 1 ? 26 : rows === 2 ? 13 : 9, y = cy + (r - (rows - 1) / 2) * (h + 2);
+      ctx.fillStyle = (k === 4 && n === 5) || (n === 9 && c === 1) ? "#d8402a" : "#1a8a4a";
+      ctx.fillRect(x - 2, y - h / 2, 4, h); ctx.fillStyle = "#0a5a2a"; ctx.fillRect(x - 2.5, y - 1, 5, 2);
+    }
+  }
+  function face(kind, cx, cy) {
+    const s = Math.floor(kind / 9), n = kind % 9 + 1;
+    ctx.textAlign = "center"; ctx.textBaseline = "middle";
+    if (kind < 9) dots(n, cx, cy);
+    else if (kind < 18) bamboo(n, cx, cy);
+    else if (kind < 27) {
+      ctx.fillStyle = "#1a1a1a"; ctx.font = "900 19px system-ui"; ctx.fillText(String(n), cx, cy - 6);
+      ctx.fillStyle = "#d8402a"; ctx.font = "900 11px serif"; ctx.fillText("✱", cx - 6, cy + 11); ctx.fillText("✱", cx + 6, cy + 11);
+    } else if (kind < 31) {
+      ctx.fillStyle = "#1a3a7a"; ctx.font = "900 22px system-ui"; ctx.fillText(["N", "E", "S", "O"][kind - 27], cx, cy);
+      ctx.strokeStyle = "#1a3a7a"; ctx.lineWidth = 1.5; ctx.beginPath(); ctx.arc(cx, cy, 13, 0, TAU); ctx.stroke();
+    } else if (kind === 31) { // red dragon
+      ctx.strokeStyle = "#d8402a"; ctx.lineWidth = 3; ctx.strokeRect(cx - 9, cy - 13, 18, 26); ctx.fillStyle = "#d8402a"; ctx.fillRect(cx - 2, cy - 13, 4, 26);
+    } else if (kind === 32) { // green dragon
+      ctx.fillStyle = "#1a8a4a"; ctx.beginPath(); ctx.moveTo(cx, cy - 15); ctx.quadraticCurveTo(cx + 13, cy, cx, cy + 15); ctx.quadraticCurveTo(cx - 13, cy, cx, cy - 15); ctx.fill();
+      ctx.strokeStyle = "#f4efe0"; ctx.lineWidth = 1.5; ctx.beginPath(); ctx.moveTo(cx, cy - 12); ctx.lineTo(cx, cy + 12); ctx.stroke();
+    } else if (kind === 33) { // white dragon: an empty blue frame
+      ctx.strokeStyle = "#1a5ac8"; ctx.lineWidth = 2; ctx.strokeRect(cx - 10, cy - 14, 20, 28); ctx.strokeRect(cx - 6, cy - 10, 12, 20);
+    } else if (kind === 34) { // plum blossom
+      ctx.fillStyle = "#e85a9a"; for (let i = 0; i < 5; i++) { const a = i * TAU / 5 - Math.PI / 2; ctx.beginPath(); ctx.arc(cx + Math.cos(a) * 7, cy + Math.sin(a) * 7, 5.5, 0, TAU); ctx.fill(); }
+      ctx.fillStyle = "#ffd23a"; ctx.beginPath(); ctx.arc(cx, cy, 3.5, 0, TAU); ctx.fill();
+    } else { // the sun
+      ctx.fillStyle = "#ff9a1a"; ctx.beginPath(); ctx.arc(cx, cy, 7, 0, TAU); ctx.fill(); ctx.strokeStyle = "#ff9a1a"; ctx.lineWidth = 2;
+      for (let i = 0; i < 8; i++) { const a = i * TAU / 8; ctx.beginPath(); ctx.moveTo(cx + Math.cos(a) * 10, cy + Math.sin(a) * 10); ctx.lineTo(cx + Math.cos(a) * 14, cy + Math.sin(a) * 14); ctx.stroke(); }
+    }
+    ctx.textBaseline = "alphabetic";
+  }
+  function drawTile(t, r, opts = {}) {
+    let { x, y } = r;
+    if (shake && shake.tile === t) x += Math.sin(shake.t * 60) * 3 * (1 - shake.t / 0.3);
+    // the thickness, right and bottom (higher layers sit up and to the left), and a shadow on the table
+    ctx.fillStyle = "rgba(0,0,0,0.28)"; ctx.fillRect(x + 3, y + 4, r.w + LX, r.h + LY);
+    ctx.fillStyle = "#c8bc94"; ctx.beginPath(); ctx.moveTo(x + r.w - 2, y + 2); ctx.lineTo(x + r.w + LX - 1, y + LY); ctx.lineTo(x + r.w + LX - 1, y + r.h + LY - 1); ctx.lineTo(x + LX, y + r.h + LY - 1); ctx.lineTo(x + 2, y + r.h - 2); ctx.closePath(); ctx.fill();
+    ctx.fillStyle = "#1a7a52"; ctx.beginPath(); ctx.moveTo(x + r.w, y + r.h * 0.45); ctx.lineTo(x + r.w + LX - 1, y + r.h * 0.45 + LY); ctx.lineTo(x + r.w + LX - 1, y + r.h + LY - 1); ctx.lineTo(x + LX, y + r.h + LY - 1); ctx.lineTo(x, y + r.h); ctx.closePath(); ctx.fill();
+    const g = ctx.createLinearGradient(x, y, x + r.w, y + r.h); g.addColorStop(0, "#fffbee"); g.addColorStop(1, "#e8dfc4");
+    ctx.fillStyle = g; ctx.beginPath(); ctx.roundRect(x, y, r.w, r.h, 4); ctx.fill();
+    ctx.strokeStyle = "rgba(0,0,0,0.35)"; ctx.lineWidth = 1; ctx.stroke();
+    face(t.kind, x + r.w / 2, y + r.h / 2);
+    if (opts.dim) { ctx.fillStyle = "rgba(10,30,20,0.38)"; ctx.beginPath(); ctx.roundRect(x, y, r.w, r.h, 4); ctx.fill(); }
+    if (opts.sel) { ctx.fillStyle = "rgba(255,220,60,0.35)"; ctx.beginPath(); ctx.roundRect(x, y, r.w, r.h, 4); ctx.fill(); ctx.strokeStyle = "#ffd23a"; ctx.lineWidth = 3; ctx.stroke(); }
+    if (opts.hint) { ctx.strokeStyle = `rgba(90,232,255,${0.6 + 0.4 * Math.sin(clock * 12)})`; ctx.lineWidth = 3; ctx.beginPath(); ctx.roundRect(x - 1, y - 1, r.w + 2, r.h + 2, 5); ctx.stroke(); }
+    if (opts.cur) { ctx.strokeStyle = "#ffffff"; ctx.lineWidth = 2; ctx.setLineDash([4, 3]); ctx.beginPath(); ctx.roundRect(x - 2, y - 2, r.w + 4, r.h + 4, 5); ctx.stroke(); ctx.setLineDash([]); }
+  }
+  function drawTable() {
+    const g = ctx.createRadialGradient(W / 2, H / 2, 40, W / 2, H / 2, 380);
+    g.addColorStop(0, "#1e5a40"); g.addColorStop(1, "#0a2418");
+    ctx.fillStyle = g; ctx.fillRect(0, 0, W, H);
+    // the felt pattern
+    ctx.strokeStyle = "rgba(255,255,255,0.03)"; ctx.lineWidth = 1;
+    for (let i = -H; i < W; i += 18) { ctx.beginPath(); ctx.moveTo(i, H); ctx.lineTo(i + H, 0); ctx.stroke(); }
+    const hp = hint ? hint.pair : [];
+    for (const t of tiles) {
+      if (t.gone) continue;
+      drawTile(t, rectOf(t), { dim: diff.dim && state !== "menu" && !isFree(t), sel: t === sel, hint: hp.includes(t), cur: !touchMode && t === cursor && state === "play" });
+    }
+    // pairs flying away
+    for (const gg of gone) for (const t of gg.tiles) {
+      ctx.globalAlpha = Math.max(0, 1 - gg.t / 0.5);
+      drawTile(t, { ...t.r, y: t.r.y - gg.t * 60 });
+      ctx.globalAlpha = 1;
+    }
+  }
+  function outlined(text, x, y, font, fill, lw = 5) {
+    ctx.font = font; ctx.lineWidth = lw; ctx.strokeStyle = "#06140e"; ctx.strokeText(text, x, y); ctx.fillStyle = fill; ctx.fillText(text, x, y);
+  }
+  function drawHud() {
+    ctx.fillStyle = "rgba(6,20,14,0.96)"; ctx.fillRect(0, 0, W, TOP);
+    ctx.textBaseline = "middle"; ctx.textAlign = "left";
+    const x0 = 12;
+    ctx.fillStyle = "#ffffff"; ctx.font = "900 15px system-ui"; ctx.fillText(score.toLocaleString("it-IT"), x0, 14);
+    ctx.fillStyle = "#c0e8d4"; ctx.font = "700 9px system-ui"; ctx.fillText(`REC ${Math.max(bestCache, score).toLocaleString("it-IT")}`, x0 + 88, 9);
+    ctx.fillStyle = "#3ad89a"; ctx.font = "900 9px system-ui"; ctx.fillText(`${B().name.toUpperCase()} · TAVOLO ${boardN + 1}`, x0 + 88, 20);
+    // the time bar
+    const bx = 250, bw = 150, k = timeMax ? clamp(timeLeft / timeMax, 0, 1) : 1;
+    ctx.fillStyle = "rgba(255,255,255,0.15)"; ctx.fillRect(bx, 9, bw, 10);
+    ctx.fillStyle = k < 0.15 ? (Math.floor(clock * 6) % 2 ? "#ff5a5a" : "#ffb03a") : k < 0.35 ? "#ffd23a" : "#3ad89a"; ctx.fillRect(bx, 9, bw * k, 10);
+    const s = Math.ceil(timeLeft);
+    ctx.fillStyle = "#ffffff"; ctx.font = "900 11px system-ui"; ctx.fillText(`${Math.floor(s / 60)}:${String(s % 60).padStart(2, "0")}`, bx + bw + 6, 14);
+    if (diff.hints) {
+      const hb = HINT_BOX, on = hints > 0 && phase === "play";
+      ctx.fillStyle = on ? "rgba(90,232,255,0.2)" : "rgba(255,255,255,0.06)"; ctx.fillRect(hb.x, hb.y, hb.w, hb.h);
+      ctx.strokeStyle = on ? "#5ae8ff" : "rgba(255,255,255,0.2)"; ctx.lineWidth = 1; ctx.strokeRect(hb.x + 0.5, hb.y + 0.5, hb.w - 1, hb.h - 1);
+      ctx.fillStyle = on ? "#5ae8ff" : "rgba(255,255,255,0.4)"; ctx.font = "900 10px system-ui"; ctx.textAlign = "center"; ctx.fillText(`AIUTO ${hints}`, hb.x + hb.w / 2, hb.y + hb.h / 2 + 1);
+    }
+    ctx.textAlign = "right"; ctx.fillStyle = "#ffffff"; ctx.font = "900 11px system-ui";
+    const left = tiles.filter((t) => !t.gone).length;
+    ctx.fillText(`♥ ${lives}`, touchMode ? W - 62 : W - 12, 9);
+    ctx.fillStyle = "#c0e8d4"; ctx.font = "700 9px system-ui"; ctx.fillText(`${left} tessere${chain > 1 && clock - lastPair <= 3 ? ` · catena ${chain}` : ""}`, touchMode ? W - 62 : W - 12, 21);
+    ctx.textBaseline = "alphabetic";
+  }
+  function draw() {
+    ctx.setTransform(pxRatio, 0, 0, pxRatio, 0, 0);
+    if (!tiles.length) placeBoard();
+    drawTable();
+    ctx.textAlign = "center";
+    for (const p of popups) { ctx.globalAlpha = Math.max(0, 1 - p.t / 1.2); outlined(p.text, p.x, p.y, "900 12px system-ui", p.col, 3); }
+    ctx.globalAlpha = 1;
+    if (state === "menu") return;
+    drawHud();
+    ctx.textAlign = "center";
+    if (message) {
+      ctx.globalAlpha = Math.min(1, ((message.long ? 3 : 2) - message.t) * 2);
+      ctx.fillStyle = "rgba(6,20,14,0.6)"; ctx.fillRect(0, H / 2 - 36, W, 64);
+      outlined(message.text, W / 2, H / 2 - 4, "italic 900 26px system-ui", "#3ad89a", 6);
+      if (message.sub) outlined(message.sub, W / 2, H / 2 + 18, "800 12px system-ui", "#ffffff", 4);
+      ctx.globalAlpha = 1;
+    }
+  }
+
+  // ---------- Loop ----------
+  const STEP = 1 / 60;
+  let last = performance.now(), acc = 0;
+  function frame(now) {
+    const dt = Math.min(0.1, (now - last) / 1000);
+    last = now;
+    if (isPlaying()) {
+      acc += dt;
+      while (acc >= STEP && isPlaying()) { update(STEP); acc -= STEP; }
+    } else { acc = 0; update(dt); }
+    draw();
+    requestAnimationFrame(frame);
+  }
+  syncControls();
+  showTitle();
+  requestAnimationFrame(frame);
+})();
+</script>
+<script src="../../shared/iniziali.js" data-record="giada-best-" data-kind="score"></script>
+</body>
+</html>
