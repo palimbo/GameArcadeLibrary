@@ -9,6 +9,11 @@
   "use strict";
   // record key prefix of the game (as in trofei.js) → its feats
   const LIST = {
+    "chitarra-best-": [   // chitarra-infuocata
+      { id: "combo", name: "Combo perfetta", desc: "suona una canzone senza mancare neanche una nota" },
+      { id: "urlo", name: "Tutti gli urli", desc: "fai tutti gli urli di una canzone" },
+      { id: "palco", name: "Padrone del palco", desc: "suona 5 canzoni nello stesso concerto" },
+    ],
     "gocce-best-": [   // gocce-in-battaglia
       { id: "otto", name: "Otto in un colpo", desc: "conquista tutte e 8 le gocce intorno con una mossa sola" },
       { id: "cappotto", name: "Cappotto", desc: "dalla terza sfida in poi, vinci senza lasciare all'avversario neanche una goccia" },
