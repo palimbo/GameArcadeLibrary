@@ -9,6 +9,11 @@
   "use strict";
   // record key prefix of the game (as in trofei.js) → its feats
   const LIST = {
+    "temerario-best-": [   // cavaliere-temerario
+      { id: "drago", name: "Ammazzadraghi", desc: "sconfiggi il drago Brace e salva la principessa Dafne" },
+      { id: "intatto", name: "Senza un graffio", desc: "supera 5 stanze di fila senza mai morire" },
+      { id: "fulmine", name: "Riflessi di fulmine", desc: "supera 5 pericoli di fila reagendo in meno di 0,4 secondi" },
+    ],
     "chitarra-best-": [   // chitarra-infuocata
       { id: "combo", name: "Combo perfetta", desc: "suona una canzone senza mancare neanche una nota" },
       { id: "urlo", name: "Tutti gli urli", desc: "fai tutti gli urli di una canzone" },
