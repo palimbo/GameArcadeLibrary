@@ -1,0 +1,794 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no, viewport-fit=cover">
+<title>Green d'Oro</title>
+<style>
+  :root {
+    --bg: #081a0c;
+    --fg: #f4f6ee;
+    --muted: #d0e8c8;
+    --pink: #ffd23a;
+    --yellow: #8ae05a;
+    --red: #ff4a3a;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  html, body {
+    height: 100%;
+    background: var(--bg);
+    color: var(--fg);
+    font-family: system-ui, -apple-system, "Segoe UI", sans-serif;
+    overflow: hidden;
+    user-select: none;
+    -webkit-user-select: none;
+    touch-action: none;
+  }
+  #wrap { position: fixed; inset: 0; display: flex; align-items: center; justify-content: center; }
+  canvas { display: block; touch-action: none; border-radius: 6px; box-shadow: 0 0 0 2px #2a5a2a, 0 10px 40px rgba(0,0,0,0.6); }
+  #pauseBtn {
+    position: fixed; z-index: 3; display: none; right: 10px; top: calc(10px + env(safe-area-inset-top, 0px));
+    font: 700 13px system-ui, sans-serif; color: var(--fg);
+    background: rgba(0, 0, 0, 0.6); border: 1px solid rgba(244, 246, 238, 0.35);
+    border-radius: 8px; padding: 6px 10px; cursor: pointer;
+  }
+  #touch {
+    position: fixed; z-index: 2; display: none; left: 12px; right: 12px;
+    bottom: calc(14px + env(safe-area-inset-bottom, 0px));
+    justify-content: space-between; align-items: flex-end; pointer-events: none;
+  }
+  /* thumb stick: left and right aim, up and down change the club; COLPO three times for the swing */
+  #touch .stick { position: relative; width: 136px; height: 136px; border-radius: 50%; pointer-events: auto; touch-action: none;
+    border: 2px solid rgba(255, 210, 58, 0.6); background: radial-gradient(circle, rgba(255,210,58,0.14), rgba(255,210,58,0.04)); }
+  #touch .stick .knob { position: absolute; left: 50%; top: 50%; width: 58px; height: 58px; margin: -29px 0 0 -29px; border-radius: 50%;
+    background: rgba(255, 210, 58, 0.45); border: 2px solid rgba(255,255,255,0.7); box-shadow: 0 4px 10px rgba(0,0,0,0.4); pointer-events: none; }
+  #touch .stick .ring { position: absolute; inset: 10px; border-radius: 50%; border: 1px dashed rgba(244,246,238,0.25); pointer-events: none; }
+  #touch .jump { width: 96px; height: 96px; border-radius: 50%; pointer-events: auto; touch-action: none; color: var(--fg);
+    font: 800 13px system-ui, sans-serif; letter-spacing: 1px; border: 2px solid rgba(255, 210, 58, 0.9); background: rgba(255, 210, 58, 0.22); }
+  #touch .jump.on { background: rgba(255, 210, 58, 0.55); }
+  #touch.small .stick { width: 112px; height: 112px; }
+  #touch.small .stick .knob { width: 48px; height: 48px; margin: -24px 0 0 -24px; }
+  #touch.small .jump { width: 80px; height: 80px; font-size: 11px; }
+  #touch .btns { display: flex; flex-direction: column; align-items: center; gap: 10px; pointer-events: none; }
+  #touch .jump.axe { width: 64px; height: 64px; font-size: 11px; border-color: rgba(255, 244, 200, 0.9); background: rgba(255, 244, 200, 0.16); }
+  #touch .jump.axe.on { background: rgba(255, 244, 200, 0.5); }
+  #touch.small .jump.axe { width: 54px; height: 54px; font-size: 10px; }
+  #overlay {
+    position: fixed; inset: 0; z-index: 5;
+    display: flex; flex-direction: column; align-items: center; justify-content: flex-start;
+    gap: 14px; padding: 16px; text-align: center; overflow-y: auto;
+    background: rgba(8, 26, 12, 0.93);
+  }
+  #overlay > :first-child { margin-top: auto; }
+  #overlay > :last-child { margin-bottom: auto; }
+  #overlay.hidden { display: none; }
+  #homeLink {
+    position: fixed; top: calc(10px + env(safe-area-inset-top, 0px)); left: 10px; z-index: 6;
+    font: 600 13px/1 system-ui, sans-serif; color: #fff; text-decoration: none;
+    padding: 8px 12px; border-radius: 999px; background: rgba(0,0,0,.55);
+    border: 1px solid rgba(255,255,255,.25);
+  }
+  #homeLink:hover { background: rgba(0,0,0,.8); }
+  #overlay.hidden ~ #homeLink { display: none; }
+  @media (max-width: 700px) { #overlay { padding-top: calc(52px + env(safe-area-inset-top, 0px)); } }
+  #overlay h1 { font-size: clamp(32px, 10vw, 58px); font-weight: 900; font-style: italic; letter-spacing: 1px; color: var(--pink);
+    text-shadow: 3px 3px 0 #5a0a2a, 0 0 22px rgba(255,210,58,0.35); }
+  #overlay h2 { font-size: clamp(26px, 7vw, 42px); font-weight: 900; letter-spacing: 2px; color: var(--pink); }
+  #overlay h2.lose { color: var(--red); }
+  #overlay p { max-width: 540px; font-size: clamp(13px, 3.4vw, 16px); line-height: 1.55; }
+  #overlay p.muted { color: var(--muted); }
+  #overlay .pts { display: grid; grid-template-columns: repeat(2, auto); gap: 4px 18px; font-size: 13px; color: var(--muted); text-align: left; max-width: 560px; }
+  #overlay .pts b { color: var(--fg); }
+  #overlay .diff { display: flex; gap: 10px; flex-wrap: wrap; justify-content: center; }
+  #overlay button {
+    font: 800 15px system-ui, sans-serif; letter-spacing: 1.5px; color: var(--fg);
+    background: transparent; cursor: pointer;
+    border: 2px solid rgba(244,246,238,0.3); border-radius: 10px; padding: 9px 16px;
+  }
+  #overlay .diff button.on { border-color: var(--c); color: var(--c); box-shadow: 0 0 12px var(--c); }
+  #overlay button.start { border-color: var(--pink); color: #2a2002; background: var(--pink); padding: 11px 30px; box-shadow: 0 4px 0 #a88a1a; }
+  @media (max-height: 560px) {
+    #overlay { gap: 8px; }
+    #overlay h1 { font-size: 30px; }
+    #overlay p { font-size: 13px; line-height: 1.4; }
+    #overlay .help, #overlay .pts { display: none; }
+  }
+</style>
+</head>
+<body>
+<div id="wrap"><canvas id="game"></canvas></div>
+<div id="touch">
+  <div class="stick" aria-label="Levetta"><div class="ring"></div><div class="knob"></div></div>
+  <div class="btns"><button type="button" class="jump hop" aria-label="Colpo">COLPO</button></div>
+</div>
+<button id="pauseBtn" type="button" aria-label="Pausa">❚❚</button>
+<div id="overlay"></div>
+<a id="homeLink" href="../../index.html">← Sala Giochi</a>
+
+
+<script>
+(() => {
+  "use strict";
+
+  const W = 640, H = 360, TAU = Math.PI * 2, TOP = 28;
+  // the bag: how far each club carries at full power (metres), how high it flies, how much it rolls after landing
+  const CLUBS = [
+    { name: "LEGNO 1", short: "L1", dist: 230, apex: 28, roll: 0.14 },
+    { name: "LEGNO 3", short: "L3", dist: 200, apex: 30, roll: 0.12 },
+    { name: "FERRO 5", short: "F5", dist: 165, apex: 30, roll: 0.09 },
+    { name: "FERRO 7", short: "F7", dist: 140, apex: 32, roll: 0.07 },
+    { name: "FERRO 9", short: "F9", dist: 112, apex: 34, roll: 0.05 },
+    { name: "WEDGE", short: "PW", dist: 82, apex: 30, roll: 0.03 },
+    { name: "SAND", short: "SW", dist: 56, apex: 24, roll: 0.02 },
+    { name: "PUTTER", short: "PT", dist: 30, apex: 0, roll: 0 },
+  ];
+  const PUTTER = CLUBS.length - 1;
+  const PARS = [4, 3, 5, 4, 4, 3, 4, 5, 4];
+  // how the ground holds the ball: distance kept on a shot from there, and the rolling friction (m/s²)
+  const LIE = {
+    tee: { name: "PARTENZA", mult: 1, mu: 3 }, fairway: { name: "FAIRWAY", mult: 1, mu: 3 }, green: { name: "GREEN", mult: 1, mu: 1.5 },
+    rough: { name: "ERBA ALTA", mult: 0.82, mu: 8 }, sand: { name: "BUNKER", mult: 0.5, mu: 40 },
+  };
+
+  const DIFFICULTIES = {
+    facile:    { label: "FACILE",    color: "#7ed87a", desc: "margine di 8 colpi sopra il par per giro · poco vento · lo swing va piano · si vede dove andrà la palla col vento", margin: 8, wind: 2.5, speed: 0.8, slope: 0.12, guide: true },
+    normale:   { label: "NORMALE",   color: "#ffd23a", desc: "margine di 6 colpi sopra il par per giro · vento fino a 5 m/s", margin: 6, wind: 5, speed: 1, slope: 0.2, guide: false },
+    difficile: { label: "DIFFICILE", color: "#ff5a5a", desc: "margine di 4 colpi sopra il par per giro · vento forte · green veloci e in pendenza · swing rapido", margin: 4, wind: 8, speed: 1.3, slope: 0.3, guide: false },
+  };
+  const DIFF_IDS = Object.keys(DIFFICULTIES);
+  const DIFF_KEY = "green-difficulty";
+  const bestKey = (id) => `green-best-${id}`;
+  function store(k, v) { try { localStorage.setItem(k, v); } catch { /* ignore */ } }
+  function load(k) { try { return localStorage.getItem(k); } catch { return null; } }
+  const impresa = (id) => window.dispatchEvent(new CustomEvent("sala:impresa", { detail: id }));
+  const rnd = (a, b) => a + Math.random() * (b - a);
+  const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
+  const hyp = Math.hypot;
+
+  // ---------- Canvas ----------
+  const canvas = document.getElementById("game");
+  const ctx = canvas.getContext("2d");
+  const wrapEl = document.getElementById("wrap");
+  const overlay = document.getElementById("overlay");
+  const touchEl = document.getElementById("touch");
+  const pauseBtn = document.getElementById("pauseBtn");
+  let pxRatio = 1, touchMode = !!(window.matchMedia && matchMedia("(pointer: coarse)").matches);
+  function resize() {
+    const portrait = window.innerHeight > window.innerWidth;
+    const showTouch = touchMode && isPlaying();
+    touchEl.style.display = showTouch ? "flex" : "none";
+    touchEl.classList.toggle("small", !portrait && window.innerHeight < 480);
+    wrapEl.style.paddingBottom = showTouch && portrait ? "calc(170px + env(safe-area-inset-bottom, 0px))" : "0";
+    let availW = window.innerWidth - 8, availH = window.innerHeight - 8;
+    if (showTouch && portrait) availH -= 170;
+    if (showTouch && !portrait) {
+      const side = Math.max(...[...touchEl.children].map((el) => el.offsetWidth)) + 20;
+      if (window.innerWidth - 2 * side > 200) availW = window.innerWidth - 2 * side;
+    }
+    const s = Math.max(0.2, Math.min(availW / W, availH / H));
+    pxRatio = Math.min(3, s * (window.devicePixelRatio || 1));
+    canvas.style.width = W * s + "px";
+    canvas.style.height = H * s + "px";
+    canvas.width = Math.round(W * pxRatio);
+    canvas.height = Math.round(H * pxRatio);
+  }
+  window.addEventListener("resize", () => syncControls());
+
+  // ---------- Audio ----------
+  let audioCtx = null;
+  function beep(freq, dur, type = "square", vol = 0.04, slide = 0, delay = 0) {
+    if (!audioCtx) return;
+    const t = audioCtx.currentTime + delay;
+    const osc = audioCtx.createOscillator(), gain = audioCtx.createGain();
+    osc.type = type;
+    osc.frequency.setValueAtTime(freq, t);
+    if (slide) osc.frequency.exponentialRampToValueAtTime(Math.max(20, freq + slide), t + dur);
+    gain.gain.setValueAtTime(vol, t);
+    gain.gain.exponentialRampToValueAtTime(0.0001, t + dur);
+    osc.connect(gain).connect(audioCtx.destination);
+    osc.start(t); osc.stop(t + dur + 0.02);
+  }
+  const arp = (notes, gap, d, type = "square", vol = 0.04) => notes.forEach((f, i) => beep(f, d, type, vol, 0, i * gap));
+  let sfxN = 0;
+  const lim = (fn) => (...a) => { if (sfxN++ < 4) fn(...a); };
+  const sfx = {
+    swing: lim(() => beep(180, 0.12, "triangle", 0.06, 500)),
+    putt: lim(() => beep(900, 0.04, "sine", 0.05)),
+    meter: lim(() => beep(1200, 0.03, "square", 0.02)),
+    land: lim(() => beep(120, 0.08, "sine", 0.05)),
+    sand: lim(() => beep(300, 0.15, "sawtooth", 0.02, -200)),
+    tree: lim(() => { beep(200, 0.06, "square", 0.04); beep(140, 0.1, "triangle", 0.04, 0, 0.05); }),
+    splash: lim(() => { for (let i = 0; i < 5; i++) beep(400 + Math.random() * 600, 0.08, "sine", 0.03, -300, i * 0.03); }),
+    cup: () => arp([660, 880, 1320], 0.07, 0.12, "triangle", 0.05),
+    cheer: () => arp([523, 659, 784, 1047, 784, 1047, 1319, 1568], 0.08, 0.14, "square", 0.045),
+    boo: () => arp([392, 330, 262], 0.15, 0.2, "triangle", 0.04),
+    over: () => arp([523, 466, 415, 392, 330, 262], 0.15, 0.24, "triangle", 0.05),
+  };
+
+  // ---------- State ----------
+  let difficulty = DIFFICULTIES[load(DIFF_KEY)] ? load(DIFF_KEY) : "normale";
+  let diff = DIFFICULTIES[difficulty];
+  let state = "menu", menu = null, pausedFrom = null, clock = 0;
+  let score = 0, bestCache = 0, round = 0, holeN = 0, margin = 6, roundOver = 0, holesDone = 0;
+  let hole = null, ball = null, strokes = 0, club = 0, aim = 0, wind = { x: 0, y: 0 }, prev = null;
+  let phase = "intro", phaseT = 0, meter = 0, power = 0, shot = null, message = null, popups = [], cam = { x: 0, y: 0, s: 1 }, camT = null, card = [];
+  let actHeld = false, wasAct = false, aimHold = 0, lastV = 0, puttFrom = 0;
+  const keys = { left: false, right: false, up: false, down: false };
+  const stick = { x: 0, y: 0 };
+  const isPlaying = () => state === "play";
+
+  // ---------- The holes ----------
+  function genHole(n) {
+    const par = PARS[n % 9];
+    const len = par === 3 ? rnd(125, 180) : par === 4 ? rnd(290, 390) : rnd(405, 470);
+    const pts = [{ x: 0, y: 0 }];
+    let dir = -Math.PI / 2 + rnd(-0.35, 0.35);
+    const legs = par === 3 ? 1 : par === 4 ? 2 : 3;
+    for (let i = 0; i < legs; i++) {
+      const l = len / legs * rnd(0.85, 1.15);
+      if (i > 0) dir += rnd(0.35, 0.7) * (Math.random() < 0.5 ? -1 : 1);
+      dir = clamp(dir, -Math.PI / 2 - 0.9, -Math.PI / 2 + 0.9);
+      const p = pts[pts.length - 1];
+      pts.push({ x: p.x + Math.cos(dir) * l, y: p.y + Math.sin(dir) * l });
+    }
+    const g = pts[pts.length - 1], gr = rnd(11, 15);
+    const pin = { x: g.x + rnd(-0.5, 0.5) * gr, y: g.y + rnd(-0.5, 0.5) * gr };
+    const width = rnd(30, 40);
+    const sand = [], water = [], trees = [];
+    // bunkers around the green, and one where the drive lands
+    for (let i = 0, k = 1 + Math.floor(Math.random() * 3); i < k; i++) { const a = rnd(0, TAU), r = rnd(4, 7); sand.push({ x: g.x + Math.cos(a) * (gr + r + 1), y: g.y + Math.sin(a) * (gr + r + 1), r }); }
+    if (par > 3) {
+      const a = pts[0], b = pts[1], t = clamp(215 / hyp(b.x - a.x, b.y - a.y), 0.3, 0.9), nx = -(b.y - a.y), ny = b.x - a.x, nl = hyp(nx, ny), sd = Math.random() < 0.5 ? -1 : 1;
+      sand.push({ x: a.x + (b.x - a.x) * t + nx / nl * sd * width * 0.45, y: a.y + (b.y - a.y) * t + ny / nl * sd * width * 0.45, r: rnd(6, 9) });
+    }
+    // water: a pond beside the fairway, or a creek in front of the green
+    if (Math.random() < 0.6) {
+      const seg = 1 + Math.floor(Math.random() * (pts.length - 1)), a = pts[seg - 1], b = pts[seg];
+      if (par === 3 || Math.random() < 0.4) {
+        const t = par === 3 ? 0.55 : 0.75, ang = Math.atan2(b.y - a.y, b.x - a.x);
+        water.push({ x: a.x + (b.x - a.x) * t, y: a.y + (b.y - a.y) * t, rx: 9, ry: width * 0.9, a: ang });
+      } else {
+        const t = rnd(0.35, 0.7), nx = -(b.y - a.y), ny = b.x - a.x, nl = hyp(nx, ny), sd = Math.random() < 0.5 ? -1 : 1;
+        water.push({ x: a.x + (b.x - a.x) * t + nx / nl * sd * (width / 2 + 16), y: a.y + (b.y - a.y) * t + ny / nl * sd * (width / 2 + 16), rx: rnd(18, 28), ry: rnd(10, 16), a: Math.atan2(b.y - a.y, b.x - a.x) });
+      }
+    }
+    // trees along both sides
+    for (let i = 1; i < pts.length; i++) {
+      const a = pts[i - 1], b = pts[i], l = hyp(b.x - a.x, b.y - a.y), nx = -(b.y - a.y) / l, ny = (b.x - a.x) / l;
+      for (let d = 20; d < l - 10; d += rnd(14, 28)) for (const sd of [-1, 1]) {
+        if (Math.random() < 0.35) continue;
+        const off = width / 2 + rnd(8, 26), x = a.x + (b.x - a.x) * d / l + nx * sd * off, y = a.y + (b.y - a.y) * d / l + ny * sd * off;
+        if (hyp(x - g.x, y - g.y) < gr + 12) continue;
+        trees.push({ x, y, r: rnd(3.5, 6), h: rnd(9, 15) });
+      }
+    }
+    let x0 = 1e9, x1 = -1e9, y0 = 1e9, y1 = -1e9;
+    for (const p of pts) { x0 = Math.min(x0, p.x); x1 = Math.max(x1, p.x); y0 = Math.min(y0, p.y); y1 = Math.max(y1, p.y); }
+    const sa = rnd(0, TAU), sm = diff.slope * (0.4 + Math.random() * 0.6) * (1 + 0.25 * round);
+    const h = { n, par, len: Math.round(len), pts, width, green: { x: g.x, y: g.y, r: gr }, pin, sand, water, trees: [], bounds: { x0: x0 - 70, x1: x1 + 70, y0: y0 - 45, y1: y1 + 45 }, slope: { x: Math.cos(sa) * sm, y: Math.sin(sa) * sm } };
+    // trees only in the rough
+    const keep = hole; hole = h;
+    h.trees = trees.filter((t) => lieAt(t.x, t.y) === "rough" && [0, 1, 2, 3].every((i) => lieAt(t.x + Math.cos(i * 1.57) * t.r, t.y + Math.sin(i * 1.57) * t.r) === "rough"));
+    hole = keep;
+    return h;
+  }
+  function distSeg(px, py, a, b) {
+    const dx = b.x - a.x, dy = b.y - a.y, l2 = dx * dx + dy * dy, t = clamp(((px - a.x) * dx + (py - a.y) * dy) / l2, 0, 1);
+    return hyp(px - a.x - dx * t, py - a.y - dy * t);
+  }
+  function inEllipse(w, x, y) { const c = Math.cos(-w.a), s = Math.sin(-w.a), dx = x - w.x, dy = y - w.y, u = dx * c - dy * s, v = dx * s + dy * c; return (u * u) / (w.rx * w.rx) + (v * v) / (w.ry * w.ry) <= 1; }
+  function lieAt(x, y) {
+    const h = hole, b = h.bounds;
+    if (x < b.x0 || x > b.x1 || y < b.y0 || y > b.y1) return "ob";
+    for (const w of h.water) if (inEllipse(w, x, y)) return "water";
+    for (const s of h.sand) if (hyp(x - s.x, y - s.y) <= s.r) return "sand";
+    if (hyp(x - h.green.x, y - h.green.y) <= h.green.r) return "green";
+    if (hyp(x, y) < 5) return "tee";
+    for (let i = 1; i < h.pts.length; i++) if (distSeg(x, y, h.pts[i - 1], h.pts[i]) <= h.width / 2) return "fairway";
+    return "rough";
+  }
+
+  // ---------- Aiming ----------
+  const toPin = () => hyp(hole.pin.x - ball.x, hole.pin.y - ball.y);
+  // where to aim: the pin if it can be reached, otherwise the next bend of the fairway
+  function autoTarget() {
+    const lie = ball.lie, reach = (lie === "tee" ? CLUBS[0].dist : CLUBS[1].dist) * LIE[lie === "green" ? "fairway" : lie].mult * 1.08;
+    if (toPin() <= reach) return hole.pin;
+    let best = 0, bd = 1e9;
+    for (let i = 1; i < hole.pts.length; i++) { const d = distSeg(ball.x, ball.y, hole.pts[i - 1], hole.pts[i]); if (d < bd) { bd = d; best = i; } }
+    for (let i = best; i < hole.pts.length; i++) { const p = hole.pts[i], d = hyp(p.x - ball.x, p.y - ball.y); if (d > 60) return d <= reach ? p : { x: ball.x + (p.x - ball.x) / d * reach * 0.95, y: ball.y + (p.y - ball.y) / d * reach * 0.95 }; }
+    return hole.pin;
+  }
+  function autoClub(d) {
+    if (ball.lie === "green") return PUTTER;
+    const mult = LIE[ball.lie].mult;
+    if (ball.lie === "sand" && d < 75) return 6;
+    for (let i = CLUBS.length - 2; i >= (ball.lie === "tee" ? 0 : 1); i--) {
+      const c = CLUBS[i], m = i === 6 && ball.lie === "sand" ? 0.95 : mult;
+      if (c.dist * m * (1 + c.roll) >= d) return i;
+    }
+    return ball.lie === "tee" ? 0 : 1;
+  }
+  function carryOf(ci, lie) { return CLUBS[ci].dist * (ci === 6 && lie === "sand" ? 0.95 : LIE[lie === "green" ? "fairway" : lie].mult); }
+  function setupShot() {
+    const t = autoTarget();
+    aim = Math.atan2(t.y - ball.y, t.x - ball.x);
+    club = autoClub(hyp(t.x - ball.x, t.y - ball.y));
+    phase = "aim"; meter = 0; power = 0; aimHold = 0;
+  }
+
+  // ---------- Flow ----------
+  function startHole() {
+    hole = genHole(holeN);
+    ball = { x: 0, y: 0, z: 0, lie: "tee", vx: 0, vy: 0 };
+    strokes = 0; prev = null;
+    const ws = rnd(0.2, 1) * diff.wind * (1 + 0.25 * round), wa = rnd(0, TAU);
+    wind = { x: Math.cos(wa) * ws, y: Math.sin(wa) * ws };
+    setupShot();
+    phase = "intro"; phaseT = 2.2; camT = null;
+    message = { text: `BUCA ${holeN % 9 + 1} · PAR ${hole.par}`, sub: `${hole.len} metri${round ? ` · giro ${round + 1}` : ""} · vento ${windTxt()}`, t: 0 };
+  }
+  const windTxt = () => `${hyp(wind.x, wind.y).toFixed(1).replace(".", ",")} m/s`;
+  function startGame() {
+    if (!audioCtx) { try { audioCtx = new (window.AudioContext || window.webkitAudioContext)(); } catch { audioCtx = null; } }
+    if (audioCtx && audioCtx.state === "suspended") audioCtx.resume();
+    score = 0; round = 0; holeN = 0; margin = diff.margin; roundOver = 0; holesDone = 0; card = []; popups = [];
+    bestCache = parseInt(load(bestKey(difficulty)), 10) || 0;
+    startHole();
+    state = "play";
+    menu = null;
+    overlay.classList.add("hidden");
+    syncControls();
+    last = performance.now();
+  }
+  // the button: start the swing, set the power, then hit it as the needle comes back to the line
+  function press() {
+    if (state !== "play") return;
+    if (phase === "aim") { phase = "power"; meter = 0; lastV = 1; sfx.meter(); }
+    else if (phase === "power") { power = clamp(meter, 0.02, 1); phase = "acc"; sfx.meter(); }
+    else if (phase === "acc") hit(meter);
+  }
+  function hit(e) {
+    const c = CLUBS[club], putt = club === PUTTER;
+    strokes++;
+    prev = { x: ball.x, y: ball.y, lie: ball.lie };
+    // the mistake on the second line: early pulls left, late pushes right (more with the long clubs, and from the sand or the rough)
+    const lieErr = ball.lie === "rough" ? rnd(-0.03, 0.03) : ball.lie === "sand" && club !== 6 ? rnd(-0.06, 0.06) : 0;
+    const ang = aim - e * (putt ? 0.18 : 0.35 + 0.25 * (c.dist / 230)) + lieErr;
+    if (Math.abs(e) < 0.025) popups.push({ x: W / 2, y: H - 60, text: "PERFETTO!", col: "#ffe84a", t: 0, screen: true });
+    if (putt) {
+      // a putt rolls: speed for the distance on a flat green
+      const d = c.dist * power * (ball.lie === "green" ? 1 : ball.lie === "sand" ? 0.3 : ball.lie === "rough" ? 0.55 : 0.8);
+      const v = Math.sqrt(2 * LIE.green.mu * d);
+      ball.vx = Math.cos(ang) * v; ball.vy = Math.sin(ang) * v;
+      puttFrom = toPin();
+      sfx.putt(); phase = "roll"; return;
+    }
+    const carry = carryOf(club, ball.lie) * power;
+    const air = carry / 40 * 0.6;
+    shot = { x0: ball.x, y0: ball.y, x1: ball.x + Math.cos(ang) * carry + wind.x * air, y1: ball.y + Math.sin(ang) * carry + wind.y * air, apex: c.apex * Math.sqrt(power), t: 0, T: (0.9 + carry / 110) * (window.__fast ? 0.25 : 1), carry, ang, roll: carry * c.roll };
+    sfx.swing(); phase = "flight";
+  }
+  function land() {
+    const lie = lieAt(ball.x, ball.y);
+    ball.z = 0;
+    if (lie === "water" || lie === "ob") return penalty(lie);
+    sfx[lie === "sand" ? "sand" : "land"]();
+    if (lie === "sand") { ball.vx = ball.vy = 0; return stopped(); }
+    // the roll after landing, in the direction of flight
+    const mu = LIE[lie].mu, d = shot.roll * (lie === "green" ? 0.7 : lie === "rough" ? 0.25 : 1);
+    const v = Math.sqrt(2 * mu * Math.max(0.01, d));
+    ball.vx = Math.cos(shot.ang) * v; ball.vy = Math.sin(shot.ang) * v;
+    phase = "roll";
+  }
+  function penalty(lie) {
+    if (lie === "water") { sfx.splash(); for (let i = 0; i < 10; i++) popups.push({ wx: ball.x, wy: ball.y, ring: true, t: -i * 0.05 }); }
+    strokes++;
+    message = { text: lie === "water" ? "IN ACQUA!" : "FUORI LIMITE!", sub: "un colpo di penalità · si tira di nuovo da dov'eri", t: 0 };
+    phase = "drop"; phaseT = 1.8;
+  }
+  function stopped() {
+    ball.vx = ball.vy = 0;
+    ball.lie = lieAt(ball.x, ball.y);
+    if (ball.lie === "water" || ball.lie === "ob") return penalty(ball.lie);
+    if (strokes >= hole.par + 4) { message = { text: "PALLA RACCOLTA", sub: `troppi colpi: la buca conta ${hole.par + 5}`, t: 0 }; strokes = hole.par + 5; return holed(true); }
+    phase = "wait"; phaseT = 0.5;
+  }
+  function holed(picked) {
+    const diffPar = strokes - hole.par;
+    holesDone++;
+    card.push(diffPar);
+    roundOver += diffPar;
+    margin -= diffPar;
+    const NAMES = { "-3": "ALBATROS!", "-2": "EAGLE!", "-1": "BIRDIE!", "0": "PAR", "1": "BOGEY", "2": "DOPPIO BOGEY" };
+    const PTS = { "-3": 15000, "-2": 7000, "-1": 3000, "0": 1200, "1": 400, "2": 100 };
+    const pts = (strokes === 1 ? 20000 : PTS[clamp(diffPar, -3, 3)] || 0) * (round + 1);
+    if (!picked) {
+      if (diffPar <= -2) impresa("aquila");
+      if (strokes > 1 && club === PUTTER && puttFrom >= 8) impresa("lungo");
+      score += pts;
+      message = { text: strokes === 1 ? "BUCA IN UNO!" : NAMES[diffPar] || `+${diffPar}`, sub: `${strokes} ${strokes === 1 ? "colpo" : "colpi"}${pts ? ` · +${pts.toLocaleString("it-IT")}` : ""} · margine ${Math.max(0, margin)}`, t: 0, long: true };
+      if (diffPar < 0) sfx.cheer(); else if (diffPar > 1) sfx.boo(); else sfx.cup();
+    } else sfx.boo();
+    phase = "holed"; phaseT = 3;
+  }
+  function nextHole() {
+    if (margin < 0) return gameOver();
+    holeN++;
+    if (holeN % 9 === 0) {
+      if (roundOver <= 0) impresa("giro");
+      const bonus = Math.max(0, 5000 - roundOver * 500) * (round + 1);
+      score += bonus;
+      round++; margin = diff.margin; roundOver = 0; card = [];
+      message = { text: `GIRO COMPLETATO!`, sub: `bonus ${bonus.toLocaleString("it-IT")} · si riparte, con più vento`, t: 0, long: true };
+      phase = "round"; phaseT = 3; return;
+    }
+    startHole();
+  }
+  function gameOver() {
+    state = "over";
+    const prevBest = parseInt(load(bestKey(difficulty)), 10) || 0;
+    const record = score > prevBest;
+    if (record) store(bestKey(difficulty), String(score));
+    sfx.over();
+    menu = () => showOverlay(
+      `<h2 class="lose">MARGINE FINITO</h2>
+       <p>Punteggio: <b>${score.toLocaleString("it-IT")}</b> · ${holesDone} ${holesDone === 1 ? "buca giocata" : "buche giocate"} · ${diff.label}</p>
+       ${record ? "<p style='color:var(--pink)'>★ NUOVO RECORD! ★</p>" : ""}
+       ${difficultyHTML()}
+       <button class="start" data-start>UN ALTRO GIRO</button>`
+    );
+    menu();
+    syncControls();
+  }
+  function togglePause() {
+    if (isPlaying()) {
+      pausedFrom = state; state = "paused";
+      showOverlay(`<h2>PAUSA</h2><button class="start" data-resume>CONTINUA</button><p class="muted">Premi P per continuare</p>`);
+    } else if (state === "paused") {
+      state = pausedFrom; overlay.classList.add("hidden"); last = performance.now();
+    }
+    syncControls();
+  }
+  // the pause menu can end the game (shared/iniziali.js): it ends here the usual way, saving the record
+  window.addEventListener("sala:termina", () => { if (state !== "paused") return; state = pausedFrom; overlay.classList.add("hidden"); gameOver(); syncControls(); });
+  function syncControls() {
+    pauseBtn.style.display = isPlaying() && touchMode ? "block" : "none";
+    resize();
+  }
+  pauseBtn.addEventListener("click", () => togglePause());
+  function showOverlay(html) { overlay.innerHTML = html; overlay.classList.remove("hidden"); }
+  function difficultyHTML() {
+    const buttons = DIFF_IDS.map((id) => {
+      const d = DIFFICULTIES[id];
+      return `<button type="button" data-diff="${id}" class="${id === difficulty ? "on" : ""}" style="--c:${d.color}">${d.label}</button>`;
+    }).join("");
+    const best = parseInt(load(bestKey(difficulty)), 10);
+    return `<div class="diff">${buttons}</div><p class="muted">${diff.desc}${best ? ` · Record: ${best.toLocaleString("it-IT")}` : ""}</p>`;
+  }
+  function setDifficulty(id) { if (!DIFFICULTIES[id]) return; difficulty = id; diff = DIFFICULTIES[id]; store(DIFF_KEY, id); if (menu) menu(); }
+  function showTitle() {
+    menu = showTitle;
+    showOverlay(
+      `<h1>GREEN D'ORO</h1>
+       <p>Nove buche viste dall'alto, con fairway, alberi, bunker, laghetti e vento. Scegli la direzione e il bastone, poi lo swing: un tocco per partire, uno per la forza, uno per la precisione quando l'ago torna sulla linea. Ogni giro hai un margine di colpi sopra il par: quando lo superi la partita finisce.</p>
+       <div class="pts">
+         <span><b>Mira</b></span><span>levetta a sinistra e a destra · su e giù per cambiare bastone (legni, ferri, wedge, sand, putter)</span>
+         <span><b>Swing</b></span><span>COLPO parte · COLPO ferma la forza · COLPO sulla linea bianca: prima tira a sinistra, dopo a destra</span>
+         <span><b>Il campo</b></span><span>l'erba alta e i bunker accorciano il tiro · acqua e fuori limite costano un colpo · sul green la palla segue la pendenza</span>
+         <span><b>Punti</b></span><span>par 1.200 · birdie 3.000 · eagle 7.000 · buca in uno 20.000, × giro · giro finito 5.000 meno 500 per colpo sopra il par</span>
+       </div>
+       ${touchMode
+         ? `<p class="muted help">Levetta: mira e bastone · COLPO tre volte per lo swing</p>`
+         : `<p class="muted help">Frecce o WASD: mira e bastone · SPAZIO o J tre volte per lo swing · P pausa</p>`}
+       ${difficultyHTML()}
+       <button class="start" data-start>AL PRIMO TEE!</button>`
+    );
+  }
+  overlay.addEventListener("click", (e) => {
+    const d = e.target.closest("[data-diff]");
+    if (d) { setDifficulty(d.dataset.diff); return; }
+    if (e.target.closest("[data-start]")) startGame();
+    if (e.target.closest("[data-resume]")) togglePause();
+  });
+
+  // ---------- Input ----------
+  const KEYMAP = { arrowleft: "left", a: "left", arrowright: "right", d: "right", arrowup: "up", w: "up", arrowdown: "down", s: "down" };
+  const ACTKEYS = [" ", "j"];
+  window.addEventListener("keydown", (e) => {
+    const k = e.key.toLowerCase();
+    if ([" ", "arrowup", "arrowdown", "arrowleft", "arrowright"].includes(k)) e.preventDefault();
+    if (state === "menu" || state === "over") {
+      if (e.key === "Enter") startGame();
+      else if (["1", "2", "3"].includes(k)) setDifficulty(DIFF_IDS[+k - 1]);
+      return;
+    }
+    if (k === "p" || k === "escape") { if (!e.repeat) togglePause(); return; }
+    if (state === "paused") { if (e.key === "Enter") togglePause(); return; }
+    if (ACTKEYS.includes(k)) actHeld = true;
+    if (KEYMAP[k]) keys[KEYMAP[k]] = true;
+  });
+  window.addEventListener("keyup", (e) => { const k = e.key.toLowerCase(); if (KEYMAP[k]) keys[KEYMAP[k]] = false; if (ACTKEYS.includes(k)) actHeld = false; });
+  window.addEventListener("blur", () => { for (const k in keys) keys[k] = false; actHeld = false; stick.x = stick.y = 0; if (isPlaying()) togglePause(); });
+  {
+    const b = touchEl.querySelector(".hop");
+    b.addEventListener("pointerdown", (e) => { e.preventDefault(); actHeld = true; b.classList.add("on"); });
+    for (const ev of ["pointerup", "pointercancel", "pointerleave"]) b.addEventListener(ev, () => { actHeld = false; b.classList.remove("on"); });
+  }
+  const stickEl = touchEl.querySelector(".stick"), knob = stickEl.querySelector(".knob");
+  let stickId = null;
+  function stickAt(e) {
+    const r = stickEl.getBoundingClientRect(), max = r.width / 2 - 14;
+    let dx = e.clientX - (r.left + r.width / 2), dy = e.clientY - (r.top + r.height / 2);
+    const len = Math.hypot(dx, dy);
+    if (len > max) { dx *= max / len; dy *= max / len; }
+    knob.style.transform = `translate(${dx}px, ${dy}px)`;
+    const f = (v) => { const a = Math.abs(v) / max; return a < 0.2 ? 0 : Math.sign(v) * Math.min(1, (a - 0.2) / 0.5); };
+    stick.x = f(dx); stick.y = f(dy);
+  }
+  const stickEnd = (e) => { if (e.pointerId !== stickId) return; stickId = null; knob.style.transform = ""; stick.x = stick.y = 0; };
+  stickEl.addEventListener("pointerdown", (e) => { e.preventDefault(); stickId = e.pointerId; try { stickEl.setPointerCapture(e.pointerId); } catch { /* ignore */ } stickAt(e); });
+  stickEl.addEventListener("pointermove", (e) => { if (e.pointerId === stickId) stickAt(e); });
+  for (const ev of ["pointerup", "pointercancel", "lostpointercapture"]) stickEl.addEventListener(ev, stickEnd);
+  window.addEventListener("pointerdown", (e) => { if (e.pointerType === "touch" && !touchMode) { touchMode = true; syncControls(); if (menu) menu(); } }, true);
+
+
+  // ---------- Update ----------
+  function rollStep(dt) {
+    const lie = lieAt(ball.x, ball.y);
+    if (lie === "water" || lie === "ob") return penalty(lie);
+    const mu = (LIE[lie] || LIE.rough).mu * (lie === "green" ? 1 / (1 + 0.1 * round) : 1);
+    const v = hyp(ball.vx, ball.vy);
+    // the cup: slow enough and close enough, and in it goes
+    const dp = hyp(ball.x - hole.pin.x, ball.y - hole.pin.y);
+    if (dp < 0.12 && v < 1.6) { ball.x = hole.pin.x; ball.y = hole.pin.y; ball.vx = ball.vy = 0; ball.lie = "cup"; return holed(false); }
+    if (dp < 0.12 && v < 2.6) { const k = 0.3; ball.vx += (hole.pin.x - ball.x) * k; ball.vy += (hole.pin.y - ball.y) * k; }
+    let ax = 0, ay = 0;
+    if (lie === "green") { ax += hole.slope.x; ay += hole.slope.y; }
+    if (v > 0) { ax -= ball.vx / v * mu; ay -= ball.vy / v * mu; }
+    ball.vx += ax * dt; ball.vy += ay * dt;
+    // friction cannot push it backwards: when it stops, it stops (unless the green is steeper than it holds)
+    if (v > 0 && ball.vx * (ball.vx - ax * dt) + ball.vy * (ball.vy - ay * dt) < 0) { ball.vx = ball.vy = 0; }
+    ball.x += ball.vx * dt; ball.y += ball.vy * dt;
+    if (hyp(ball.vx, ball.vy) < 0.04 && (lie !== "green" || hyp(hole.slope.x, hole.slope.y) < mu * 0.5)) stopped();
+  }
+  function update(dt) {
+    clock += dt; sfxN = 0;
+    if (window.__bot) window.__bot(dt);
+    for (const p of popups) p.t += dt;
+    popups = popups.filter((p) => p.t < (p.ring ? 0.8 : 1.3));
+    if (message) { message.t += dt; if (message.t > (message.long ? 3 : 2.2)) message = null; }
+    if (state !== "play") return;
+    phaseT -= dt;
+    // aiming and choosing the club
+    const sx = clamp((keys.right ? 1 : 0) - (keys.left ? 1 : 0) + stick.x, -1, 1), sy = clamp((keys.down ? 1 : 0) - (keys.up ? 1 : 0) + stick.y, -1, 1);
+    if (phase === "aim") {
+      if (Math.abs(sx) > 0.15) { aimHold += dt; aim += sx * dt * (aimHold > 0.6 ? 0.9 : 0.25) * (club === PUTTER ? 0.6 : 1); } else aimHold = 0;
+      const cs = Math.abs(sy) > 0.6 ? Math.sign(sy) : 0;
+      if (cs && cs !== lastClubDir) { club = clamp(club + cs, ball.lie === "tee" ? 0 : 1, PUTTER); if (ball.lie === "green") club = PUTTER; sfx.meter(); }
+      lastClubDir = cs;
+    }
+    if (actHeld && !wasAct) press();
+    wasAct = actHeld;
+    const sp = diff.speed * (1 + 0.08 * round);
+    if (phase === "power") {
+      meter += lastV * dt * sp;
+      if (meter >= 1) { meter = 1; lastV = -1; }
+      if (meter <= 0 && lastV < 0) { meter = 0; phase = "aim"; }   // let it go back to zero: no shot
+    } else if (phase === "acc") {
+      meter -= dt * sp * 1.5;
+      if (meter <= -0.2) hit(-0.2);
+    } else if (phase === "flight") {
+      shot.t += dt;
+      const u = Math.min(1, shot.t / shot.T);
+      const px = ball.x, py = ball.y;
+      ball.x = shot.x0 + (shot.x1 - shot.x0) * u; ball.y = shot.y0 + (shot.y1 - shot.y0) * u; ball.z = 4 * shot.apex * u * (1 - u);
+      // into the trees: it drops down there
+      for (const t of hole.trees) if (ball.z < t.h && hyp(ball.x - t.x, ball.y - t.y) < t.r) {
+        sfx.tree(); ball.x = px - (ball.x - px) * 3; ball.y = py - (ball.y - py) * 3; ball.z = 0;
+        shot.roll = 0; popups.push({ wx: t.x, wy: t.y, text: "ALBERO!", col: "#ffb03a", t: 0 }); land(); return;
+      }
+      if (u >= 1) land();
+    } else if (phase === "roll") {
+      for (let i = 0; i < 4 && phase === "roll"; i++) rollStep(dt / 4);
+    } else if (phase === "wait" && phaseT <= 0) setupShot();
+    else if (phase === "drop" && phaseT <= 0) { ball.x = prev.x; ball.y = prev.y; ball.lie = prev.lie; ball.vx = ball.vy = 0; setupShot(); }
+    else if (phase === "intro" && phaseT <= 0) phase = "aim";
+    else if (phase === "holed" && phaseT <= 0) nextHole();
+    else if (phase === "round" && phaseT <= 0) startHole();
+    updateCam(dt);
+  }
+  let lastClubDir = 0;
+
+  // ---------- Camera ----------
+  // it frames the ball and where it is going: the whole hole from the tee, close up on the green
+  function camTarget() {
+    if (phase === "intro" || phase === "holed" || phase === "round") {
+      if (phase === "holed") return fit([{ x: hole.pin.x - 10, y: hole.pin.y - 10 }, { x: hole.pin.x + 10, y: hole.pin.y + 10 }]);
+      return fit([...hole.pts, { x: hole.green.x - hole.green.r, y: hole.green.y - hole.green.r }, { x: hole.green.x + hole.green.r, y: hole.green.y + hole.green.r }]);
+    }
+    const pts = [{ x: ball.x, y: ball.y }];
+    if (phase === "flight") pts.push({ x: shot.x1, y: shot.y1 });
+    else if (phase === "roll" || phase === "drop" || phase === "wait") { pts.push({ x: ball.x + ball.vx * 1.2, y: ball.y + ball.vy * 1.2 }); if (toPin() < 30) pts.push(hole.pin); }
+    else { const d = club === PUTTER ? Math.max(toPin() * 1.1, 3) : carryOf(club, ball.lie); pts.push({ x: ball.x + Math.cos(aim) * d, y: ball.y + Math.sin(aim) * d }); if (toPin() < carryOf(club, ball.lie) * 1.4) pts.push(hole.pin); }
+    return fit(pts);
+  }
+  function fit(pts) {
+    let x0 = 1e9, x1 = -1e9, y0 = 1e9, y1 = -1e9;
+    for (const p of pts) { x0 = Math.min(x0, p.x); x1 = Math.max(x1, p.x); y0 = Math.min(y0, p.y); y1 = Math.max(y1, p.y); }
+    const pad = 6;
+    const s = clamp(Math.min((W - 70) / (x1 - x0 + 2 * pad), (H - TOP - 70) / (y1 - y0 + 2 * pad)), 0.5, 10);
+    return { x: (x0 + x1) / 2, y: (y0 + y1) / 2, s };
+  }
+  function updateCam(dt) {
+    const t = camTarget();
+    const k = 1 - Math.exp(-dt * (phase === "flight" ? 3 : 2.2));
+    if (!camT) { cam = { ...t }; camT = 1; return; }
+    cam.x += (t.x - cam.x) * k; cam.y += (t.y - cam.y) * k; cam.s *= Math.pow(t.s / cam.s, k);
+  }
+  const SX = (x) => W / 2 + (x - cam.x) * cam.s, SY = (y) => TOP + (H - TOP) / 2 + 12 + (y - cam.y) * cam.s;
+
+  // ---------- Drawing ----------
+  function drawCourse() {
+    const h = hole, s = cam.s;
+    ctx.fillStyle = "#1a4a1e"; ctx.fillRect(0, 0, W, H);
+    // out of bounds: darker, with the white stakes
+    ctx.fillStyle = "#2a6a2a"; ctx.fillRect(SX(h.bounds.x0), SY(h.bounds.y0), (h.bounds.x1 - h.bounds.x0) * s, (h.bounds.y1 - h.bounds.y0) * s);
+    ctx.fillStyle = "rgba(255,255,255,0.03)";
+    for (let i = Math.floor(h.bounds.y0 / 12); i < h.bounds.y1 / 12; i += 2) ctx.fillRect(SX(h.bounds.x0), SY(i * 12), (h.bounds.x1 - h.bounds.x0) * s, 12 * s);
+    // fairway
+    ctx.lineJoin = ctx.lineCap = "round";
+    ctx.strokeStyle = "#4aa840"; ctx.lineWidth = h.width * s; ctx.beginPath(); h.pts.forEach((p, i) => (i ? ctx.lineTo(SX(p.x), SY(p.y)) : ctx.moveTo(SX(p.x), SY(p.y)))); ctx.stroke();
+    ctx.strokeStyle = "rgba(255,255,255,0.06)"; ctx.lineWidth = h.width * s * 0.5; ctx.stroke();
+    // tee box
+    ctx.fillStyle = "#5ab84a"; ctx.fillRect(SX(-4), SY(-3), 8 * s, 6 * s);
+    // green, with the fringe
+    ctx.fillStyle = "#3a9838"; ctx.beginPath(); ctx.arc(SX(h.green.x), SY(h.green.y), (h.green.r + 2) * s, 0, TAU); ctx.fill();
+    ctx.fillStyle = "#6ad85a"; ctx.beginPath(); ctx.arc(SX(h.green.x), SY(h.green.y), h.green.r * s, 0, TAU); ctx.fill();
+    // the slope of the green: little arrows when close
+    if (s > 4) {
+      const sl = hyp(h.slope.x, h.slope.y), a = Math.atan2(h.slope.y, h.slope.x);
+      ctx.strokeStyle = "rgba(20,80,20,0.45)"; ctx.lineWidth = 1.5;
+      for (let gx = -h.green.r; gx <= h.green.r; gx += 4) for (let gy = -h.green.r; gy <= h.green.r; gy += 4) {
+        if (hyp(gx, gy) > h.green.r - 1.5) continue;
+        const x = SX(h.green.x + gx), y = SY(h.green.y + gy), L = 4 + sl * 25;
+        const o = (clock * (0.6 + sl * 3)) % 1;
+        const cx = x + Math.cos(a) * L * (o - 0.5), cy = y + Math.sin(a) * L * (o - 0.5);
+        ctx.beginPath(); ctx.moveTo(cx - Math.cos(a) * 3, cy - Math.sin(a) * 3); ctx.lineTo(cx + Math.cos(a) * 3, cy + Math.sin(a) * 3); ctx.stroke();
+      }
+    }
+    for (const b of h.sand) { ctx.fillStyle = "#c8b078"; ctx.beginPath(); ctx.arc(SX(b.x), SY(b.y), (b.r + 0.6) * s, 0, TAU); ctx.fill(); ctx.fillStyle = "#ead8a0"; ctx.beginPath(); ctx.arc(SX(b.x), SY(b.y), b.r * s, 0, TAU); ctx.fill(); }
+    for (const w of h.water) {
+      ctx.save(); ctx.translate(SX(w.x), SY(w.y)); ctx.rotate(w.a);
+      ctx.fillStyle = "#2a6ac8"; ctx.beginPath(); ctx.ellipse(0, 0, w.rx * s, w.ry * s, 0, 0, TAU); ctx.fill();
+      ctx.strokeStyle = "rgba(255,255,255,0.25)"; ctx.lineWidth = 1;
+      for (let i = -2; i <= 2; i++) { ctx.beginPath(); ctx.ellipse(Math.sin(clock + i) * w.rx * s * 0.3, i * w.ry * s * 0.3, w.rx * s * 0.25, 1.5, 0, 0, Math.PI); ctx.stroke(); }
+      ctx.restore();
+    }
+    // the cup and the flag (it flies with the wind)
+    const px = SX(h.pin.x), py = SY(h.pin.y);
+    ctx.fillStyle = "#0a1a0a"; ctx.beginPath(); ctx.arc(px, py, Math.max(1.5, 0.11 * s), 0, TAU); ctx.fill();
+    if (!(ball.lie === "cup")) {
+      const fl = Math.max(14, Math.min(34, 2.2 * s)), wa = Math.atan2(wind.y, wind.x), wv = clamp(hyp(wind.x, wind.y) / 6, 0.3, 1);
+      ctx.strokeStyle = "#f0f0f0"; ctx.lineWidth = 1.5; ctx.beginPath(); ctx.moveTo(px, py); ctx.lineTo(px, py - fl); ctx.stroke();
+      ctx.fillStyle = "#ff3a3a"; ctx.beginPath(); ctx.moveTo(px, py - fl); ctx.lineTo(px + Math.cos(wa) * 11 * wv + Math.sin(clock * 9) * 1.5, py - fl + 4 + Math.sin(wa) * 5 * wv); ctx.lineTo(px, py - fl + 8); ctx.fill();
+    }
+  }
+  function drawTrees(behind) {
+    for (const t of hole.trees) {
+      const x = SX(t.x), y = SY(t.y), r = t.r * cam.s;
+      if (behind) { ctx.fillStyle = "rgba(0,0,0,0.25)"; ctx.beginPath(); ctx.ellipse(x + r * 0.5, y + r * 0.4, r, r * 0.8, 0, 0, TAU); ctx.fill(); continue; }
+      ctx.fillStyle = "#1e5a24"; ctx.beginPath(); ctx.arc(x, y, r, 0, TAU); ctx.fill();
+      ctx.fillStyle = "#2e7a30"; ctx.beginPath(); ctx.arc(x - r * 0.25, y - r * 0.25, r * 0.65, 0, TAU); ctx.fill();
+    }
+  }
+  function drawBall() {
+    const x = SX(ball.x), y = SY(ball.y), z = ball.z, r = clamp(0.35 * cam.s, 2.5, 4) * (1 + z / 30);
+    if (ball.lie === "cup" && phase === "holed") return;
+    ctx.fillStyle = "rgba(0,0,0,0.35)"; ctx.beginPath(); ctx.ellipse(x + z * 0.5, y + z * 0.25, r, r * 0.6, 0, 0, TAU); ctx.fill();
+    ctx.fillStyle = "#ffffff"; ctx.beginPath(); ctx.arc(x, y - z * 0.9, r, 0, TAU); ctx.fill();
+    ctx.strokeStyle = "rgba(0,0,0,0.4)"; ctx.lineWidth = 0.8; ctx.stroke();
+  }
+  function drawAim() {
+    if (!["aim", "power", "acc"].includes(phase)) return;
+    const putt = club === PUTTER, d = putt ? CLUBS[PUTTER].dist * (phase === "aim" ? 1 : power || meter) : carryOf(club, ball.lie);
+    const bx = SX(ball.x), by = SY(ball.y);
+    let ex = ball.x + Math.cos(aim) * d, ey = ball.y + Math.sin(aim) * d;
+    ctx.setLineDash([4, 4]); ctx.strokeStyle = "rgba(255,255,255,0.75)"; ctx.lineWidth = 1.5;
+    ctx.beginPath(); ctx.moveTo(bx, by); ctx.lineTo(SX(ex), SY(ey)); ctx.stroke(); ctx.setLineDash([]);
+    if (!putt) {
+      ctx.strokeStyle = "#ffffff"; ctx.beginPath(); ctx.arc(SX(ex), SY(ey), Math.max(5, 6 * cam.s), 0, TAU); ctx.stroke();
+      if (diff.guide) { // where the wind takes it
+        const air = d / 40 * 0.6, wx = ex + wind.x * air, wy = ey + wind.y * air;
+        ctx.strokeStyle = "#5ae8ff"; ctx.setLineDash([2, 3]); ctx.beginPath(); ctx.arc(SX(wx), SY(wy), Math.max(5, 6 * cam.s), 0, TAU); ctx.stroke(); ctx.setLineDash([]);
+      }
+    }
+  }
+  function drawMeter() {
+    if (!["aim", "power", "acc"].includes(phase)) return;
+    const mx = W / 2 - 120, my = H - 26, mw = 240, mh = 14, z = mx + mw * 0.15;   // the white line: 15% from the left
+    ctx.fillStyle = "rgba(6,20,10,0.85)"; ctx.fillRect(mx - 8, my - 18, mw + 16, mh + 26);
+    const g = ctx.createLinearGradient(z, 0, mx + mw, 0); g.addColorStop(0, "#3ad860"); g.addColorStop(0.7, "#ffd23a"); g.addColorStop(1, "#ff5a3a");
+    ctx.fillStyle = "rgba(255,255,255,0.12)"; ctx.fillRect(mx, my, mw, mh);
+    ctx.fillStyle = g; ctx.fillRect(z, my, (mx + mw - z) * (phase === "power" ? meter : phase === "acc" ? power : 0), mh);
+    ctx.fillStyle = "#ffffff"; ctx.fillRect(z - 1, my - 3, 2, mh + 6);
+    if (phase !== "aim") { const nx = z + (mx + mw - z) * meter; ctx.fillStyle = "#ff3a8a"; ctx.fillRect(nx - 1.5, my - 4, 3, mh + 8); }
+    if (phase === "acc") { ctx.fillStyle = "#ffe84a"; ctx.fillRect(z + (mx + mw - z) * power - 1, my, 2, mh); }
+    ctx.font = "800 9px system-ui"; ctx.textAlign = "center"; ctx.fillStyle = "#ffffff";
+    ctx.fillText(phase === "aim" ? "COLPO per lo swing" : phase === "power" ? "COLPO: la forza" : "COLPO sulla linea!", W / 2, my - 6);
+  }
+  function outlined(text, x, y, font, fill, lw = 5) {
+    ctx.font = font; ctx.lineWidth = lw; ctx.strokeStyle = "#06140a"; ctx.strokeText(text, x, y); ctx.fillStyle = fill; ctx.fillText(text, x, y);
+  }
+  function drawHud() {
+    ctx.fillStyle = "rgba(6,20,10,0.96)"; ctx.fillRect(0, 0, W, TOP);
+    ctx.textBaseline = "middle"; ctx.textAlign = "left";
+    const x0 = touchMode ? 130 : 10;
+    ctx.fillStyle = "#ffffff"; ctx.font = "900 15px system-ui"; ctx.fillText(score.toLocaleString("it-IT"), x0, 14);
+    ctx.fillStyle = "#d0e8c8"; ctx.font = "700 9px system-ui"; ctx.fillText(`REC ${Math.max(bestCache, score).toLocaleString("it-IT")}`, x0 + 82, 9);
+    ctx.fillStyle = "#ffd23a"; ctx.font = "900 9px system-ui"; ctx.fillText(`BUCA ${holeN % 9 + 1} · PAR ${hole.par} · COLPI ${strokes}`, x0 + 82, 20);
+    // the wind
+    const wx = x0 + 230, ws = hyp(wind.x, wind.y), wa = Math.atan2(wind.y, wind.x);
+    ctx.save(); ctx.translate(wx, 14); ctx.rotate(wa); ctx.fillStyle = "#5ae8ff"; ctx.beginPath(); ctx.moveTo(8, 0); ctx.lineTo(-6, -5); ctx.lineTo(-3, 0); ctx.lineTo(-6, 5); ctx.fill(); ctx.restore();
+    ctx.fillStyle = "#5ae8ff"; ctx.font = "800 9px system-ui"; ctx.fillText(windTxt(), wx + 12, 14);
+    ctx.textAlign = "right";
+    const xr = touchMode ? W - 62 : W - 10;
+    ctx.fillStyle = margin <= 1 ? "#ff8a6a" : "#ffffff"; ctx.font = "900 10px system-ui"; ctx.fillText(`MARGINE ${Math.max(0, margin)}`, xr, 9);
+    ctx.fillStyle = "#d0e8c8"; ctx.font = "700 9px system-ui"; ctx.fillText(`giro ${round + 1} · ${roundOver > 0 ? "+" : ""}${roundOver === 0 ? "pari" : roundOver}`, xr, 21);
+    // bottom left: the club, the lie, the distance
+    if (["aim", "power", "acc"].includes(phase)) {
+      ctx.textAlign = "left"; ctx.fillStyle = "rgba(6,20,10,0.8)"; ctx.fillRect(6, H - 46, 118, 40);
+      ctx.fillStyle = "#ffd23a"; ctx.font = "900 12px system-ui"; ctx.fillText(CLUBS[club].name, 12, H - 35);
+      ctx.fillStyle = "#ffffff"; ctx.font = "700 9px system-ui"; ctx.fillText(`${LIE[ball.lie].name} · tira ${Math.round(club === PUTTER ? CLUBS[PUTTER].dist : carryOf(club, ball.lie))} m`, 12, H - 22);
+      ctx.fillText(`bandiera a ${toPin() < 20 ? toPin().toFixed(1).replace(".", ",") : Math.round(toPin())} m`, 12, H - 12);
+    }
+    ctx.textBaseline = "alphabetic";
+  }
+  function draw() {
+    ctx.setTransform(pxRatio, 0, 0, pxRatio, 0, 0);
+    if (!hole) { hole = genHole(0); ball = { x: 0, y: 0, z: 0, lie: "tee", vx: 0, vy: 0 }; cam = fit([...hole.pts]); setupShot(); phase = "intro"; }
+    drawCourse();
+    drawTrees(true);
+    drawAim();
+    if (ball.z > 10) { drawTrees(false); drawBall(); } else { drawBall(); drawTrees(false); }
+    for (const p of popups) {
+      if (p.t < 0) continue;
+      if (p.ring) { ctx.strokeStyle = `rgba(255,255,255,${1 - p.t / 0.8})`; ctx.lineWidth = 1.5; ctx.beginPath(); ctx.arc(SX(p.wx), SY(p.wy), 2 + p.t * 30, 0, TAU); ctx.stroke(); continue; }
+      ctx.globalAlpha = Math.max(0, 1 - p.t / 1.3); ctx.textAlign = "center";
+      outlined(p.text, p.screen ? p.x : SX(p.wx), (p.screen ? p.y : SY(p.wy) - 12) - p.t * 20, "900 13px system-ui", p.col, 3);
+      ctx.globalAlpha = 1;
+    }
+    if (state === "menu") return;
+    drawMeter();
+    drawHud();
+    ctx.textAlign = "center";
+    if (message) {
+      ctx.globalAlpha = Math.min(1, ((message.long ? 3 : 2.2) - message.t) * 2);
+      outlined(message.text, W / 2, 80, "italic 900 26px system-ui", "#ffd23a", 6);
+      if (message.sub) outlined(message.sub, W / 2, 102, "800 12px system-ui", "#ffffff", 4);
+      ctx.globalAlpha = 1;
+    }
+  }
+
+  // ---------- Loop ----------
+  const STEP = 1 / 120;
+  let last = performance.now(), acc = 0;
+  function frame(now) {
+    const dt = Math.min(0.1, (now - last) / 1000);
+    last = now;
+    if (isPlaying()) {
+      acc += dt;
+      while (acc >= STEP && isPlaying()) { update(STEP); acc -= STEP; }
+    } else { acc = 0; update(dt); }
+    draw();
+    requestAnimationFrame(frame);
+  }
+  syncControls();
+  showTitle();
+  requestAnimationFrame(frame);
+})();
+</script>
+<script src="../../shared/iniziali.js" data-record="green-best-" data-kind="score"></script>
+</body>
+</html>
+

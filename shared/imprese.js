@@ -9,6 +9,11 @@
   "use strict";
   // record key prefix of the game (as in trofei.js) → its feats
   const LIST = {
+    "green-best-": [   // green-d-oro
+      { id: "aquila", name: "Eagle!", desc: "chiudi una buca con due colpi sotto il par (o meglio)" },
+      { id: "lungo", name: "Putt da lontano", desc: "imbuca un putt da almeno 8 metri" },
+      { id: "giro", name: "Giro in par", desc: "finisci un giro di nove buche al par o sotto" },
+    ],
     "giada-best-": [   // tessere-di-giada
       { id: "catena", name: "Catena di giada", desc: "fai 8 coppie di fila, ognuna a meno di 3 secondi dalla precedente" },
       { id: "lampo", name: "Mani svelte", desc: "libera un tavolo con almeno il 40% del tempo ancora da usare" },
