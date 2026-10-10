@@ -9,6 +9,11 @@
   "use strict";
   // record key prefix of the game (as in trofei.js) → its feats
   const LIST = {
+    "skate-best-": [   // rampa-volante
+      { id: "720", name: "Settecentoventi", desc: "atterra un 720: due giri interi in aria" },
+      { id: "combo", name: "Serie perfetta", desc: "atterra 15 trucchi di fila senza cadere" },
+      { id: "parchi", name: "Tre parchi", desc: "supera il terzo parco, il parcheggio di notte" },
+    ],
     "green-best-": [   // green-d-oro
       { id: "aquila", name: "Eagle!", desc: "chiudi una buca con due colpi sotto il par (o meglio)" },
       { id: "lungo", name: "Putt da lontano", desc: "imbuca un putt da almeno 8 metri" },
