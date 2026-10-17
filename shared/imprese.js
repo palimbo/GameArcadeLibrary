@@ -9,6 +9,11 @@
   "use strict";
   // record key prefix of the game (as in trofei.js) → its feats
   const LIST = {
+    "dardi-best-": [   // freccette-al-bar
+      { id: "180", name: "Centottanta!", desc: "tre freccette nel triplo 20 nello stesso turno" },
+      { id: "centro", name: "Chiusura al centro", desc: "vinci una partita chiudendo sul centro da 50" },
+      { id: "campione", name: "Campione del bar", desc: "batti il Campione del Bar, l'ottavo sfidante" },
+    ],
     "skate-best-": [   // rampa-volante
       { id: "720", name: "Settecentoventi", desc: "atterra un 720: due giri interi in aria" },
       { id: "combo", name: "Serie perfetta", desc: "atterra 15 trucchi di fila senza cadere" },

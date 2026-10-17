@@ -1,0 +1,639 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no, viewport-fit=cover">
+<title>Freccette al Bar</title>
+<style>
+  :root {
+    --bg: #140a0c;
+    --fg: #f4f6ee;
+    --muted: #e8c8d0;
+    --pink: #ff5a6a;
+    --yellow: #8ae05a;
+    --red: #ff4a3a;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  html, body {
+    height: 100%;
+    background: var(--bg);
+    color: var(--fg);
+    font-family: system-ui, -apple-system, "Segoe UI", sans-serif;
+    overflow: hidden;
+    user-select: none;
+    -webkit-user-select: none;
+    touch-action: none;
+  }
+  #wrap { position: fixed; inset: 0; display: flex; align-items: center; justify-content: center; }
+  canvas { display: block; touch-action: none; border-radius: 6px; box-shadow: 0 0 0 2px #5a2a3a, 0 10px 40px rgba(0,0,0,0.6); }
+  #pauseBtn {
+    position: fixed; z-index: 3; display: none; right: 10px; top: calc(10px + env(safe-area-inset-top, 0px));
+    font: 700 13px system-ui, sans-serif; color: var(--fg);
+    background: rgba(0, 0, 0, 0.6); border: 1px solid rgba(244, 246, 238, 0.35);
+    border-radius: 8px; padding: 6px 10px; cursor: pointer;
+  }
+  #touch {
+    position: fixed; z-index: 2; display: none; left: 12px; right: 12px;
+    bottom: calc(14px + env(safe-area-inset-bottom, 0px));
+    justify-content: space-between; align-items: flex-end; pointer-events: none;
+  }
+  /* thumb stick: moves the sight; hold TIRA to hold your breath, let go to throw */
+  #touch .stick { position: relative; width: 136px; height: 136px; border-radius: 50%; pointer-events: auto; touch-action: none;
+    border: 2px solid rgba(255, 90, 106, 0.6); background: radial-gradient(circle, rgba(255,90,106,0.14), rgba(255,90,106,0.04)); }
+  #touch .stick .knob { position: absolute; left: 50%; top: 50%; width: 58px; height: 58px; margin: -29px 0 0 -29px; border-radius: 50%;
+    background: rgba(255, 90, 106, 0.45); border: 2px solid rgba(255,255,255,0.7); box-shadow: 0 4px 10px rgba(0,0,0,0.4); pointer-events: none; }
+  #touch .stick .ring { position: absolute; inset: 10px; border-radius: 50%; border: 1px dashed rgba(244,246,238,0.25); pointer-events: none; }
+  #touch .jump { width: 96px; height: 96px; border-radius: 50%; pointer-events: auto; touch-action: none; color: var(--fg);
+    font: 800 13px system-ui, sans-serif; letter-spacing: 1px; border: 2px solid rgba(255, 90, 106, 0.9); background: rgba(255, 90, 106, 0.22); }
+  #touch .jump.on { background: rgba(255, 90, 106, 0.55); }
+  #touch.small .stick { width: 112px; height: 112px; }
+  #touch.small .stick .knob { width: 48px; height: 48px; margin: -24px 0 0 -24px; }
+  #touch.small .jump { width: 80px; height: 80px; font-size: 11px; }
+  #touch .btns { display: flex; flex-direction: column; align-items: center; gap: 10px; pointer-events: none; }
+  #touch .jump.axe { width: 64px; height: 64px; font-size: 11px; border-color: rgba(255, 244, 200, 0.9); background: rgba(255, 244, 200, 0.16); }
+  #touch .jump.axe.on { background: rgba(255, 244, 200, 0.5); }
+  #touch.small .jump.axe { width: 54px; height: 54px; font-size: 10px; }
+  #overlay {
+    position: fixed; inset: 0; z-index: 5;
+    display: flex; flex-direction: column; align-items: center; justify-content: flex-start;
+    gap: 14px; padding: 16px; text-align: center; overflow-y: auto;
+    background: rgba(20, 8, 12, 0.93);
+  }
+  #overlay > :first-child { margin-top: auto; }
+  #overlay > :last-child { margin-bottom: auto; }
+  #overlay.hidden { display: none; }
+  #homeLink {
+    position: fixed; top: calc(10px + env(safe-area-inset-top, 0px)); left: 10px; z-index: 6;
+    font: 600 13px/1 system-ui, sans-serif; color: #fff; text-decoration: none;
+    padding: 8px 12px; border-radius: 999px; background: rgba(0,0,0,.55);
+    border: 1px solid rgba(255,255,255,.25);
+  }
+  #homeLink:hover { background: rgba(0,0,0,.8); }
+  #overlay.hidden ~ #homeLink { display: none; }
+  @media (max-width: 700px) { #overlay { padding-top: calc(52px + env(safe-area-inset-top, 0px)); } }
+  #overlay h1 { font-size: clamp(32px, 10vw, 58px); font-weight: 900; font-style: italic; letter-spacing: 1px; color: var(--pink);
+    text-shadow: 3px 3px 0 #5a0a2a, 0 0 22px rgba(255,90,106,0.35); }
+  #overlay h2 { font-size: clamp(26px, 7vw, 42px); font-weight: 900; letter-spacing: 2px; color: var(--pink); }
+  #overlay h2.lose { color: var(--red); }
+  #overlay p { max-width: 540px; font-size: clamp(13px, 3.4vw, 16px); line-height: 1.55; }
+  #overlay p.muted { color: var(--muted); }
+  #overlay .pts { display: grid; grid-template-columns: repeat(2, auto); gap: 4px 18px; font-size: 13px; color: var(--muted); text-align: left; max-width: 560px; }
+  #overlay .pts b { color: var(--fg); }
+  #overlay .diff { display: flex; gap: 10px; flex-wrap: wrap; justify-content: center; }
+  #overlay button {
+    font: 800 15px system-ui, sans-serif; letter-spacing: 1.5px; color: var(--fg);
+    background: transparent; cursor: pointer;
+    border: 2px solid rgba(244,246,238,0.3); border-radius: 10px; padding: 9px 16px;
+  }
+  #overlay .diff button.on { border-color: var(--c); color: var(--c); box-shadow: 0 0 12px var(--c); }
+  #overlay button.start { border-color: var(--pink); color: #2a0208; background: var(--pink); padding: 11px 30px; box-shadow: 0 4px 0 #a81a2a; }
+  @media (max-height: 560px) {
+    #overlay { gap: 8px; }
+    #overlay h1 { font-size: 30px; }
+    #overlay p { font-size: 13px; line-height: 1.4; }
+    #overlay .help, #overlay .pts { display: none; }
+  }
+</style>
+</head>
+<body>
+<div id="wrap"><canvas id="game"></canvas></div>
+<div id="touch">
+  <div class="stick" aria-label="Levetta"><div class="ring"></div><div class="knob"></div></div>
+  <div class="btns"><button type="button" class="jump hop" aria-label="Tira">TIRA</button></div>
+</div>
+<button id="pauseBtn" type="button" aria-label="Pausa">❚❚</button>
+<div id="overlay"></div>
+<a id="homeLink" href="../../index.html">← Sala Giochi</a>
+
+
+<script>
+(() => {
+  "use strict";
+
+  const W = 640, H = 360, TAU = Math.PI * 2, TOP = 28;
+  // the board (an electronic one, like in bars: wide rings); radii as fractions of the board
+  const BX = 236, BY = 194, BR = 136;
+  const RING = { bull: 0.055, outer: 0.12, tIn: 0.54, tOut: 0.63, dIn: 0.9, dOut: 1 };
+  const NUMS = [20, 1, 18, 4, 13, 6, 10, 15, 2, 17, 3, 19, 7, 16, 8, 11, 14, 9, 12, 5];
+  // the bar's players, from the easiest: how widely their darts scatter (pixels)
+  const RIVALS = [
+    { name: "Gino il barista", sd: 30, col: "#c8a070" }, { name: "Zia Rosetta", sd: 26, col: "#e86a8a" }, { name: "Il Professore", sd: 22, col: "#8a8ac8" },
+    { name: "Bruno il camionista", sd: 19, col: "#c86a3a" }, { name: "La Volpe", sd: 16, col: "#ff8a2a" }, { name: "Occhio di Lince", sd: 13.5, col: "#5ac85a" },
+    { name: "Mister Centoottanta", sd: 11, col: "#5ab8ff" }, { name: "Il Campione del Bar", sd: 9, col: "#ffd23a" },
+  ];
+  const START = 301;
+
+  const DIFFICULTIES = {
+    facile:    { label: "FACILE",    color: "#7ed87a", desc: "3 gettoni · la mano trema poco · si chiude con qualsiasi tiro (senza doppio)", coins: 3, sway: 9, dbl: false },
+    normale:   { label: "NORMALE",   color: "#ff5a6a", desc: "2 gettoni · si chiude con un doppio o con il centro · il tabellone suggerisce la chiusura", coins: 2, sway: 15, dbl: true },
+    difficile: { label: "DIFFICILE", color: "#ff3a3a", desc: "1 gettone · la mano trema di più · chiusura con un doppio", coins: 1, sway: 19, dbl: true },
+  };
+  const DIFF_IDS = Object.keys(DIFFICULTIES);
+  const DIFF_KEY = "dardi-difficulty";
+  const bestKey = (id) => `dardi-best-${id}`;
+  function store(k, v) { try { localStorage.setItem(k, v); } catch { /* ignore */ } }
+  function load(k) { try { return localStorage.getItem(k); } catch { return null; } }
+  const impresa = (id) => window.dispatchEvent(new CustomEvent("sala:impresa", { detail: id }));
+  const rnd = (a, b) => a + Math.random() * (b - a);
+  const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
+  const gauss = () => { let u = 0; while (!u) u = Math.random(); return Math.sqrt(-2 * Math.log(u)) * Math.cos(TAU * Math.random()); };
+
+  // ---------- Canvas ----------
+  const canvas = document.getElementById("game");
+  const ctx = canvas.getContext("2d");
+  const wrapEl = document.getElementById("wrap");
+  const overlay = document.getElementById("overlay");
+  const touchEl = document.getElementById("touch");
+  const pauseBtn = document.getElementById("pauseBtn");
+  let pxRatio = 1, touchMode = !!(window.matchMedia && matchMedia("(pointer: coarse)").matches);
+  function resize() {
+    const portrait = window.innerHeight > window.innerWidth;
+    const showTouch = touchMode && isPlaying();
+    touchEl.style.display = showTouch ? "flex" : "none";
+    touchEl.classList.toggle("small", !portrait && window.innerHeight < 480);
+    wrapEl.style.paddingBottom = showTouch && portrait ? "calc(170px + env(safe-area-inset-bottom, 0px))" : "0";
+    let availW = window.innerWidth - 8, availH = window.innerHeight - 8;
+    if (showTouch && portrait) availH -= 170;
+    if (showTouch && !portrait) {
+      const side = Math.max(...[...touchEl.children].map((el) => el.offsetWidth)) + 20;
+      if (window.innerWidth - 2 * side > 200) availW = window.innerWidth - 2 * side;
+    }
+    const s = Math.max(0.2, Math.min(availW / W, availH / H));
+    pxRatio = Math.min(3, s * (window.devicePixelRatio || 1));
+    canvas.style.width = W * s + "px";
+    canvas.style.height = H * s + "px";
+    canvas.width = Math.round(W * pxRatio);
+    canvas.height = Math.round(H * pxRatio);
+  }
+  window.addEventListener("resize", () => syncControls());
+
+  // ---------- Audio ----------
+  let audioCtx = null;
+  function beep(freq, dur, type = "square", vol = 0.04, slide = 0, delay = 0) {
+    if (!audioCtx) return;
+    const t = audioCtx.currentTime + delay;
+    const osc = audioCtx.createOscillator(), gain = audioCtx.createGain();
+    osc.type = type;
+    osc.frequency.setValueAtTime(freq, t);
+    if (slide) osc.frequency.exponentialRampToValueAtTime(Math.max(20, freq + slide), t + dur);
+    gain.gain.setValueAtTime(vol, t);
+    gain.gain.exponentialRampToValueAtTime(0.0001, t + dur);
+    osc.connect(gain).connect(audioCtx.destination);
+    osc.start(t); osc.stop(t + dur + 0.02);
+  }
+  const arp = (notes, gap, d, type = "square", vol = 0.04) => notes.forEach((f, i) => beep(f, d, type, vol, 0, i * gap));
+  let sfxN = 0;
+  const lim = (fn) => (...a) => { if (sfxN++ < 4) fn(...a); };
+  const sfx = {
+    thunk: lim(() => { beep(180, 0.05, "square", 0.05, -60); beep(90, 0.08, "sine", 0.05); }),
+    whoosh: lim(() => beep(900, 0.12, "sine", 0.02, -600)),
+    miss: lim(() => beep(120, 0.15, "sawtooth", 0.03, -40)),
+    triple: lim(() => arp([880, 1175], 0.05, 0.08, "square", 0.03)),
+    bull: () => arp([660, 880, 1320, 1760], 0.05, 0.1, "square", 0.04),
+    bust: () => arp([392, 311, 233], 0.1, 0.15, "sawtooth", 0.035),
+    win: () => arp([523, 659, 784, 1047, 784, 1047, 1319, 1568], 0.08, 0.14, "square", 0.045),
+    lose: () => arp([523, 466, 415, 392, 330, 262], 0.15, 0.24, "triangle", 0.05),
+    oneEighty: () => { arp([523, 659, 784, 1047, 1319, 1568, 2093], 0.06, 0.12, "square", 0.05); },
+    breath: lim(() => beep(200, 0.25, "sine", 0.012, -80)),
+  };
+
+  // ---------- State ----------
+  let difficulty = DIFFICULTIES[load(DIFF_KEY)] ? load(DIFF_KEY) : "normale";
+  let diff = DIFFICULTIES[difficulty];
+  let state = "menu", menu = null, pausedFrom = null, clock = 0;
+  let score = 0, bestCache = 0, level = 0, lap = 0, coins = 2, wins = 0;
+  let rem = [START, START], turn = 0, darts = [], turnStart = 0, legStarter = 0, phase = "intro", phaseT = 0, message = null, popups = [], stuck = [];
+  let aim = { x: BX, y: BY - 60 }, hold = 0, holding = false, flight = null, cpuPlan = null;
+  let actHeld = false, wasAct = false;
+  const keys = { left: false, right: false, up: false, down: false };
+  const stick = { x: 0, y: 0 };
+  const isPlaying = () => state === "play";
+  const RV = () => RIVALS[level];
+
+  // ---------- The board ----------
+  // what a point on the board is worth: { v, mult, num, ring }
+  function scoreAt(x, y) {
+    const dx = x - BX, dy = y - BY, r = Math.hypot(dx, dy) / BR;
+    if (r > RING.dOut) return { v: 0, mult: 0, num: 0, txt: "FUORI" };
+    if (r <= RING.bull) return { v: 50, mult: 2, num: 25, txt: "CENTRO 50" };
+    if (r <= RING.outer) return { v: 25, mult: 1, num: 25, txt: "25" };
+    let a = Math.atan2(dx, -dy) / TAU * 20 + 0.5; a = ((Math.floor(a) % 20) + 20) % 20;
+    const num = NUMS[a];
+    const mult = r >= RING.dIn ? 2 : r >= RING.tIn && r <= RING.tOut ? 3 : 1;
+    return { v: num * mult, mult, num, txt: `${mult === 3 ? "T" : mult === 2 ? "D" : ""}${num}` };
+  }
+  // the middle of a bed: number num, ring (1 single high, 3 treble, 2 double, 25 or 50)
+  function spot(num, mult) {
+    if (num === 25) return { x: BX, y: BY, r: mult === 2 ? 0 : (RING.bull + RING.outer) / 2 * BR };
+    const i = NUMS.indexOf(num), a = i / 20 * TAU;
+    const rr = mult === 3 ? (RING.tIn + RING.tOut) / 2 : mult === 2 ? (RING.dIn + RING.dOut) / 2 : (RING.tOut + RING.dIn) / 2;
+    return { x: BX + Math.sin(a) * rr * BR, y: BY - Math.cos(a) * rr * BR };
+  }
+  // where to go for a finish: the next dart of a checkout, or the treble 20
+  const ALL = []; for (let n = 1; n <= 20; n++) for (const m of [3, 1, 2]) ALL.push({ num: n, mult: m, v: n * m }); ALL.push({ num: 25, mult: 1, v: 25 }, { num: 25, mult: 2, v: 50 });
+  const finisher = (d, dbl) => !dbl || d.mult === 2;
+  const PREF_LEAVE = [32, 40, 16, 24, 36, 20, 8, 12, 28, 4, 2, 50];
+  function plan(r, left, dbl) {
+    // one dart
+    for (const d of [...ALL].sort((a, b) => (b.mult === 2) - (a.mult === 2))) if (d.v === r && finisher(d, dbl)) return d;
+    if (left >= 2) {
+      // leave a favourite finish (setting up with singles and trebles)
+      const setup = ALL.filter((d) => d.mult !== 2 && d.num !== 25).concat(ALL.filter((d) => d.mult === 2 || d.num === 25));
+      for (const lv of PREF_LEAVE) { if (!dbl && lv > 40) continue; const d = setup.find((e) => e.v === r - lv); if (d) return d; }
+      if (left >= 3) for (const d of ALL.filter((d) => d.mult === 3).sort((a, b) => b.v - a.v)) { const rr = r - d.v; if (rr > 1 && rr <= 110 && PREF_LEAVE.some((lv) => ALL.some((e) => e.v === rr - lv))) return d; }
+    }
+    if (!dbl && r <= 60) { for (const d of ALL) if (d.v === r) return d; }
+    if (r > 60) return r - 60 === 1 && dbl ? { num: 19, mult: 3, v: 57 } : { num: 20, mult: 3, v: 60 };
+    // get under: take a single that leaves an even number
+    for (const d of ALL.filter((d) => d.mult === 1)) if (r - d.v > 1 && (r - d.v) % 2 === 0 && r - d.v <= 40) return d;
+    return { num: 20, mult: 1, v: 20 };
+  }
+  const dartName = (d) => (d.num === 25 ? (d.mult === 2 ? "CENTRO" : "25") : `${d.mult === 3 ? "T" : d.mult === 2 ? "D" : ""}${d.num}`);
+  function checkoutText(r, left) {
+    if (r > 170) return "";
+    const path = []; let x = r;
+    for (let i = 0; i < left && x > 0; i++) { const d = plan(x, left - i, diff.dbl); path.push(dartName(d)); x -= d.v; }
+    return x === 0 ? path.join(" · ") : "";
+  }
+
+  // ---------- Flow ----------
+  function startLeg() {
+    rem = [START, START]; darts = []; stuck = [];
+    turn = legStarter; turnStart = rem[turn];
+    phase = "intro"; phaseT = 1.8;
+    message = { text: `CONTRO ${RV().name.toUpperCase()}`, sub: `sfida ${level + 1} di ${RIVALS.length}${lap ? ` · giro ${lap + 1}` : ""} · ${START}${diff.dbl ? ", chiusura con un doppio" : ""} · ${turn === 0 ? "inizi tu" : "inizia lui"}`, t: 0 };
+  }
+  function startGame() {
+    if (!audioCtx) { try { audioCtx = new (window.AudioContext || window.webkitAudioContext)(); } catch { audioCtx = null; } }
+    if (audioCtx && audioCtx.state === "suspended") audioCtx.resume();
+    score = 0; level = 0; lap = 0; wins = 0; coins = diff.coins; legStarter = 0; popups = [];
+    bestCache = parseInt(load(bestKey(difficulty)), 10) || 0;
+    startLeg();
+    state = "play";
+    menu = null;
+    overlay.classList.add("hidden");
+    syncControls();
+    last = performance.now();
+  }
+  function beginTurn() {
+    darts = []; turnStart = rem[turn]; stuck = []; cpuPlan = null;
+    phase = turn === 0 ? "aim" : "cpu"; phaseT = 0; hold = 0; holding = false;
+    if (turn === 0) aim = { x: BX + rnd(-20, 20), y: BY - 70 };
+  }
+  // the hand: it wanders by itself; holding the button steadies it for a moment, then it shakes
+  function swayAmp() {
+    const k = !holding ? 1 : hold < 0.6 ? 1 - 0.55 * hold / 0.6 : hold < 2 ? 0.45 : Math.min(1.8, 0.45 + (hold - 2) * 1.2);
+    return diff.sway * k * (1 + 0.04 * level);
+  }
+  function swayAt(t) { return { x: Math.sin(t * 1.3) + 0.6 * Math.sin(t * 2.9 + 1.3) + 0.3 * Math.sin(t * 7.1), y: Math.cos(t * 1.1 + 0.4) + 0.6 * Math.sin(t * 3.3 + 2) + 0.3 * Math.cos(t * 6.7) }; }
+  function handPos() { const s = swayAt(clock), a = swayAmp(); return { x: aim.x + s.x * a, y: aim.y + s.y * a }; }
+  function throwDart(x, y, who) {
+    flight = { x0: who === 0 ? x + 40 : x - 40, y0: H + 30, x, y, t: 0, who };
+    sfx.whoosh();
+    phase = "flight";
+  }
+  function landed() {
+    const f = flight, who = f.who; flight = null;
+    const s = scoreAt(f.x, f.y);
+    stuck.push({ x: f.x, y: f.y, who });
+    darts.push(s);
+    if (s.v === 0) sfx.miss(); else if (s.num === 25 && s.mult === 2) sfx.bull(); else if (s.mult === 3) sfx.triple(); else sfx.thunk();
+    popups.push({ x: f.x, y: f.y - 14, text: s.txt, col: s.mult === 3 ? "#ffd23a" : s.mult === 2 ? "#5aff8a" : "#ffffff", t: 0 });
+    const after = rem[who] - s.v;
+    const busted = after < 0 || (diff.dbl && after === 1) || (after === 0 && diff.dbl && s.mult !== 2);
+    if (busted) {
+      rem[who] = turnStart; sfx.bust();
+      message = { text: "SBALLATO!", sub: "il turno non conta", t: 0 };
+      return endTurn(true);
+    }
+    rem[who] = after;
+    if (who === 0) { score += s.v * 10; }
+    if (after === 0) return legWon(who, s);
+    if (darts.length >= 3) return endTurn(false);
+    phase = who === 0 ? "aim" : "cpu"; phaseT = 0; hold = 0; holding = false; cpuPlan = null;
+  }
+  function endTurn(bust) {
+    const tot = darts.reduce((a, d) => a + d.v, 0);
+    if (!bust && tot === 180) { sfx.oneEighty(); message = { text: "CENTOTTANTA!", sub: turn === 0 ? "bonus 5.000" : "", t: 0 }; if (turn === 0) { score += 5000; impresa("180"); } }
+    else if (!bust && tot >= 100) message = { text: `${tot}!`, sub: turn === 0 ? "bel turno" : "", t: 0 };
+    phase = "show"; phaseT = 1.3;
+  }
+  function legWon(who, last) {
+    phase = "legend"; phaseT = 3;
+    if (who === 0) {
+      const co = turnStart;
+      const bonus = (2000 + co * 30 + rem[1] * 5) * (level + 1) * (1 + lap);
+      score += bonus; wins++;
+      if (last.num === 25 && last.mult === 2) impresa("centro");
+      if (level === RIVALS.length - 1) impresa("campione");
+      sfx.win();
+      message = { text: "PARTITA VINTA!", sub: `chiusura ${co} · bonus ${bonus.toLocaleString("it-IT")}`, t: 0, long: true };
+      result = true;
+    } else {
+      sfx.lose(); coins--;
+      message = { text: `HA VINTO ${RV().name.toUpperCase()}`, sub: coins > 0 ? `${coins} ${coins === 1 ? "gettone" : "gettoni"} rimasti: rivincita` : "niente più gettoni", t: 0, long: true };
+      result = false;
+    }
+  }
+  let result = false;
+  function afterLeg() {
+    if (result) { level++; if (level >= RIVALS.length) { level = 0; lap++; } legStarter = 0; startLeg(); }
+    else if (coins > 0) { legStarter = 1 - legStarter; startLeg(); }
+    else gameOver();
+  }
+  function gameOver() {
+    state = "over";
+    const prev = parseInt(load(bestKey(difficulty)), 10) || 0;
+    const record = score > prev;
+    if (record) store(bestKey(difficulty), String(score));
+    menu = () => showOverlay(
+      `<h2 class="lose">FINE DEI GETTONI</h2>
+       <p>Punteggio: <b>${score.toLocaleString("it-IT")}</b> · ${wins} ${wins === 1 ? "partita vinta" : "partite vinte"} · ultimo avversario ${RV().name} · ${diff.label}</p>
+       ${record ? "<p style='color:var(--pink)'>★ NUOVO RECORD! ★</p>" : ""}
+       ${difficultyHTML()}
+       <button class="start" data-start>UN'ALTRA SFIDA</button>`
+    );
+    menu();
+    syncControls();
+  }
+  function togglePause() {
+    if (isPlaying()) {
+      pausedFrom = state; state = "paused";
+      showOverlay(`<h2>PAUSA</h2><button class="start" data-resume>CONTINUA</button><p class="muted">Premi P per continuare</p>`);
+    } else if (state === "paused") {
+      state = pausedFrom; overlay.classList.add("hidden"); last = performance.now();
+    }
+    syncControls();
+  }
+  // the pause menu can end the game (shared/iniziali.js): it ends here the usual way, saving the record
+  window.addEventListener("sala:termina", () => { if (state !== "paused") return; state = pausedFrom; overlay.classList.add("hidden"); gameOver(); syncControls(); });
+  function syncControls() {
+    pauseBtn.style.display = isPlaying() && touchMode ? "block" : "none";
+    resize();
+  }
+  pauseBtn.addEventListener("click", () => togglePause());
+  function showOverlay(html) { overlay.innerHTML = html; overlay.classList.remove("hidden"); }
+  function difficultyHTML() {
+    const buttons = DIFF_IDS.map((id) => {
+      const d = DIFFICULTIES[id];
+      return `<button type="button" data-diff="${id}" class="${id === difficulty ? "on" : ""}" style="--c:${d.color}">${d.label}</button>`;
+    }).join("");
+    const best = parseInt(load(bestKey(difficulty)), 10);
+    return `<div class="diff">${buttons}</div><p class="muted">${diff.desc}${best ? ` · Record: ${best.toLocaleString("it-IT")}` : ""}</p>`;
+  }
+  function setDifficulty(id) { if (!DIFFICULTIES[id]) return; difficulty = id; diff = DIFFICULTIES[id]; store(DIFF_KEY, id); if (menu) menu(); }
+  function showTitle() {
+    menu = showTitle;
+    showOverlay(
+      `<h1>FRECCETTE AL BAR</h1>
+       <p>Il bersaglio elettronico in fondo al bar e otto sfidanti, dal barista al Campione del Bar. Si gioca a ${START}: a turno tre freccette, e i punti si scalano finché non arrivi esattamente a zero${diff.dbl ? ", con l'ultima freccetta su un doppio (o sul centro)" : ""}. Chi va sotto zero sballa e il turno non conta.</p>
+       <div class="pts">
+         <span><b>Mira</b></span><span>levetta per spostare il mirino · la mano trema un po' da sola</span>
+         <span><b>Tira</b></span><span>tieni premuto TIRA per trattenere il fiato: per un attimo la mano si ferma, poi trema di più · lascia per tirare</span>
+         <span><b>Il bersaglio</b></span><span>anello esterno doppio, anello interno triplo, centro 50 (vale come doppio), anello del centro 25</span>
+         <span><b>Punti</b></span><span>10 per ogni punto fatto · 180 bonus 5.000 · partita vinta 2.000 più 30 × la chiusura, × sfida</span>
+       </div>
+       ${touchMode
+         ? `<p class="muted help">Levetta: mirino · TIRA tenuto, poi lasciato</p>`
+         : `<p class="muted help">Frecce o WASD: mirino · SPAZIO o J tenuto, poi lasciato · P pausa</p>`}
+       ${difficultyHTML()}
+       <button class="start" data-start>AL BERSAGLIO!</button>`
+    );
+  }
+  overlay.addEventListener("click", (e) => {
+    const d = e.target.closest("[data-diff]");
+    if (d) { setDifficulty(d.dataset.diff); return; }
+    if (e.target.closest("[data-start]")) startGame();
+    if (e.target.closest("[data-resume]")) togglePause();
+  });
+
+  // ---------- Input ----------
+  const KEYMAP = { arrowleft: "left", a: "left", arrowright: "right", d: "right", arrowup: "up", w: "up", arrowdown: "down", s: "down" };
+  const ACTKEYS = [" ", "j"];
+  window.addEventListener("keydown", (e) => {
+    const k = e.key.toLowerCase();
+    if ([" ", "arrowup", "arrowdown", "arrowleft", "arrowright"].includes(k)) e.preventDefault();
+    if (state === "menu" || state === "over") {
+      if (e.key === "Enter") startGame();
+      else if (["1", "2", "3"].includes(k)) setDifficulty(DIFF_IDS[+k - 1]);
+      return;
+    }
+    if (k === "p" || k === "escape") { if (!e.repeat) togglePause(); return; }
+    if (state === "paused") { if (e.key === "Enter") togglePause(); return; }
+    if (ACTKEYS.includes(k)) actHeld = true;
+    if (KEYMAP[k]) keys[KEYMAP[k]] = true;
+  });
+  window.addEventListener("keyup", (e) => { const k = e.key.toLowerCase(); if (KEYMAP[k]) keys[KEYMAP[k]] = false; if (ACTKEYS.includes(k)) actHeld = false; });
+  window.addEventListener("blur", () => { for (const k in keys) keys[k] = false; actHeld = false; stick.x = stick.y = 0; if (isPlaying()) togglePause(); });
+  {
+    const b = touchEl.querySelector(".hop");
+    b.addEventListener("pointerdown", (e) => { e.preventDefault(); actHeld = true; b.classList.add("on"); });
+    for (const ev of ["pointerup", "pointercancel", "pointerleave"]) b.addEventListener(ev, () => { actHeld = false; b.classList.remove("on"); });
+  }
+  const stickEl = touchEl.querySelector(".stick"), knob = stickEl.querySelector(".knob");
+  let stickId = null;
+  function stickAt(e) {
+    const r = stickEl.getBoundingClientRect(), max = r.width / 2 - 14;
+    let dx = e.clientX - (r.left + r.width / 2), dy = e.clientY - (r.top + r.height / 2);
+    const len = Math.hypot(dx, dy);
+    if (len > max) { dx *= max / len; dy *= max / len; }
+    knob.style.transform = `translate(${dx}px, ${dy}px)`;
+    const f = (v) => { const a = Math.abs(v) / max; return a < 0.2 ? 0 : Math.sign(v) * Math.min(1, (a - 0.2) / 0.5); };
+    stick.x = f(dx); stick.y = f(dy);
+  }
+  const stickEnd = (e) => { if (e.pointerId !== stickId) return; stickId = null; knob.style.transform = ""; stick.x = stick.y = 0; };
+  stickEl.addEventListener("pointerdown", (e) => { e.preventDefault(); stickId = e.pointerId; try { stickEl.setPointerCapture(e.pointerId); } catch { /* ignore */ } stickAt(e); });
+  stickEl.addEventListener("pointermove", (e) => { if (e.pointerId === stickId) stickAt(e); });
+  for (const ev of ["pointerup", "pointercancel", "lostpointercapture"]) stickEl.addEventListener(ev, stickEnd);
+  window.addEventListener("pointerdown", (e) => { if (e.pointerType === "touch" && !touchMode) { touchMode = true; syncControls(); if (menu) menu(); } }, true);
+
+
+  // ---------- Update ----------
+  function cpuStep(dt) {
+    const L = RV();
+    if (!cpuPlan) {
+      const d = plan(rem[1], 3 - darts.length, diff.dbl), sp = spot(d.num, d.mult);
+      cpuPlan = { tx: sp.x, ty: sp.y, t: 0, wait: rnd(0.7, 1.2) * (window.__fast ? 0.2 : 1) };
+      aim = { x: sp.x + gauss() * 30, y: sp.y + gauss() * 30 };
+    }
+    cpuPlan.t += dt;
+    aim.x += (cpuPlan.tx - aim.x) * Math.min(1, dt * 5); aim.y += (cpuPlan.ty - aim.y) * Math.min(1, dt * 5);
+    if (cpuPlan.t >= cpuPlan.wait) {
+      const sd = L.sd * 0.78 / (1 + 0.25 * lap);
+      throwDart(cpuPlan.tx + gauss() * sd, cpuPlan.ty + gauss() * sd, 1);
+    }
+  }
+  function update(dt) {
+    clock += dt; sfxN = 0;
+    if (window.__bot) window.__bot(dt);
+    for (const p of popups) { p.t += dt; p.y -= 16 * dt; }
+    popups = popups.filter((p) => p.t < 1.2);
+    if (message) { message.t += dt; if (message.t > (message.long ? 3 : 1.8)) message = null; }
+    if (state !== "play") return;
+    phaseT += dt;
+    if (phase === "intro") { if (phaseT >= 1.8) beginTurn(); return; }
+    if (phase === "legend") { if (phaseT >= 3) afterLeg(); return; }
+    if (phase === "show") { if (phaseT >= 1.3) { turn = 1 - turn; beginTurn(); } return; }
+    if (phase === "flight") {
+      flight.t += dt / (window.__fast ? 0.08 : 0.28);
+      if (flight.t >= 1) landed();
+      return;
+    }
+    if (phase === "cpu") { cpuStep(dt); return; }
+    if (phase === "aim") {
+      const sx = clamp((keys.right ? 1 : 0) - (keys.left ? 1 : 0) + stick.x, -1, 1), sy = clamp((keys.down ? 1 : 0) - (keys.up ? 1 : 0) + stick.y, -1, 1);
+      const sp = holding ? 45 : 170;
+      aim.x = clamp(aim.x + sx * sp * dt, BX - BR - 20, BX + BR + 20); aim.y = clamp(aim.y + sy * sp * dt, BY - BR - 20, BY + BR + 20);
+      if (actHeld && !wasAct) { holding = true; hold = 0; sfx.breath(); }
+      if (holding) hold += dt;
+      if (holding && !actHeld) { holding = false; const p = handPos(); throwDart(p.x + gauss() * 1.5, p.y + gauss() * 1.5, 0); }
+      wasAct = actHeld;
+    } else wasAct = actHeld;
+  }
+
+  // ---------- Drawing ----------
+  function drawBar() {
+    const g = ctx.createLinearGradient(0, 0, 0, H);
+    g.addColorStop(0, "#2a1a14"); g.addColorStop(1, "#140a08");
+    ctx.fillStyle = g; ctx.fillRect(0, 0, W, H);
+    // wood panels and the light over the board
+    ctx.strokeStyle = "rgba(0,0,0,0.3)"; ctx.lineWidth = 2; for (let x = 0; x < W; x += 48) { ctx.beginPath(); ctx.moveTo(x, TOP); ctx.lineTo(x, H); ctx.stroke(); }
+    const gl = ctx.createRadialGradient(BX, BY - 40, 20, BX, BY, 260); gl.addColorStop(0, "rgba(255,220,150,0.22)"); gl.addColorStop(1, "rgba(255,220,150,0)");
+    ctx.fillStyle = gl; ctx.fillRect(0, 0, W, H);
+    // the cabinet around the board
+    ctx.fillStyle = "#1a1a24"; ctx.beginPath(); ctx.roundRect(BX - BR - 18, BY - BR - 18, (BR + 18) * 2, (BR + 18) * 2, 18); ctx.fill();
+    ctx.strokeStyle = "#ff3a6a"; ctx.lineWidth = 2; ctx.shadowColor = "#ff3a6a"; ctx.shadowBlur = 10; ctx.stroke(); ctx.shadowBlur = 0;
+  }
+  function drawBoard() {
+    const segA = TAU / 20;
+    ctx.fillStyle = "#111"; ctx.beginPath(); ctx.arc(BX, BY, BR + 12, 0, TAU); ctx.fill();
+    for (let i = 0; i < 20; i++) {
+      const a0 = -Math.PI / 2 + (i - 0.5) * segA, a1 = a0 + segA, dark = i % 2 === 0;
+      const ring = (r0, r1, col) => { ctx.fillStyle = col; ctx.beginPath(); ctx.arc(BX, BY, r1 * BR, a0, a1); ctx.arc(BX, BY, r0 * BR, a1, a0, true); ctx.closePath(); ctx.fill(); };
+      ring(RING.outer, RING.tIn, dark ? "#1a1a1a" : "#f0e2c0");
+      ring(RING.tIn, RING.tOut, dark ? "#d8283a" : "#1a8a4a");
+      ring(RING.tOut, RING.dIn, dark ? "#1a1a1a" : "#f0e2c0");
+      ring(RING.dIn, RING.dOut, dark ? "#d8283a" : "#1a8a4a");
+    }
+    // the little holes of an electronic board
+    ctx.fillStyle = "rgba(0,0,0,0.18)";
+    for (let r = 0.16; r < 1; r += 0.07) for (let a = 0; a < TAU; a += 0.09 / r) ctx.fillRect(BX + Math.cos(a) * r * BR - 0.5, BY + Math.sin(a) * r * BR - 0.5, 1, 1);
+    ctx.fillStyle = "#1a8a4a"; ctx.beginPath(); ctx.arc(BX, BY, RING.outer * BR, 0, TAU); ctx.fill();
+    ctx.fillStyle = "#d8283a"; ctx.beginPath(); ctx.arc(BX, BY, RING.bull * BR, 0, TAU); ctx.fill();
+    ctx.strokeStyle = "#c8c8c8"; ctx.lineWidth = 1;
+    for (const r of [RING.bull, RING.outer, RING.tIn, RING.tOut, RING.dIn, RING.dOut]) { ctx.beginPath(); ctx.arc(BX, BY, r * BR, 0, TAU); ctx.stroke(); }
+    for (let i = 0; i < 20; i++) { const a = -Math.PI / 2 + (i - 0.5) * segA; ctx.beginPath(); ctx.moveTo(BX + Math.cos(a) * RING.outer * BR, BY + Math.sin(a) * RING.outer * BR); ctx.lineTo(BX + Math.cos(a) * BR, BY + Math.sin(a) * BR); ctx.stroke(); }
+    ctx.fillStyle = "#ffffff"; ctx.font = "900 11px system-ui"; ctx.textAlign = "center"; ctx.textBaseline = "middle";
+    for (let i = 0; i < 20; i++) { const a = i * segA; ctx.fillText(String(NUMS[i]), BX + Math.sin(a) * (BR + 7), BY - Math.cos(a) * (BR + 7)); }
+    ctx.textBaseline = "alphabetic";
+  }
+  function drawDart(x, y, who, scale = 1, flying = false) {
+    ctx.save(); ctx.translate(x, y); ctx.scale(scale, scale);
+    const col = who === 0 ? "#5ab8ff" : RV().col;
+    ctx.fillStyle = "rgba(0,0,0,0.35)"; ctx.beginPath(); ctx.ellipse(4, 5, 3, 1.5, 0, 0, TAU); ctx.fill();
+    ctx.strokeStyle = "#c8c8d0"; ctx.lineWidth = 1.5; ctx.beginPath(); ctx.moveTo(0, 0); ctx.lineTo(5, 7); ctx.stroke();
+    ctx.fillStyle = "#4a4a5a"; ctx.save(); ctx.translate(5, 7); ctx.rotate(0.6); ctx.fillRect(-2, 0, 4, 9); ctx.restore();
+    ctx.fillStyle = col; ctx.beginPath(); ctx.moveTo(10, 15); ctx.lineTo(18, 18); ctx.lineTo(11, 22); ctx.closePath(); ctx.fill(); ctx.beginPath(); ctx.moveTo(10, 15); ctx.lineTo(7, 23); ctx.lineTo(13, 20); ctx.closePath(); ctx.fill();
+    ctx.restore();
+  }
+  function drawAim() {
+    if (phase !== "aim" && phase !== "cpu") return;
+    const p = phase === "aim" ? handPos() : aim, who = phase === "aim" ? 0 : 1;
+    const steady = holding && hold > 0.5 && hold < 2;
+    ctx.strokeStyle = who === 0 ? (steady ? "#5aff8a" : holding && hold >= 2 ? "#ff5a5a" : "#ffffff") : "rgba(255,255,255,0.5)";
+    ctx.lineWidth = 1.5;
+    ctx.beginPath(); ctx.arc(p.x, p.y, 7, 0, TAU); ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(p.x - 12, p.y); ctx.lineTo(p.x - 4, p.y); ctx.moveTo(p.x + 4, p.y); ctx.lineTo(p.x + 12, p.y); ctx.moveTo(p.x, p.y - 12); ctx.lineTo(p.x, p.y - 4); ctx.moveTo(p.x, p.y + 4); ctx.lineTo(p.x, p.y + 12); ctx.stroke();
+    if (who === 0) {
+      // the breath gauge, beside the board
+      const k = holding ? clamp(hold / 3, 0, 1) : 0, gx = 40, gy0 = BY + 80, gh = 160;
+      ctx.fillStyle = "rgba(0,0,0,0.5)"; ctx.fillRect(gx, gy0 - gh, 8, gh);
+      ctx.fillStyle = "rgba(90,255,138,0.35)"; ctx.fillRect(gx, gy0 - gh * 2 / 3, 8, gh * (2 / 3 - 0.2));
+      ctx.fillStyle = steady ? "#5aff8a" : hold >= 2 ? "#ff5a5a" : "#ffffff"; ctx.fillRect(gx, gy0 - gh * k, 8, gh * k);
+      ctx.fillStyle = "#e8c8d0"; ctx.font = "800 8px system-ui"; ctx.textAlign = "center"; ctx.fillText("FIATO", gx + 4, gy0 + 12);
+    }
+  }
+  function drawPanel() {
+    const x = 418, w = 210;
+    ctx.fillStyle = "rgba(10,6,14,0.85)"; ctx.beginPath(); ctx.roundRect(x, TOP + 8, w, H - TOP - 16, 10); ctx.fill();
+    ctx.strokeStyle = "rgba(255,90,120,0.4)"; ctx.lineWidth = 1; ctx.stroke();
+    const row = (i, name, col, r, active) => {
+      const y = TOP + 22 + i * 92;
+      if (active) { ctx.fillStyle = "rgba(255,255,255,0.07)"; ctx.fillRect(x + 6, y - 10, w - 12, 82); }
+      ctx.textAlign = "left"; ctx.fillStyle = col; ctx.font = "900 11px system-ui"; ctx.fillText(name.toUpperCase(), x + 14, y + 4);
+      ctx.font = "900 44px system-ui"; ctx.fillStyle = "#ffffff"; ctx.textAlign = "right"; ctx.fillText(String(r), x + w - 14, y + 56);
+      if (active) { ctx.fillStyle = col; ctx.beginPath(); ctx.moveTo(x + 12, y + 30); ctx.lineTo(x + 20, y + 36); ctx.lineTo(x + 12, y + 42); ctx.fill(); }
+    };
+    row(0, "Tu", "#5ab8ff", rem[0], turn === 0);
+    row(1, RV().name, RV().col, rem[1], turn === 1);
+    // this turn's darts
+    const y = TOP + 212;
+    ctx.textAlign = "left"; ctx.font = "800 10px system-ui"; ctx.fillStyle = "#c8b8c8"; ctx.fillText("QUESTO TURNO", x + 14, y);
+    for (let i = 0; i < 3; i++) {
+      const d = darts[i];
+      ctx.fillStyle = "rgba(255,255,255,0.08)"; ctx.fillRect(x + 14 + i * 64, y + 6, 58, 26);
+      ctx.fillStyle = d ? (d.mult === 3 ? "#ffd23a" : d.mult === 2 ? "#5aff8a" : "#ffffff") : "rgba(255,255,255,0.25)"; ctx.font = "900 14px system-ui"; ctx.textAlign = "center";
+      ctx.fillText(d ? d.txt.replace("CENTRO 50", "50") : "·", x + 43 + i * 64, y + 24);
+    }
+    // the suggested finish
+    const co = turn === 0 && (phase === "aim" || phase === "flight") && difficulty !== "difficile" ? checkoutText(rem[0], 3 - darts.length) : "";
+    if (co) { ctx.textAlign = "left"; ctx.fillStyle = "#5aff8a"; ctx.font = "800 10px system-ui"; ctx.fillText("CHIUDI CON", x + 14, y + 52); ctx.font = "900 14px system-ui"; ctx.fillText(co, x + 14, y + 70); }
+  }
+  function outlined(text, x, y, font, fill, lw = 5) {
+    ctx.font = font; ctx.lineWidth = lw; ctx.strokeStyle = "#0a0408"; ctx.strokeText(text, x, y); ctx.fillStyle = fill; ctx.fillText(text, x, y);
+  }
+  function drawHud() {
+    ctx.fillStyle = "rgba(10,4,8,0.96)"; ctx.fillRect(0, 0, W, TOP);
+    ctx.textBaseline = "middle"; ctx.textAlign = "left";
+    const x0 = touchMode ? 130 : 10;
+    ctx.fillStyle = "#ffffff"; ctx.font = "900 15px system-ui"; ctx.fillText(score.toLocaleString("it-IT"), x0, 14);
+    ctx.fillStyle = "#e8c8d0"; ctx.font = "700 9px system-ui"; ctx.fillText(`REC ${Math.max(bestCache, score).toLocaleString("it-IT")}`, x0 + 90, 9);
+    ctx.fillStyle = "#ff5a6a"; ctx.font = "900 9px system-ui"; ctx.fillText(`SFIDA ${level + 1}/${RIVALS.length}${lap ? ` · GIRO ${lap + 1}` : ""}`, x0 + 90, 20);
+    ctx.textAlign = "right"; ctx.fillStyle = "#ffd23a"; ctx.font = "900 11px system-ui";
+    ctx.fillText(`GETTONI ${"● ".repeat(coins).trim() || "–"}`, touchMode ? W - 70 : W - 12, 14);
+    ctx.textBaseline = "alphabetic";
+  }
+  function draw() {
+    ctx.setTransform(pxRatio, 0, 0, pxRatio, 0, 0);
+    drawBar();
+    drawBoard();
+    for (const s of stuck) drawDart(s.x, s.y, s.who);
+    drawAim();
+    if (flight) { const k = flight.t, e = 1 - Math.pow(1 - k, 2); drawDart(flight.x0 + (flight.x - flight.x0) * e, flight.y0 + (flight.y - flight.y0) * e - Math.sin(k * Math.PI) * 40, flight.who, 2.4 - 1.4 * k, true); }
+    ctx.textAlign = "center";
+    for (const p of popups) { ctx.globalAlpha = Math.max(0, 1 - p.t / 1.2); outlined(p.text, p.x, p.y, "900 14px system-ui", p.col, 4); }
+    ctx.globalAlpha = 1;
+    if (state === "menu") return;
+    drawPanel();
+    drawHud();
+    ctx.textAlign = "center";
+    if (message) {
+      ctx.globalAlpha = Math.min(1, ((message.long ? 3 : 1.8) - message.t) * 2);
+      outlined(message.text, BX, BY - 4, "italic 900 26px system-ui", "#ff5a6a", 6);
+      if (message.sub) outlined(message.sub, BX, BY + 18, "800 12px system-ui", "#ffffff", 4);
+      ctx.globalAlpha = 1;
+    }
+  }
+
+  // ---------- Loop ----------
+  const STEP = 1 / 120;
+  let last = performance.now(), acc = 0;
+  function frame(now) {
+    const dt = Math.min(0.1, (now - last) / 1000);
+    last = now;
+    if (isPlaying()) {
+      acc += dt;
+      while (acc >= STEP && isPlaying()) { update(STEP); acc -= STEP; }
+    } else { acc = 0; update(dt); }
+    draw();
+    requestAnimationFrame(frame);
+  }
+  syncControls();
+  showTitle();
+  requestAnimationFrame(frame);
+})();
+</script>
+<script src="../../shared/iniziali.js" data-record="dardi-best-" data-kind="score"></script>
+</body>
+</html>
+
