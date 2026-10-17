@@ -87,6 +87,14 @@
   }
   #overlay .diff button.on { border-color: var(--c); color: var(--c); box-shadow: 0 0 12px var(--c); }
   #overlay button.start { border-color: var(--pink); color: #142a02; background: var(--pink); padding: 11px 30px; box-shadow: 0 4px 0 #4a8a1a; }
+  #overlay .kit { width: min(560px, 100%); display: grid; gap: 4px; text-align: left; font-size: 12px; color: var(--muted);
+    background: rgba(138,255,58,0.06); border: 1px solid rgba(138,255,58,0.3); border-radius: 10px; padding: 8px 12px; }
+  #overlay .kit .kit-t { font-size: 11px; font-weight: 900; letter-spacing: 1.5px; color: var(--pink); margin: 0 0 2px; }
+  #overlay .kit div { display: flex; flex-wrap: wrap; gap: 2px 10px; align-items: baseline; }
+  #overlay .kit b { color: var(--fg); }
+  #overlay .kit i { font-style: normal; color: var(--pink); letter-spacing: 1px; }
+  #overlay .kit small { flex: 1 1 220px; font-size: 11px; }
+  @media (max-height: 430px) { #overlay .kit { grid-template-columns: repeat(2, 1fr); padding: 6px 10px; } #overlay .kit .kit-t { grid-column: 1 / -1; } #overlay .kit small { display: none; } }
   @media (max-height: 560px) {
     #overlay { gap: 8px; }
     #overlay h1 { font-size: 30px; }
@@ -198,7 +206,7 @@
     difficile: { label: "DIFFICILE", color: "#ff5a5a", desc: "meno salute · zombie più forti, più veloci a colpire e più numerosi", hp: 90, zhp: 1.25, zdmg: 1.3, spawn: 1.15 },
   };
   const DIFF_IDS = Object.keys(DIFFICULTIES);
-  const DIFF_KEY = "orda-difficulty", SET_KEY = "orda-setting", DONE_KEY = "orda-storie";
+  const DIFF_KEY = "orda-difficulty", SET_KEY = "orda-setting", DONE_KEY = "orda-storie", MODE_KEY = "orda-modo";
   const bestKey = (id) => `orda-best-${id}`;
   function store(k, v) { try { localStorage.setItem(k, v); } catch { /* ignore */ } }
   function load(k) { try { return localStorage.getItem(k); } catch { return null; } }
@@ -290,6 +298,7 @@
   const stick = { x: 0, y: 0 };
   const isPlaying = () => state === "play";
   const S = () => SETTINGS[setIdx];
+  let endBase = 0, endless = false, modeSel = load(MODE_KEY) === "infinita" ? "infinita" : "storia", nightT = 0, bossN = 0;
   const done = () => { try { return JSON.parse(load(DONE_KEY) || "[]"); } catch { return []; } };
 
   // ---------- The arena ----------
@@ -346,14 +355,43 @@
     if (audioCtx && audioCtx.state === "suspended") audioCtx.resume();
     bestCache = parseInt(load(bestKey(difficulty)), 10) || 0;
     resetRun();
+    endless = modeSel === "infinita" && done().includes(S().id);
     obstacles = makeObstacles();
-    showStory("chapter");
+    if (endless) startEndless(0); else showStory("chapter");
     state = "play";
     menu = null;
     overlay.classList.add("hidden");
     syncControls();
     last = performance.now();
   }
+  // ---------- The endless night ----------
+  // waves of a minute, ever thicker; every third wave a boss comes back (all four in turn, stronger each time)
+  function startEndless(base) {
+    endBase = base;
+    endless = true; wave = 5; nightT = 0; bossN = 0;
+    zombies = []; bullets = []; acids = []; fires = []; gems = []; hearts = []; bolts = []; parts = []; boss = null;
+    obstacles = makeObstacles();
+    P.x = WW / 2; P.y = WH / 2; P.inv = 1.5;
+    waveT = 60; spawnAcc = 0; phase = "fight"; phaseT = 0;
+    message = { text: "NOTTE INFINITA", sub: `${S().name.toLowerCase()} · resisti più che puoi`, t: 0, long: true };
+    sfx.wave();
+  }
+  function continueEndless() {
+    state = "play"; menu = null; overlay.classList.add("hidden");
+    startEndless(5);
+    syncControls(); last = performance.now();
+  }
+  function nextOndata() {
+    wave++; waveT = 60; phaseT = 0;
+    const o = wave - 4, bonus = 500 * o;
+    score += bonus;
+    message = { text: `ONDATA ${o}`, sub: `bonus ${bonus.toLocaleString("it-IT")} · arrivano di più`, t: 0 };
+    sfx.wave();
+    if (o % 3 === 1 && o > 1 && !boss) { const def = SETTINGS[(setIdx + bossN) % SETTINGS.length].boss; bossN++; spawnBoss(def, (endBase ? 1.6 : 0.8) + 0.6 * (bossN - 1)); }
+  }
+  // how strong the horde is: the chapter, or in the endless night the waves so far (from where you started)
+  const tier = () => { if (!endless) return wave; const o = wave - 5; return endBase + o * 0.6 + o * o * 0.025; };
+  const fmtT = (t) => `${Math.floor(t / 60)}:${String(Math.floor(t % 60)).padStart(2, "0")}`;
   function continueStory() {
     if (storyKind === "chapter") startWave();
     else if (storyKind === "ending") victory();
@@ -389,13 +427,15 @@
     if (record) store(bestKey(difficulty), String(score));
     if (won) sfx.win(); else sfx.over();
     menu = () => showOverlay(
-      `<h2 class="${won ? "" : "lose"}">${won ? "STORIA COMPLETATA!" : "L'ORDA HA VINTO"}</h2>
-       <p>${won ? `${S().hero} ce l'ha fatta: ${S().saved}.` : `${S().hero} ${S().fell} al capitolo ${wave + 1}: ${S().chapters[wave].title}.`}</p>
+      `<h2 class="${won ? "" : "lose"}">${won ? "STORIA COMPLETATA!" : endless ? "LA NOTTE È FINITA" : "L'ORDA HA VINTO"}</h2>
+       <p>${won ? `${S().hero} ce l'ha fatta: ${S().saved}.` : endless ? `${S().hero} ha resistito ${fmtT(nightT)} nella Notte infinita, fino all'ondata ${wave - 4}.` : `${S().hero} ${S().fell} al capitolo ${wave + 1}: ${S().chapters[wave].title}.`}</p>
+       ${won ? `<p style="color:var(--pink)">Si è sbloccata la Notte infinita di ${S().name.toLowerCase()}: continua adesso con i tuoi potenziamenti, o sceglila dal menu quando vuoi.</p><button class="start" data-endless>CONTINUA NELLA NOTTE INFINITA ▶</button>` : ""}
        <p>Punteggio: <b>${score.toLocaleString("it-IT")}</b> · ${kills.toLocaleString("it-IT")} zombie · livello ${level} · ${diff.label}</p>
        ${record ? "<p style='color:var(--pink)'>★ NUOVO RECORD! ★</p>" : ""}
        ${settingHTML()}
        ${difficultyHTML()}
-       <button class="start" data-start>UN'ALTRA NOTTE</button>`
+       <button class="start" data-start>UN'ALTRA NOTTE</button>
+       ${kitHTML()}`
     );
     menu();
     syncControls();
@@ -404,7 +444,7 @@
   function togglePause() {
     if (isPlaying()) {
       pausedFrom = state; state = "paused";
-      showOverlay(`<h2>PAUSA</h2><button class="start" data-resume>CONTINUA</button><p class="muted">Premi P per continuare</p>`);
+      showOverlay(`<h2>PAUSA</h2>${kitHTML()}<button class="start" data-resume>CONTINUA</button><p class="muted">Premi P per continuare</p>`);
     } else if (state === "paused") {
       state = pausedFrom; overlay.classList.add("hidden"); last = performance.now();
     }
@@ -430,7 +470,18 @@
   function settingHTML() {
     const d = done();
     return `<div class="diff">${SETTINGS.map((s, i) => `<button type="button" data-set="${i}" class="${i === setIdx ? "on" : ""}" style="--c:#8aff3a">${d.includes(s.id) ? "★ " : ""}${s.name.toUpperCase()}</button>`).join("")}</div>
-      <p class="muted">${S().sub}</p>`;
+      <p class="muted">${S().sub}</p>
+      ${d.includes(S().id) ? `<div class="diff">${[["storia", "STORIA"], ["infinita", "NOTTE INFINITA"]].map(([m, t]) => `<button type="button" data-mode="${m}" class="${modeSel === m ? "on" : ""}" style="--c:#ff5aff">${t}</button>`).join("")}</div>
+        <p class="muted">${modeSel === "infinita" ? "ondate senza fine, sempre più fitte, e ogni tre ondate torna un boss" : "i cinque capitoli della storia"}</p>` : `<p class="muted">completa la storia per sbloccare la Notte infinita di questo posto</p>`}`;
+  }
+  // what you have picked up so far: the weapons and the upgrades, with their level
+  function kitHTML() {
+    const ws = Object.keys(weapons), ps = Object.keys(passives);
+    if (!ws.length && !ps.length) return "";
+    const dots = (n) => "●".repeat(n) + "○".repeat(5 - n);
+    const rows = ws.map((k) => `<div><span>${WEAPONS[k].icon} <b>${WEAPONS[k].name}</b> <i>${dots(weapons[k])}</i></span><small>${WEAPONS[k].desc.slice(0, weapons[k]).join(" · ")}</small></div>`)
+      .concat(ps.map((k) => `<div><span>${PASSIVES[k].icon} <b>${PASSIVES[k].name}</b> <i>${dots(passives[k])}</i></span><small>${PASSIVES[k].desc} (× ${passives[k]})</small></div>`));
+    return `<div class="kit"><p class="kit-t">IL TUO EQUIPAGGIAMENTO · LIVELLO ${level}</p>${rows.join("")}</div>`;
   }
   function setSetting(i) { setIdx = i; store(SET_KEY, String(i)); if (menu) menu(); }
   function showTitle() {
@@ -452,7 +503,11 @@
        <button class="start" data-start>INIZIA LA NOTTE</button>`
     );
   }
-  overlay.addEventListener("click", (e) => { const s = e.target.closest("[data-set]"); if (s) setSetting(+s.dataset.set); });
+  overlay.addEventListener("click", (e) => {
+    const s = e.target.closest("[data-set]"); if (s) setSetting(+s.dataset.set);
+    const m = e.target.closest("[data-mode]"); if (m) { modeSel = m.dataset.mode; store(MODE_KEY, modeSel); if (menu) menu(); }
+    if (e.target.closest("[data-endless]")) continueEndless();
+  });
   overlay.addEventListener("click", (e) => {
     const d = e.target.closest("[data-diff]");
     if (d) { setDifficulty(d.dataset.diff); return; }
@@ -510,7 +565,7 @@
 
   // ---------- Spawning ----------
   function spawnZombie(type, x, y) {
-    const t = ZT[type], k = diff.zhp * (1 + 0.45 * wave);
+    const t = ZT[type], k = diff.zhp * (1 + 0.45 * tier());
     if (x === undefined) {
       // just outside the view, inside the arena
       for (let i = 0; i < 10; i++) {
@@ -520,21 +575,22 @@
       }
       x = clamp(x, 20, WW - 20); y = clamp(y, 20, WH - 20);
     }
-    zombies.push({ type, x, y, r: t.r, hp: t.hp * k, maxHp: t.hp * k, sp: t.sp * rnd(0.85, 1.15) * (1 + 0.04 * wave), dmg: t.dmg * diff.zdmg, xp: t.xp, flash: 0, kx: 0, ky: 0, spit: rnd(1, 3), wob: rnd(0, TAU), cloth: S().cloth[Math.floor(Math.random() * 3)], lastHit: {} });
+    zombies.push({ type, x, y, r: t.r, hp: t.hp * k, maxHp: t.hp * k, sp: t.sp * rnd(0.85, 1.15) * (1 + 0.04 * Math.min(10, tier())), dmg: t.dmg * diff.zdmg, xp: t.xp, flash: 0, kx: 0, ky: 0, spit: rnd(1, 3), wob: rnd(0, TAU), cloth: S().cloth[Math.floor(Math.random() * 3)], lastHit: {} });
   }
   function pickType() {
     const r = Math.random();
-    if (wave >= 3 && r < 0.1) return "spitter";
-    if (wave >= 2 && r < 0.17) return "brute";
-    if (wave >= 1 && r < 0.38) return "runner";
+    const w = tier();
+    if (w >= 3 && r < 0.1) return "spitter";
+    if (w >= 2 && r < 0.17) return "brute";
+    if (w >= 1 && r < 0.38) return "runner";
     if (r < 0.08) return "runner";
     return "walker";
   }
-  function spawnBoss() {
-    const b = S().boss;
-    boss = { kind: b.kind, name: b.name, color: b.color, x: WW / 2, y: 120, r: 26, hp: 1800 * diff.zhp, maxHp: 1800 * diff.zhp, sp: 44, t: 0, state: "walk", st: 0, vx: 150, vy: 110, dmg: 25 * diff.zdmg, flash: 0, ax: 0, ay: 0 };
+  function spawnBoss(b = S().boss, mul = 1) {
+    const bx = P.y > WH / 2 ? 120 : WH - 120;
+    boss = { kind: b.kind, name: b.name, color: b.color, x: WW / 2, y: endless ? bx : 120, r: 26, hp: 1800 * diff.zhp * mul, maxHp: 1800 * diff.zhp * mul, sp: 44, t: 0, state: "walk", st: 0, vx: 150, vy: 110, dmg: 25 * diff.zdmg, flash: 0, ax: 0, ay: 0 };
     sfx.boss();
-    message = { text: b.name.toUpperCase(), sub: "il boss del capitolo finale", t: 0, long: true };
+    message = { text: b.name.toUpperCase(), sub: endless ? "è tornato, più forte di prima" : "il boss del capitolo finale", t: 0, long: true };
   }
 
   // ---------- Weapons ----------
@@ -611,7 +667,7 @@
   }
   function killZ(z) {
     z.dead = true; kills++;
-    const pts = 10 * z.xp * (wave + 1); score += pts;
+    const pts = Math.round(10 * z.xp * (tier() + 1)); score += pts;
     if (kills === 500) impresa("cinquecento");
     gems.push({ x: z.x, y: z.y, v: z.xp, t: 0 });
     if (Math.random() < 0.012) hearts.push({ x: z.x + 6, y: z.y, t: 0 });
@@ -623,6 +679,7 @@
     burst(boss.x, boss.y, boss.color, 40);
     for (let i = 0; i < 12; i++) gems.push({ x: boss.x + rnd(-30, 30), y: boss.y + rnd(-30, 30), v: 5, t: 0 });
     boss = null;
+    if (endless) { score += 5000 * bossN; message = { text: "BOSS SCONFITTO!", sub: `bonus ${(5000 * bossN).toLocaleString("it-IT")}`, t: 0 }; sfx.win(); return; }
     waveCleared();
   }
   function burst(x, y, col, n) { for (let i = 0; i < n; i++) parts.push({ x, y, vx: rnd(-90, 90), vy: rnd(-90, 90), t: 0, life: rnd(0.3, 0.7), col }); }
@@ -696,11 +753,14 @@
     if (passives.kit) P.hp = Math.min(P.maxHp, P.hp + 0.6 * passives.kit * dt);
     camX = clamp(P.x - W / 2, 0, WW - W); camY = clamp(P.y - (H + TOP) / 2, -TOP, WH - H);
     // the horde
-    if (wave < 4) {
+    if (endless) {
+      nightT += dt; waveT -= dt;
+      if (waveT <= 0) nextOndata();
+    } else if (wave < 4) {
       waveT -= dt;
       if (waveT <= 0) { waveCleared(); return; }
     }
-    const rate = (1.1 + wave * 0.75 + phaseT / 22) * diff.spawn * (wave === 4 ? 0.55 : 1);
+    const rate = (1.1 + tier() * 0.75 + phaseT / 22) * diff.spawn * (wave === 4 && !endless ? 0.55 : 1);
     spawnAcc += rate * dt;
     while (spawnAcc >= 1) { spawnAcc--; if (zombies.length < 170) spawnZombie(pickType()); }
     if (Math.random() < dt * 0.5) sfx.groan();
@@ -916,7 +976,7 @@
     const x0 = touchMode ? 130 : 10;
     ctx.fillStyle = "#ffffff"; ctx.font = "900 15px system-ui"; ctx.fillText(score.toLocaleString("it-IT"), x0, 14);
     ctx.fillStyle = "#d0e8c0"; ctx.font = "700 9px system-ui"; ctx.fillText(`REC ${Math.max(bestCache, score).toLocaleString("it-IT")} · ☠ ${kills}`, x0 + 82, 9);
-    ctx.fillStyle = "#8aff3a"; ctx.font = "900 9px system-ui"; ctx.fillText(`CAP. ${wave + 1}/5 · LIV. ${level}`, x0 + 82, 20);
+    ctx.fillStyle = "#8aff3a"; ctx.font = "900 9px system-ui"; ctx.fillText(endless ? `NOTTE INFINITA · ONDATA ${wave - 4} · LIV. ${level}` : `CAP. ${wave + 1}/5 · LIV. ${level}`, x0 + 82, 20);
     // health
     const hx = touchMode ? 300 : 260;
     ctx.fillStyle = "rgba(255,255,255,0.15)"; ctx.fillRect(hx, 8, 110, 12);
@@ -925,7 +985,8 @@
     // time or the boss
     ctx.textAlign = "right"; ctx.font = "900 13px system-ui"; ctx.fillStyle = "#ffffff";
     const xr = touchMode ? W - 70 : W - 12;
-    if (wave < 4) ctx.fillText(`${Math.max(0, Math.ceil(waveT))}″`, xr, 14);
+    if (endless) ctx.fillText(fmtT(nightT), xr, 14);
+    else if (wave < 4) ctx.fillText(`${Math.max(0, Math.ceil(waveT))}″`, xr, 14);
     else ctx.fillText("BOSS", xr, 14);
     // dash ready
     ctx.fillStyle = P.dashCd <= 0 ? "#8aff3a" : "rgba(255,255,255,0.25)"; ctx.font = "900 8px system-ui"; ctx.fillText("SCATTO", xr - 44, 14);
