@@ -9,6 +9,7 @@
   "use strict";
   // record key prefix → [bronzo, argento, oro] (and t for times)
   const DATA = {
+    "taxi-best-": [1000, 1300, 700],   // taxi-matto (bot)
     "orda-best-": [17000, 50000, 35000],   // ultima-orda (bot)
     "galoppo-best-": [11500, 34500, 24000],   // galoppo-d-oro (bot)
     "piattello-best-": [5500, 16500, 11500],   // tiro-al-piattello (bot)

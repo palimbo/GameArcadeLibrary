@@ -9,6 +9,11 @@
   "use strict";
   // record key prefix of the game (as in trofei.js) → its feats
   const LIST = {
+    "taxi-best-": [   // taxi-matto
+      { id: "lampo", name: "Tre lampo", desc: "tre corse di fila con la valutazione LAMPO" },
+      { id: "pulito", name: "Guida da manuale", desc: "cinque corse di fila senza nessun botto" },
+      { id: "venti", name: "Turno da record", desc: "completa 20 corse nella stessa partita" },
+    ],
     "orda-best-": [   // ultima-orda
       { id: "finale", name: "Sopravvissuto", desc: "completa una storia: sconfiggi il boss del quinto capitolo" },
       { id: "cinquecento", name: "Cinquecento", desc: "elimina 500 zombie nella stessa partita" },
