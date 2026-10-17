@@ -9,6 +9,11 @@
   "use strict";
   // record key prefix of the game (as in trofei.js) → its feats
   const LIST = {
+    "galoppo-best-": [   // galoppo-d-oro
+      { id: "distacco", name: "Vittoria per distacco", desc: "vinci una corsa con almeno 5 lunghezze di vantaggio" },
+      { id: "rimonta", name: "Rimonta dall'ultimo posto", desc: "vinci una corsa in cui a metà gara eri ultimo" },
+      { id: "granpremio", name: "Il Gran Premio", desc: "vinci l'ottava corsa, il Gran Premio" },
+    ],
     "piattello-best-": [   // tiro-al-piattello
       { id: "perfetto", name: "Turno perfetto", desc: "rompi tutti i piattelli di un turno" },
       { id: "doppiette", name: "Cinque doppiette", desc: "rompi entrambi i piattelli in 5 doppiette di fila" },
