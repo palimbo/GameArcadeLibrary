@@ -9,6 +9,11 @@
   "use strict";
   // record key prefix of the game (as in trofei.js) → its feats
   const LIST = {
+    "orda-best-": [   // ultima-orda
+      { id: "finale", name: "Sopravvissuto", desc: "completa una storia: sconfiggi il boss del quinto capitolo" },
+      { id: "cinquecento", name: "Cinquecento", desc: "elimina 500 zombie nella stessa partita" },
+      { id: "tutte", name: "Tutte le notti", desc: "completa le storie di tutte e quattro le ambientazioni" },
+    ],
     "galoppo-best-": [   // galoppo-d-oro
       { id: "distacco", name: "Vittoria per distacco", desc: "vinci una corsa con almeno 5 lunghezze di vantaggio" },
       { id: "rimonta", name: "Rimonta dall'ultimo posto", desc: "vinci una corsa in cui a metà gara eri ultimo" },
