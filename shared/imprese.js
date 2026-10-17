@@ -12,7 +12,7 @@
     "orda-best-": [   // ultima-orda
       { id: "finale", name: "Sopravvissuto", desc: "completa una storia: sconfiggi il boss del quinto capitolo" },
       { id: "cinquecento", name: "Cinquecento", desc: "elimina 500 zombie nella stessa partita" },
-      { id: "tutte", name: "Tutte le notti", desc: "completa le storie di tutte e quattro le ambientazioni" },
+      { id: "tutte", name: "Tutte le notti", desc: "completa le storie di tutte le sette ambientazioni" },
     ],
     "galoppo-best-": [   // galoppo-d-oro
       { id: "distacco", name: "Vittoria per distacco", desc: "vinci una corsa con almeno 5 lunghezze di vantaggio" },
