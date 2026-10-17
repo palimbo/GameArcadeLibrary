@@ -9,6 +9,11 @@
   "use strict";
   // record key prefix of the game (as in trofei.js) → its feats
   const LIST = {
+    "piattello-best-": [   // tiro-al-piattello
+      { id: "perfetto", name: "Turno perfetto", desc: "rompi tutti i piattelli di un turno" },
+      { id: "doppiette", name: "Cinque doppiette", desc: "rompi entrambi i piattelli in 5 doppiette di fila" },
+      { id: "cinque", name: "Tiratore scelto", desc: "supera 5 turni nella stessa gara" },
+    ],
     "dardi-best-": [   // freccette-al-bar
       { id: "180", name: "Centottanta!", desc: "tre freccette nel triplo 20 nello stesso turno" },
       { id: "centro", name: "Chiusura al centro", desc: "vinci una partita chiudendo sul centro da 50" },
