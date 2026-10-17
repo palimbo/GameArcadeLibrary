@@ -229,6 +229,11 @@
     molotov: { name: "Molotov", icon: "🔥", desc: ["lancia bottiglie che bruciano il terreno", "fuoco più largo", "più spesso", "fuoco più forte", "due bottiglie"] },
     lame:    { name: "Lame rotanti", icon: "🌀", desc: ["due lame ti girano intorno", "+1 lama", "più veloci e più danno", "+1 lama, più larghe", "+1 lama, danno doppio"] },
     fulmine: { name: "Scarica elettrica", icon: "⚡", desc: ["un fulmine salta da uno zombie all'altro", "+2 salti", "più spesso", "+2 salti, più danno", "due fulmini insieme"] },
+    balestra: { name: "Balestra", icon: "🏹", desc: ["un dardo pesante che trapassa una fila intera", "trapassa il doppio degli zombie", "ricarica più in fretta", "più danno", "due dardi insieme"] },
+    boomerang: { name: "Boomerang", icon: "🪃", desc: ["va verso il più vicino e torna da te, colpendo all'andata e al ritorno", "+1 boomerang", "più spesso", "più danno", "+1 boomerang"] },
+    granate: { name: "Granate", icon: "💣", desc: ["lancia una granata dove gli zombie sono più fitti", "esplosione più larga", "più spesso", "più danno", "due granate"] },
+    lanciafiamme: { name: "Lanciafiamme", icon: "🧯", desc: ["una lingua di fuoco corta verso il più vicino, sempre accesa", "fiamma più lunga", "più calda", "fiamma ancora più lunga", "fiamma bianca, caldissima"] },
+    drone: { name: "Drone", icon: "🛸", desc: ["un drone ti gira intorno e spara da solo", "spara più spesso", "+1 drone", "più danno", "+1 drone"] },
   };
   const PASSIVES = {
     scarpe:     { name: "Scarpe da corsa", icon: "👟", desc: "+10% velocità" },
@@ -237,12 +242,17 @@
     adrenalina: { name: "Adrenalina", icon: "💉", desc: "tutte le armi più veloci (−8%)" },
     piombo:     { name: "Munizioni pesanti", icon: "🎯", desc: "+15% danno a tutte le armi" },
     kit:        { name: "Kit medico", icon: "🩹", desc: "recuperi salute da solo" },
+    mirino:     { name: "Mirino", icon: "🔭", desc: "8% di colpi critici, che fanno danno doppio" },
+    corazza:    { name: "Corazza", icon: "🛡️", desc: "−8% danni subiti" },
+    fortuna:    { name: "Quadrifoglio", icon: "🍀", desc: "+10% esperienza e più cuori dagli zombie" },
+    riflessi:   { name: "Riflessi", icon: "🏃", desc: "lo scatto si ricarica il 12% prima" },
+    raggio:     { name: "Raggio d'azione", icon: "📡", desc: "+12% area e gittata (fuoco, granate, lame, dardi...)" },
   };
 
   const DIFFICULTIES = {
-    facile:    { label: "FACILE",    color: "#7ed87a", desc: "più salute · zombie più deboli e meno numerosi", hp: 160, zhp: 0.72, zdmg: 0.65, spawn: 0.82 },
-    normale:   { label: "NORMALE",   color: "#8aff3a", desc: "la notte come deve essere", hp: 100, zhp: 0.92, zdmg: 1, spawn: 0.92 },
-    difficile: { label: "DIFFICILE", color: "#ff5a5a", desc: "meno salute · zombie più forti, più veloci a colpire e più numerosi", hp: 90, zhp: 1.25, zdmg: 1.3, spawn: 1.15 },
+    facile:    { label: "FACILE",    color: "#7ed87a", desc: "più salute · zombie più deboli e meno numerosi", hp: 160, zhp: 0.72, zdmg: 0.65, spawn: 0.82, boss: 0.7 },
+    normale:   { label: "NORMALE",   color: "#8aff3a", desc: "la notte come deve essere", hp: 100, zhp: 1, zdmg: 1, spawn: 0.97, boss: 1 },
+    difficile: { label: "DIFFICILE", color: "#ff5a5a", desc: "meno salute · zombie più forti, più veloci a colpire e più numerosi", hp: 90, zhp: 1.25, zdmg: 1.3, spawn: 1.15, boss: 1.05 },
   };
   const DIFF_IDS = Object.keys(DIFFICULTIES);
   const DIFF_KEY = "orda-difficulty", SET_KEY = "orda-setting", DONE_KEY = "orda-storie", MODE_KEY = "orda-modo";
@@ -304,6 +314,7 @@
   const lim = (fn) => (...a) => { if (sfxN++ < 4) fn(...a); };
   const sfx = {
     shot: lim(() => beep(700, 0.04, "square", 0.018, -300)),
+    boom: lim(() => { beep(70, 0.35, "sawtooth", 0.07, -40); beep(140, 0.2, "square", 0.04, -100); }),
     shotgun: lim(() => { beep(120, 0.12, "sawtooth", 0.05, -60); beep(900, 0.04, "square", 0.02, -500); }),
     zap: lim(() => beep(1600, 0.12, "sawtooth", 0.025, -1300)),
     fire: lim(() => beep(160, 0.3, "sawtooth", 0.02, 60)),
@@ -328,6 +339,7 @@
   let state = "menu", menu = null, pausedFrom = null, clock = 0;
   let score = 0, bestCache = 0, wave = 0, waveT = 0, kills = 0, level = 1, xp = 0, xpNeed = 6;
   let phase = "story", phaseT = 0, message = null, popups = [];
+  let booms = [], grenades = [], flameOn = false, flameA = 0, flameLen = 0, droneAng = 0;
   let zombies = [], bullets = [], acids = [], fires = [], gems = [], hearts = [], bolts = [], parts = [], obstacles = [], boss = null;
   let mapFrom = { phase: "fight", phaseT: 0 };
   let cardsFrom = { phase: "fight", phaseT: 0 }, cards = [], cardSel = 0, storyKind = "chapter", storyReady = 0;
@@ -412,7 +424,7 @@
     popups = [];
   }
   function startWave() {
-    zombies = []; bullets = []; acids = []; fires = []; gems = []; hearts = []; bolts = []; parts = []; boss = null;
+    zombies = []; bullets = []; acids = []; fires = []; gems = []; hearts = []; bolts = []; parts = []; boss = null; booms = []; grenades = [];
     P.x = WW / 2; P.y = WH / 2; P.inv = 1.5;
     obstacles = makeObstacles();
     waveT = wave < 4 ? 55 : 0; spawnAcc = 0; waveHurt = false;
@@ -445,7 +457,7 @@
   function startEndless(base) {
     endBase = base;
     endless = true; wave = 5; nightT = 0; bossN = 0;
-    zombies = []; bullets = []; acids = []; fires = []; gems = []; hearts = []; bolts = []; parts = []; boss = null;
+    zombies = []; bullets = []; acids = []; fires = []; gems = []; hearts = []; bolts = []; parts = []; boss = null; booms = []; grenades = [];
     P.x = WW / 2; P.y = WH / 2; P.inv = 1.5;
     obstacles = makeObstacles();
     waveT = 60; spawnAcc = 0; phase = "fight"; phaseT = 0;
@@ -568,7 +580,7 @@
        <p>Una notte, e gli zombie sono ovunque. Scegli dove passarla: ogni posto ha la sua storia in cinque capitoli, con un boss alla fine. Ti muovi tu, le armi sparano da sole: raccogli l'esperienza che lasciano gli zombie e a ogni livello scegli un potenziamento.</p>
        <div class="pts">
          <span><b>Muoversi</b></span><span>levetta · SCATTO per uno scatto veloce in cui non ti toccano (ogni 3 secondi)</span>
-         <span><b>Potenziarsi</b></span><span>a ogni livello scegli tra tre carte: armi nuove (pistola, fucile a pompa, molotov, lame rotanti, scarica elettrica) o migliorie</span>
+         <span><b>Potenziarsi</b></span><span>a ogni livello scegli tra tre carte: armi nuove (dieci, fino a sei insieme: pistola, fucile a pompa, molotov, lame rotanti, scarica elettrica, balestra, boomerang, granate, lanciafiamme, drone) o undici migliorie</span>
          <span><b>I capitoli</b></span><span>resisti 55 secondi ai primi quattro, poi sconfiggi il boss · tra un capitolo e l'altro ti curi un po'</span>
          <span><b>Punti</b></span><span>zombie 10 × capitolo (grossi e sputatori di più) · capitolo superato 1.000 × capitolo · boss 5.000 · storia completata 10.000</span>
        </div>
@@ -674,7 +686,7 @@
   }
   function spawnBoss(b = S().boss, mul = 1) {
     const bx = P.y > WH / 2 ? 120 : WH - 120;
-    boss = { kind: b.kind, name: b.name, color: b.color, x: WW / 2, y: endless ? bx : 120, r: 26, hp: 1800 * diff.zhp * mul, maxHp: 1800 * diff.zhp * mul, sp: 44, t: 0, state: "walk", st: 0, vx: 150, vy: 110, dmg: 25 * diff.zdmg, flash: 0, ax: 0, ay: 0 };
+    boss = { kind: b.kind, name: b.name, color: b.color, x: WW / 2, y: endless ? bx : 120, r: 26, hp: 1800 * diff.zhp * diff.boss * mul, maxHp: 1800 * diff.zhp * diff.boss * mul, sp: 44, t: 0, state: "walk", st: 0, vx: 150, vy: 110, dmg: 25 * diff.zdmg, flash: 0, ax: 0, ay: 0 };
     sfx.boss();
     message = { text: b.name.toUpperCase(), sub: endless ? "è tornato, più forte di prima" : "il boss del capitolo finale", t: 0, long: true };
   }
@@ -713,7 +725,7 @@
       for (let i = 0; i < n; i++) {
         const near = zombies.filter((z) => dist(z, P) < 240);
         const t = near.length ? near[Math.floor(Math.random() * near.length)] : { x: P.x + P.fx * 80, y: P.y + P.fy * 80 };
-        fires.push({ x: t.x, y: t.y, r: lv >= 2 ? 50 : 38, dps: (lv >= 4 ? 30 : 18) * dmgMul(), t: 0, life: 3, fly: 0.4, fx: P.x, fy: P.y });
+        fires.push({ x: t.x, y: t.y, r: (lv >= 2 ? 50 : 38) * areaMul(), dps: (lv >= 4 ? 30 : 18) * dmgMul(), t: 0, life: 3, fly: 0.4, fx: P.x, fy: P.y });
       }
       cool.molotov = (lv >= 3 ? 2.4 : 3.4) * cdMul(); sfx.fire();
     }
@@ -734,7 +746,7 @@
       cool.fulmine = (lv >= 3 ? 1.5 : 2.2) * cdMul(); sfx.zap();
     }
     if (L.lame) {
-      const lv = L.lame, n = bladeCount(), rad = lv >= 4 ? 62 : 48, dmg = (12 + (lv >= 3 ? 6 : 0)) * (lv >= 5 ? 2 : 1) * dmgMul();
+      const lv = L.lame, n = bladeCount(), rad = (lv >= 4 ? 62 : 48) * areaMul(), dmg = (12 + (lv >= 3 ? 6 : 0)) * (lv >= 5 ? 2 : 1) * dmgMul();
       bladeAng += dt * (lv >= 3 ? 4.2 : 3.2);
       for (let i = 0; i < n; i++) {
         const a = bladeAng + i * TAU / n, bx = P.x + Math.cos(a) * rad, by = P.y + Math.sin(a) * rad;
@@ -743,9 +755,86 @@
         }
       }
     }
+    // the crossbow: a heavy bolt that goes through a whole line of them
+    if (L.balestra && cool.balestra <= 0) {
+      const t = nearest(380);
+      if (t) {
+        const lv = L.balestra, a = Math.atan2(t.y - P.y, t.x - P.x), n = lv >= 5 ? 2 : 1;
+        for (let i = 0; i < n; i++) shoot(P.x + Math.cos(a + 1.57) * (i - (n - 1) / 2) * 12, P.y + Math.sin(a + 1.57) * (i - (n - 1) / 2) * 12, a, 540, (30 + (lv >= 4 ? 18 : 0)) * dmgMul(), 1.1 * areaMul(), lv >= 2 ? 8 : 4, "x");
+        cool.balestra = (lv >= 3 ? 1.15 : 1.6) * cdMul(); sfx.shot();
+      }
+    }
+    // the boomerang: out to the nearest, and back to you, hitting both ways
+    if (L.boomerang && cool.boomerang <= 0) {
+      const t = nearest(300);
+      if (t) {
+        const lv = L.boomerang, n = 1 + (lv >= 2 ? 1 : 0) + (lv >= 5 ? 1 : 0), a0 = Math.atan2(t.y - P.y, t.x - P.x);
+        for (let i = 0; i < n; i++) { const a = a0 + (i - (n - 1) / 2) * 0.5; booms.push({ x: P.x, y: P.y, vx: Math.cos(a) * 330, vy: Math.sin(a) * 330, t: 0, back: false, hit: new Set(), dmg: (14 + (lv >= 4 ? 9 : 0)) * dmgMul(), spin: 0 }); }
+        cool.boomerang = (lv >= 3 ? 1.5 : 2.1) * cdMul();
+      }
+    }
+    for (const b of booms) {
+      b.t += dt; b.spin += dt * 18;
+      if (!b.back && b.t > 0.55 * areaMul()) { b.back = true; b.hit = new Set(); }
+      if (b.back) { const dx = P.x - b.x, dy = P.y - b.y, d = Math.hypot(dx, dy) || 1; b.vx += (dx / d * 420 - b.vx) * Math.min(1, dt * 6); b.vy += (dy / d * 420 - b.vy) * Math.min(1, dt * 6); if (d < 14 || b.t > 3) b.done = true; }
+      b.x += b.vx * dt; b.y += b.vy * dt;
+      for (const z of targets()) if (!b.hit.has(z) && Math.hypot(z.x - b.x, z.y - b.y) < z.r + 8) { b.hit.add(z); hurtZ(z, b.dmg, b.vx * 0.1, b.vy * 0.1); }
+    }
+    booms = booms.filter((b) => !b.done);
+    // grenades: thrown where they are thickest, a moment, then boom
+    if (L.granate && cool.granate <= 0) {
+      const lv = L.granate, n = lv >= 5 ? 2 : 1, near = zombies.filter((z) => dist(z, P) < 270);
+      for (let i = 0; i < n && near.length; i++) {
+        let best = near[0], bc = -1;
+        for (let k = 0; k < 8; k++) { const c = near[Math.floor(Math.random() * near.length)]; let m = 0; for (const z of near) if (dist(z, c) < 55) m++; if (m > bc) { bc = m; best = c; } }
+        grenades.push({ x0: P.x, y0: P.y, x: best.x, y: best.y, t: 0, fuse: 0.75, r: (55 + (lv >= 2 ? 15 : 0)) * areaMul(), dmg: (45 + (lv >= 4 ? 30 : 0)) * dmgMul() });
+      }
+      cool.granate = (lv >= 3 ? 2.1 : 2.8) * cdMul();
+    }
+    for (const g of grenades) {
+      g.t += dt;
+      if (g.t >= g.fuse && !g.boom) {
+        g.boom = true; sfx.boom();
+        for (const z of targets()) { const d = Math.hypot(z.x - g.x, z.y - g.y); if (d < g.r + z.r * 0.5) hurtZ(z, g.dmg, (z.x - g.x) / (d || 1) * 220, (z.y - g.y) / (d || 1) * 220); }
+        burst(g.x, g.y, "#ffb03a", 18);
+      }
+    }
+    grenades = grenades.filter((g) => g.t < g.fuse + 0.35);
+    // the flamethrower: a short cone of fire towards the nearest, all the time
+    flameOn = false;
+    if (L.lanciafiamme) {
+      const lv = L.lanciafiamme, len = (75 + (lv >= 2 ? 20 : 0) + (lv >= 4 ? 20 : 0)) * areaMul(), t = nearest(len + 20);
+      if (t) {
+        flameOn = true; flameA = Math.atan2(t.y - P.y, t.x - P.x); flameLen = len;
+        const dps = (28 + (lv >= 3 ? 14 : 0) + (lv >= 5 ? 22 : 0)) * dmgMul();
+        for (const z of targets()) {
+          const dx = z.x - P.x, dy = z.y - P.y, d = Math.hypot(dx, dy);
+          if (d > len + z.r) continue;
+          let da = Math.atan2(dy, dx) - flameA; da = Math.atan2(Math.sin(da), Math.cos(da));
+          if (Math.abs(da) < 0.38 + z.r / Math.max(20, d)) hurtZ(z, dps * dt);
+        }
+        if (Math.random() < dt * 4) sfx.fire();
+      }
+    }
+    // drones: little helpers that fly round you and shoot on their own
+    if (L.drone) {
+      const lv = L.drone, n = droneCount();
+      droneAng += dt * 1.6;
+      for (let i = 0; i < n; i++) {
+        cool["drone" + i] = (cool["drone" + i] || rnd(0, 0.4)) - dt;
+        const a = droneAng + i * TAU / n, dx = P.x + Math.cos(a) * 34, dy = P.y + Math.sin(a) * 34;
+        if (cool["drone" + i] <= 0) {
+          const t = nearest(270, { x: dx, y: dy });
+          if (t) { shoot(dx, dy, Math.atan2(t.y - dy, t.x - dx), 460, (8 + (lv >= 4 ? 6 : 0)) * dmgMul(), 0.7, 0, "d"); cool["drone" + i] = (lv >= 2 ? 0.38 : 0.55) * cdMul(); }
+        }
+      }
+    }
   }
+  const areaMul = () => 1 + 0.12 * (passives.raggio || 0);
+  const droneCount = () => { const lv = weapons.drone || 0; return lv ? 1 + (lv >= 3 ? 1 : 0) + (lv >= 5 ? 1 : 0) : 0; };
   const bladeCount = () => { const lv = weapons.lame || 0; return lv ? Math.min(5, lv + 1) : 0; };
   function hurtZ(z, d, kx = 0, ky = 0) {
+    if (passives.mirino && Math.random() < 0.08 * passives.mirino) { d *= 2; if (Math.random() < 0.3) popups.push({ x: z.x, y: z.y - 14, text: "CRITICO!", col: "#ffd23a", t: 0, world: true }); }
     z.hp -= d; z.flash = 0.1; z.kx += kx; z.ky += ky;
     if (z === boss) { if (z.hp <= 0) killBoss(); return; }
     if (z.hp <= 0 && !z.dead) killZ(z);
@@ -756,7 +845,7 @@
     const pts = Math.round(10 * z.xp * (tier() + 1)); score += pts;
     if (kills === 500) impresa("cinquecento");
     gems.push({ x: z.x, y: z.y, v: z.xp, t: 0 });
-    if (Math.random() < 0.012) hearts.push({ x: z.x + 6, y: z.y, t: 0 });
+    if (Math.random() < 0.012 * (1 + 0.5 * (passives.fortuna || 0))) hearts.push({ x: z.x + 6, y: z.y, t: 0 });
     burst(z.x, z.y, S().skin, 6); sfx.die();
   }
   function killBoss() {
@@ -772,12 +861,12 @@
 
   // ---------- Levelling ----------
   function gainXp(v) {
-    xp += v;
+    xp += v * (1 + 0.1 * (passives.fortuna || 0));
     if (xp >= xpNeed) { xp -= xpNeed; level++; xpNeed = Math.floor(6 + level * 4.5 + Math.pow(level, 1.6)); openCards(); }
   }
   function openCards() {
     const pool = [];
-    for (const k in WEAPONS) { const lv = weapons[k] || 0; if (lv < 5 && (lv > 0 || Object.keys(weapons).length < 4)) pool.push({ kind: "w", k, lv: lv + 1 }); }
+    for (const k in WEAPONS) { const lv = weapons[k] || 0; if (lv < 5 && (lv > 0 || Object.keys(weapons).length < 6)) pool.push({ kind: "w", k, lv: lv + 1 }); }
     for (const k in PASSIVES) { const lv = passives[k] || 0; if (lv < 5) pool.push({ kind: "p", k, lv: lv + 1 }); }
     for (let i = pool.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); [pool[i], pool[j]] = [pool[j], pool[i]]; }
     cards = pool.slice(0, 3);
@@ -836,7 +925,7 @@
     const spd = 120 * (1 + 0.1 * (passives.scarpe || 0));
     if (m > 0.15) { P.fx = sx / m; P.fy = sy / m; }
     P.dashCd -= dt;
-    if (press && P.dashCd <= 0) { P.dashT = 0.2; P.dashCd = 3; P.inv = Math.max(P.inv, 0.3); sfx.dash(); }
+    if (press && P.dashCd <= 0) { P.dashT = 0.2; P.dashCd = 3 * (1 - 0.12 * (passives.riflessi || 0)); P.inv = Math.max(P.inv, 0.3); sfx.dash(); }
     if (P.dashT > 0) { P.dashT -= dt; P.x += P.fx * 470 * dt; P.y += P.fy * 470 * dt; burst(P.x, P.y, "rgba(255,255,255,0.5)", 1); }
     else if (m > 0.15) { const k = Math.min(1, m); P.x += sx / m * spd * k * dt; P.y += sy / m * spd * k * dt; }
     collide(P);
@@ -905,6 +994,7 @@
   }
   function hurtP(d) {
     if (P.inv > 0 || P.dashT > 0) return;
+    d *= 1 - 0.08 * (passives.corazza || 0);
     P.hp -= d; P.inv = 0.6; waveHurt = true; sfx.hurt();
     if (P.hp <= 0) { P.hp = 0; gameOver(); }
   }
@@ -1162,8 +1252,9 @@
     const x = wx(P.x), y = wy(P.y), a = Math.atan2(P.fy, P.fx);
     if (P.inv > 0 && Math.floor(clock * 20) % 2 && P.dashT <= 0) return;
     // the blades
-    const n = bladeCount(), lv = weapons.lame || 0, rad = lv >= 4 ? 62 : 48;
+    const n = bladeCount(), lv = weapons.lame || 0, rad = (lv >= 4 ? 62 : 48) * areaMul();
     for (let i = 0; i < n; i++) { const ba = bladeAng + i * TAU / n; ctx.save(); ctx.translate(x + Math.cos(ba) * rad, y + Math.sin(ba) * rad); ctx.rotate(clock * 12); ctx.fillStyle = "#d8e0f0"; for (let k = 0; k < 3; k++) { ctx.rotate(TAU / 3); ctx.beginPath(); ctx.moveTo(0, 0); ctx.lineTo(9, -3); ctx.lineTo(8, 3); ctx.fill(); } ctx.restore(); }
+    for (let i = 0, dn = droneCount(); i < dn; i++) { const da = droneAng + i * TAU / dn, ddx = x + Math.cos(da) * 34, ddy = y + Math.sin(da) * 34 - 6; ctx.fillStyle = "rgba(0,0,0,0.25)"; ctx.beginPath(); ctx.ellipse(ddx, ddy + 12, 6, 3, 0, 0, TAU); ctx.fill(); ctx.fillStyle = "#5a6a7a"; ctx.fillRect(ddx - 5, ddy - 3, 10, 6); ctx.fillStyle = "#7ae8ff"; ctx.fillRect(ddx - 1, ddy - 1, 2, 2); ctx.strokeStyle = "rgba(220,230,240,0.7)"; ctx.lineWidth = 1; for (const sx of [-7, 7]) { ctx.beginPath(); ctx.ellipse(ddx + sx, ddy - 4, 4, 1.2, clock * 30, 0, TAU); ctx.stroke(); } }
     ctx.save(); ctx.translate(x, y); ctx.rotate(a);
     ctx.fillStyle = "rgba(0,0,0,0.3)"; ctx.beginPath(); ctx.ellipse(2, 3, 10, 8, 0, 0, TAU); ctx.fill();
     ctx.fillStyle = "#2a2a2a"; ctx.fillRect(6, 1, 12, 4);
@@ -1183,7 +1274,27 @@
       ctx.fillStyle = g; ctx.beginPath(); ctx.arc(x, y, f.r, 0, TAU); ctx.fill();
       for (let i = 0; i < 5; i++) { const fa = i * 1.3 + f.t * 3, fr = f.r * 0.6; ctx.fillStyle = `rgba(255,${150 + i * 20},40,${0.7 * al})`; ctx.beginPath(); ctx.arc(x + Math.cos(fa) * fr * 0.7, y + Math.sin(fa) * fr * 0.7 - (f.t * 20 + i * 5) % 10, 3, 0, TAU); ctx.fill(); }
     }
-    for (const b of bullets) { ctx.fillStyle = b.kind === "p" ? "#ffd8a0" : "#ffff8a"; ctx.beginPath(); ctx.arc(wx(b.x), wy(b.y), b.kind === "p" ? 1.8 : 2.5, 0, TAU); ctx.fill(); }
+    for (const b of bullets) {
+      if (b.kind === "x") { const a = Math.atan2(b.vy, b.vx); ctx.strokeStyle = "#e8d8b0"; ctx.lineWidth = 2.5; ctx.beginPath(); ctx.moveTo(wx(b.x) - Math.cos(a) * 12, wy(b.y) - Math.sin(a) * 12); ctx.lineTo(wx(b.x), wy(b.y)); ctx.stroke(); continue; }
+      ctx.fillStyle = b.kind === "p" ? "#ffd8a0" : b.kind === "d" ? "#7ae8ff" : "#ffff8a"; ctx.beginPath(); ctx.arc(wx(b.x), wy(b.y), b.kind === "p" ? 1.8 : 2.5, 0, TAU); ctx.fill();
+    }
+    // the flamethrower's cone
+    if (flameOn) {
+      const lv = weapons.lanciafiamme || 0, hot = lv >= 5;
+      for (let i = 0; i < 14; i++) {
+        const k = ((clock * 3 + i / 14) % 1), d = k * flameLen, a = flameA + Math.sin(i * 7.3 + clock * 20) * 0.32 * k;
+        ctx.globalAlpha = 0.75 * (1 - k); ctx.fillStyle = hot ? (k < 0.4 ? "#ffffff" : "#aee0ff") : k < 0.3 ? "#ffee8a" : k < 0.65 ? "#ff8a2a" : "#d83a1a";
+        ctx.beginPath(); ctx.arc(wx(P.x + Math.cos(a) * d), wy(P.y + Math.sin(a) * d), 4 + k * 10, 0, TAU); ctx.fill();
+      }
+      ctx.globalAlpha = 1;
+    }
+    // boomerangs
+    for (const b of booms) { ctx.save(); ctx.translate(wx(b.x), wy(b.y)); ctx.rotate(b.spin); ctx.strokeStyle = "#c8883a"; ctx.lineWidth = 4; ctx.lineCap = "round"; ctx.beginPath(); ctx.moveTo(-8, -6); ctx.lineTo(0, 2); ctx.lineTo(8, -6); ctx.stroke(); ctx.restore(); }
+    // grenades in the air, then the blast
+    for (const g of grenades) {
+      if (!g.boom) { const k = Math.min(1, g.t / (g.fuse * 0.7)), x = g.x0 + (g.x - g.x0) * k, y = g.y0 + (g.y - g.y0) * k - Math.sin(k * Math.PI) * 40; ctx.fillStyle = "#3a5a2a"; ctx.beginPath(); ctx.arc(wx(x), wy(y), 4, 0, TAU); ctx.fill(); if (k >= 1 && Math.floor(clock * 16) % 2) { ctx.fillStyle = "#ff3a3a"; ctx.fillRect(wx(x) - 1, wy(y) - 6, 2, 2); } }
+      else { const k = (g.t - g.fuse) / 0.35; ctx.globalAlpha = 1 - k; ctx.fillStyle = "#ffb03a"; ctx.beginPath(); ctx.arc(wx(g.x), wy(g.y), g.r * (0.4 + 0.6 * k), 0, TAU); ctx.fill(); ctx.strokeStyle = "#ffffff"; ctx.lineWidth = 3; ctx.stroke(); ctx.globalAlpha = 1; }
+    }
     for (const a of acids) { ctx.fillStyle = a.ice ? "#d8f0ff" : "#a8ff3a"; ctx.beginPath(); ctx.arc(wx(a.x), wy(a.y), a.ice ? 7 : a.big ? 5 : 4, 0, TAU); ctx.fill(); ctx.fillStyle = "rgba(168,255,58,0.3)"; ctx.beginPath(); ctx.arc(wx(a.x - a.vx * 0.04), wy(a.y - a.vy * 0.04), 3, 0, TAU); ctx.fill(); }
     for (const b of bolts) { ctx.strokeStyle = `rgba(150,220,255,${1 - b.t / 0.25})`; ctx.lineWidth = 2.5; ctx.beginPath(); b.pts.forEach((p, i) => { const x = wx(p.x) + (i ? rnd(-3, 3) : 0), y = wy(p.y) + (i ? rnd(-3, 3) : 0); i ? ctx.lineTo(x, y) : ctx.moveTo(x, y); }); ctx.stroke(); }
     for (const p of parts) { ctx.globalAlpha = Math.max(0, 1 - p.t / p.life); ctx.fillStyle = p.col; ctx.fillRect(wx(p.x) - 2, wy(p.y) - 2, 4, 4); }
