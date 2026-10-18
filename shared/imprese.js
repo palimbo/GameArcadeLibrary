@@ -9,6 +9,11 @@
   "use strict";
   // record key prefix of the game (as in trofei.js) → its feats
   const LIST = {
+    "affetta-best-": [   // affettafrutta
+      { id: "combo", name: "Combo da sei", desc: "taglia 6 frutti con un fendente solo" },
+      { id: "cento", name: "Cento al volo", desc: "in Classico, taglia 100 frutti di fila senza farne cadere neanche uno" },
+      { id: "melagrana", name: "Melagrana sfinita", desc: "in Arcade, colpisci la melagrana finale almeno 20 volte" },
+    ],
     "taxi-best-": [   // taxi-matto
       { id: "lampo", name: "Tre lampo", desc: "tre corse di fila con la valutazione LAMPO" },
       { id: "pulito", name: "Guida da manuale", desc: "cinque corse di fila senza nessun botto" },
