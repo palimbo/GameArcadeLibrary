@@ -9,6 +9,11 @@
   "use strict";
   // record key prefix of the game (as in trofei.js) → its feats
   const LIST = {
+    "bilico-best-": [   // palazzo-in-bilico
+      { id: "perfetti", name: "Mano ferma", desc: "metti 5 piani PERFETTI di fila" },
+      { id: "pulito", name: "Senza sbavature", desc: "finisci un palazzo senza far cadere neanche un piano" },
+      { id: "grattacielo", name: "Il grattacielo", desc: "finisci il sesto palazzo, il Grattacielo di Vetro da 22 piani" },
+    ],
     "affetta-best-": [   // affettafrutta
       { id: "combo", name: "Combo da sei", desc: "taglia 6 frutti con un fendente solo" },
       { id: "cento", name: "Cento al volo", desc: "in Classico, taglia 100 frutti di fila senza farne cadere neanche uno" },

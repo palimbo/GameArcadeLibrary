@@ -1,0 +1,538 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no, viewport-fit=cover">
+<title>Palazzo in Bilico</title>
+<style>
+  :root {
+    --bg: #0e1424;
+    --fg: #f4f6ee;
+    --muted: #c8d4e8;
+    --pink: #ffc83a;
+    --yellow: #5ad8ff;
+    --red: #ff4a3a;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  html, body {
+    height: 100%;
+    background: var(--bg);
+    color: var(--fg);
+    font-family: system-ui, -apple-system, "Segoe UI", sans-serif;
+    overflow: hidden;
+    user-select: none;
+    -webkit-user-select: none;
+    touch-action: none;
+  }
+  #wrap { position: fixed; inset: 0; display: flex; align-items: center; justify-content: center; }
+  canvas { cursor: pointer; display: block; touch-action: none; border-radius: 6px; box-shadow: 0 0 0 2px #2a3a5a, 0 10px 40px rgba(0,0,0,0.6); }
+  #pauseBtn {
+    position: fixed; z-index: 3; display: none; right: 10px; top: calc(10px + env(safe-area-inset-top, 0px));
+    font: 700 13px system-ui, sans-serif; color: var(--fg);
+    background: rgba(0, 0, 0, 0.6); border: 1px solid rgba(244, 246, 238, 0.35);
+    border-radius: 8px; padding: 6px 10px; cursor: pointer;
+  }
+  #touch { display: none !important; }
+  #overlay {
+    position: fixed; inset: 0; z-index: 5;
+    display: flex; flex-direction: column; align-items: center; justify-content: flex-start;
+    gap: 14px; padding: 16px; text-align: center; overflow-y: auto;
+    background: rgba(14, 20, 36, 0.93);
+  }
+  #overlay > :first-child { margin-top: auto; }
+  #overlay > :last-child { margin-bottom: auto; }
+  #overlay.hidden { display: none; }
+  #homeLink {
+    position: fixed; top: calc(10px + env(safe-area-inset-top, 0px)); left: 10px; z-index: 6;
+    font: 600 13px/1 system-ui, sans-serif; color: #fff; text-decoration: none;
+    padding: 8px 12px; border-radius: 999px; background: rgba(0,0,0,.55);
+    border: 1px solid rgba(255,255,255,.25);
+  }
+  #homeLink:hover { background: rgba(0,0,0,.8); }
+  #overlay.hidden ~ #homeLink { display: none; }
+  @media (max-width: 700px) { #overlay { padding-top: calc(52px + env(safe-area-inset-top, 0px)); } }
+  #overlay h1 { font-size: clamp(32px, 10vw, 58px); font-weight: 900; font-style: italic; letter-spacing: 1px; color: var(--pink);
+    text-shadow: 3px 3px 0 #5a3a0a, 0 0 22px rgba(255,200,58,0.35); }
+  #overlay h2 { font-size: clamp(26px, 7vw, 42px); font-weight: 900; letter-spacing: 2px; color: var(--pink); }
+  #overlay h2.lose { color: var(--red); }
+  #overlay p { max-width: 540px; font-size: clamp(13px, 3.4vw, 16px); line-height: 1.55; }
+  #overlay p.muted { color: var(--muted); }
+  #overlay .pts { display: grid; grid-template-columns: repeat(2, auto); gap: 4px 18px; font-size: 13px; color: var(--muted); text-align: left; max-width: 560px; }
+  #overlay .pts b { color: var(--fg); }
+  #overlay .diff { display: flex; gap: 10px; flex-wrap: wrap; justify-content: center; }
+  #overlay button {
+    font: 800 15px system-ui, sans-serif; letter-spacing: 1.5px; color: var(--fg);
+    background: transparent; cursor: pointer;
+    border: 2px solid rgba(244,246,238,0.3); border-radius: 10px; padding: 9px 16px;
+  }
+  #overlay .diff button.on { border-color: var(--c); color: var(--c); box-shadow: 0 0 12px var(--c); }
+  #overlay button.start { border-color: var(--pink); color: #2a1002; background: var(--pink); padding: 11px 30px; box-shadow: 0 4px 0 #a8801a; }
+  @media (max-height: 560px) {
+    #overlay { gap: 8px; }
+    #overlay h1 { font-size: 30px; }
+    #overlay p { font-size: 13px; line-height: 1.4; }
+    #overlay .help, #overlay .pts { display: none; }
+  }
+</style>
+</head>
+<body>
+<div id="wrap"><canvas id="game"></canvas></div>
+<div id="touch"></div>
+<button id="pauseBtn" type="button" aria-label="Pausa">❚❚</button>
+<div id="overlay"></div>
+<a id="homeLink" href="../../index.html">← Sala Giochi</a>
+
+
+<script>
+(() => {
+  "use strict";
+
+  const W = 640, H = 360, TAU = Math.PI * 2, TOP = 28;
+  const FW = 100, FH = 34, ROPE = 118, G = 1100;
+  // the buildings of the city, one after the other
+  const BUILDINGS = [
+    { name: "La Casa Rossa", floors: 8, wall: "#c8503a", trim: "#8a2a1a", win: "#ffe8a0" },
+    { name: "Il Condominio Azzurro", floors: 10, wall: "#5a8ad8", trim: "#2a4a8a", win: "#fff4c0" },
+    { name: "L'Albergo Giallo", floors: 12, wall: "#e8b83a", trim: "#a8781a", win: "#ffffff" },
+    { name: "La Torre Bianca", floors: 15, wall: "#e8e8f0", trim: "#8a8aa0", win: "#ffd86a" },
+    { name: "Il Palazzo Verde", floors: 18, wall: "#4aa86a", trim: "#2a6a3a", win: "#fff0b0" },
+    { name: "Il Grattacielo di Vetro", floors: 22, wall: "#3a5a7a", trim: "#1a2a3a", win: "#8ae8ff" },
+  ];
+  const bOf = (i) => i < BUILDINGS.length ? BUILDINGS[i] : { ...BUILDINGS[(i - 2) % 4 + 2], name: `Il Grattacielo n. ${i - BUILDINGS.length + 2}`, floors: 25 };
+
+  const DIFFICULTIES = {
+    facile:    { label: "FACILE",    color: "#7ed87a", desc: "5 piani di scorta · la gru dondola piano", lives: 5, swing: 0.8, perfect: 7 },
+    normale:   { label: "NORMALE",   color: "#ffd23a", desc: "3 piani di scorta", lives: 3, swing: 1, perfect: 5 },
+    difficile: { label: "DIFFICILE", color: "#ff5a5a", desc: "3 piani di scorta · la gru dondola di più · il perfetto è più stretto", lives: 3, swing: 1.2, perfect: 4 },
+  };
+  const DIFF_IDS = Object.keys(DIFFICULTIES);
+  const DIFF_KEY = "bilico-difficulty";
+  const bestKey = (id) => `bilico-best-${id}`;
+  function store(k, v) { try { localStorage.setItem(k, v); } catch { /* ignore */ } }
+  function load(k) { try { return localStorage.getItem(k); } catch { return null; } }
+  const impresa = (id) => window.dispatchEvent(new CustomEvent("sala:impresa", { detail: id }));
+  const rnd = (a, b) => a + Math.random() * (b - a);
+  const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
+
+  // ---------- Canvas ----------
+  const canvas = document.getElementById("game");
+  const ctx = canvas.getContext("2d");
+  const wrapEl = document.getElementById("wrap");
+  const overlay = document.getElementById("overlay");
+  const touchEl = document.getElementById("touch");
+  const pauseBtn = document.getElementById("pauseBtn");
+  let pxRatio = 1, touchMode = !!(window.matchMedia && matchMedia("(pointer: coarse)").matches);
+  function resize() {
+    const portrait = window.innerHeight > window.innerWidth;
+    const showTouch = false;
+    touchEl.style.display = showTouch ? "flex" : "none";
+    touchEl.classList.toggle("small", !portrait && window.innerHeight < 480);
+    wrapEl.style.paddingBottom = showTouch && portrait ? "calc(170px + env(safe-area-inset-bottom, 0px))" : "0";
+    let availW = window.innerWidth - 8, availH = window.innerHeight - 8;
+    if (showTouch && portrait) availH -= 170;
+    if (showTouch && !portrait) {
+      const side = Math.max(...[...touchEl.children].map((el) => el.offsetWidth)) + 20;
+      if (window.innerWidth - 2 * side > 200) availW = window.innerWidth - 2 * side;
+    }
+    const s = Math.max(0.2, Math.min(availW / W, availH / H));
+    pxRatio = Math.min(3, s * (window.devicePixelRatio || 1));
+    canvas.style.width = W * s + "px";
+    canvas.style.height = H * s + "px";
+    canvas.width = Math.round(W * pxRatio);
+    canvas.height = Math.round(H * pxRatio);
+  }
+  window.addEventListener("resize", () => syncControls());
+
+  // ---------- Audio ----------
+  let audioCtx = null;
+  function beep(freq, dur, type = "square", vol = 0.04, slide = 0, delay = 0) {
+    if (!audioCtx) return;
+    const t = audioCtx.currentTime + delay;
+    const osc = audioCtx.createOscillator(), gain = audioCtx.createGain();
+    osc.type = type;
+    osc.frequency.setValueAtTime(freq, t);
+    if (slide) osc.frequency.exponentialRampToValueAtTime(Math.max(20, freq + slide), t + dur);
+    gain.gain.setValueAtTime(vol, t);
+    gain.gain.exponentialRampToValueAtTime(0.0001, t + dur);
+    osc.connect(gain).connect(audioCtx.destination);
+    osc.start(t); osc.stop(t + dur + 0.02);
+  }
+  const arp = (notes, gap, d, type = "square", vol = 0.04) => notes.forEach((f, i) => beep(f, d, type, vol, 0, i * gap));
+  let sfxN = 0;
+  const lim = (fn) => (...a) => { if (sfxN++ < 4) fn(...a); };
+  const sfx = {
+    creak: lim(() => beep(rnd(180, 220), 0.12, "triangle", 0.012, -30)),
+    drop: () => beep(600, 0.15, "triangle", 0.03, -400),
+    thud: () => { beep(90, 0.15, "square", 0.06, -40); beep(160, 0.06, "triangle", 0.04); },
+    perfect: (n) => arp([784, 988, 1175, 1568].slice(0, 2 + Math.min(2, n)), 0.05, 0.12, "square", 0.04),
+    fall: () => { beep(400, 0.5, "sawtooth", 0.04, -330); beep(70, 0.3, "square", 0.06, -30, 0.45); },
+    done: () => arp([523, 659, 784, 1047, 784, 1047, 1319, 1568], 0.08, 0.16, "square", 0.045),
+    end: () => arp([523, 466, 415, 392, 330, 262], 0.15, 0.24, "triangle", 0.05),
+  };
+
+  // ---------- State ----------
+  let difficulty = DIFFICULTIES[load(DIFF_KEY)] ? load(DIFF_KEY) : "normale";
+  let diff = DIFFICULTIES[difficulty];
+  let state = "menu", menu = null, pausedFrom = null, clock = 0;
+  let score = 0, bestCache = 0, lives = 3, people = 0, bIdx = 0, combo = 0, lost = 0, bestCombo = 0;
+  // the tower: floors from the ground up, each with its offset on the one below
+  let floors = [], hang = null, falling = null, tipping = [], built = [], popups = [], dust = [], message = null;
+  let phase = "hang", phaseT = 0, swingT = 0, sway = 0, swayT = 0, pivotX = W / 2, camY = -270, actHeld = false, wasAct = false, creakT = 0;
+  const isPlaying = () => state === "play";
+
+  // ---------- The tower ----------
+  const B = () => bOf(bIdx);
+  const lean = () => floors.reduce((s, f) => s + f.off, 0);
+  // where floor i is now: its offsets plus the swaying of the whole tower (more at the top)
+  function floorX(i) {
+    let x = W / 2; for (let k = 0; k <= i; k++) x += floors[k].off;
+    const n = Math.max(1, floors.length);
+    return x + Math.sin(swayT * 1.7) * sway * Math.pow((i + 1) / n, 1.5);
+  }
+  const topY = () => -floors.length * FH;   // world y of the top of the tower (the ground is 0, up is negative)
+  // the crane: a pendulum that swings more as the city grows
+  function swingAmp() { return Math.min(0.75, (0.32 + bIdx * 0.05 + floors.length * 0.006) * diff.swing); }
+  function swingW() { return Math.min(3.6, 2.1 + bIdx * 0.12 + floors.length * 0.02) * (0.85 + diff.swing * 0.15); }
+  const angle = () => swingAmp() * Math.sin(swingT * swingW());
+  const pivotY = () => camY + TOP + 14;
+  function hangPos() { const a = angle(); return { x: pivotX + Math.sin(a) * ROPE, y: pivotY() + Math.cos(a) * ROPE + FH / 2, a }; }
+  function newHang() {
+    const roof = floors.length === B().floors - 1;
+    hang = { roof };
+    phase = "hang"; phaseT = 0;
+    swingT = Math.random() < 0.5 ? 0 : Math.PI / swingW();
+  }
+  function startBuilding() {
+    floors = []; sway = 0; lost = 0;
+    pivotX = W / 2;
+    camY = -270;
+    const b = B();
+    message = { text: b.name.toUpperCase(), sub: `palazzo ${bIdx + 1} · ${b.floors} piani`, t: 0, long: true };
+    newHang();
+  }
+  function startGame() {
+    if (!audioCtx) { try { audioCtx = new (window.AudioContext || window.webkitAudioContext)(); } catch { audioCtx = null; } }
+    if (audioCtx && audioCtx.state === "suspended") audioCtx.resume();
+    score = 0; lives = diff.lives; people = 0; bIdx = 0; combo = 0; bestCombo = 0; built = []; popups = []; dust = []; tipping = []; falling = null;
+    bestCache = parseInt(load(bestKey(difficulty)), 10) || 0;
+    startBuilding();
+    state = "play";
+    menu = null;
+    overlay.classList.add("hidden");
+    syncControls();
+    last = performance.now();
+  }
+  function release() {
+    if (phase !== "hang" || !hang) return;
+    const p = hangPos(), w = swingW(), A = swingAmp();
+    const da = A * w * Math.cos(swingT * w);   // how fast the rope turns
+    falling = { x: p.x, y: p.y, vx: Math.cos(p.a) * ROPE * da, vy: -Math.sin(p.a) * ROPE * da, roof: hang.roof };
+    hang = null; phase = "fall"; phaseT = 0;
+    sfx.drop();
+  }
+  function land() {
+    const f = falling; falling = null;
+    const n = floors.length;
+    const under = n ? floorX(n - 1) : W / 2;
+    let off = f.x - under;
+    const room = n ? FW * 0.5 : FW * 0.5 + 30;   // the middle past the edge: it falls
+    if (Math.abs(off) >= room) {
+      // off the edge: it tips over and falls down
+      tipping.push({ x: f.x, y: topY() - FH / 2, vx: f.vx * 0.3 + Math.sign(off) * 60, vy: -80, a: 0, va: Math.sign(off) * 5, roof: f.roof, col: B().wall });
+      sfx.fall(); lives--; lost++; combo = 0;
+      sway = Math.min(45, sway + 6);
+      message = { text: "CADUTO!", sub: lives > 0 ? `${lives} ${lives === 1 ? "piano" : "piani"} di scorta` : "", t: 0, col: "#ff6a5a" };
+      if (lives <= 0) { phase = "over"; phaseT = 0; } else { phase = "wait"; phaseT = 0; }
+      return;
+    }
+    let kind;
+    if (!n) { kind = Math.abs(off) < diff.perfect * 2 ? "perfetto" : "bene"; if (kind === "perfetto") off = 0; }
+    else if (Math.abs(off) < diff.perfect) { kind = "perfetto"; off = 0; }
+    else kind = Math.abs(off) < FW * 0.3 ? "bene" : "bilico";
+    // the swaying: good floors calm the tower down, bad ones make it worse
+    if (kind === "perfetto") { combo++; sway *= 0.6; } else { combo = 0; sway = Math.min(50, sway + Math.abs(off) * (kind === "bilico" ? 0.5 : 0.3)); }
+    sway = Math.max(sway, Math.min(30, (floors.length + 1) * 0.9 * diff.swing));   // tall towers always rock a little
+    bestCombo = Math.max(bestCombo, combo);
+    if (combo >= 5) impresa("perfetti");
+    floors.push({ off: n ? off : f.x - W / 2, kind, roof: f.roof, people: kind === "perfetto" ? 4 : kind === "bene" ? 3 : 1, wob: kind === "bilico" ? 1 : 0 });
+    const ppl = floors[floors.length - 1].people;
+    people += ppl;
+    const pts = (kind === "perfetto" ? 200 * Math.min(5, combo) : kind === "bene" ? 100 : 40) * (1 + bIdx * 0.25);
+    score += Math.round(pts);
+    popups.push({ text: kind === "perfetto" ? (combo > 1 ? `PERFETTO ×${Math.min(5, combo)}` : "PERFETTO!") : kind === "bene" ? "BENE" : "IN BILICO!", sub: `+${Math.round(pts)} · ${ppl} ${ppl === 1 ? "abitante" : "abitanti"}`, x: f.x, y: topY(), t: 0, col: kind === "perfetto" ? "#ffd23a" : kind === "bene" ? "#ffffff" : "#ff8a5a" });
+    for (let i = 0; i < 10; i++) dust.push({ x: f.x + rnd(-FW / 2, FW / 2), y: topY() + FH, vx: rnd(-60, 60), vy: rnd(-60, -10), t: 0 });
+    if (kind === "perfetto") sfx.perfect(combo); else sfx.thud();
+    if (f.roof) { finishBuilding(); return; }
+    phase = "wait"; phaseT = 0;
+  }
+  function finishBuilding() {
+    const b = B();
+    const bonus = Math.round(b.floors * 100 * (1 + bIdx * 0.25) * (lost ? 1 : 1.5));
+    score += bonus;
+    if (!lost) impresa("pulito");
+    if (bIdx === 5) impresa("grattacielo");
+    built.push({ ...b, n: floors.length });
+    sfx.done();
+    message = { text: "PALAZZO FINITO!", sub: `${b.name} · ${people} abitanti in città · +${bonus.toLocaleString("it-IT")}${lost ? "" : " (nessun piano perso: +50%)"}`, t: 0, long: true, col: "#5aff7a" };
+    phase = "done"; phaseT = 0;
+  }
+
+  // ---------- Update ----------
+  function update(dt) {
+    clock += dt; sfxN = 0;
+    if (window.__bot) window.__bot(dt);
+    for (const p of popups) { p.t += dt; p.y -= 26 * dt; }
+    popups = popups.filter((p) => p.t < 1.4);
+    for (const d of dust) { d.t += dt; d.x += d.vx * dt; d.y += d.vy * dt; }
+    dust = dust.filter((d) => d.t < 0.6);
+    if (message) { message.t += dt; if (message.t > (message.long ? 3 : 2.2)) message = null; }
+    if (state !== "play") return;
+    phaseT += dt; swayT += dt; swingT += dt;
+    for (const f of floors) f.wob = Math.max(0, f.wob - dt * 0.8);
+    for (const t of tipping) { t.vy += G * dt; t.x += t.vx * dt; t.y += t.vy * dt; t.a += t.va * dt; }
+    tipping = tipping.filter((t) => t.y - camY < H + 200);
+    // the crane follows the top of the tower (not its swaying)
+    // the wind pushes the crane's trolley to and fro, from the third building
+    const want = W / 2 + lean() + Math.sin(clock * 0.55) * Math.min(55, Math.max(0, bIdx - 1) * 14) * diff.swing;
+    pivotX += (clamp(want, 120, W - 120) - pivotX) * Math.min(1, dt * 1.5);
+    // the camera: the top of the tower stays low on the screen
+    camY += (topY() - 272 - camY) * Math.min(1, dt * 3);
+    if (phase === "hang") {
+      creakT -= dt; if (creakT <= 0) { creakT = Math.PI / swingW(); sfx.creak(); }
+      if (actHeld && !wasAct) release();
+    } else if (phase === "fall") {
+      const f = falling;
+      f.vy += G * dt; f.x += f.vx * dt; f.y += f.vy * dt; f.vx *= Math.pow(0.6, dt);
+      if (f.y + FH / 2 >= topY()) { f.y = topY() - FH / 2; land(); }
+    } else if (phase === "wait") { if (phaseT > 0.45) newHang(); }
+    else if (phase === "done") {
+      if (phaseT > 2.8) { bIdx++; startBuilding(); }
+    } else if (phase === "over") { if (phaseT > 1.6) gameOver(); }
+    wasAct = actHeld;
+  }
+
+  function gameOver() {
+    state = "over";
+    sfx.end();
+    const prev = parseInt(load(bestKey(difficulty)), 10) || 0;
+    const record = score > prev;
+    if (record) store(bestKey(difficulty), String(score));
+    menu = () => showOverlay(
+      `<h2 class="lose">CANTIERE CHIUSO</h2>
+       <p>Punteggio: <b>${score.toLocaleString("it-IT")}</b> · ${built.length} ${built.length === 1 ? "palazzo finito" : "palazzi finiti"} · ${people} abitanti${bestCombo >= 2 ? ` · ${bestCombo} perfetti di fila` : ""} · ${diff.label}</p>
+       ${record ? "<p style='color:var(--pink)'>★ NUOVO RECORD! ★</p>" : ""}
+       ${difficultyHTML()}
+       <button class="start" data-start>UN ALTRO CANTIERE</button>`
+    );
+    menu();
+    syncControls();
+  }
+  function togglePause() {
+    if (isPlaying()) {
+      pausedFrom = state; state = "paused";
+      showOverlay(`<h2>PAUSA</h2><button class="start" data-resume>CONTINUA</button><p class="muted">Premi P per continuare</p>`);
+    } else if (state === "paused") {
+      state = pausedFrom; overlay.classList.add("hidden"); last = performance.now();
+    }
+    syncControls();
+  }
+  // the pause menu can end the game (shared/iniziali.js): it ends here the usual way, saving the record
+  window.addEventListener("sala:termina", () => { if (state !== "paused") return; state = pausedFrom; overlay.classList.add("hidden"); gameOver(); syncControls(); });
+  function syncControls() {
+    pauseBtn.style.display = isPlaying() && touchMode ? "block" : "none";
+    resize();
+  }
+  pauseBtn.addEventListener("click", () => togglePause());
+  function showOverlay(html) { overlay.innerHTML = html; overlay.classList.remove("hidden"); }
+  function difficultyHTML() {
+    const buttons = DIFF_IDS.map((id) => {
+      const d = DIFFICULTIES[id];
+      return `<button type="button" data-diff="${id}" class="${id === difficulty ? "on" : ""}" style="--c:${d.color}">${d.label}</button>`;
+    }).join("");
+    const best = parseInt(load(bestKey(difficulty)), 10);
+    return `<div class="diff">${buttons}</div><p class="muted">${diff.desc}${best ? ` · Record: ${best.toLocaleString("it-IT")}` : ""}</p>`;
+  }
+  function setDifficulty(id) { if (!DIFFICULTIES[id]) return; difficulty = id; diff = DIFFICULTIES[id]; store(DIFF_KEY, id); if (menu) menu(); }
+  function showTitle() {
+    menu = showTitle;
+    showOverlay(
+      `<h1>PALAZZO IN BILICO</h1>
+       <p>Sei il gruista: la gru fa dondolare un piano appeso alla fune, e tu scegli quando lasciarlo cadere. Deve atterrare bene sopra il piano di sotto: se sporge troppo cade giù e perdi uno dei piani di scorta. Più i piani sono allineati, più la torre è stabile e più abitanti vengono a viverci; se li metti storti il palazzo comincia a ondeggiare. Metti il tetto e il palazzo è finito: si passa al prossimo, più alto.</p>
+       <div class="pts">
+         <span><b>Piani</b></span><span>PERFETTO (allineato al millimetro) 200 × perfetti di fila, fino a ×5 · BENE 100 · IN BILICO 40 · i palazzi dopo il primo valgono di più</span>
+         <span><b>Palazzi</b></span><span>finito: 100 per piano, +50% se non hai perso piani · otto, dieci, dodici piani… fino al grattacielo</span>
+       </div>
+       ${touchMode
+         ? `<p class="muted help">Tocca lo schermo per lasciare il piano · ❚❚ pausa</p>`
+         : `<p class="muted help">SPAZIO, J, freccia giù o clic per lasciare il piano · P pausa</p>`}
+       ${difficultyHTML()}
+       <button class="start" data-start>AL LAVORO!</button>`
+    );
+  }
+  overlay.addEventListener("click", (e) => {
+    const d = e.target.closest("[data-diff]");
+    if (d) { setDifficulty(d.dataset.diff); return; }
+    if (e.target.closest("[data-start]")) startGame();
+    if (e.target.closest("[data-resume]")) togglePause();
+  });
+
+  // ---------- Input ----------
+  const ACTKEYS = [" ", "j", "arrowdown", "s", "enter"];
+  window.addEventListener("keydown", (e) => {
+    const k = e.key.toLowerCase();
+    if ([" ", "arrowup", "arrowdown", "arrowleft", "arrowright"].includes(k)) e.preventDefault();
+    if (state === "menu" || state === "over") {
+      if (e.key === "Enter") startGame();
+      else if (["1", "2", "3"].includes(k)) setDifficulty(DIFF_IDS[+k - 1]);
+      return;
+    }
+    if (k === "p" || k === "escape") { if (!e.repeat) togglePause(); return; }
+    if (state === "paused") { if (e.key === "Enter") togglePause(); return; }
+    if (ACTKEYS.includes(k) && !e.repeat) actHeld = true;
+  });
+  window.addEventListener("keyup", (e) => { if (ACTKEYS.includes(e.key.toLowerCase())) actHeld = false; });
+  window.addEventListener("blur", () => { actHeld = false; if (isPlaying()) togglePause(); });
+  canvas.addEventListener("pointerdown", (e) => { e.preventDefault(); if (isPlaying()) actHeld = true; });
+  for (const ev of ["pointerup", "pointercancel", "pointerleave"]) canvas.addEventListener(ev, () => { actHeld = false; });
+  window.addEventListener("pointerdown", (e) => { if (e.pointerType === "touch" && !touchMode) { touchMode = true; syncControls(); if (menu) menu(); } }, true);
+
+  // ---------- Drawing ----------
+  const sy = (y) => y - camY;
+  function drawSky() {
+    // the higher you go, the darker the sky: from afternoon to the stars
+    const k = clamp(-camY / 3000, 0, 1);
+    const mix = (a, b) => `rgb(${a.map((v, i) => Math.round(v + (b[i] - v) * k)).join(",")})`;
+    const g = ctx.createLinearGradient(0, 0, 0, H);
+    g.addColorStop(0, mix([90, 160, 230], [16, 22, 60])); g.addColorStop(1, mix([200, 228, 248], [70, 60, 120]));
+    ctx.fillStyle = g; ctx.fillRect(0, 0, W, H);
+    if (k > 0.4) { ctx.fillStyle = `rgba(255,255,255,${(k - 0.4) * 1.4})`; for (let i = 0; i < 40; i++) { const x = (i * 97) % W, y = (i * 53 + camY * 0.05) % H; ctx.fillRect(x, (y + H) % H, 1.5, 1.5); } }
+    // clouds, slower than the tower
+    ctx.fillStyle = "rgba(255,255,255,0.75)";
+    for (let i = 0; i < 14; i++) {
+      const wy = -200 - i * 260, y = (wy - camY) * 0.6 + 60, x = ((i * 233 + clock * (8 + i % 3 * 4)) % (W + 200)) - 100;
+      if (y < -40 || y > H + 40) continue;
+      for (const [dx, dy, r] of [[0, 0, 22], [24, -8, 18], [44, 2, 20], [-20, 4, 16]]) { ctx.beginPath(); ctx.arc(x + dx, y + dy, r, 0, TAU); ctx.fill(); }
+    }
+  }
+  function drawCity() {
+    const gy = sy(0);
+    if (gy > H + 200) return;
+    // the city in the back: the buildings already finished
+    const far = gy - 10;
+    ctx.fillStyle = "rgba(60,80,120,0.35)";
+    for (let i = 0; i < 12; i++) { const x = i * 60 - 10, h = 40 + (i * 37) % 60; ctx.fillRect(x, far - h, 46, h + 10); }
+    built.forEach((b, i) => {
+      const x = i % 2 ? W / 2 + 120 + Math.floor(i / 2) * 70 : W / 2 - 170 - Math.floor(i / 2) * 70, h = b.n * FH * 0.35, w = FW * 0.4;
+      ctx.fillStyle = b.wall; ctx.fillRect(x - w / 2, gy - h, w, h);
+      ctx.fillStyle = b.trim; ctx.fillRect(x - w / 2 - 2, gy - h - 4, w + 4, 4);
+      ctx.fillStyle = b.win; for (let f = 0; f < b.n; f++) { ctx.fillRect(x - w / 2 + 4, gy - (f + 1) * FH * 0.35 + 4, 4, 4); ctx.fillRect(x + w / 2 - 8, gy - (f + 1) * FH * 0.35 + 4, 4, 4); }
+    });
+    ctx.fillStyle = "#5a8a3a"; ctx.fillRect(0, gy, W, 14);
+    ctx.fillStyle = "#4a4c54"; ctx.fillRect(0, gy + 14, W, H);
+    ctx.fillStyle = "#ffffff"; for (let x = 0; x < W; x += 40) ctx.fillRect(x, gy + 34, 20, 3);
+    // the foundations
+    ctx.fillStyle = "#8a8a90"; ctx.fillRect(W / 2 - FW / 2 - 30, gy - 4, FW + 60, 8);
+  }
+  function drawFloor(x, y, b, f, a = 0) {
+    ctx.save(); ctx.translate(x, y); if (a) ctx.rotate(a);
+    if (f && f.wob) ctx.rotate(Math.sin(clock * 30) * 0.03 * f.wob);
+    if (f && f.roof || (!f && false)) { drawRoof(b); ctx.restore(); return; }
+    ctx.fillStyle = b.wall; ctx.fillRect(-FW / 2, -FH / 2, FW, FH);
+    ctx.fillStyle = b.trim; ctx.fillRect(-FW / 2, FH / 2 - 4, FW, 4); ctx.fillRect(-FW / 2, -FH / 2, 3, FH); ctx.fillRect(FW / 2 - 3, -FH / 2, 3, FH);
+    const lit = f ? f.people : 0;
+    for (let i = 0; i < 4; i++) {
+      const wx = -FW / 2 + 10 + i * 22;
+      ctx.fillStyle = i < lit ? b.win : "rgba(20,30,50,0.6)"; ctx.fillRect(wx, -FH / 2 + 7, 14, 15);
+      ctx.fillStyle = b.trim; ctx.fillRect(wx + 6, -FH / 2 + 7, 2, 15); ctx.fillRect(wx - 1, -FH / 2 + 22, 16, 2);
+    }
+    ctx.restore();
+  }
+  function drawRoof(b) {
+    ctx.fillStyle = b.trim; ctx.beginPath(); ctx.moveTo(-FW / 2 - 6, FH / 2); ctx.lineTo(-FW / 2 + 14, -FH / 2); ctx.lineTo(FW / 2 - 14, -FH / 2); ctx.lineTo(FW / 2 + 6, FH / 2); ctx.closePath(); ctx.fill();
+    ctx.fillStyle = b.wall; ctx.fillRect(-12, -FH / 2 - 18, 24, 18);
+    ctx.strokeStyle = "#c8c8d0"; ctx.lineWidth = 2; ctx.beginPath(); ctx.moveTo(0, -FH / 2 - 18); ctx.lineTo(0, -FH / 2 - 34); ctx.stroke();
+    ctx.fillStyle = Math.floor(clock * 2) % 2 ? "#ff3a3a" : "#8a1a1a"; ctx.beginPath(); ctx.arc(0, -FH / 2 - 35, 3, 0, TAU); ctx.fill();
+  }
+  function drawCrane() {
+    const py = TOP + 14;
+    // the jib across the top, the trolley over the tower
+    ctx.fillStyle = "#e8b83a"; ctx.fillRect(0, py - 10, W, 8);
+    ctx.strokeStyle = "#a8781a"; ctx.lineWidth = 1.5; for (let x = -((camY * 0) % 20); x < W; x += 20) { ctx.beginPath(); ctx.moveTo(x, py - 10); ctx.lineTo(x + 10, py - 2); ctx.lineTo(x + 20, py - 10); ctx.stroke(); }
+    ctx.fillStyle = "#4a4a52"; ctx.fillRect(pivotX - 14, py - 6, 28, 10);
+    if (hang) {
+      const p = hangPos();
+      ctx.strokeStyle = "#2a2a30"; ctx.lineWidth = 2; ctx.beginPath(); ctx.moveTo(pivotX, py); ctx.lineTo(p.x, sy(p.y) - FH / 2 - 4); ctx.stroke();
+      ctx.fillStyle = "#6a6a72"; ctx.fillRect(p.x - 6, sy(p.y) - FH / 2 - 7, 12, 5);
+      drawFloor(p.x, sy(p.y), B(), { people: 0, roof: hang.roof }, p.a);
+      // where it would land if dropped straight: a faint guide
+      if (floors.length) { const tx = floorX(floors.length - 1); ctx.strokeStyle = "rgba(255,255,255,0.18)"; ctx.setLineDash([4, 6]); ctx.beginPath(); ctx.moveTo(tx, sy(topY()) - 2); ctx.lineTo(tx, sy(topY()) - 30); ctx.stroke(); ctx.setLineDash([]); }
+    }
+  }
+  function outlined(text, x, y, font, fill, lw = 5) {
+    ctx.font = font; ctx.lineWidth = lw; ctx.strokeStyle = "#0e1424"; ctx.strokeText(text, x, y); ctx.fillStyle = fill; ctx.fillText(text, x, y);
+  }
+  function drawHud() {
+    ctx.fillStyle = "rgba(14,20,36,0.92)"; ctx.fillRect(0, 0, W, TOP);
+    ctx.textBaseline = "middle"; ctx.textAlign = "left";
+    const x0 = 10;
+    ctx.fillStyle = "#ffffff"; ctx.font = "900 15px system-ui"; ctx.fillText(score.toLocaleString("it-IT"), x0, 14);
+    ctx.fillStyle = "#c8d4e8"; ctx.font = "700 9px system-ui"; ctx.fillText(`REC ${Math.max(bestCache, score).toLocaleString("it-IT")}`, x0 + 82, 9);
+    ctx.fillStyle = "#ffc83a"; ctx.font = "900 9px system-ui"; ctx.fillText(`PALAZZO ${bIdx + 1} · PIANO ${Math.min(floors.length + 1, B().floors)}/${B().floors}`, x0 + 82, 20);
+    ctx.textAlign = "center"; ctx.fillStyle = "#ffffff"; ctx.font = "900 11px system-ui"; ctx.fillText(`👤 ${people}`, touchMode ? 370 : 360, 14);
+    // the spare floors
+    const lx = touchMode ? 430 : 440;
+    for (let i = 0; i < diff.lives; i++) { ctx.fillStyle = i < lives ? B().wall : "rgba(255,255,255,0.15)"; ctx.fillRect(lx + i * 20, 8, 16, 12); }
+    if (combo >= 2 && !touchMode) { ctx.textAlign = "right"; ctx.fillStyle = "#ffd23a"; ctx.font = "900 10px system-ui"; ctx.fillText(`PERFETTI ×${combo}`, W - 10, 14); }
+    ctx.textBaseline = "alphabetic";
+    // the sway meter, on the left: how much the tower is rocking
+    const k = clamp(sway / 45, 0, 1);
+    ctx.fillStyle = "rgba(0,0,0,0.3)"; ctx.fillRect(8, TOP + 40, 8, 100);
+    ctx.fillStyle = k < 0.35 ? "#5aff7a" : k < 0.7 ? "#ffd23a" : "#ff5a5a"; ctx.fillRect(8, TOP + 140 - 100 * k, 8, 100 * k);
+    ctx.save(); ctx.translate(20, TOP + 90); ctx.rotate(-Math.PI / 2); ctx.textAlign = "center"; ctx.fillStyle = "rgba(255,255,255,0.7)"; ctx.font = "800 8px system-ui"; ctx.fillText("ONDEGGIA", 0, 6); ctx.restore();
+  }
+  function draw() {
+    ctx.setTransform(pxRatio, 0, 0, pxRatio, 0, 0);
+    if (state === "menu") { camY = -270 - Math.max(0, Math.sin(clock * 0.2)) * 400; swayT = clock; }
+    drawSky();
+    drawCity();
+    const b = B();
+    for (let i = 0; i < floors.length; i++) { const y = sy(-i * FH - FH / 2); if (y < -40 || y > H + 40) continue; drawFloor(floorX(i), y, b, floors[i]); }
+    for (const t of tipping) drawFloor(t.x, sy(t.y), { ...b, wall: t.col }, { people: 0, roof: t.roof }, t.a);
+    if (falling) drawFloor(falling.x, sy(falling.y), b, { people: 0, roof: falling.roof });
+    for (const d of dust) { ctx.fillStyle = `rgba(220,210,190,${0.6 * (1 - d.t / 0.6)})`; ctx.beginPath(); ctx.arc(d.x, sy(d.y), 4, 0, TAU); ctx.fill(); }
+    if (state === "menu") return;
+    drawCrane();
+    drawHud();
+    ctx.textAlign = "center";
+    for (const p of popups) { ctx.globalAlpha = Math.max(0, 1 - p.t / 1.4); outlined(p.text, clamp(p.x, 90, W - 90), sy(p.y) - 26, "900 14px system-ui", p.col, 4); outlined(p.sub, clamp(p.x, 90, W - 90), sy(p.y) - 10, "800 10px system-ui", "#ffffff", 3); }
+    ctx.globalAlpha = 1;
+    if (message) {
+      ctx.globalAlpha = Math.min(1, ((message.long ? 3 : 2.2) - message.t) * 2);
+      outlined(message.text, W / 2, 196, "italic 900 26px system-ui", message.col || "#ffc83a", 6);
+      if (message.sub) outlined(message.sub, W / 2, 218, "800 12px system-ui", "#ffffff", 4);
+      ctx.globalAlpha = 1;
+    }
+  }
+
+  // ---------- Loop ----------
+  const STEP = 1 / 120;
+  let last = performance.now(), acc = 0;
+  function frame(now) {
+    const dt = Math.min(0.1, (now - last) / 1000);
+    last = now;
+    if (isPlaying()) {
+      acc += dt;
+      while (acc >= STEP && isPlaying()) { update(STEP); acc -= STEP; }
+    } else { acc = 0; update(dt); }
+    draw();
+    requestAnimationFrame(frame);
+  }
+  syncControls();
+  showTitle();
+  requestAnimationFrame(frame);
+})();
+</script>
+<script src="../../shared/iniziali.js" data-record="bilico-best-" data-kind="score"></script>
+</body>
+</html>
+
