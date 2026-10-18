@@ -1,0 +1,624 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no, viewport-fit=cover">
+<title>Torre di Controllo</title>
+<style>
+  :root {
+    --bg: #0a1a1a;
+    --fg: #f4f6ee;
+    --muted: #c8e8e0;
+    --pink: #5ae8c8;
+    --yellow: #5ad8ff;
+    --red: #ff4a3a;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  html, body {
+    height: 100%;
+    background: var(--bg);
+    color: var(--fg);
+    font-family: system-ui, -apple-system, "Segoe UI", sans-serif;
+    overflow: hidden;
+    user-select: none;
+    -webkit-user-select: none;
+    touch-action: none;
+  }
+  #wrap { position: fixed; inset: 0; display: flex; align-items: center; justify-content: center; }
+  canvas { cursor: crosshair; display: block; touch-action: none; border-radius: 6px; box-shadow: 0 0 0 2px #2a5a5a, 0 10px 40px rgba(0,0,0,0.6); }
+  #pauseBtn {
+    position: fixed; z-index: 3; display: none; right: 10px; top: calc(10px + env(safe-area-inset-top, 0px));
+    font: 700 13px system-ui, sans-serif; color: var(--fg);
+    background: rgba(0, 0, 0, 0.6); border: 1px solid rgba(244, 246, 238, 0.35);
+    border-radius: 8px; padding: 6px 10px; cursor: pointer;
+  }
+  #touch { display: none !important; }
+  #overlay {
+    position: fixed; inset: 0; z-index: 5;
+    display: flex; flex-direction: column; align-items: center; justify-content: flex-start;
+    gap: 14px; padding: 16px; text-align: center; overflow-y: auto;
+    background: rgba(10, 26, 26, 0.93);
+  }
+  #overlay > :first-child { margin-top: auto; }
+  #overlay > :last-child { margin-bottom: auto; }
+  #overlay.hidden { display: none; }
+  #homeLink {
+    position: fixed; top: calc(10px + env(safe-area-inset-top, 0px)); left: 10px; z-index: 6;
+    font: 600 13px/1 system-ui, sans-serif; color: #fff; text-decoration: none;
+    padding: 8px 12px; border-radius: 999px; background: rgba(0,0,0,.55);
+    border: 1px solid rgba(255,255,255,.25);
+  }
+  #homeLink:hover { background: rgba(0,0,0,.8); }
+  #overlay.hidden ~ #homeLink { display: none; }
+  @media (max-width: 700px) { #overlay { padding-top: calc(52px + env(safe-area-inset-top, 0px)); } }
+  #overlay h1 { font-size: clamp(32px, 10vw, 58px); font-weight: 900; font-style: italic; letter-spacing: 1px; color: var(--pink);
+    text-shadow: 3px 3px 0 #0a3a3a, 0 0 22px rgba(90,232,200,0.35); }
+  #overlay h2 { font-size: clamp(26px, 7vw, 42px); font-weight: 900; letter-spacing: 2px; color: var(--pink); }
+  #overlay h2.lose { color: var(--red); }
+  #overlay p { max-width: 540px; font-size: clamp(13px, 3.4vw, 16px); line-height: 1.55; }
+  #overlay p.muted { color: var(--muted); }
+  #overlay .pts { display: grid; grid-template-columns: repeat(2, auto); gap: 4px 18px; font-size: 13px; color: var(--muted); text-align: left; max-width: 560px; }
+  #overlay .pts b { color: var(--fg); }
+  #overlay .diff { display: flex; gap: 10px; flex-wrap: wrap; justify-content: center; }
+  #overlay button {
+    font: 800 15px system-ui, sans-serif; letter-spacing: 1.5px; color: var(--fg);
+    background: transparent; cursor: pointer;
+    border: 2px solid rgba(244,246,238,0.3); border-radius: 10px; padding: 9px 16px;
+  }
+  #overlay .mode button { font-size: 12px; padding: 7px 12px; }
+  #overlay .diff button.on { border-color: var(--c); color: var(--c); box-shadow: 0 0 12px var(--c); }
+  #overlay button.start { border-color: var(--pink); color: #02201a; background: var(--pink); padding: 11px 30px; box-shadow: 0 4px 0 #2a8a7a; }
+  @media (max-height: 560px) {
+    #overlay { gap: 8px; }
+    #overlay h1 { font-size: 30px; }
+    #overlay p { font-size: 13px; line-height: 1.4; }
+    #overlay .help, #overlay .pts { display: none; }
+  }
+</style>
+</head>
+<body>
+<div id="wrap"><canvas id="game"></canvas></div>
+<div id="touch"></div>
+<button id="pauseBtn" type="button" aria-label="Pausa">❚❚</button>
+<div id="overlay"></div>
+<a id="homeLink" href="../../index.html">← Sala Giochi</a>
+
+
+<script>
+(() => {
+  "use strict";
+
+  const W = 640, H = 360, TAU = Math.PI * 2, TOP = 28;
+  // the aircraft: where they land, how fast, how they look
+  const TYPES = {
+    jet:   { pad: "rossa", col: "#ff5a4a", sp: 30, size: 1, turn: 2.2, pts: 10, name: "jet" },
+    elica: { pad: "gialla", col: "#ffd23a", sp: 21, size: 0.78, turn: 2.6, pts: 10, name: "aereo a elica" },
+    eli:   { pad: "blu", col: "#4ab8ff", sp: 15, size: 0.8, turn: 4, pts: 10, name: "elicottero" },
+    vip:   { pad: "rossa", col: "#ff5a4a", sp: 40, size: 1.05, turn: 2.4, pts: 30, name: "jet VIP", vip: true },
+  };
+  const PADCOL = { rossa: "#ff5a4a", gialla: "#ffd23a", blu: "#4ab8ff" };
+  // the airports: runways (where you touch down, which way, how long) and the helipads
+  const MAPS = {
+    campagna: {
+      name: "Campagna", ground: "#6aa84a", ground2: "#5a9a3a",
+      pads: [
+        { type: "rossa", x: 230, y: 230, a: 0, len: 190 },
+        { type: "gialla", x: 300, y: 120, a: 0.55, len: 100 },
+        { type: "blu", x: 500, y: 110 },
+      ],
+    },
+    isola: {
+      name: "Isola", ground: "#2a7ab8", ground2: "#3a8ac8", island: true,
+      pads: [
+        { type: "rossa", x: 210, y: 270, a: -0.5, len: 180 },
+        { type: "gialla", x: 400, y: 120, a: Math.PI / 2, len: 100 },
+        { type: "blu", x: 140, y: 110, ship: true },
+      ],
+    },
+    montagna: {
+      name: "Montagna", ground: "#e8eef4", ground2: "#d8e2ec", snow: true,
+      pads: [
+        { type: "rossa", x: 470, y: 280, a: Math.PI, len: 200 },
+        { type: "gialla", x: 225, y: 125, a: 0.9, len: 100 },
+        { type: "blu", x: 520, y: 120 },
+        { type: "blu", x: 110, y: 270 },
+      ],
+    },
+  };
+  const MAP_KEY = "controllo-mappa";
+
+  const DIFFICULTIES = {
+    facile:    { label: "FACILE",    color: "#7ed87a", desc: "aerei più lenti e più radi", sp: 0.85, every: 1.35 },
+    normale:   { label: "NORMALE",   color: "#ffd23a", desc: "il traffico di un giorno qualunque", sp: 1, every: 1 },
+    difficile: { label: "DIFFICILE", color: "#ff5a5a", desc: "aerei più veloci e più fitti", sp: 1.12, every: 0.8 },
+  };
+  const DIFF_IDS = Object.keys(DIFFICULTIES);
+  const DIFF_KEY = "controllo-difficulty";
+  const bestKey = (id) => `controllo-best-${id}`;
+  function store(k, v) { try { localStorage.setItem(k, v); } catch { /* ignore */ } }
+  function load(k) { try { return localStorage.getItem(k); } catch { return null; } }
+  const impresa = (id) => window.dispatchEvent(new CustomEvent("sala:impresa", { detail: id }));
+  const rnd = (a, b) => a + Math.random() * (b - a);
+  const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
+  const wrapA = (a) => { while (a > Math.PI) a -= TAU; while (a < -Math.PI) a += TAU; return a; };
+
+  // ---------- Canvas ----------
+  const canvas = document.getElementById("game");
+  const ctx = canvas.getContext("2d");
+  const wrapEl = document.getElementById("wrap");
+  const overlay = document.getElementById("overlay");
+  const touchEl = document.getElementById("touch");
+  const pauseBtn = document.getElementById("pauseBtn");
+  let pxRatio = 1, touchMode = !!(window.matchMedia && matchMedia("(pointer: coarse)").matches);
+  function resize() {
+    const portrait = window.innerHeight > window.innerWidth;
+    const showTouch = false;
+    touchEl.style.display = showTouch ? "flex" : "none";
+    touchEl.classList.toggle("small", !portrait && window.innerHeight < 480);
+    wrapEl.style.paddingBottom = showTouch && portrait ? "calc(170px + env(safe-area-inset-bottom, 0px))" : "0";
+    let availW = window.innerWidth - 8, availH = window.innerHeight - 8;
+    if (showTouch && portrait) availH -= 170;
+    if (showTouch && !portrait) {
+      const side = Math.max(...[...touchEl.children].map((el) => el.offsetWidth)) + 20;
+      if (window.innerWidth - 2 * side > 200) availW = window.innerWidth - 2 * side;
+    }
+    const s = Math.max(0.2, Math.min(availW / W, availH / H));
+    pxRatio = Math.min(3, s * (window.devicePixelRatio || 1));
+    canvas.style.width = W * s + "px";
+    canvas.style.height = H * s + "px";
+    canvas.width = Math.round(W * pxRatio);
+    canvas.height = Math.round(H * pxRatio);
+  }
+  window.addEventListener("resize", () => syncControls());
+
+  // ---------- Audio ----------
+  let audioCtx = null;
+  function beep(freq, dur, type = "square", vol = 0.04, slide = 0, delay = 0) {
+    if (!audioCtx) return;
+    const t = audioCtx.currentTime + delay;
+    const osc = audioCtx.createOscillator(), gain = audioCtx.createGain();
+    osc.type = type;
+    osc.frequency.setValueAtTime(freq, t);
+    if (slide) osc.frequency.exponentialRampToValueAtTime(Math.max(20, freq + slide), t + dur);
+    gain.gain.setValueAtTime(vol, t);
+    gain.gain.exponentialRampToValueAtTime(0.0001, t + dur);
+    osc.connect(gain).connect(audioCtx.destination);
+    osc.start(t); osc.stop(t + dur + 0.02);
+  }
+  const arp = (notes, gap, d, type = "square", vol = 0.04) => notes.forEach((f, i) => beep(f, d, type, vol, 0, i * gap));
+  let sfxN = 0;
+  const lim = (fn) => (...a) => { if (sfxN++ < 4) fn(...a); };
+  const sfx = {
+    pick: () => beep(880, 0.05, "square", 0.025),
+    ok: () => beep(1320, 0.06, "triangle", 0.03),
+    land: () => arp([659, 880, 1047], 0.06, 0.1, "square", 0.035),
+    vip: () => arp([784, 1047, 1319, 1568], 0.06, 0.12, "square", 0.04),
+    alarm: lim(() => beep(1500, 0.08, "square", 0.025)),
+    warn: () => beep(520, 0.12, "triangle", 0.03),
+    crash: () => { beep(70, 0.7, "sawtooth", 0.09, -40); beep(150, 0.4, "square", 0.06, -100); },
+    end: () => arp([523, 466, 415, 392, 330, 262], 0.15, 0.24, "triangle", 0.05),
+  };
+
+  // ---------- State ----------
+  let difficulty = DIFFICULTIES[load(DIFF_KEY)] ? load(DIFF_KEY) : "normale";
+  let diff = DIFFICULTIES[difficulty];
+  let mapId = MAPS[load(MAP_KEY)] ? load(MAP_KEY) : "campagna";
+  let state = "menu", menu = null, pausedFrom = null, clock = 0;
+  let score = 0, bestCache = 0, landed = 0, planes = [], incoming = [], popups = [], crash = null, message = null, playT = 0, spawnT = 3, alarmT = 0, recent = [], vipN = 0;
+  const draws = new Map();   // pointer id → the aircraft whose route it is drawing
+  const isPlaying = () => state === "play";
+  const MAP = () => MAPS[mapId];
+
+  // ---------- Runways ----------
+  // the touchdown point and the way in: the aircraft must arrive there heading along the runway
+  const padOk = (p, t) => p.type === TYPES[t].pad;
+  function nearPad(x, y, t, r = 16) { return MAP().pads.find((p) => padOk(p, t) && Math.hypot(padPos(p).x - x, padPos(p).y - y) < r) || null; }
+  function padPos(p) { if (!p.ship) return p; return { x: p.x + Math.sin(clock * 0.25) * 40, y: p.y + Math.sin(clock * 0.5) * 12 }; }
+
+  // ---------- Aircraft ----------
+  function spawnSpot() {
+    for (let t = 0; t < 30; t++) {
+      const e = Math.floor(Math.random() * 4);
+      const x = e === 0 ? -20 : e === 1 ? W + 20 : rnd(60, W - 60), y = e === 2 ? TOP - 20 : e === 3 ? H + 20 : rnd(TOP + 50, H - 50);
+      if (planes.some((p) => Math.hypot(p.x - x, p.y - y) < 90) || incoming.some((p) => Math.hypot(p.x - x, p.y - y) < 90)) continue;
+      return { x, y };
+    }
+    return null;
+  }
+  function queuePlane() {
+    const s = spawnSpot(); if (!s) return;
+    const r = Math.random();
+    const hasHeli = MAP().pads.some((p) => p.type === "blu");
+    let type = r < 0.42 ? "jet" : r < 0.78 ? "elica" : hasHeli ? "eli" : "jet";
+    if (playT > 40 && Math.random() < 0.08) type = "vip";
+    incoming.push({ ...s, type, t: 2.2 });
+    sfx.warn();
+  }
+  function launch(q) {
+    const tx = rnd(140, W - 140), ty = rnd(TOP + 70, H - 70);
+    const k = TYPES[q.type];
+    planes.push({ type: q.type, x: q.x, y: q.y, a: Math.atan2(ty - q.y, tx - q.x), sp: k.sp * diff.sp * (1 + Math.min(0.25, playT / 1200)), path: [], to: null, state: "fly", t: 0, near: false, id: Math.random() });
+  }
+  function landPlane(p, pad) {
+    p.state = "land"; p.t = 0; p.pad = pad; p.path = []; p.to = null;
+    const k = TYPES[p.type];
+    score += k.pts; landed++;
+    recent.push(clock); recent = recent.filter((t) => clock - t < 3);
+    if (recent.length >= 3) impresa("tris");
+    if (landed >= 50) impresa("cinquanta");
+    if (k.vip) { vipN++; sfx.vip(); } else sfx.land();
+    popups.push({ text: `+${k.pts}`, x: p.x, y: p.y - 14, t: 0, col: PADCOL[pad.type] });
+    for (const [id, pl] of draws) if (pl === p) draws.delete(id);
+  }
+
+  // ---------- The game ----------
+  function startGame() {
+    if (!audioCtx) { try { audioCtx = new (window.AudioContext || window.webkitAudioContext)(); } catch { audioCtx = null; } }
+    if (audioCtx && audioCtx.state === "suspended") audioCtx.resume();
+    score = 0; landed = 0; planes = []; incoming = []; popups = []; crash = null; playT = 0; spawnT = 1.5; recent = []; vipN = 0; draws.clear();
+    bestCache = parseInt(load(bestKey(difficulty)), 10) || 0;
+    queuePlane();
+    message = { text: `AEROPORTO DI ${MAP().name.toUpperCase()}`, sub: "trascina dagli aerei fino alla pista del loro colore", t: 0, long: true };
+    state = "play";
+    menu = null;
+    overlay.classList.add("hidden");
+    syncControls();
+    last = performance.now();
+  }
+
+  // ---------- Update ----------
+  function update(dt) {
+    clock += dt; sfxN = 0;
+    if (window.__bot) window.__bot(dt);
+    for (const p of popups) { p.t += dt; p.y -= 20 * dt; }
+    popups = popups.filter((p) => p.t < 1.2);
+    if (message) { message.t += dt; if (message.t > (message.long ? 3.2 : 2.4)) message = null; }
+    if (state !== "play") return;
+    if (crash) { crash.t += dt; if (crash.t > 2.2) gameOver(); return; }
+    playT += dt;
+    // more and more traffic
+    spawnT -= dt;
+    if (spawnT <= 0) { queuePlane(); spawnT = Math.max(2.3, 6.5 - playT / 40) * diff.every * rnd(0.75, 1.25); }
+    for (const q of incoming) { q.t -= dt; if (q.t <= 0) { q.done = true; launch(q); } }
+    incoming = incoming.filter((q) => !q.done);
+    for (const p of planes) step(p, dt);
+    planes = planes.filter((p) => !(p.state === "land" && p.t > 1.6));
+    if (planes.filter((p) => p.state === "fly").length >= 12) impresa("dodici");
+    // too close: the alarm; touching: the crash
+    let alarm = false;
+    for (const p of planes) p.near = false;
+    for (let i = 0; i < planes.length; i++) for (let j = i + 1; j < planes.length; j++) {
+      const a = planes[i], b = planes[j];
+      if (a.state !== "fly" || b.state !== "fly") continue;
+      const d = Math.hypot(a.x - b.x, a.y - b.y);
+      if (d < 40) { a.near = b.near = true; alarm = true; }
+      if (d < 10.5 * (TYPES[a.type].size + TYPES[b.type].size) / 2) { crash = { x: (a.x + b.x) / 2, y: (a.y + b.y) / 2, t: 0, a, b }; sfx.crash(); message = { text: "COLLISIONE!", sub: `${landed} ${landed === 1 ? "atterraggio" : "atterraggi"}`, t: 0, col: "#ff5a4a", long: true }; return; }
+    }
+    alarmT -= dt; if (alarm && alarmT <= 0) { alarmT = 0.5; sfx.alarm(); }
+  }
+  function step(p, dt) {
+    p.t += dt;
+    const k = TYPES[p.type];
+    if (p.state === "land") {
+      // rolling down the runway (or settling on the pad), slowing down
+      const pad = p.pad;
+      if (pad.type !== "blu") { const v = p.sp * Math.max(0, 1 - p.t / 1.4); p.x += Math.cos(pad.a) * v * dt; p.y += Math.sin(pad.a) * v * dt; p.a = pad.a; }
+      else { const q = padPos(pad); p.x += (q.x - p.x) * Math.min(1, dt * 4); p.y += (q.y - p.y) * Math.min(1, dt * 4); }
+      return;
+    }
+    // follow the drawn route; at its end, keep going straight
+    let want = p.a;
+    // points reached, or left behind within the turning circle, are done
+    const tr = p.sp / k.turn + 2;
+    while (p.path.length) {
+      const q = p.path[0], dq = Math.hypot(q.x - p.x, q.y - p.y);
+      if (dq < 7 || (dq < tr * 1.6 && Math.abs(wrapA(Math.atan2(q.y - p.y, q.x - p.x) - p.a)) > 1.3 && p.path.length > 1)) p.path.shift(); else break;
+    }
+    if (p.path.length) want = Math.atan2(p.path[0].y - p.y, p.path[0].x - p.x);
+    const d = wrapA(want - p.a);
+    p.a = wrapA(p.a + clamp(d, -k.turn * dt, k.turn * dt));
+    p.x += Math.cos(p.a) * p.sp * dt; p.y += Math.sin(p.a) * p.sp * dt;
+    // at the edge of the screen it turns back
+    const inside = p.x > 8 && p.x < W - 8 && p.y > TOP + 8 && p.y < H - 8;
+    if (inside) p.inside = true;
+    if (p.inside && !p.path.length) {
+      if (p.x < 10 && Math.cos(p.a) < 0) p.a = Math.PI - p.a;
+      if (p.x > W - 10 && Math.cos(p.a) > 0) p.a = Math.PI - p.a;
+      if (p.y < TOP + 10 && Math.sin(p.a) < 0) p.a = -p.a;
+      if (p.y > H - 10 && Math.sin(p.a) > 0) p.a = -p.a;
+    }
+    // touching down: on its runway, heading the right way (any way for a helicopter)
+    for (const pad of MAP().pads) {
+      if (!padOk(pad, p.type)) continue;
+      const q = padPos(pad);
+      if (Math.hypot(q.x - p.x, q.y - p.y) > 12) continue;
+      if (pad.type === "blu" || Math.abs(wrapA(p.a - pad.a)) < (p.to ? 1.1 : 0.6)) { landPlane(p, pad); return; }
+    }
+  }
+
+  // ---------- Drawing the routes ----------
+  function grab(x, y) {
+    let best = null, bd = 30;
+    for (const p of planes) { if (p.state !== "fly") continue; const d = Math.hypot(p.x - x, p.y - y); if (d < bd) { bd = d; best = p; } }
+    return best;
+  }
+  function routeStart(id, x, y) {
+    const p = grab(x, y);
+    if (!p) return false;
+    for (const [k, pl] of draws) if (pl === p) draws.delete(k);
+    p.path = []; p.to = null; p.drawing = true;
+    draws.set(id, p);
+    sfx.pick();
+    return true;
+  }
+  function routeTo(id, x, y) {
+    const p = draws.get(id); if (!p || p.state !== "fly") return;
+    if (p.to) return;
+    x = clamp(x, 4, W - 4); y = clamp(y, TOP + 4, H - 4);
+    const lastP = p.path[p.path.length - 1] || p;
+    const d = Math.hypot(x - lastP.x, y - lastP.y);
+    if (d < 7) return;
+    // fill in long jumps so the route stays smooth
+    const n = Math.ceil(d / 10);
+    for (let i = 1; i <= n; i++) p.path.push({ x: lastP.x + (x - lastP.x) * i / n, y: lastP.y + (y - lastP.y) * i / n });
+    if (p.path.length > 400) p.path.splice(0, p.path.length - 400);
+    // reaching its runway: the route snaps onto it
+    const pad = nearPad(x, y, p.type);
+    if (pad) {
+      const q = padPos(pad);
+      p.to = pad;
+      if (pad.type !== "blu") { p.path.push({ x: q.x, y: q.y }); p.path.push({ x: q.x + Math.cos(pad.a) * 40, y: q.y + Math.sin(pad.a) * 40 }); }
+      else p.path.push({ x: q.x, y: q.y });
+      p.drawing = false;
+      sfx.ok();
+    }
+  }
+  function routeEnd(id) { const p = draws.get(id); if (p) p.drawing = false; draws.delete(id); }
+
+  function gameOver() {
+    state = "over"; draws.clear();
+    sfx.end();
+    const prev = parseInt(load(bestKey(difficulty)), 10) || 0;
+    const record = score > prev;
+    if (record) store(bestKey(difficulty), String(score));
+    menu = () => showOverlay(
+      `<h2 class="lose">AEROPORTO CHIUSO</h2>
+       <p>Punteggio: <b>${score.toLocaleString("it-IT")}</b> · ${landed} ${landed === 1 ? "atterraggio" : "atterraggi"}${vipN ? ` · ${vipN} VIP` : ""} · ${Math.floor(playT / 60)}:${String(Math.floor(playT % 60)).padStart(2, "0")} in torre · ${MAP().name} · ${diff.label}</p>
+       ${record ? "<p style='color:var(--pink)'>★ NUOVO RECORD! ★</p>" : ""}
+       ${mapHTML()}
+       ${difficultyHTML()}
+       <button class="start" data-start>RIAPRI L'AEROPORTO</button>`
+    );
+    menu();
+    syncControls();
+  }
+  function mapHTML() {
+    return `<div class="diff mode">${Object.entries(MAPS).map(([id, m]) => `<button type="button" data-map="${id}" class="${id === mapId ? "on" : ""}" style="--c:#5ae8c8">${m.name.toUpperCase()}</button>`).join("")}</div>`;
+  }
+  function togglePause() {
+    if (isPlaying()) {
+      pausedFrom = state; state = "paused";
+      showOverlay(`<h2>PAUSA</h2><button class="start" data-resume>CONTINUA</button><p class="muted">Premi P per continuare</p>`);
+    } else if (state === "paused") {
+      state = pausedFrom; overlay.classList.add("hidden"); last = performance.now();
+    }
+    syncControls();
+  }
+  // the pause menu can end the game (shared/iniziali.js): it ends here the usual way, saving the record
+  window.addEventListener("sala:termina", () => { if (state !== "paused") return; state = pausedFrom; overlay.classList.add("hidden"); gameOver(); syncControls(); });
+  function syncControls() {
+    pauseBtn.style.display = isPlaying() && touchMode ? "block" : "none";
+    resize();
+  }
+  pauseBtn.addEventListener("click", () => togglePause());
+  function showOverlay(html) { overlay.innerHTML = html; overlay.classList.remove("hidden"); }
+  function difficultyHTML() {
+    const buttons = DIFF_IDS.map((id) => {
+      const d = DIFFICULTIES[id];
+      return `<button type="button" data-diff="${id}" class="${id === difficulty ? "on" : ""}" style="--c:${d.color}">${d.label}</button>`;
+    }).join("");
+    const best = parseInt(load(bestKey(difficulty)), 10);
+    return `<div class="diff">${buttons}</div><p class="muted">${diff.desc}${best ? ` · Record: ${best.toLocaleString("it-IT")}` : ""}</p>`;
+  }
+  function setDifficulty(id) { if (!DIFFICULTIES[id]) return; difficulty = id; diff = DIFFICULTIES[id]; store(DIFF_KEY, id); if (menu) menu(); }
+  function showTitle() {
+    menu = showTitle;
+    showOverlay(
+      `<h1>TORRE DI CONTROLLO</h1>
+       <p>Sei il controllore di volo: gli aerei arrivano dai bordi e tocca a te farli atterrare. Trascina da un aereo fino alla pista del suo colore e lui seguirà la rotta che hai disegnato: i jet rossi sulla pista lunga rossa, gli aerei a elica gialli sulla pista gialla, gli elicotteri blu sull'eliporto. Le piste si prendono dal lato della freccia. Ma attenzione: se due aerei si toccano è la fine!</p>
+       <div class="pts">
+         <span><b>Punti</b></span><span>10 per atterraggio · i jet VIP (con la stella) sono più veloci e valgono 30</span>
+         <span><b>Allarme</b></span><span>quando due aerei sono troppo vicini compare il cerchio rosso: cambia subito la rotta di uno dei due</span>
+       </div>
+       <p class="muted help">${touchMode ? "Trascina col dito da un aereo alla sua pista (anche due dita insieme) · ❚❚ pausa" : "Tieni premuto il mouse su un aereo e trascina fino alla sua pista · P pausa"}</p>
+       ${mapHTML()}
+       ${difficultyHTML()}
+       <button class="start" data-start>APRI LA TORRE</button>`
+    );
+  }
+  overlay.addEventListener("click", (e) => {
+    const d = e.target.closest("[data-diff]");
+    if (d) { setDifficulty(d.dataset.diff); return; }
+    if (e.target.closest("[data-start]")) startGame();
+    if (e.target.closest("[data-resume]")) togglePause();
+  });
+  overlay.addEventListener("click", (e) => {
+    const m = e.target.closest("[data-map]");
+    if (m && MAPS[m.dataset.map]) { mapId = m.dataset.map; store(MAP_KEY, mapId); if (menu) menu(); }
+  });
+
+  // ---------- Input ----------
+  window.addEventListener("keydown", (e) => {
+    const k = e.key.toLowerCase();
+    if (state === "menu" || state === "over") {
+      if (e.key === "Enter") startGame();
+      else if (["1", "2", "3"].includes(k)) setDifficulty(DIFF_IDS[+k - 1]);
+      return;
+    }
+    if (k === "p" || k === "escape") { if (!e.repeat) togglePause(); return; }
+    if (state === "paused" && e.key === "Enter") togglePause();
+  });
+  window.addEventListener("blur", () => { draws.clear(); if (isPlaying()) togglePause(); });
+  const toGame = (e) => { const r = canvas.getBoundingClientRect(); return [(e.clientX - r.left) * W / r.width, (e.clientY - r.top) * H / r.height]; };
+  canvas.addEventListener("pointerdown", (e) => { e.preventDefault(); if (!isPlaying() || crash) return; const [x, y] = toGame(e); if (routeStart(e.pointerId, x, y)) { try { canvas.setPointerCapture(e.pointerId); } catch { /* ignore */ } } });
+  canvas.addEventListener("pointermove", (e) => { if (!draws.has(e.pointerId)) return; const [x, y] = toGame(e); routeTo(e.pointerId, x, y); });
+  for (const ev of ["pointerup", "pointercancel", "lostpointercapture"]) canvas.addEventListener(ev, (e) => routeEnd(e.pointerId));
+  window.addEventListener("pointerdown", (e) => { if (e.pointerType === "touch" && !touchMode) { touchMode = true; syncControls(); if (menu) menu(); } }, true);
+
+  // ---------- Drawing ----------
+  function drawGround() {
+    const m = MAP();
+    ctx.fillStyle = m.ground; ctx.fillRect(0, 0, W, H);
+    if (m.island) {
+      // waves, and the island with the airport
+      ctx.strokeStyle = "rgba(255,255,255,0.18)"; ctx.lineWidth = 2;
+      for (let i = 0; i < 26; i++) { const x = (i * 131 + clock * 6) % (W + 40) - 20, y = TOP + (i * 71) % (H - TOP); ctx.beginPath(); ctx.arc(x, y, 8, Math.PI * 1.1, Math.PI * 1.9); ctx.stroke(); }
+      ctx.fillStyle = "#e8d8a0"; ctx.beginPath(); ctx.ellipse(330, 210, 250, 120, -0.2, 0, TAU); ctx.fill();
+      ctx.fillStyle = "#6ab84a"; ctx.beginPath(); ctx.ellipse(330, 210, 236, 106, -0.2, 0, TAU); ctx.fill();
+      ctx.fillStyle = "#3a8a3a"; for (const [x, y] of [[140, 200], [520, 170], [480, 270], [330, 300], [560, 230]]) { ctx.beginPath(); ctx.arc(x, y, 9, 0, TAU); ctx.fill(); }
+    } else if (m.snow) {
+      ctx.fillStyle = m.ground2; for (let i = 0; i < 9; i++) { ctx.beginPath(); ctx.ellipse((i * 157) % W, TOP + (i * 89) % (H - TOP), 70, 30, 0.3, 0, TAU); ctx.fill(); }
+      // mountains in the corners, pine trees
+      ctx.fillStyle = "#8a9aaa"; for (const [x, y, s] of [[40, H, 90], [W - 30, TOP + 40, 70], [W - 100, H, 60]]) { ctx.beginPath(); ctx.moveTo(x - s, y + 10); ctx.lineTo(x, y - s); ctx.lineTo(x + s, y + 10); ctx.fill(); ctx.fillStyle = "#ffffff"; ctx.beginPath(); ctx.moveTo(x - s * 0.3, y - s * 0.7); ctx.lineTo(x, y - s); ctx.lineTo(x + s * 0.3, y - s * 0.7); ctx.fill(); ctx.fillStyle = "#8a9aaa"; }
+      ctx.fillStyle = "#2a6a4a"; for (const [x, y] of [[320, 60], [350, 75], [600, 330], [270, 330], [40, 150], [60, 175]]) { ctx.beginPath(); ctx.moveTo(x, y - 12); ctx.lineTo(x - 7, y + 6); ctx.lineTo(x + 7, y + 6); ctx.fill(); }
+    } else {
+      // fields
+      for (let i = 0; i < 8; i++) { ctx.fillStyle = i % 2 ? m.ground2 : "#7ab85a"; ctx.save(); ctx.translate((i * 173) % W, TOP + (i * 97) % (H - TOP)); ctx.rotate(0.2 * i); ctx.fillRect(-60, -30, 120, 60); ctx.restore(); }
+      ctx.fillStyle = "#3a7a3a"; for (const [x, y] of [[60, 80], [80, 95], [580, 300], [560, 320], [120, 320], [40, 300]]) { ctx.beginPath(); ctx.arc(x, y, 10, 0, TAU); ctx.fill(); }
+    }
+  }
+  function drawPads() {
+    for (const pad of MAP().pads) {
+      const col = PADCOL[pad.type], q = padPos(pad);
+      if (pad.type === "blu") {
+        if (pad.ship) { ctx.save(); ctx.translate(q.x, q.y); ctx.fillStyle = "#e8e8e8"; ctx.beginPath(); ctx.ellipse(0, 0, 38, 18, 0, 0, TAU); ctx.fill(); ctx.fillStyle = "#8a5a3a"; ctx.fillRect(14, -8, 14, 16); ctx.restore(); }
+        ctx.fillStyle = "#3a3c44"; ctx.beginPath(); ctx.arc(q.x, q.y, 16, 0, TAU); ctx.fill();
+        ctx.strokeStyle = col; ctx.lineWidth = 3; ctx.beginPath(); ctx.arc(q.x, q.y, 14, 0, TAU); ctx.stroke();
+        ctx.fillStyle = "#ffffff"; ctx.font = "900 14px system-ui"; ctx.textAlign = "center"; ctx.textBaseline = "middle"; ctx.fillText("H", q.x, q.y + 1); ctx.textBaseline = "alphabetic";
+        continue;
+      }
+      ctx.save(); ctx.translate(pad.x, pad.y); ctx.rotate(pad.a);
+      const wd = pad.type === "rossa" ? 26 : 20;
+      ctx.fillStyle = "rgba(0,0,0,0.2)"; ctx.fillRect(-6 + 3, -wd / 2 + 3, pad.len + 12, wd);
+      ctx.fillStyle = "#4a4c54"; ctx.fillRect(-6, -wd / 2, pad.len + 12, wd);
+      ctx.fillStyle = col; ctx.fillRect(-6, -wd / 2, pad.len + 12, 2); ctx.fillRect(-6, wd / 2 - 2, pad.len + 12, 2);
+      ctx.fillStyle = "#ffffff"; for (let x = 20; x < pad.len - 10; x += 18) ctx.fillRect(x, -1, 9, 2);
+      for (let i = 0; i < 4; i++) ctx.fillRect(2, -wd / 2 + 4 + i * (wd - 8) / 4, 8, 2);
+      // the way in: an arrow before the threshold
+      const pulse = 0.5 + 0.5 * Math.sin(clock * 4);
+      ctx.fillStyle = col; ctx.globalAlpha = 0.5 + 0.4 * pulse;
+      ctx.beginPath(); ctx.moveTo(-10, 0); ctx.lineTo(-24, -9); ctx.lineTo(-20, 0); ctx.lineTo(-24, 9); ctx.closePath(); ctx.fill();
+      ctx.beginPath(); ctx.moveTo(-28, 0); ctx.lineTo(-42, -9); ctx.lineTo(-38, 0); ctx.lineTo(-42, 9); ctx.closePath(); ctx.fill();
+      ctx.globalAlpha = 1;
+      ctx.restore();
+    }
+  }
+  function planeShape(type, s) {
+    const k = TYPES[type];
+    ctx.scale(s, s);
+    if (type === "eli") {
+      ctx.fillStyle = k.col; ctx.beginPath(); ctx.ellipse(0, 0, 9, 6, 0, 0, TAU); ctx.fill(); ctx.fillRect(-18, -1.5, 12, 3); ctx.fillRect(-19, -4, 3, 8);
+      ctx.fillStyle = "rgba(220,240,255,0.8)"; ctx.beginPath(); ctx.ellipse(4, 0, 4, 4, 0, 0, TAU); ctx.fill();
+      ctx.strokeStyle = "rgba(30,30,40,0.55)"; ctx.lineWidth = 2; const r = clock * 25; for (let i = 0; i < 2; i++) { ctx.beginPath(); ctx.moveTo(Math.cos(r + i * Math.PI / 2) * 15, Math.sin(r + i * Math.PI / 2) * 15); ctx.lineTo(-Math.cos(r + i * Math.PI / 2) * 15, -Math.sin(r + i * Math.PI / 2) * 15); ctx.stroke(); }
+      return;
+    }
+    if (type === "elica") {
+      ctx.fillStyle = k.col; ctx.fillRect(-12, -2.5, 24, 5); ctx.fillRect(-1, -14, 7, 28); ctx.fillRect(-12, -6, 4, 12);
+      ctx.fillStyle = "rgba(30,30,40,0.5)"; ctx.fillRect(12, -7 * Math.abs(Math.sin(clock * 30)), 2, 14 * Math.abs(Math.sin(clock * 30)));
+      ctx.fillStyle = "rgba(220,240,255,0.9)"; ctx.fillRect(6, -2, 3, 4);
+      return;
+    }
+    ctx.fillStyle = k.col;
+    ctx.beginPath(); ctx.moveTo(16, 0); ctx.lineTo(10, -3); ctx.lineTo(-14, -3); ctx.lineTo(-16, 0); ctx.lineTo(-14, 3); ctx.lineTo(10, 3); ctx.closePath(); ctx.fill();
+    ctx.beginPath(); ctx.moveTo(4, -2); ctx.lineTo(-6, -16); ctx.lineTo(-10, -16); ctx.lineTo(-4, -2); ctx.moveTo(4, 2); ctx.lineTo(-6, 16); ctx.lineTo(-10, 16); ctx.lineTo(-4, 2); ctx.fill();
+    ctx.beginPath(); ctx.moveTo(-11, -2); ctx.lineTo(-16, -7); ctx.lineTo(-17, -7); ctx.lineTo(-15, 0); ctx.lineTo(-17, 7); ctx.lineTo(-16, 7); ctx.lineTo(-11, 2); ctx.fill();
+    ctx.fillStyle = "rgba(255,255,255,0.7)"; ctx.fillRect(-10, -1, 18, 2);
+    if (k.vip) { ctx.fillStyle = "#ffd23a"; ctx.font = "900 12px system-ui"; ctx.textAlign = "center"; ctx.textBaseline = "middle"; ctx.fillText("★", -2, 0); ctx.textBaseline = "alphabetic"; }
+  }
+  function drawPlanes() {
+    // the routes first
+    for (const p of planes) {
+      if (p.state !== "fly" || !p.path.length) continue;
+      ctx.strokeStyle = p.to ? PADCOL[p.to.type] : "rgba(255,255,255,0.75)"; ctx.lineWidth = 2; ctx.setLineDash([5, 5]);
+      ctx.beginPath(); ctx.moveTo(p.x, p.y); for (const q of p.path) ctx.lineTo(q.x, q.y); ctx.stroke(); ctx.setLineDash([]);
+      if (!p.to) { const e = p.path[p.path.length - 1]; ctx.fillStyle = "rgba(255,255,255,0.75)"; ctx.beginPath(); ctx.arc(e.x, e.y, 3, 0, TAU); ctx.fill(); }
+    }
+    for (const p of planes) {
+      const k = TYPES[p.type];
+      const land = p.state === "land", s = k.size * (land ? Math.max(0.55, 1 - p.t * 0.3) : 1);
+      // the shadow drops away from the plane: it is up in the air
+      const h = land ? Math.max(0, 6 - p.t * 8) : 6;
+      ctx.save(); ctx.translate(p.x + h, p.y + h); ctx.rotate(p.a); ctx.globalAlpha = 0.25; ctx.filter = "none";
+      ctx.fillStyle = "#000"; const keep = TYPES[p.type].col; TYPES[p.type].col = "#000"; planeShape(p.type, s); TYPES[p.type].col = keep; ctx.restore(); ctx.globalAlpha = 1;
+      ctx.save(); ctx.translate(p.x, p.y); ctx.rotate(p.a); if (land) ctx.globalAlpha = Math.max(0, 1 - Math.max(0, p.t - 1) / 0.6); planeShape(p.type, s); ctx.restore(); ctx.globalAlpha = 1;
+      if (p.near && !land) { ctx.strokeStyle = `rgba(255,60,60,${0.6 + 0.4 * Math.sin(clock * 20)})`; ctx.lineWidth = 2; ctx.beginPath(); ctx.arc(p.x, p.y, 20, 0, TAU); ctx.stroke(); }
+      if (p.drawing) { ctx.strokeStyle = "rgba(255,255,255,0.8)"; ctx.lineWidth = 1.5; ctx.beginPath(); ctx.arc(p.x, p.y, 18, 0, TAU); ctx.stroke(); }
+    }
+    // aircraft about to arrive: a marker at the edge
+    for (const q of incoming) {
+      const x = clamp(q.x, 14, W - 14), y = clamp(q.y, TOP + 14, H - 14), col = TYPES[q.type].col;
+      ctx.globalAlpha = 0.5 + 0.5 * Math.sin(clock * 10);
+      ctx.fillStyle = col; ctx.beginPath(); ctx.arc(x, y, 9, 0, TAU); ctx.fill();
+      ctx.fillStyle = "#1a1a1a"; ctx.font = "900 12px system-ui"; ctx.textAlign = "center"; ctx.textBaseline = "middle"; ctx.fillText("!", x, y + 1); ctx.textBaseline = "alphabetic";
+      ctx.globalAlpha = 1;
+    }
+    if (crash) {
+      const k = Math.min(1, crash.t / 0.5);
+      ctx.fillStyle = `rgba(255,200,80,${0.8 * (1 - crash.t / 2.2)})`; ctx.beginPath(); ctx.arc(crash.x, crash.y, 10 + k * 40, 0, TAU); ctx.fill();
+      ctx.fillStyle = `rgba(80,80,80,${0.6 * (1 - crash.t / 2.2)})`; for (let i = 0; i < 6; i++) { ctx.beginPath(); ctx.arc(crash.x + Math.cos(i) * k * 30, crash.y + Math.sin(i * 1.7) * k * 30 - crash.t * 10, 10, 0, TAU); ctx.fill(); }
+    }
+  }
+  function outlined(text, x, y, font, fill, lw = 5) {
+    ctx.font = font; ctx.lineWidth = lw; ctx.strokeStyle = "#0a1a1a"; ctx.strokeText(text, x, y); ctx.fillStyle = fill; ctx.fillText(text, x, y);
+  }
+  function drawHud() {
+    ctx.fillStyle = "rgba(10,26,26,0.92)"; ctx.fillRect(0, 0, W, TOP);
+    ctx.textBaseline = "middle"; ctx.textAlign = "left";
+    ctx.fillStyle = "#ffffff"; ctx.font = "900 15px system-ui"; ctx.fillText(score.toLocaleString("it-IT"), 10, 14);
+    ctx.fillStyle = "#c8e8e0"; ctx.font = "700 9px system-ui"; ctx.fillText(`REC ${Math.max(bestCache, score).toLocaleString("it-IT")}`, 70, 9);
+    ctx.fillStyle = "#5ae8c8"; ctx.font = "900 9px system-ui"; ctx.fillText(`${MAP().name.toUpperCase()} · ATTERRATI ${landed}`, 70, 20);
+    ctx.textAlign = "center"; ctx.fillStyle = "#ffffff"; ctx.font = "800 11px system-ui";
+    ctx.fillText(`✈ ${planes.filter((p) => p.state === "fly").length} in volo`, touchMode ? 380 : 360, 14);
+    ctx.fillText(`${Math.floor(playT / 60)}:${String(Math.floor(playT % 60)).padStart(2, "0")}`, touchMode ? 480 : 470, 14);
+    ctx.textBaseline = "alphabetic";
+  }
+  function draw() {
+    ctx.setTransform(pxRatio, 0, 0, pxRatio, 0, 0);
+    drawGround();
+    drawPads();
+    if (state === "menu") return;
+    drawPlanes();
+    drawHud();
+    ctx.textAlign = "center";
+    for (const p of popups) { ctx.globalAlpha = Math.max(0, 1 - p.t / 1.2); outlined(p.text, p.x, p.y, "900 13px system-ui", p.col, 4); }
+    ctx.globalAlpha = 1;
+    if (message) {
+      ctx.globalAlpha = Math.min(1, ((message.long ? 3.2 : 2.4) - message.t) * 2);
+      outlined(message.text, W / 2, 80, "italic 900 24px system-ui", message.col || "#5ae8c8", 6);
+      if (message.sub) outlined(message.sub, W / 2, 102, "800 12px system-ui", "#ffffff", 4);
+      ctx.globalAlpha = 1;
+    }
+  }
+
+  // ---------- Loop ----------
+  const STEP = 1 / 120;
+  let last = performance.now(), acc = 0;
+  function frame(now) {
+    const dt = Math.min(0.1, (now - last) / 1000);
+    last = now;
+    if (isPlaying()) {
+      acc += dt;
+      while (acc >= STEP && isPlaying()) { update(STEP); acc -= STEP; }
+    } else { acc = 0; update(dt); }
+    draw();
+    requestAnimationFrame(frame);
+  }
+  syncControls();
+  showTitle();
+  requestAnimationFrame(frame);
+})();
+</script>
+<script src="../../shared/iniziali.js" data-record="controllo-best-" data-kind="score"></script>
+</body>
+</html>
+

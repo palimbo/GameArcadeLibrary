@@ -9,6 +9,11 @@
   "use strict";
   // record key prefix of the game (as in trofei.js) → its feats
   const LIST = {
+    "controllo-best-": [   // torre-di-controllo
+      { id: "tris", name: "Tris di atterraggi", desc: "fai atterrare 3 aerei in 3 secondi" },
+      { id: "dodici", name: "Cielo affollato", desc: "abbi 12 aerei in volo nello stesso momento" },
+      { id: "cinquanta", name: "Cinquanta a terra", desc: "fai atterrare 50 aerei nella stessa partita" },
+    ],
     "bilico-best-": [   // palazzo-in-bilico
       { id: "perfetti", name: "Mano ferma", desc: "metti 5 piani PERFETTI di fila" },
       { id: "pulito", name: "Senza sbavature", desc: "finisci un palazzo senza far cadere neanche un piano" },
