@@ -99,7 +99,9 @@
     { col: "#3a9aff", dark: "#1a4ab8", name: "blu" },
     { col: "#b85aff", dark: "#6a1ab8", name: "viola" },
   ];
-  const CHERRY = -1, BOMB = -2;
+  const CHERRY = -1, BOMB = -2, BEAR = -3;
+  const FIXED = (p) => p && (p.c === CHERRY || p.c === BEAR);   // not a sweet: cannot be matched or blown up
+  const POW = (p) => p && (p.sp === "h" || p.sp === "v" || p.sp === "w" || p.sp === "pesce");
   // the jelly layouts
   const JELLY = {
     centro: (r, c) => r >= 2 && r <= 5 && c >= 2 && c <= 5 ? 1 : 0,
@@ -128,6 +130,21 @@
     { goal: "gelatina", jelly: "angoli", moves: 24 },
     { goal: "gelatina", jelly: "tutto", moves: 30 },
   ];
+  // the Soda mode: the soda rises when you pop the bottles, and in the soda the sweets float up
+  const SODA_LEVELS = [
+    { goal: "soda", soda: 2, bottles: 3, moves: 20 },
+    { goal: "orsetti", n: 2, soda: 4, bottles: 2, moves: 24 },
+    { goal: "colore", color: 2, n: 22, soda: 4, moves: 20 },
+    { goal: "soda", soda: 1, bottles: 4, moves: 24 },
+    { goal: "gelatina", jelly: "centro", soda: 4, moves: 24 },
+    { goal: "orsetti", n: 3, soda: 2, bottles: 3, moves: 28 },
+    { goal: "punti", n: 15000, soda: 8, moves: 20 },
+    { goal: "soda", soda: 0, bottles: 4, moves: 26 },
+    { goal: "orsetti", n: 4, soda: 3, bottles: 3, moves: 30 },
+    { goal: "gelatina", jelly: "tutto", soda: 4, moves: 30 },
+  ];
+  const MODES = { classica: "CLASSICA", soda: "SODA" };
+  const MODE_KEY = "dolci-modo";
 
   const DIFFICULTIES = {
     facile:    { label: "FACILE",    color: "#7ed87a", desc: "5 colori di dolci · più mosse per livello · 5 vite", colors: 5, extra: 6, lives: 5 },
@@ -197,6 +214,7 @@
     special: () => arp([880, 1175, 1568], 0.04, 0.1, "square", 0.035),
     blast: lim(() => { beep(120, 0.25, "sawtooth", 0.05, -60); beep(900, 0.1, "triangle", 0.03, -600); }),
     cherry: () => arp([784, 988, 1319], 0.06, 0.1, "triangle", 0.04),
+    fizz: () => { for (let i = 0; i < 6; i++) beep(rnd(1800, 3200), 0.04, "triangle", 0.015, -400, i * 0.04); },
     win: () => arp([523, 659, 784, 1047, 784, 1047, 1319, 1568], 0.08, 0.16, "square", 0.045),
     lose: () => arp([523, 466, 415, 392, 330, 262], 0.15, 0.24, "triangle", 0.05),
   };
@@ -208,6 +226,8 @@
   let score = 0, bestCache = 0, lives = 3, lvN = 0, lv = null, moves = 0, levelScore = 0, got = 0, stars = 0, totalStars = 0;
   let grid = [], jelly = [], phase = "idle", phaseT = 0, sel = null, cursor = { r: 3, c: 3 }, swapA = null, swapB = null, swapBack = false, popping = [], cascade = 0, bestCascade = 0;
   let parts = [], popups = [], beams = [], message = null, idleT = 0, hint = null, finaleN = 0, uid = 0;
+  let mode = MODES[load(MODE_KEY)] ? load(MODE_KEY) : "classica", sodaRow = N, fizzed = false, fishes = [], bubbles = [];
+  const soda = () => mode === "soda";
   const keys = { left: false, right: false, up: false, down: false };
   const isPlaying = () => state === "play";
 
@@ -233,6 +253,8 @@
     const runs = [];
     for (let r = 0; r < N; r++) for (let c = 0; c < N;) { let e = c + 1; while (e < N && same(grid[r][c], grid[r][e])) e++; if (e - c >= 3) runs.push({ dir: "h", cells: Array.from({ length: e - c }, (_, i) => [r, c + i]) }); c = e; }
     for (let c = 0; c < N; c++) for (let r = 0; r < N;) { let e = r + 1; while (e < N && same(grid[r][c], grid[e][c])) e++; if (e - r >= 3) runs.push({ dir: "v", cells: Array.from({ length: e - r }, (_, i) => [r + i, c]) }); r = e; }
+    // in the Soda mode a square of four is a match too (it makes a fish)
+    if (soda()) for (let r = 0; r < N - 1; r++) for (let c = 0; c < N - 1; c++) if (same(grid[r][c], grid[r][c + 1]) && same(grid[r][c], grid[r + 1][c]) && same(grid[r][c], grid[r + 1][c + 1])) runs.push({ dir: "q", cells: [[r, c], [r, c + 1], [r + 1, c], [r + 1, c + 1]] });
     return runs;
   }
   const isSpecial = (p) => p && (p.sp || p.c === BOMB);
@@ -240,9 +262,9 @@
   // is this swap a move? (it makes a line, or it puts two specials or a colour bomb together)
   function moveWorks(a, b) {
     const pa = grid[a.r][a.c], pb = grid[b.r][b.c];
-    if (!pa || !pb || pa.c === CHERRY && pb.c === CHERRY) return false;
-    if (pa.c === BOMB || pb.c === BOMB) return pa.c !== CHERRY && pb.c !== CHERRY;
-    if (pa.sp && pb.sp) return true;
+    if (!pa || !pb || FIXED(pa) && FIXED(pb)) return false;
+    if (pa.c === BOMB || pb.c === BOMB) return !FIXED(pa) && !FIXED(pb);
+    if (POW(pa) && POW(pb)) return true;
     swapCells(a, b); const ok = findRuns().length > 0; swapCells(a, b);
     return ok;
   }
@@ -276,7 +298,9 @@
       done.add(k);
       const p = grid[r][c];
       if (jelly[r][c] > 0) { jelly[r][c]--; levelScore += 0; score += 100; levelScore += 100; for (let i = 0; i < 4; i++) parts.push({ x: BX + c * S + S / 2, y: BY + r * S + S / 2, vx: rnd(-60, 60), vy: rnd(-80, 0), t: 0, col: "#ff9ad8" }); }
-      if (!p || p.c === CHERRY || p.keep) continue;
+      if (!p || FIXED(p) || p.keep) continue;
+      if (p.sp === "bot") popBottle(r, c);
+      if (p.sp === "pesce") { const t = fishTarget(done, r, c); if (t) { queue.push(t); fishes.push({ x0: BX + c * S + S / 2, y0: BY + r * S + S / 2, x1: BX + t[1] * S + S / 2, y1: BY + t[0] * S + S / 2, t: 0, col: SWEETS[p.c].col }); } }
       if (p.sp === "h") { beams.push({ r, c, dir: "h", t: 0 }); for (let i = 0; i < N; i++) queue.push([r, i]); sfx.blast(); }
       if (p.sp === "v") { beams.push({ r, c, dir: "v", t: 0 }); for (let i = 0; i < N; i++) queue.push([i, c]); sfx.blast(); }
       if (p.sp === "w") { beams.push({ r, c, dir: "w", t: 0 }); for (let dr = -1; dr <= 1; dr++) for (let dc = -1; dc <= 1; dc++) queue.push([r + dr, c + dc]); sfx.blast(); }
@@ -306,12 +330,14 @@
     if (cascade >= 5) impresa("cascata");
     const make = [];
     for (const g of groups) {
-      const long = Math.max(...g.runs.map((r) => r.cells.length));
+      const lines = g.runs.filter((r) => r.dir !== "q");
+      const long = Math.max(0, ...lines.map((r) => r.cells.length));
       const color = grid[g.cells[0][0]][g.cells[0][1]].c;
       let sp = null;
       if (long >= 5) sp = "bomb";
-      else if (g.runs.some((r) => r.dir === "h") && g.runs.some((r) => r.dir === "v")) sp = "w";
-      else if (long === 4) sp = g.runs[0].dir === "h" ? "v" : "h";
+      else if (lines.some((r) => r.dir === "h") && lines.some((r) => r.dir === "v")) sp = "w";
+      else if (long === 4) sp = lines[0].dir === "h" ? "v" : "h";
+      else if (g.runs.some((r) => r.dir === "q")) sp = "pesce";
       // the new special goes where you moved, or in the middle
       let at = g.cells[Math.floor(g.cells.length / 2)];
       for (const s of [swapA, swapB]) if (s && g.cells.some(([r, c]) => r === s.r && c === s.c)) at = [s.r, s.c];
@@ -350,6 +376,24 @@
       blast(cells, other.c);
       return;
     }
+    // a fish with another special: three fish, each carrying it
+    if (pa.sp === "pesce" || pb.sp === "pesce") {
+      const other = pa.sp === "pesce" ? pb : pa, n = other.sp === "pesce" ? 3 : 3;
+      grid[a.r][a.c] = null; grid[b.r][b.c] = null;
+      const done = new Set([a.r * N + a.c, b.r * N + b.c]), cells = [];
+      for (let i = 0; i < n; i++) {
+        const t = fishTarget(done, at.r, at.c); if (!t) break;
+        done.add(t[0] * N + t[1]);
+        const q = grid[t[0]][t[1]];
+        if (q && q.c >= 0 && other.sp !== "pesce") q.sp = other.sp;
+        cells.push(t);
+        fishes.push({ x0: BX + at.c * S + S / 2, y0: BY + at.r * S + S / 2, x1: BX + t[1] * S + S / 2, y1: BY + t[0] * S + S / 2, t: 0, col: SWEETS[pa.c >= 0 ? pa.c : 0].col });
+      }
+      gain(1000, at.r, at.c, "#5ad8ff");
+      sfx.special();
+      blast(cells);
+      return;
+    }
     const s = [pa.sp, pb.sp].sort().join("");
     pa.keep = pb.keep = false;
     grid[a.r][a.c] = null; grid[b.r][b.c] = null;
@@ -363,6 +407,7 @@
   }
   // sweets fall into the holes, new ones from the top; cherries at the bottom are taken
   function gravity() {
+    if (soda()) { sodaGravity(); return; }
     for (let c = 0; c < N; c++) {
       let w = N - 1;
       for (let r = N - 1; r >= 0; r--) { const p = grid[r][c]; if (p) { if (w !== r) { grid[w][c] = p; grid[r][c] = null; p.dy -= w - r; } w--; } }
@@ -371,6 +416,65 @@
     }
   }
   let cherriesOut = 0;
+  // ---------- Soda ----------
+  // above the soda the sweets fall down onto it; in the soda they float up to its surface (new ones come from below)
+  function newSodaPiece() {
+    const need = (lv.goal === "soda" || lv.goal === "orsetti") && sodaRow > 0;
+    const bottles = grid.reduce((n, row) => n + row.filter((p) => p && p.sp === "bot").length, 0);
+    return piece(randColor(), need && bottles < 3 && Math.random() < 0.14 ? "bot" : null);
+  }
+  function sodaGravity() {
+    const b = sodaRow;
+    for (let c = 0; c < N; c++) {
+      let w = b - 1;
+      for (let r = b - 1; r >= 0; r--) { const p = grid[r][c]; if (p) { if (w !== r) { grid[w][c] = p; grid[r][c] = null; p.dy -= w - r; } w--; } }
+      let k = 0;
+      for (let r = w; r >= 0; r--) { k++; grid[r][c] = newSodaPiece(); grid[r][c].dy = -(w + 1) - k * 0.15; }
+      w = b;
+      for (let r = b; r < N; r++) { const p = grid[r][c]; if (p) { if (w !== r) { grid[w][c] = p; grid[r][c] = null; p.dy += r - w; } w++; } }
+      k = 0;
+      for (let r = w; r < N; r++) { k++; grid[r][c] = newSodaPiece(); grid[r][c].dy = (N - w) + k * 0.15; }
+    }
+  }
+  function popBottle(r, c) {
+    if (sodaRow <= 0) return;
+    sodaRow = Math.max(0, sodaRow - 1);
+    gain(500, r, c, "#5ad8ff");
+    sfx.fizz();
+    for (let i = 0; i < 12; i++) bubbles.push({ x: BX + rnd(0, N * S), y: BY + N * S, vy: rnd(-90, -40), t: 0, r: rnd(2, 5) });
+    if (lv.goal === "soda" || lv.goal === "orsetti") message = { text: sodaRow ? "SODA!" : "SODA IN CIMA!", sub: sodaRow ? `mancano ${sodaRow} ${sodaRow === 1 ? "fila" : "file"}` : "", t: 0, col: "#5ad8ff" };
+  }
+  // where a fish swims: what the level needs most
+  function fishTarget(done, fr, fc) {
+    const ok = (r, c) => inB(r, c) && !done.has(r * N + c) && !(r === fr && c === fc) && grid[r][c] && !FIXED(grid[r][c]);
+    const pick = (list) => list.length ? list[Math.floor(Math.random() * list.length)] : null;
+    const all = []; for (let r = 0; r < N; r++) for (let c = 0; c < N; c++) if (ok(r, c)) all.push([r, c]);
+    if (lv.goal === "soda" || lv.goal === "orsetti") { const t = pick(all.filter(([r, c]) => grid[r][c].sp === "bot")); if (t) return t; }
+    if (lv.goal === "orsetti") { const t = pick(all.filter(([r, c]) => inB(r + 1, c) && grid[r + 1][c] && grid[r + 1][c].c === BEAR)); if (t) return t; }
+    if (lv.goal === "gelatina") { const t = pick(all.filter(([r, c]) => jelly[r][c] > 0)); if (t) return t; }
+    if (lv.goal === "colore") { const t = pick(all.filter(([r, c]) => grid[r][c].c === lv.color)); if (t) return t; }
+    return pick(all);
+  }
+  // the bears at the top of a board full of soda are free
+  function takeBears() {
+    if (!soda() || sodaRow > 0) return 0;
+    let n = 0;
+    for (let c = 0; c < N; c++) { const p = grid[0][c]; if (p && p.c === BEAR && p.dy === 0) { grid[0][c] = null; got++; n++; gain(1500, 0, c, "#ff8a3a"); for (let i = 0; i < 12; i++) parts.push({ x: BX + c * S + S / 2, y: BY + S / 2, vx: rnd(-90, 90), vy: rnd(-160, -40), t: 0, col: "#ff8a3a" }); } }
+    if (n) sfx.cherry();
+    return n;
+  }
+  // the soda reaches the top for the first time: the top row fizzes away
+  function fizz() {
+    if (!soda() || sodaRow > 0 || fizzed || lv.soda >= N) return false;
+    fizzed = true;
+    const cells = []; for (let c = 0; c < N; c++) cells.push([0, c]);
+    beams.push({ r: 0, c: 0, dir: "h", t: 0 });
+    gain(2000, 0, Math.floor(N / 2), "#5ad8ff");
+    message = { text: "SCOPPIO FRIZZANTE!", sub: "la soda è arrivata in cima", t: 0, col: "#5ad8ff" };
+    sfx.blast(); sfx.fizz();
+    blast(cells);
+    return true;
+  }
   const boardHasCherry = () => grid.some((row) => row.some((p) => p && p.c === CHERRY));
   function takeCherries() {
     let n = 0;
@@ -382,15 +486,26 @@
 
   // ---------- Levels ----------
   function levelDef(i) {
-    const base = LEVELS[i % LEVELS.length], loop = Math.floor(i / LEVELS.length);
-    return { ...base, n: base.goal === "punti" ? Math.round(base.n * (1 + loop * 0.3)) : base.goal === "colore" ? base.n + loop * 6 : base.n, moves: Math.max(10, base.moves - loop * 2 + diff.extra) };
+    const L = soda() ? SODA_LEVELS : LEVELS;
+    const base = L[i % L.length], loop = Math.floor(i / L.length);
+    return { ...base, color: base.color !== undefined ? base.color % diff.colors : undefined, n: base.goal === "punti" ? Math.round(base.n * (1 + loop * 0.3)) : base.goal === "colore" ? base.n + loop * 6 : base.n, moves: Math.max(10, base.moves - loop * 2 + diff.extra) };
   }
   function startLevel() {
     lv = levelDef(lvN);
-    moves = lv.moves; levelScore = 0; got = 0; cherriesOut = 0; cascade = 0;
+    moves = lv.moves; levelScore = 0; got = 0; cherriesOut = 0; cascade = 0; fizzed = false; fishes = []; bubbles = [];
+    sodaRow = soda() ? N - (lv.soda || 0) : N;
     jelly = Array.from({ length: N }, (_, r) => Array.from({ length: N }, (_, c) => lv.goal === "gelatina" ? JELLY[lv.jelly](r, c) : 0));
     fillBoard();
     if (lv.goal === "ciliegie") { const cols = [1, 6, 3]; for (let i = 0; i < Math.min(3, lv.n); i++) { const c = cols[i], r = 3 + (i % 2); grid[r][c] = piece(CHERRY); grid[r][c].dy = -9; cherriesOut++; } }
+    if (soda()) {
+      // the sweets in the soda rise in from below; bottles and bears in their places
+      for (let r = sodaRow; r < N; r++) for (let c = 0; c < N; c++) grid[r][c].dy = (N - sodaRow) + rnd(0, 1.5);
+      const spots = []; for (let r = 0; r < N; r++) for (let c = 0; c < N; c++) spots.push([r, c]);
+      spots.sort(() => Math.random() - 0.5);
+      for (let i = 0; i < (lv.bottles || 0); i++) { const [r, c] = spots.pop(); grid[r][c].sp = "bot"; }
+      const cols = [1, 6, 3, 4];
+      for (let i = 0; i < (lv.n && lv.goal === "orsetti" ? lv.n : 0); i++) { const c = cols[i], r = N - 1 - (i % 2); const dy = grid[r][c].dy; grid[r][c] = piece(BEAR); grid[r][c].dy = dy; }
+    }
     if (!allMoves().length) shuffleBoard();
     phase = "fall"; phaseT = 0; sel = null; hint = null; idleT = 0;
     message = { text: `LIVELLO ${lvN + 1}`, sub: goalText(), t: 0, long: true };
@@ -399,6 +514,8 @@
     if (lv.goal === "punti") return `fai ${lv.n.toLocaleString("it-IT")} punti in ${lv.moves} mosse`;
     if (lv.goal === "colore") return `raccogli ${lv.n} caramelle ${SWEETS[lv.color].name} in ${lv.moves} mosse`;
     if (lv.goal === "gelatina") return `togli tutta la gelatina rosa in ${lv.moves} mosse`;
+    if (lv.goal === "soda") return `fai salire la soda fino in cima in ${lv.moves} mosse`;
+    if (lv.goal === "orsetti") return `riempi di soda e fai risalire ${lv.n} orsetti in ${lv.moves} mosse`;
     return `porta giù ${lv.n} ${lv.n === 1 ? "ciliegia" : "ciliegie"} in ${lv.moves} mosse`;
   }
   const jellyLeft = () => jelly.reduce((s, row) => s + row.reduce((a, b) => a + b, 0), 0);
@@ -406,12 +523,14 @@
     if (lv.goal === "punti") return levelScore >= lv.n;
     if (lv.goal === "colore") return got >= lv.n;
     if (lv.goal === "gelatina") return jellyLeft() === 0;
+    if (lv.goal === "soda") return sodaRow === 0;
     return got >= lv.n;
   }
   function goalLeft() {
     if (lv.goal === "punti") return Math.max(0, lv.n - levelScore).toLocaleString("it-IT");
     if (lv.goal === "colore") return Math.max(0, lv.n - got);
     if (lv.goal === "gelatina") return jellyLeft();
+    if (lv.goal === "soda") return sodaRow;
     return Math.max(0, lv.n - got);
   }
   function startGame() {
@@ -439,7 +558,7 @@
   function afterSwap() {
     const a = swapA, b = swapB, pa = grid[b.r][b.c], pb = grid[a.r][a.c];   // already swapped: pa is now at b
     // specials together, or a colour bomb
-    if ((pa.c === BOMB || pb.c === BOMB) && pa.c !== CHERRY && pb.c !== CHERRY || pa.sp && pb.sp) {
+    if ((pa.c === BOMB || pb.c === BOMB) && !FIXED(pa) && !FIXED(pb) || POW(pa) && POW(pb)) {
       moves--; cascade = 1;
       swapCells(a, b);
       comboSwap(a, b);
@@ -466,14 +585,19 @@
     if (message) { message.t += dt; if (message.t > (message.long ? 3 : 2.2)) message = null; }
     if (state !== "play") return;
     phaseT += dt;
-    for (const row of grid) for (const p of row) if (p) { if (p.born) p.born = Math.max(0, p.born - dt); if (p.dy < 0) { p.vy += 40 * dt; p.dy = Math.min(0, p.dy + p.vy * dt); if (p.dy === 0) p.vy = 0; } }
+    for (const row of grid) for (const p of row) if (p) { if (p.born) p.born = Math.max(0, p.born - dt); if (p.dy < 0) { p.vy += 40 * dt; p.dy = Math.min(0, p.dy + p.vy * dt); if (p.dy === 0) p.vy = 0; } else if (p.dy > 0) { p.vy += 30 * dt; p.dy = Math.max(0, p.dy - p.vy * dt); if (p.dy === 0) p.vy = 0; } }
+    for (const f of fishes) f.t += dt;
+    fishes = fishes.filter((f) => f.t < 0.45);
+    for (const b of bubbles) { b.t += dt; b.y += b.vy * dt; }
+    bubbles = bubbles.filter((b) => b.t < 2.5);
     if (phase === "swap") {
       if (phaseT >= 0.14) { if (swapBack) { phase = "idle"; swapA = swapB = null; } else afterSwap(); }
     } else if (phase === "pop") {
       if (phaseT >= 0.22) { gravity(); phase = "fall"; phaseT = 0; }
     } else if (phase === "fall") {
       if (settled()) {
-        if (takeCherries()) { gravity(); return; }
+        if (takeCherries() || takeBears()) { gravity(); return; }
+        if (fizz()) { phase = "pop"; phaseT = 0; return; }
         if (resolveRuns()) { phase = "pop"; phaseT = 0; return; }
         cascade = 0;
         endOfMove();
@@ -534,8 +658,9 @@
     if (record) store(bestKey(difficulty), String(score));
     menu = () => showOverlay(
       `<h2 class="lose">BASTA DOLCI!</h2>
-       <p>Punteggio: <b>${score.toLocaleString("it-IT")}</b> · arrivato al livello ${lvN + 1} · ${totalStars} ★${bestCascade >= 3 ? ` · cascata da ${bestCascade}` : ""} · ${diff.label}</p>
+       <p>Punteggio: <b>${score.toLocaleString("it-IT")}</b> · arrivato al livello ${lvN + 1} · ${totalStars} ★${bestCascade >= 3 ? ` · cascata da ${bestCascade}` : ""} · ${MODES[mode]} · ${diff.label}</p>
        ${record ? "<p style='color:var(--pink)'>★ NUOVO RECORD! ★</p>" : ""}
+       ${modeHTML()}
        ${difficultyHTML()}
        <button class="start" data-start>ANCORA DOLCI!</button>`
     );
@@ -572,21 +697,31 @@
     menu = showTitle;
     showOverlay(
       `<h1>DOLCI IN FILA</h1>
-       <p>Scambia due dolci vicini per metterne tre o più dello stesso colore in fila: spariscono e dall'alto ne cadono di nuovi. Ogni livello ha il suo obiettivo e un numero di mosse: fai tanti punti, raccogli dolci di un colore, togli la gelatina rosa sotto i dolci, o porta le ciliegie fino in fondo.</p>
+       <p>Scambia due dolci vicini per metterne tre o più dello stesso colore in fila: spariscono e dall'alto ne cadono di nuovi. Ogni livello ha il suo obiettivo e un numero di mosse. Nella modalità Soda la griglia si riempie di soda: dentro la soda i dolci galleggiano verso l'alto invece di cadere.</p>
        <div class="pts">
          <span><b>Speciali</b></span><span>4 in fila: dolce a strisce (pulisce riga o colonna) · a L o a T: dolce incartato (esplode intorno) · 5 in fila: bomba di cioccolato (via tutti i dolci di un colore) · scambia due speciali tra loro per un colpo enorme</span>
+         <span><b>Soda</b></span><span>scoppia le bottiglie per alzare la soda · 4 dolci in quadrato: un pesce, che nuota da solo verso quello che serve · gli orsetti gommosi galleggiano e si liberano in cima · soda in cima: scoppio frizzante</span>
          <span><b>Punti</b></span><span>60 a dolce, moltiplicati per la cascata · gelatina 100 · ciliegia 1.000 · ogni mossa avanzata: 300</span>
        </div>
        <p class="muted help">${touchMode ? "Trascina un dolce verso il vicino (o tocca un dolce e poi il vicino) · ❚❚ pausa" : "Mouse: trascina un dolce verso il vicino, o clicca i due dolci · frecce + SPAZIO · P pausa"}</p>
+       ${modeHTML()}
        ${difficultyHTML()}
        <button class="start" data-start>GIOCA!</button>`
     );
+  }
+  function modeHTML() {
+    return `<div class="diff mode">${Object.entries(MODES).map(([id, n]) => `<button type="button" data-mode="${id}" class="${id === mode ? "on" : ""}" style="--c:${id === "soda" ? "#5ad8ff" : "#ff6ab8"}">${n}</button>`).join("")}</div>
+      <p class="muted">${mode === "soda" ? "Soda: le bottiglie fanno salire la soda, e nella soda i dolci galleggiano verso l'alto · 4 in quadrato fanno un pesce · libera gli orsetti gommosi" : "Classica: punti, caramelle di un colore, gelatina e ciliegie"}</p>`;
   }
   overlay.addEventListener("click", (e) => {
     const d = e.target.closest("[data-diff]");
     if (d) { setDifficulty(d.dataset.diff); return; }
     if (e.target.closest("[data-start]")) startGame();
     if (e.target.closest("[data-resume]")) togglePause();
+  });
+  overlay.addEventListener("click", (e) => {
+    const m = e.target.closest("[data-mode]");
+    if (m && MODES[m.dataset.mode]) { mode = m.dataset.mode; store(MODE_KEY, mode); lv = null; if (menu) menu(); }
   });
 
   // ---------- Input ----------
@@ -650,6 +785,15 @@
   }
   function sweetShape(p, x, y, s) {
     ctx.save(); ctx.translate(x, y); ctx.scale(s, s);
+    if (p.c === BEAR) {
+      // a gummy bear
+      ctx.fillStyle = "rgba(255,120,40,0.9)";
+      for (const [bx, by, r] of [[-6, -13, 3.5], [6, -13, 3.5], [0, -7, 8], [-9, 2, 4], [9, 2, 4], [-5, 12, 4.5], [5, 12, 4.5]]) { ctx.beginPath(); ctx.arc(bx, by, r, 0, TAU); ctx.fill(); }
+      ctx.beginPath(); ctx.ellipse(0, 4, 9, 10, 0, 0, TAU); ctx.fill();
+      ctx.fillStyle = "rgba(255,255,255,0.5)"; ctx.beginPath(); ctx.ellipse(-3, -9, 3, 2, -0.5, 0, TAU); ctx.fill(); ctx.beginPath(); ctx.ellipse(-3, 1, 2.5, 4, -0.3, 0, TAU); ctx.fill();
+      ctx.fillStyle = "#5a1a0a"; ctx.fillRect(-3.5, -8, 2, 2); ctx.fillRect(1.5, -8, 2, 2);
+      ctx.restore(); return;
+    }
     if (p.c === CHERRY) {
       ctx.strokeStyle = "#3a8a2a"; ctx.lineWidth = 2; ctx.beginPath(); ctx.moveTo(-6, 2); ctx.quadraticCurveTo(-2, -14, 4, -14); ctx.moveTo(6, 4); ctx.quadraticCurveTo(4, -10, 4, -14); ctx.stroke();
       ctx.fillStyle = "#4ab83a"; ctx.beginPath(); ctx.ellipse(8, -14, 6, 3, -0.4, 0, TAU); ctx.fill();
@@ -663,6 +807,25 @@
       ctx.restore(); return;
     }
     const k = SWEETS[p.c];
+    if (p.sp === "bot") {
+      // a soda bottle of that colour
+      ctx.fillStyle = k.dark; ctx.beginPath(); ctx.roundRect(-10, -6, 20, 21, 6); ctx.fill(); ctx.fillRect(-5, -14, 10, 10);
+      ctx.fillStyle = k.col; ctx.beginPath(); ctx.roundRect(-8.5, -4.5, 17, 18, 5); ctx.fill(); ctx.fillRect(-3.5, -13, 7, 9);
+      ctx.fillStyle = "#e8e8f0"; ctx.fillRect(-6, -18, 12, 5);
+      ctx.fillStyle = "rgba(255,255,255,0.85)"; ctx.fillRect(-8.5, 1, 17, 5);
+      ctx.fillStyle = "rgba(255,255,255,0.7)"; for (let i = 0; i < 3; i++) { ctx.beginPath(); ctx.arc(-4 + i * 4, 10 - ((clock * 12 + i * 5) % 12), 1.3, 0, TAU); ctx.fill(); }
+      ctx.restore(); return;
+    }
+    if (p.sp === "pesce") {
+      // a jelly fish: swims off to what the level needs
+      const wag = Math.sin(clock * 8) * 2;
+      ctx.fillStyle = k.dark; ctx.beginPath(); ctx.moveTo(-9, 0); ctx.lineTo(-17, -8 + wag); ctx.lineTo(-17, 8 + wag); ctx.closePath(); ctx.fill();
+      ctx.beginPath(); ctx.ellipse(1, 0, 13, 9, 0, 0, TAU); ctx.fill();
+      ctx.fillStyle = k.col; ctx.beginPath(); ctx.ellipse(1, -1, 11.5, 7.5, 0, 0, TAU); ctx.fill();
+      ctx.fillStyle = "rgba(255,255,255,0.55)"; ctx.beginPath(); ctx.ellipse(-2, -4, 6, 2, 0, 0, TAU); ctx.fill();
+      ctx.fillStyle = "#ffffff"; ctx.beginPath(); ctx.arc(7, -2, 3, 0, TAU); ctx.fill(); ctx.fillStyle = "#1a1a1a"; ctx.beginPath(); ctx.arc(8, -2, 1.5, 0, TAU); ctx.fill();
+      ctx.restore(); return;
+    }
     if (p.sp === "w") {
       // the wrapper: two twisted ends
       ctx.fillStyle = k.dark; for (const sx of [-1, 1]) { ctx.beginPath(); ctx.moveTo(sx * 10, 0); ctx.lineTo(sx * 18, -9); ctx.lineTo(sx * 18, 9); ctx.closePath(); ctx.fill(); }
@@ -704,6 +867,10 @@
       const j = jelly[r] && jelly[r][c];
       if (j) { ctx.fillStyle = j > 1 ? "rgba(255,60,160,0.75)" : "rgba(255,120,200,0.55)"; ctx.beginPath(); ctx.roundRect(BX + c * S + 2, BY + r * S + 2, S - 4, S - 4, 6); ctx.fill(); }
     }
+    if (soda() && sodaRow < N) {
+      const y = BY + sodaRow * S;
+      ctx.fillStyle = "rgba(60,170,255,0.32)"; ctx.fillRect(BX - 6, y, N * S + 12, BY + N * S + 4 - y);
+    }
     if (lv && lv.goal === "ciliegie") { ctx.fillStyle = "rgba(255,255,255,0.8)"; ctx.font = "900 9px system-ui"; ctx.textAlign = "center"; for (let c = 0; c < N; c++) ctx.fillText("▼", BX + c * S + S / 2, BY + N * S + 2); }
     ctx.save(); ctx.beginPath(); ctx.rect(BX - 6, BY - 4, N * S + 12, N * S + 8); ctx.clip();
     for (let r = 0; r < N; r++) for (let c = 0; c < N; c++) {
@@ -713,7 +880,22 @@
       sweetShape(p, q.x, q.y + p.dy * S, s);
     }
     for (const pp of popping) { const q = cellPos(pp.r, pp.c); sweetShape(pp.p, q.x, q.y, 1 + pp.t * 2); }
+    if (soda() && sodaRow < N) {
+      // the surface of the soda, and its bubbles
+      const y = BY + sodaRow * S;
+      ctx.strokeStyle = "rgba(200,240,255,0.9)"; ctx.lineWidth = 3; ctx.beginPath();
+      for (let x = BX - 6; x <= BX + N * S + 6; x += 6) ctx.lineTo(x, y + Math.sin(x * 0.08 + clock * 3) * 2);
+      ctx.stroke();
+      ctx.fillStyle = "rgba(220,245,255,0.55)";
+      for (let i = 0; i < 18; i++) { const bx = BX + ((i * 53) % (N * S)), by = BY + N * S - ((clock * 30 + i * 37) % Math.max(1, N * S - sodaRow * S)); ctx.beginPath(); ctx.arc(bx + Math.sin(clock * 2 + i) * 3, by, 1.5 + (i % 3), 0, TAU); ctx.fill(); }
+    }
+    for (const b of bubbles) { ctx.strokeStyle = `rgba(220,245,255,${1 - b.t / 2.5})`; ctx.lineWidth = 1.5; ctx.beginPath(); ctx.arc(b.x, b.y, b.r, 0, TAU); ctx.stroke(); }
     ctx.restore();
+    for (const f of fishes) {
+      const k = Math.min(1, f.t / 0.45), x = f.x0 + (f.x1 - f.x0) * k, y = f.y0 + (f.y1 - f.y0) * k - Math.sin(k * Math.PI) * 30;
+      ctx.save(); ctx.translate(x, y); ctx.rotate(Math.atan2(f.y1 - f.y0, f.x1 - f.x0)); ctx.fillStyle = f.col;
+      ctx.beginPath(); ctx.ellipse(0, 0, 9, 6, 0, 0, TAU); ctx.fill(); ctx.beginPath(); ctx.moveTo(-7, 0); ctx.lineTo(-13, -5); ctx.lineTo(-13, 5); ctx.fill(); ctx.restore();
+    }
     for (const b of beams) {
       const k = 1 - b.t / 0.35, x = BX + b.c * S + S / 2, y = BY + b.r * S + S / 2, w = b.wide ? S * 3 : S * 0.5;
       ctx.fillStyle = `rgba(255,255,255,${0.8 * k})`;
@@ -736,9 +918,11 @@
     panel(10, BY, 146, 160);
     ctx.textAlign = "center";
     outlined(`LIVELLO ${lvN + 1}`, 83, BY + 22, "900 14px system-ui", "#ffffff", 4);
-    ctx.fillStyle = "#f0c8e0"; ctx.font = "800 9px system-ui"; ctx.fillText(lv.goal === "punti" ? "PUNTI CHE MANCANO" : lv.goal === "colore" ? `CARAMELLE ${SWEETS[lv.color].name.toUpperCase()}` : lv.goal === "gelatina" ? "GELATINA DA TOGLIERE" : "CILIEGIE DA PORTARE GIÙ", 83, BY + 42);
+    ctx.fillStyle = "#f0c8e0"; ctx.font = "800 9px system-ui"; ctx.fillText(lv.goal === "punti" ? "PUNTI CHE MANCANO" : lv.goal === "colore" ? `CARAMELLE ${SWEETS[lv.color].name.toUpperCase()}` : lv.goal === "gelatina" ? "GELATINA DA TOGLIERE" : lv.goal === "soda" ? "FILE DI SODA CHE MANCANO" : lv.goal === "orsetti" ? "ORSETTI DA LIBERARE" : "CILIEGIE DA PORTARE GIÙ", 83, BY + 42);
     if (lv.goal === "colore") sweetShape({ c: lv.color }, 50, BY + 68, 0.9);
     else if (lv.goal === "ciliegie") sweetShape({ c: CHERRY }, 50, BY + 68, 0.9);
+    else if (lv.goal === "soda") sweetShape({ c: 4, sp: "bot" }, 50, BY + 68, 0.9);
+    else if (lv.goal === "orsetti") sweetShape({ c: BEAR }, 50, BY + 68, 0.9);
     else if (lv.goal === "gelatina") { ctx.fillStyle = "rgba(255,120,200,0.8)"; ctx.beginPath(); ctx.roundRect(36, BY + 54, 28, 28, 6); ctx.fill(); }
     outlined(String(goalLeft()), lv.goal === "punti" ? 83 : 108, BY + 76, "900 20px system-ui", goalDone() ? "#5aff7a" : "#ffffff", 4);
     ctx.fillStyle = "#f0c8e0"; ctx.font = "800 9px system-ui"; ctx.fillText("MOSSE", 83, BY + 108);
@@ -761,12 +945,12 @@
   function draw() {
     ctx.setTransform(pxRatio, 0, 0, pxRatio, 0, 0);
     drawBack();
-    if (!lv) { lv = levelDef(0); jelly = Array.from({ length: N }, () => Array(N).fill(0)); fillBoard(); for (const row of grid) for (const p of row) p.dy = 0; }
+    if (!lv) { sodaRow = N; lv = levelDef(0); jelly = Array.from({ length: N }, () => Array(N).fill(0)); fillBoard(); for (const row of grid) for (const p of row) p.dy = 0; }
     drawBoard();
     if (state === "menu") return;
     ctx.fillStyle = "rgba(42,14,36,0.92)"; ctx.fillRect(0, 0, W, TOP);
     ctx.textAlign = "center"; ctx.fillStyle = "#ffffff"; ctx.font = "900 12px system-ui"; ctx.textBaseline = "middle";
-    ctx.fillText(`DOLCI IN FILA · ${goalText()}`, W / 2, 14); ctx.textBaseline = "alphabetic";
+    ctx.fillText(`${soda() ? "SODA" : "DOLCI IN FILA"} · ${goalText()}`, W / 2, 14); ctx.textBaseline = "alphabetic";
     drawSide();
     ctx.textAlign = "center";
     for (const p of popups) { ctx.globalAlpha = Math.max(0, 1 - p.t); outlined(p.text, p.x, p.y, "900 13px system-ui", p.col, 4); }
