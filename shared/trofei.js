@@ -10,6 +10,7 @@
   // record key prefix → [bronzo, argento, oro] (and t for times)
   const DATA = {
     "dolci-best-": [150000, 170000, 130000],   // dolci-in-fila (bot)
+    "svelato-best-": [15000, 30000, 25000],   // pianeta-svelato (bot)
     "controllo-best-": [300, 400, 250],   // torre-di-controllo (bot)
     "bilico-best-": [60000, 90000, 45000],   // palazzo-in-bilico (bot)
     "affetta-best-": [3000, 3500, 2000],   // affettafrutta (bot)

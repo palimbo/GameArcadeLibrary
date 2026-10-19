@@ -14,6 +14,11 @@
       { id: "cascata", name: "Cascata da cinque", desc: "fai una cascata di 5 file con una mossa sola" },
       { id: "dieci", name: "Dieci livelli", desc: "supera il decimo livello" },
     ],
+    "svelato-best-": [   // pianeta-svelato
+      { id: "retata", name: "Retata", desc: "schiaccia 3 alieni chiudendoli dentro con una sola linea" },
+      { id: "abbattuto", name: "Guardiano abbattuto", desc: "distruggi il guardiano di un pianeta con il laser" },
+      { id: "novanta", name: "Quasi tutto", desc: "libera un pianeta svelandone almeno il 90%" },
+    ],
     "controllo-best-": [   // torre-di-controllo
       { id: "tris", name: "Tris di atterraggi", desc: "fai atterrare 3 aerei in 3 secondi" },
       { id: "dodici", name: "Cielo affollato", desc: "abbi 12 aerei in volo nello stesso momento" },
