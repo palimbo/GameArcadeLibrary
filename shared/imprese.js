@@ -9,6 +9,11 @@
   "use strict";
   // record key prefix of the game (as in trofei.js) → its feats
   const LIST = {
+    "svelato-best-": [   // pianeta-svelato
+      { id: "retata", name: "Retata", desc: "schiaccia 3 alieni chiudendoli dentro con una sola linea" },
+      { id: "abbattuto", name: "Guardiano abbattuto", desc: "distruggi il guardiano di un pianeta con il laser" },
+      { id: "novanta", name: "Quasi tutto", desc: "libera un pianeta svelandone almeno il 90%" },
+    ],
     "controllo-best-": [   // torre-di-controllo
       { id: "tris", name: "Tris di atterraggi", desc: "fai atterrare 3 aerei in 3 secondi" },
       { id: "dodici", name: "Cielo affollato", desc: "abbi 12 aerei in volo nello stesso momento" },
