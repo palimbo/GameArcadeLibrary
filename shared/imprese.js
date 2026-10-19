@@ -9,6 +9,11 @@
   "use strict";
   // record key prefix of the game (as in trofei.js) → its feats
   const LIST = {
+    "dolci-best-": [   // dolci-in-fila
+      { id: "bomba", name: "Bomba di cioccolato", desc: "metti cinque dolci in fila e crea una bomba di cioccolato" },
+      { id: "cascata", name: "Cascata da cinque", desc: "fai una cascata di 5 file con una mossa sola" },
+      { id: "dieci", name: "Dieci livelli", desc: "supera il decimo livello" },
+    ],
     "controllo-best-": [   // torre-di-controllo
       { id: "tris", name: "Tris di atterraggi", desc: "fai atterrare 3 aerei in 3 secondi" },
       { id: "dodici", name: "Cielo affollato", desc: "abbi 12 aerei in volo nello stesso momento" },

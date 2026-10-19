@@ -1,0 +1,805 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no, viewport-fit=cover">
+<title>Dolci in Fila</title>
+<style>
+  :root {
+    --bg: #2a0e24;
+    --fg: #f4f6ee;
+    --muted: #f0c8e0;
+    --pink: #ff6ab8;
+    --yellow: #5ad8ff;
+    --red: #ff4a3a;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  html, body {
+    height: 100%;
+    background: var(--bg);
+    color: var(--fg);
+    font-family: system-ui, -apple-system, "Segoe UI", sans-serif;
+    overflow: hidden;
+    user-select: none;
+    -webkit-user-select: none;
+    touch-action: none;
+  }
+  #wrap { position: fixed; inset: 0; display: flex; align-items: center; justify-content: center; }
+  canvas { cursor: pointer; display: block; touch-action: none; border-radius: 6px; box-shadow: 0 0 0 2px #6a2a5a, 0 10px 40px rgba(0,0,0,0.6); }
+  #pauseBtn {
+    position: fixed; z-index: 3; display: none; right: 10px; top: calc(10px + env(safe-area-inset-top, 0px));
+    font: 700 13px system-ui, sans-serif; color: var(--fg);
+    background: rgba(0, 0, 0, 0.6); border: 1px solid rgba(244, 246, 238, 0.35);
+    border-radius: 8px; padding: 6px 10px; cursor: pointer;
+  }
+  #touch { display: none !important; }
+  #overlay {
+    position: fixed; inset: 0; z-index: 5;
+    display: flex; flex-direction: column; align-items: center; justify-content: flex-start;
+    gap: 14px; padding: 16px; text-align: center; overflow-y: auto;
+    background: rgba(42, 14, 36, 0.93);
+  }
+  #overlay > :first-child { margin-top: auto; }
+  #overlay > :last-child { margin-bottom: auto; }
+  #overlay.hidden { display: none; }
+  #homeLink {
+    position: fixed; top: calc(10px + env(safe-area-inset-top, 0px)); left: 10px; z-index: 6;
+    font: 600 13px/1 system-ui, sans-serif; color: #fff; text-decoration: none;
+    padding: 8px 12px; border-radius: 999px; background: rgba(0,0,0,.55);
+    border: 1px solid rgba(255,255,255,.25);
+  }
+  #homeLink:hover { background: rgba(0,0,0,.8); }
+  #overlay.hidden ~ #homeLink { display: none; }
+  @media (max-width: 700px) { #overlay { padding-top: calc(52px + env(safe-area-inset-top, 0px)); } }
+  #overlay h1 { font-size: clamp(32px, 10vw, 58px); font-weight: 900; font-style: italic; letter-spacing: 1px; color: var(--pink);
+    text-shadow: 3px 3px 0 #5a0a3a, 0 0 22px rgba(255,106,184,0.4); }
+  #overlay h2 { font-size: clamp(26px, 7vw, 42px); font-weight: 900; letter-spacing: 2px; color: var(--pink); }
+  #overlay h2.lose { color: var(--red); }
+  #overlay p { max-width: 540px; font-size: clamp(13px, 3.4vw, 16px); line-height: 1.55; }
+  #overlay p.muted { color: var(--muted); }
+  #overlay .pts { display: grid; grid-template-columns: repeat(2, auto); gap: 4px 18px; font-size: 13px; color: var(--muted); text-align: left; max-width: 560px; }
+  #overlay .pts b { color: var(--fg); }
+  #overlay .diff { display: flex; gap: 10px; flex-wrap: wrap; justify-content: center; }
+  #overlay button {
+    font: 800 15px system-ui, sans-serif; letter-spacing: 1.5px; color: var(--fg);
+    background: transparent; cursor: pointer;
+    border: 2px solid rgba(244,246,238,0.3); border-radius: 10px; padding: 9px 16px;
+  }
+  #overlay .mode button { font-size: 12px; padding: 7px 12px; }
+  #overlay .diff button.on { border-color: var(--c); color: var(--c); box-shadow: 0 0 12px var(--c); }
+  #overlay button.start { border-color: var(--pink); color: #2a0218; background: var(--pink); padding: 11px 30px; box-shadow: 0 4px 0 #a83a7a; }
+  @media (max-height: 560px) {
+    #overlay { gap: 8px; }
+    #overlay h1 { font-size: 30px; }
+    #overlay p { font-size: 13px; line-height: 1.4; }
+    #overlay .help, #overlay .pts { display: none; }
+  }
+</style>
+</head>
+<body>
+<div id="wrap"><canvas id="game"></canvas></div>
+<div id="touch"></div>
+<button id="pauseBtn" type="button" aria-label="Pausa">❚❚</button>
+<div id="overlay"></div>
+<a id="homeLink" href="../../index.html">← Sala Giochi</a>
+
+
+<script>
+(() => {
+  "use strict";
+
+  const W = 640, H = 360, TAU = Math.PI * 2, TOP = 28;
+  const N = 8, S = 38, BX = 168, BY = TOP + 6;
+  // the sweets: colour, name
+  const SWEETS = [
+    { col: "#ff3a4a", dark: "#a8142a", name: "rosse" },
+    { col: "#ff9a2a", dark: "#b85a0a", name: "arancioni" },
+    { col: "#ffe03a", dark: "#b8980a", name: "gialle" },
+    { col: "#4ad85a", dark: "#1a8a2a", name: "verdi" },
+    { col: "#3a9aff", dark: "#1a4ab8", name: "blu" },
+    { col: "#b85aff", dark: "#6a1ab8", name: "viola" },
+  ];
+  const CHERRY = -1, BOMB = -2;
+  // the jelly layouts
+  const JELLY = {
+    centro: (r, c) => r >= 2 && r <= 5 && c >= 2 && c <= 5 ? 1 : 0,
+    croce: (r, c) => r === c || r + c === N - 1 ? 1 : 0,
+    bordo: (r, c) => r === 0 || c === 0 || r === N - 1 || c === N - 1 ? 1 : 0,
+    fondo: (r) => r >= N - 3 ? 2 : 0,
+    tutto: () => 1,
+    angoli: (r, c) => (r < 3 || r > 4) && (c < 3 || c > 4) ? (r === 0 || r === N - 1) && (c === 0 || c === N - 1) ? 2 : 1 : 0,
+  };
+  // the levels: the goal, how many moves, the scores for the stars
+  const LEVELS = [
+    { goal: "punti", n: 2500, moves: 15 },
+    { goal: "colore", color: 0, n: 18, moves: 18 },
+    { goal: "gelatina", jelly: "centro", moves: 20 },
+    { goal: "punti", n: 6000, moves: 18 },
+    { goal: "ciliegie", n: 2, moves: 24 },
+    { goal: "colore", color: 3, n: 24, moves: 20 },
+    { goal: "gelatina", jelly: "croce", moves: 20 },
+    { goal: "ciliegie", n: 3, moves: 24 },
+    { goal: "punti", n: 12000, moves: 20 },
+    { goal: "gelatina", jelly: "bordo", moves: 24 },
+    { goal: "colore", color: 4, n: 30, moves: 22 },
+    { goal: "gelatina", jelly: "fondo", moves: 24 },
+    { goal: "ciliegie", n: 4, moves: 27 },
+    { goal: "punti", n: 20000, moves: 20 },
+    { goal: "gelatina", jelly: "angoli", moves: 24 },
+    { goal: "gelatina", jelly: "tutto", moves: 30 },
+  ];
+
+  const DIFFICULTIES = {
+    facile:    { label: "FACILE",    color: "#7ed87a", desc: "5 colori di dolci · più mosse per livello · 5 vite", colors: 5, extra: 6, lives: 5 },
+    normale:   { label: "NORMALE",   color: "#ffd23a", desc: "6 colori di dolci · 3 vite", colors: 6, extra: 3, lives: 3 },
+    difficile: { label: "DIFFICILE", color: "#ff5a5a", desc: "6 colori di dolci · meno mosse per livello · 3 vite", colors: 6, extra: 0, lives: 3 },
+  };
+  const DIFF_IDS = Object.keys(DIFFICULTIES);
+  const DIFF_KEY = "dolci-difficulty";
+  const bestKey = (id) => `dolci-best-${id}`;
+  function store(k, v) { try { localStorage.setItem(k, v); } catch { /* ignore */ } }
+  function load(k) { try { return localStorage.getItem(k); } catch { return null; } }
+  const impresa = (id) => window.dispatchEvent(new CustomEvent("sala:impresa", { detail: id }));
+  const rnd = (a, b) => a + Math.random() * (b - a);
+  const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
+
+  // ---------- Canvas ----------
+  const canvas = document.getElementById("game");
+  const ctx = canvas.getContext("2d");
+  const wrapEl = document.getElementById("wrap");
+  const overlay = document.getElementById("overlay");
+  const touchEl = document.getElementById("touch");
+  const pauseBtn = document.getElementById("pauseBtn");
+  let pxRatio = 1, touchMode = !!(window.matchMedia && matchMedia("(pointer: coarse)").matches);
+  function resize() {
+    const portrait = window.innerHeight > window.innerWidth;
+    const showTouch = false;
+    touchEl.style.display = showTouch ? "flex" : "none";
+    touchEl.classList.toggle("small", !portrait && window.innerHeight < 480);
+    wrapEl.style.paddingBottom = showTouch && portrait ? "calc(170px + env(safe-area-inset-bottom, 0px))" : "0";
+    let availW = window.innerWidth - 8, availH = window.innerHeight - 8;
+    if (showTouch && portrait) availH -= 170;
+    if (showTouch && !portrait) {
+      const side = Math.max(...[...touchEl.children].map((el) => el.offsetWidth)) + 20;
+      if (window.innerWidth - 2 * side > 200) availW = window.innerWidth - 2 * side;
+    }
+    const s = Math.max(0.2, Math.min(availW / W, availH / H));
+    pxRatio = Math.min(3, s * (window.devicePixelRatio || 1));
+    canvas.style.width = W * s + "px";
+    canvas.style.height = H * s + "px";
+    canvas.width = Math.round(W * pxRatio);
+    canvas.height = Math.round(H * pxRatio);
+  }
+  window.addEventListener("resize", () => syncControls());
+
+  // ---------- Audio ----------
+  let audioCtx = null;
+  function beep(freq, dur, type = "square", vol = 0.04, slide = 0, delay = 0) {
+    if (!audioCtx) return;
+    const t = audioCtx.currentTime + delay;
+    const osc = audioCtx.createOscillator(), gain = audioCtx.createGain();
+    osc.type = type;
+    osc.frequency.setValueAtTime(freq, t);
+    if (slide) osc.frequency.exponentialRampToValueAtTime(Math.max(20, freq + slide), t + dur);
+    gain.gain.setValueAtTime(vol, t);
+    gain.gain.exponentialRampToValueAtTime(0.0001, t + dur);
+    osc.connect(gain).connect(audioCtx.destination);
+    osc.start(t); osc.stop(t + dur + 0.02);
+  }
+  const arp = (notes, gap, d, type = "square", vol = 0.04) => notes.forEach((f, i) => beep(f, d, type, vol, 0, i * gap));
+  let sfxN = 0;
+  const lim = (fn) => (...a) => { if (sfxN++ < 4) fn(...a); };
+  const sfx = {
+    pick: () => beep(660, 0.04, "square", 0.02),
+    swap: () => beep(440, 0.06, "triangle", 0.03, 200),
+    bad: () => beep(200, 0.12, "triangle", 0.04, -60),
+    pop: lim((n) => beep(500 + n * 90, 0.08, "square", 0.03, 300)),
+    special: () => arp([880, 1175, 1568], 0.04, 0.1, "square", 0.035),
+    blast: lim(() => { beep(120, 0.25, "sawtooth", 0.05, -60); beep(900, 0.1, "triangle", 0.03, -600); }),
+    cherry: () => arp([784, 988, 1319], 0.06, 0.1, "triangle", 0.04),
+    win: () => arp([523, 659, 784, 1047, 784, 1047, 1319, 1568], 0.08, 0.16, "square", 0.045),
+    lose: () => arp([523, 466, 415, 392, 330, 262], 0.15, 0.24, "triangle", 0.05),
+  };
+
+  // ---------- State ----------
+  let difficulty = DIFFICULTIES[load(DIFF_KEY)] ? load(DIFF_KEY) : "normale";
+  let diff = DIFFICULTIES[difficulty];
+  let state = "menu", menu = null, pausedFrom = null, clock = 0;
+  let score = 0, bestCache = 0, lives = 3, lvN = 0, lv = null, moves = 0, levelScore = 0, got = 0, stars = 0, totalStars = 0;
+  let grid = [], jelly = [], phase = "idle", phaseT = 0, sel = null, cursor = { r: 3, c: 3 }, swapA = null, swapB = null, swapBack = false, popping = [], cascade = 0, bestCascade = 0;
+  let parts = [], popups = [], beams = [], message = null, idleT = 0, hint = null, finaleN = 0, uid = 0;
+  const keys = { left: false, right: false, up: false, down: false };
+  const isPlaying = () => state === "play";
+
+  // ---------- The board ----------
+  const inB = (r, c) => r >= 0 && c >= 0 && r < N && c < N;
+  const piece = (c, sp = null) => ({ c, sp, dy: 0, vy: 0, id: ++uid, pop: 0 });
+  const randColor = () => Math.floor(Math.random() * diff.colors);
+  const same = (a, b) => a && b && a.c >= 0 && a.c === b.c;
+  function fillBoard() {
+    grid = [];
+    for (let r = 0; r < N; r++) {
+      grid.push([]);
+      for (let c = 0; c < N; c++) {
+        let k;
+        do { k = randColor(); } while ((c >= 2 && grid[r][c - 1].c === k && grid[r][c - 2].c === k) || (r >= 2 && grid[r - 1][c].c === k && grid[r - 2][c].c === k));
+        grid[r].push(piece(k));
+      }
+    }
+    for (let r = 0; r < N; r++) for (let c = 0; c < N; c++) grid[r][c].dy = -(N - r) - rnd(0, 1.5);
+  }
+  // all the runs of three or more of a colour
+  function findRuns() {
+    const runs = [];
+    for (let r = 0; r < N; r++) for (let c = 0; c < N;) { let e = c + 1; while (e < N && same(grid[r][c], grid[r][e])) e++; if (e - c >= 3) runs.push({ dir: "h", cells: Array.from({ length: e - c }, (_, i) => [r, c + i]) }); c = e; }
+    for (let c = 0; c < N; c++) for (let r = 0; r < N;) { let e = r + 1; while (e < N && same(grid[r][c], grid[e][c])) e++; if (e - r >= 3) runs.push({ dir: "v", cells: Array.from({ length: e - r }, (_, i) => [r + i, c]) }); r = e; }
+    return runs;
+  }
+  const isSpecial = (p) => p && (p.sp || p.c === BOMB);
+  function swapCells(a, b) { const t = grid[a.r][a.c]; grid[a.r][a.c] = grid[b.r][b.c]; grid[b.r][b.c] = t; }
+  // is this swap a move? (it makes a line, or it puts two specials or a colour bomb together)
+  function moveWorks(a, b) {
+    const pa = grid[a.r][a.c], pb = grid[b.r][b.c];
+    if (!pa || !pb || pa.c === CHERRY && pb.c === CHERRY) return false;
+    if (pa.c === BOMB || pb.c === BOMB) return pa.c !== CHERRY && pb.c !== CHERRY;
+    if (pa.sp && pb.sp) return true;
+    swapCells(a, b); const ok = findRuns().length > 0; swapCells(a, b);
+    return ok;
+  }
+  function allMoves() {
+    const out = [];
+    for (let r = 0; r < N; r++) for (let c = 0; c < N; c++) for (const [dr, dc] of [[0, 1], [1, 0]]) { const a = { r, c }, b = { r: r + dr, c: c + dc }; if (inB(b.r, b.c) && moveWorks(a, b)) out.push([a, b]); }
+    return out;
+  }
+  function shuffleBoard() {
+    for (let t = 0; t < 200; t++) {
+      const list = []; for (let r = 0; r < N; r++) for (let c = 0; c < N; c++) if (grid[r][c].c >= 0 && !grid[r][c].sp) list.push(grid[r][c].c);
+      list.sort(() => Math.random() - 0.5);
+      let i = 0; for (let r = 0; r < N; r++) for (let c = 0; c < N; c++) if (grid[r][c].c >= 0 && !grid[r][c].sp) grid[r][c].c = list[i++];
+      if (!findRuns().length && allMoves().length) break;
+    }
+    message = { text: "MESCOLO!", sub: "non c'erano più mosse", t: 0 };
+  }
+
+  // ---------- Clearing ----------
+  function gain(n, r, c, col = "#ffffff") {
+    score += n; levelScore += n;
+    if (r !== undefined) popups.push({ text: `+${n}`, x: BX + c * S + S / 2, y: BY + r * S + S / 2, t: 0, col });
+  }
+  // clear a set of cells: specials caught inside go off too
+  function blast(cells, colorBomb) {
+    const done = new Set(), queue = [...cells];
+    let n = 0;
+    while (queue.length) {
+      const [r, c] = queue.shift(), k = r * N + c;
+      if (!inB(r, c) || done.has(k)) continue;
+      done.add(k);
+      const p = grid[r][c];
+      if (jelly[r][c] > 0) { jelly[r][c]--; levelScore += 0; score += 100; levelScore += 100; for (let i = 0; i < 4; i++) parts.push({ x: BX + c * S + S / 2, y: BY + r * S + S / 2, vx: rnd(-60, 60), vy: rnd(-80, 0), t: 0, col: "#ff9ad8" }); }
+      if (!p || p.c === CHERRY || p.keep) continue;
+      if (p.sp === "h") { beams.push({ r, c, dir: "h", t: 0 }); for (let i = 0; i < N; i++) queue.push([r, i]); sfx.blast(); }
+      if (p.sp === "v") { beams.push({ r, c, dir: "v", t: 0 }); for (let i = 0; i < N; i++) queue.push([i, c]); sfx.blast(); }
+      if (p.sp === "w") { beams.push({ r, c, dir: "w", t: 0 }); for (let dr = -1; dr <= 1; dr++) for (let dc = -1; dc <= 1; dc++) queue.push([r + dr, c + dc]); sfx.blast(); }
+      if (p.c === BOMB) { const k2 = colorBomb ?? mostColor(); beams.push({ r, c, dir: "b", t: 0 }); for (let rr = 0; rr < N; rr++) for (let cc = 0; cc < N; cc++) if (grid[rr][cc] && grid[rr][cc].c === k2) queue.push([rr, cc]); sfx.blast(); }
+      if (p.c >= 0 && lv.goal === "colore" && p.c === lv.color) got++;
+      for (let i = 0; i < 6; i++) parts.push({ x: BX + c * S + S / 2, y: BY + r * S + S / 2, vx: rnd(-90, 90), vy: rnd(-120, 20), t: 0, col: p.c >= 0 ? SWEETS[p.c].col : "#6a3a1a" });
+      popping.push({ r, c, p, t: 0 });
+      grid[r][c] = null;
+      n++;
+    }
+    return n;
+  }
+  function mostColor() { const cnt = Array(6).fill(0); for (const row of grid) for (const p of row) if (p && p.c >= 0) cnt[p.c]++; return cnt.indexOf(Math.max(...cnt)); }
+  // the lines on the board: clear them, and make the special sweets
+  function resolveRuns() {
+    const runs = findRuns();
+    if (!runs.length) return false;
+    // runs sharing a sweet are one group (an L or a T)
+    const groups = [];
+    for (const run of runs) {
+      const g = groups.find((x) => x.cells.some(([r, c]) => run.cells.some(([r2, c2]) => r === r2 && c === c2)));
+      if (g) { g.runs.push(run); for (const cell of run.cells) if (!g.cells.some(([r, c]) => r === cell[0] && c === cell[1])) g.cells.push(cell); }
+      else groups.push({ runs: [run], cells: [...run.cells] });
+    }
+    cascade++;
+    bestCascade = Math.max(bestCascade, cascade);
+    if (cascade >= 5) impresa("cascata");
+    const make = [];
+    for (const g of groups) {
+      const long = Math.max(...g.runs.map((r) => r.cells.length));
+      const color = grid[g.cells[0][0]][g.cells[0][1]].c;
+      let sp = null;
+      if (long >= 5) sp = "bomb";
+      else if (g.runs.some((r) => r.dir === "h") && g.runs.some((r) => r.dir === "v")) sp = "w";
+      else if (long === 4) sp = g.runs[0].dir === "h" ? "v" : "h";
+      // the new special goes where you moved, or in the middle
+      let at = g.cells[Math.floor(g.cells.length / 2)];
+      for (const s of [swapA, swapB]) if (s && g.cells.some(([r, c]) => r === s.r && c === s.c)) at = [s.r, s.c];
+      if (sp) make.push({ at, sp, color });
+      const pts = g.cells.length * 60 * cascade + (sp === "bomb" ? 400 : sp ? 200 : 0);
+      const [mr, mc] = g.cells[Math.floor(g.cells.length / 2)];
+      gain(pts, mr, mc, SWEETS[color].col);
+    }
+    const all = groups.flatMap((g) => g.cells);
+    blast(all);
+    for (const m of make) {
+      const [r, c] = m.at;
+      grid[r][c] = m.sp === "bomb" ? piece(BOMB) : piece(m.color, m.sp);
+      grid[r][c].born = 0.3;
+      if (m.sp === "bomb") impresa("bomba");
+    }
+    if (make.length) sfx.special();
+    sfx.pop(cascade);
+    swapA = swapB = null;
+    return true;
+  }
+  // two specials swapped together (or a colour bomb with anything)
+  function comboSwap(a, b) {
+    const pa = grid[a.r][a.c], pb = grid[b.r][b.c];
+    const at = b;
+    if (pa.c === BOMB && pb.c === BOMB) { const cells = []; for (let r = 0; r < N; r++) for (let c = 0; c < N; c++) cells.push([r, c]); grid[a.r][a.c] = null; grid[b.r][b.c] = null; gain(5000, at.r, at.c, "#ffd23a"); blast(cells); return; }
+    if (pa.c === BOMB || pb.c === BOMB) {
+      const other = pa.c === BOMB ? pb : pa, bombAt = pa.c === BOMB ? a : b;
+      const cells = [[bombAt.r, bombAt.c]];
+      grid[bombAt.r][bombAt.c].c = BOMB;
+      // with a striped one: every sweet of that colour becomes striped and goes off
+      for (let r = 0; r < N; r++) for (let c = 0; c < N; c++) { const p = grid[r][c]; if (p && p.c === other.c) { if (other.sp === "h" || other.sp === "v") p.sp = Math.random() < 0.5 ? "h" : "v"; else if (other.sp === "w") p.sp = "w"; cells.push([r, c]); } }
+      grid[bombAt.r][bombAt.c] = null;
+      beams.push({ r: bombAt.r, c: bombAt.c, dir: "b", t: 0 });
+      gain(1500, at.r, at.c, "#ffd23a");
+      blast(cells, other.c);
+      return;
+    }
+    const s = [pa.sp, pb.sp].sort().join("");
+    pa.keep = pb.keep = false;
+    grid[a.r][a.c] = null; grid[b.r][b.c] = null;
+    const cells = [];
+    if (s === "ww") { for (let dr = -2; dr <= 2; dr++) for (let dc = -2; dc <= 2; dc++) cells.push([at.r + dr, at.c + dc]); beams.push({ r: at.r, c: at.c, dir: "w", t: 0, big: true }); }
+    else if (s.includes("w")) { for (let d = -1; d <= 1; d++) for (let i = 0; i < N; i++) { cells.push([at.r + d, i]); cells.push([i, at.c + d]); } beams.push({ r: at.r, c: at.c, dir: "h", t: 0, wide: true }, { r: at.r, c: at.c, dir: "v", t: 0, wide: true }); }
+    else { for (let i = 0; i < N; i++) { cells.push([at.r, i]); cells.push([i, at.c]); } beams.push({ r: at.r, c: at.c, dir: "h", t: 0 }, { r: at.r, c: at.c, dir: "v", t: 0 }); }
+    gain(1000, at.r, at.c, "#ffd23a");
+    sfx.blast();
+    blast(cells);
+  }
+  // sweets fall into the holes, new ones from the top; cherries at the bottom are taken
+  function gravity() {
+    for (let c = 0; c < N; c++) {
+      let w = N - 1;
+      for (let r = N - 1; r >= 0; r--) { const p = grid[r][c]; if (p) { if (w !== r) { grid[w][c] = p; grid[r][c] = null; p.dy -= w - r; } w--; } }
+      let k = 0;
+      for (let r = w; r >= 0; r--) { k++; const cherry = lv.goal === "ciliegie" && cherriesOut < lv.n && !boardHasCherry() && Math.random() < 0.5; grid[r][c] = piece(cherry ? CHERRY : randColor()); if (cherry) cherriesOut++; grid[r][c].dy = -(w + 1) - k * 0.15; }
+    }
+  }
+  let cherriesOut = 0;
+  const boardHasCherry = () => grid.some((row) => row.some((p) => p && p.c === CHERRY));
+  function takeCherries() {
+    let n = 0;
+    for (let c = 0; c < N; c++) { const p = grid[N - 1][c]; if (p && p.c === CHERRY && p.dy === 0) { grid[N - 1][c] = null; got++; n++; gain(1000, N - 1, c, "#ff3a4a"); for (let i = 0; i < 10; i++) parts.push({ x: BX + c * S + S / 2, y: BY + (N - 1) * S + S / 2, vx: rnd(-90, 90), vy: rnd(-160, -40), t: 0, col: "#ff3a4a" }); } }
+    if (n) sfx.cherry();
+    return n;
+  }
+  const settled = () => grid.every((row) => row.every((p) => !p || p.dy === 0));
+
+  // ---------- Levels ----------
+  function levelDef(i) {
+    const base = LEVELS[i % LEVELS.length], loop = Math.floor(i / LEVELS.length);
+    return { ...base, n: base.goal === "punti" ? Math.round(base.n * (1 + loop * 0.3)) : base.goal === "colore" ? base.n + loop * 6 : base.n, moves: Math.max(10, base.moves - loop * 2 + diff.extra) };
+  }
+  function startLevel() {
+    lv = levelDef(lvN);
+    moves = lv.moves; levelScore = 0; got = 0; cherriesOut = 0; cascade = 0;
+    jelly = Array.from({ length: N }, (_, r) => Array.from({ length: N }, (_, c) => lv.goal === "gelatina" ? JELLY[lv.jelly](r, c) : 0));
+    fillBoard();
+    if (lv.goal === "ciliegie") { const cols = [1, 6, 3]; for (let i = 0; i < Math.min(3, lv.n); i++) { const c = cols[i], r = 3 + (i % 2); grid[r][c] = piece(CHERRY); grid[r][c].dy = -9; cherriesOut++; } }
+    if (!allMoves().length) shuffleBoard();
+    phase = "fall"; phaseT = 0; sel = null; hint = null; idleT = 0;
+    message = { text: `LIVELLO ${lvN + 1}`, sub: goalText(), t: 0, long: true };
+  }
+  function goalText() {
+    if (lv.goal === "punti") return `fai ${lv.n.toLocaleString("it-IT")} punti in ${lv.moves} mosse`;
+    if (lv.goal === "colore") return `raccogli ${lv.n} caramelle ${SWEETS[lv.color].name} in ${lv.moves} mosse`;
+    if (lv.goal === "gelatina") return `togli tutta la gelatina rosa in ${lv.moves} mosse`;
+    return `porta giù ${lv.n} ${lv.n === 1 ? "ciliegia" : "ciliegie"} in ${lv.moves} mosse`;
+  }
+  const jellyLeft = () => jelly.reduce((s, row) => s + row.reduce((a, b) => a + b, 0), 0);
+  function goalDone() {
+    if (lv.goal === "punti") return levelScore >= lv.n;
+    if (lv.goal === "colore") return got >= lv.n;
+    if (lv.goal === "gelatina") return jellyLeft() === 0;
+    return got >= lv.n;
+  }
+  function goalLeft() {
+    if (lv.goal === "punti") return Math.max(0, lv.n - levelScore).toLocaleString("it-IT");
+    if (lv.goal === "colore") return Math.max(0, lv.n - got);
+    if (lv.goal === "gelatina") return jellyLeft();
+    return Math.max(0, lv.n - got);
+  }
+  function startGame() {
+    if (!audioCtx) { try { audioCtx = new (window.AudioContext || window.webkitAudioContext)(); } catch { audioCtx = null; } }
+    if (audioCtx && audioCtx.state === "suspended") audioCtx.resume();
+    score = 0; lives = diff.lives; lvN = 0; totalStars = 0; bestCascade = 0; parts = []; popups = []; beams = []; popping = [];
+    bestCache = parseInt(load(bestKey(difficulty)), 10) || 0;
+    startLevel();
+    state = "play";
+    menu = null;
+    overlay.classList.add("hidden");
+    syncControls();
+    last = performance.now();
+  }
+  // a move: swap two neighbours
+  function trySwap(a, b) {
+    if (phase !== "idle" || !inB(b.r, b.c) || Math.abs(a.r - b.r) + Math.abs(a.c - b.c) !== 1) return;
+    const pa = grid[a.r][a.c], pb = grid[b.r][b.c];
+    if (!pa || !pb) return;
+    swapA = a; swapB = b; sel = null; hint = null; idleT = 0;
+    swapCells(a, b);
+    phase = "swap"; phaseT = 0; swapBack = false;
+    sfx.swap();
+  }
+  function afterSwap() {
+    const a = swapA, b = swapB, pa = grid[b.r][b.c], pb = grid[a.r][a.c];   // already swapped: pa is now at b
+    // specials together, or a colour bomb
+    if ((pa.c === BOMB || pb.c === BOMB) && pa.c !== CHERRY && pb.c !== CHERRY || pa.sp && pb.sp) {
+      moves--; cascade = 1;
+      swapCells(a, b);
+      comboSwap(a, b);
+      swapA = swapB = null;
+      phase = "pop"; phaseT = 0; return;
+    }
+    if (findRuns().length) { moves--; cascade = 0; resolveRuns(); phase = "pop"; phaseT = 0; return; }
+    // nothing: swap back
+    swapCells(a, b); swapBack = true; phase = "swap"; phaseT = 0; sfx.bad();
+  }
+
+  // ---------- Update ----------
+  function update(dt) {
+    clock += dt; sfxN = 0;
+    if (window.__bot) window.__bot(dt);
+    for (const p of popups) { p.t += dt; p.y -= 30 * dt; }
+    popups = popups.filter((p) => p.t < 1);
+    for (const p of parts) { p.t += dt; p.vy += 400 * dt; p.x += p.vx * dt; p.y += p.vy * dt; }
+    parts = parts.filter((p) => p.t < 0.7);
+    for (const b of beams) b.t += dt;
+    beams = beams.filter((b) => b.t < 0.35);
+    for (const p of popping) p.t += dt;
+    popping = popping.filter((p) => p.t < 0.25);
+    if (message) { message.t += dt; if (message.t > (message.long ? 3 : 2.2)) message = null; }
+    if (state !== "play") return;
+    phaseT += dt;
+    for (const row of grid) for (const p of row) if (p) { if (p.born) p.born = Math.max(0, p.born - dt); if (p.dy < 0) { p.vy += 40 * dt; p.dy = Math.min(0, p.dy + p.vy * dt); if (p.dy === 0) p.vy = 0; } }
+    if (phase === "swap") {
+      if (phaseT >= 0.14) { if (swapBack) { phase = "idle"; swapA = swapB = null; } else afterSwap(); }
+    } else if (phase === "pop") {
+      if (phaseT >= 0.22) { gravity(); phase = "fall"; phaseT = 0; }
+    } else if (phase === "fall") {
+      if (settled()) {
+        if (takeCherries()) { gravity(); return; }
+        if (resolveRuns()) { phase = "pop"; phaseT = 0; return; }
+        cascade = 0;
+        endOfMove();
+      }
+    } else if (phase === "idle") {
+      idleT += dt;
+      if (idleT > 6 && !hint) { const m = allMoves(); hint = m.length ? m[Math.floor(Math.random() * m.length)] : null; }
+      keyMoves(dt);
+    } else if (phase === "finale") {
+      // the moves left over go off as striped sweets
+      if (phaseT > 0.28) {
+        phaseT = 0;
+        if (finaleN > 0) {
+          finaleN--; moves = finaleN;
+          const list = []; for (let r = 0; r < N; r++) for (let c = 0; c < N; c++) if (grid[r][c] && grid[r][c].c >= 0) list.push([r, c]);
+          const [r, c] = list[Math.floor(Math.random() * list.length)];
+          grid[r][c].sp = Math.random() < 0.5 ? "h" : "v";
+          gain(300, r, c, "#ffd23a");
+          blast([[r, c]]);
+          gravity();
+        } else if (settled()) {
+          if (resolveRuns()) { gravity(); return; }
+          levelWon();
+        }
+      }
+    } else if (phase === "won") {
+      if (phaseT > 2.6) { lvN++; startLevel(); }
+    } else if (phase === "lost") {
+      if (phaseT > 2.4) { if (lives > 0) startLevel(); else gameOver(); }
+    }
+  }
+  function endOfMove() {
+    if (goalDone()) { finaleN = moves; phase = "finale"; phaseT = 0; message = { text: "CE L'HAI FATTA!", sub: moves ? "le mosse avanzate diventano dolci a strisce" : "", t: 0, col: "#5aff7a" }; return; }
+    if (moves <= 0) {
+      lives--;
+      sfx.lose();
+      message = { text: "MOSSE FINITE", sub: lives > 0 ? `ancora ${lives} ${lives === 1 ? "vita" : "vite"}: si riprova` : "", t: 0, col: "#ff6a6a", long: true };
+      phase = "lost"; phaseT = 0; return;
+    }
+    if (!allMoves().length) shuffleBoard();
+    phase = "idle"; phaseT = 0; idleT = 0;
+  }
+  function levelWon() {
+    // the stars: by how many points the level gave
+    const ref = lv.goal === "punti" ? lv.n : 4000 + lvN * 600;
+    stars = levelScore >= ref * 2 ? 3 : levelScore >= ref * 1.4 ? 2 : 1;
+    totalStars += stars;
+    if (lvN + 1 >= 10) impresa("dieci");
+    sfx.win();
+    message = { text: `LIVELLO ${lvN + 1} SUPERATO!`, sub: `${"★".repeat(stars)}${"☆".repeat(3 - stars)} · ${levelScore.toLocaleString("it-IT")} punti`, t: 0, col: "#ffd23a", long: true };
+    phase = "won"; phaseT = 0;
+  }
+
+  function gameOver() {
+    state = "over";
+    const prev = parseInt(load(bestKey(difficulty)), 10) || 0;
+    const record = score > prev;
+    if (record) store(bestKey(difficulty), String(score));
+    menu = () => showOverlay(
+      `<h2 class="lose">BASTA DOLCI!</h2>
+       <p>Punteggio: <b>${score.toLocaleString("it-IT")}</b> · arrivato al livello ${lvN + 1} · ${totalStars} ★${bestCascade >= 3 ? ` · cascata da ${bestCascade}` : ""} · ${diff.label}</p>
+       ${record ? "<p style='color:var(--pink)'>★ NUOVO RECORD! ★</p>" : ""}
+       ${difficultyHTML()}
+       <button class="start" data-start>ANCORA DOLCI!</button>`
+    );
+    menu();
+    syncControls();
+  }
+  function togglePause() {
+    if (isPlaying()) {
+      pausedFrom = state; state = "paused";
+      showOverlay(`<h2>PAUSA</h2><button class="start" data-resume>CONTINUA</button><p class="muted">Premi P per continuare</p>`);
+    } else if (state === "paused") {
+      state = pausedFrom; overlay.classList.add("hidden"); last = performance.now();
+    }
+    syncControls();
+  }
+  // the pause menu can end the game (shared/iniziali.js): it ends here the usual way, saving the record
+  window.addEventListener("sala:termina", () => { if (state !== "paused") return; state = pausedFrom; overlay.classList.add("hidden"); gameOver(); syncControls(); });
+  function syncControls() {
+    pauseBtn.style.display = isPlaying() && touchMode ? "block" : "none";
+    resize();
+  }
+  pauseBtn.addEventListener("click", () => togglePause());
+  function showOverlay(html) { overlay.innerHTML = html; overlay.classList.remove("hidden"); }
+  function difficultyHTML() {
+    const buttons = DIFF_IDS.map((id) => {
+      const d = DIFFICULTIES[id];
+      return `<button type="button" data-diff="${id}" class="${id === difficulty ? "on" : ""}" style="--c:${d.color}">${d.label}</button>`;
+    }).join("");
+    const best = parseInt(load(bestKey(difficulty)), 10);
+    return `<div class="diff">${buttons}</div><p class="muted">${diff.desc}${best ? ` · Record: ${best.toLocaleString("it-IT")}` : ""}</p>`;
+  }
+  function setDifficulty(id) { if (!DIFFICULTIES[id]) return; difficulty = id; diff = DIFFICULTIES[id]; store(DIFF_KEY, id); if (menu) menu(); }
+  function showTitle() {
+    menu = showTitle;
+    showOverlay(
+      `<h1>DOLCI IN FILA</h1>
+       <p>Scambia due dolci vicini per metterne tre o più dello stesso colore in fila: spariscono e dall'alto ne cadono di nuovi. Ogni livello ha il suo obiettivo e un numero di mosse: fai tanti punti, raccogli dolci di un colore, togli la gelatina rosa sotto i dolci, o porta le ciliegie fino in fondo.</p>
+       <div class="pts">
+         <span><b>Speciali</b></span><span>4 in fila: dolce a strisce (pulisce riga o colonna) · a L o a T: dolce incartato (esplode intorno) · 5 in fila: bomba di cioccolato (via tutti i dolci di un colore) · scambia due speciali tra loro per un colpo enorme</span>
+         <span><b>Punti</b></span><span>60 a dolce, moltiplicati per la cascata · gelatina 100 · ciliegia 1.000 · ogni mossa avanzata: 300</span>
+       </div>
+       <p class="muted help">${touchMode ? "Trascina un dolce verso il vicino (o tocca un dolce e poi il vicino) · ❚❚ pausa" : "Mouse: trascina un dolce verso il vicino, o clicca i due dolci · frecce + SPAZIO · P pausa"}</p>
+       ${difficultyHTML()}
+       <button class="start" data-start>GIOCA!</button>`
+    );
+  }
+  overlay.addEventListener("click", (e) => {
+    const d = e.target.closest("[data-diff]");
+    if (d) { setDifficulty(d.dataset.diff); return; }
+    if (e.target.closest("[data-start]")) startGame();
+    if (e.target.closest("[data-resume]")) togglePause();
+  });
+
+  // ---------- Input ----------
+  const KEYMAP = { arrowleft: "left", a: "left", arrowright: "right", d: "right", arrowup: "up", w: "up", arrowdown: "down", s: "down" };
+  const DIRS = { left: [0, -1], right: [0, 1], up: [-1, 0], down: [1, 0] };
+  let keyCool = 0;
+  function keyMoves(dt) {
+    keyCool -= dt;
+    for (const k of Object.keys(DIRS)) if (keys[k] && keyCool <= 0) {
+      const [dr, dc] = DIRS[k];
+      keyCool = 0.16;
+      if (sel) { trySwap(sel, { r: sel.r + dr, c: sel.c + dc }); sel = null; }
+      else cursor = { r: clamp(cursor.r + dr, 0, N - 1), c: clamp(cursor.c + dc, 0, N - 1) };
+      kbd = true;
+    }
+  }
+  let kbd = false;
+  window.addEventListener("keydown", (e) => {
+    const k = e.key.toLowerCase();
+    if ([" ", "arrowup", "arrowdown", "arrowleft", "arrowright"].includes(k)) e.preventDefault();
+    if (state === "menu" || state === "over") {
+      if (e.key === "Enter") startGame();
+      else if (["1", "2", "3"].includes(k)) setDifficulty(DIFF_IDS[+k - 1]);
+      return;
+    }
+    if (k === "p" || k === "escape") { if (!e.repeat) togglePause(); return; }
+    if (state === "paused") { if (e.key === "Enter") togglePause(); return; }
+    if ((k === " " || k === "j" || k === "enter") && !e.repeat && phase === "idle") { kbd = true; sel = sel ? null : { ...cursor }; if (sel) sfx.pick(); }
+    if (KEYMAP[k]) { if (!keys[KEYMAP[k]]) keyCool = 0; keys[KEYMAP[k]] = true; }
+  });
+  window.addEventListener("keyup", (e) => { const k = e.key.toLowerCase(); if (KEYMAP[k]) keys[KEYMAP[k]] = false; });
+  window.addEventListener("blur", () => { for (const k in keys) keys[k] = false; if (isPlaying()) togglePause(); });
+  const toCell = (e) => { const r = canvas.getBoundingClientRect(); const x = (e.clientX - r.left) * W / r.width, y = (e.clientY - r.top) * H / r.height; return { x, y, r: Math.floor((y - BY) / S), c: Math.floor((x - BX) / S) }; };
+  let drag = null;
+  canvas.addEventListener("pointerdown", (e) => {
+    e.preventDefault(); if (!isPlaying() || phase !== "idle") return;
+    const p = toCell(e); if (!inB(p.r, p.c)) { sel = null; return; }
+    kbd = false;
+    if (sel && Math.abs(sel.r - p.r) + Math.abs(sel.c - p.c) === 1) { trySwap(sel, p); return; }
+    sel = { r: p.r, c: p.c }; cursor = { ...sel }; drag = p; sfx.pick();
+    try { canvas.setPointerCapture(e.pointerId); } catch { /* ignore */ }
+  });
+  canvas.addEventListener("pointermove", (e) => {
+    if (!drag || !sel) return;
+    const p = toCell(e), dx = p.x - drag.x, dy = p.y - drag.y;
+    if (Math.hypot(dx, dy) < S * 0.45) return;
+    const to = Math.abs(dx) > Math.abs(dy) ? { r: sel.r, c: sel.c + Math.sign(dx) } : { r: sel.r + Math.sign(dy), c: sel.c };
+    drag = null; trySwap(sel, to);
+  });
+  for (const ev of ["pointerup", "pointercancel"]) canvas.addEventListener(ev, () => { drag = null; });
+  window.addEventListener("pointerdown", (e) => { if (e.pointerType === "touch" && !touchMode) { touchMode = true; syncControls(); if (menu) menu(); } }, true);
+
+  // ---------- Drawing ----------
+  function drawBack() {
+    const g = ctx.createLinearGradient(0, 0, W, H);
+    g.addColorStop(0, "#ffb8d8"); g.addColorStop(1, "#c8a8ff");
+    ctx.fillStyle = g; ctx.fillRect(0, 0, W, H);
+    // sprinkles
+    for (let i = 0; i < 60; i++) { ctx.save(); ctx.translate((i * 97) % W, (i * 61 + 20) % H); ctx.rotate(i); ctx.fillStyle = ["#ffffff", "#ffe03a", "#5ad8ff", "#ff6ab8"][i % 4]; ctx.globalAlpha = 0.5; ctx.fillRect(-4, -1.5, 8, 3); ctx.restore(); }
+    ctx.globalAlpha = 1;
+  }
+  function sweetShape(p, x, y, s) {
+    ctx.save(); ctx.translate(x, y); ctx.scale(s, s);
+    if (p.c === CHERRY) {
+      ctx.strokeStyle = "#3a8a2a"; ctx.lineWidth = 2; ctx.beginPath(); ctx.moveTo(-6, 2); ctx.quadraticCurveTo(-2, -14, 4, -14); ctx.moveTo(6, 4); ctx.quadraticCurveTo(4, -10, 4, -14); ctx.stroke();
+      ctx.fillStyle = "#4ab83a"; ctx.beginPath(); ctx.ellipse(8, -14, 6, 3, -0.4, 0, TAU); ctx.fill();
+      for (const [cx, cy] of [[-6, 6], [6, 8]]) { ctx.fillStyle = "#d81a2a"; ctx.beginPath(); ctx.arc(cx, cy, 8, 0, TAU); ctx.fill(); ctx.fillStyle = "rgba(255,255,255,0.6)"; ctx.beginPath(); ctx.arc(cx - 3, cy - 3, 2.5, 0, TAU); ctx.fill(); }
+      ctx.restore(); return;
+    }
+    if (p.c === BOMB) {
+      ctx.fillStyle = "#5a3418"; ctx.beginPath(); ctx.arc(0, 0, 15, 0, TAU); ctx.fill();
+      ctx.fillStyle = "#7a4a28"; ctx.beginPath(); ctx.arc(-3, -3, 11, 0, TAU); ctx.fill();
+      for (let i = 0; i < 14; i++) { ctx.save(); ctx.rotate(i * 2.4 + clock * 0.5); ctx.fillStyle = SWEETS[i % 6].col; ctx.fillRect(4 + (i % 3) * 3, -1, 4, 2); ctx.restore(); }
+      ctx.restore(); return;
+    }
+    const k = SWEETS[p.c];
+    if (p.sp === "w") {
+      // the wrapper: two twisted ends
+      ctx.fillStyle = k.dark; for (const sx of [-1, 1]) { ctx.beginPath(); ctx.moveTo(sx * 10, 0); ctx.lineTo(sx * 18, -9); ctx.lineTo(sx * 18, 9); ctx.closePath(); ctx.fill(); }
+    }
+    ctx.fillStyle = k.dark; ctx.beginPath();
+    const shape = (r) => {
+      ctx.beginPath();
+      if (p.c === 0) ctx.arc(0, 0, r, 0, TAU);
+      else if (p.c === 1) ctx.ellipse(0, 0, r * 1.1, r * 0.85, 0, 0, TAU);
+      else if (p.c === 2) { ctx.moveTo(0, -r); ctx.quadraticCurveTo(r * 1.1, r * 0.2, 0, r); ctx.quadraticCurveTo(-r * 1.1, r * 0.2, 0, -r); }
+      else if (p.c === 3) ctx.roundRect(-r * 0.9, -r * 0.9, r * 1.8, r * 1.8, r * 0.35);
+      else if (p.c === 4) { for (let i = 0; i < 6; i++) { const a = i * TAU / 6 + Math.PI / 6; ctx.lineTo(Math.cos(a) * r, Math.sin(a) * r); } ctx.closePath(); }
+      else { for (let i = 0; i < 10; i++) { const a = i * TAU / 10 - Math.PI / 2, rr = i % 2 ? r * 0.55 : r * 1.05; ctx.lineTo(Math.cos(a) * rr, Math.sin(a) * rr); } ctx.closePath(); }
+    };
+    shape(14); ctx.fill();
+    ctx.fillStyle = k.col; ctx.save(); ctx.translate(-1, -1.5); shape(12.5); ctx.fill(); ctx.restore();
+    if (p.sp === "h" || p.sp === "v") {
+      ctx.save(); shape(13); ctx.clip(); ctx.fillStyle = "rgba(255,255,255,0.75)";
+      for (let i = -3; i <= 3; i++) { if (p.sp === "h") ctx.fillRect(-16, i * 7 - 1.5, 32, 3); else ctx.fillRect(i * 7 - 1.5, -16, 3, 32); }
+      ctx.restore();
+    }
+    ctx.fillStyle = "rgba(255,255,255,0.55)"; ctx.beginPath(); ctx.ellipse(-4, -5, 4, 2.5, -0.6, 0, TAU); ctx.fill();
+    ctx.restore();
+  }
+  function cellPos(r, c) {
+    let x = BX + c * S + S / 2, y = BY + r * S + S / 2;
+    // the two sweets sliding past each other while swapping
+    if (phase === "swap" && swapA && swapB) {
+      const k = Math.min(1, phaseT / 0.14), e = swapBack ? k : 1 - k;
+      const other = r === swapA.r && c === swapA.c ? swapB : r === swapB.r && c === swapB.c ? swapA : null;
+      if (other) { x += (other.c - c) * S * e; y += (other.r - r) * S * e; }
+    }
+    return { x, y };
+  }
+  function drawBoard() {
+    ctx.fillStyle = "rgba(60,20,70,0.55)"; ctx.beginPath(); ctx.roundRect(BX - 6, BY - 4, N * S + 12, N * S + 8, 10); ctx.fill();
+    for (let r = 0; r < N; r++) for (let c = 0; c < N; c++) {
+      ctx.fillStyle = (r + c) % 2 ? "rgba(255,255,255,0.12)" : "rgba(255,255,255,0.2)"; ctx.fillRect(BX + c * S, BY + r * S, S, S);
+      const j = jelly[r] && jelly[r][c];
+      if (j) { ctx.fillStyle = j > 1 ? "rgba(255,60,160,0.75)" : "rgba(255,120,200,0.55)"; ctx.beginPath(); ctx.roundRect(BX + c * S + 2, BY + r * S + 2, S - 4, S - 4, 6); ctx.fill(); }
+    }
+    if (lv && lv.goal === "ciliegie") { ctx.fillStyle = "rgba(255,255,255,0.8)"; ctx.font = "900 9px system-ui"; ctx.textAlign = "center"; for (let c = 0; c < N; c++) ctx.fillText("▼", BX + c * S + S / 2, BY + N * S + 2); }
+    ctx.save(); ctx.beginPath(); ctx.rect(BX - 6, BY - 4, N * S + 12, N * S + 8); ctx.clip();
+    for (let r = 0; r < N; r++) for (let c = 0; c < N; c++) {
+      const p = grid[r] && grid[r][c]; if (!p) continue;
+      const q = cellPos(r, c);
+      const s = 1 + (p.born ? Math.sin(p.born / 0.3 * Math.PI) * 0.3 : 0) + (hint && ((hint[0].r === r && hint[0].c === c) || (hint[1].r === r && hint[1].c === c)) ? Math.sin(clock * 8) * 0.08 : 0);
+      sweetShape(p, q.x, q.y + p.dy * S, s);
+    }
+    for (const pp of popping) { const q = cellPos(pp.r, pp.c); sweetShape(pp.p, q.x, q.y, 1 + pp.t * 2); }
+    ctx.restore();
+    for (const b of beams) {
+      const k = 1 - b.t / 0.35, x = BX + b.c * S + S / 2, y = BY + b.r * S + S / 2, w = b.wide ? S * 3 : S * 0.5;
+      ctx.fillStyle = `rgba(255,255,255,${0.8 * k})`;
+      if (b.dir === "h") ctx.fillRect(BX, y - w / 2, N * S, w);
+      else if (b.dir === "v") ctx.fillRect(x - w / 2, BY, w, N * S);
+      else { ctx.beginPath(); ctx.arc(x, y, (b.dir === "b" ? N * S : b.big ? S * 2.5 : S * 1.5) * (1 - k * 0.5), 0, TAU); ctx.fill(); }
+    }
+    for (const p of parts) { ctx.globalAlpha = 1 - p.t / 0.7; ctx.fillStyle = p.col; ctx.fillRect(p.x - 2, p.y - 2, 4, 4); }
+    ctx.globalAlpha = 1;
+    // the selection and the keyboard cursor
+    if (sel) { ctx.strokeStyle = "#ffffff"; ctx.lineWidth = 3; ctx.beginPath(); ctx.roundRect(BX + sel.c * S + 1, BY + sel.r * S + 1, S - 2, S - 2, 8); ctx.stroke(); }
+    if (kbd && !sel && phase === "idle") { ctx.strokeStyle = "rgba(255,255,255,0.7)"; ctx.lineWidth = 2; ctx.setLineDash([4, 3]); ctx.strokeRect(BX + cursor.c * S + 2, BY + cursor.r * S + 2, S - 4, S - 4); ctx.setLineDash([]); }
+  }
+  function outlined(text, x, y, font, fill, lw = 5) {
+    ctx.font = font; ctx.lineWidth = lw; ctx.strokeStyle = "#3a0a2a"; ctx.strokeText(text, x, y); ctx.fillStyle = fill; ctx.fillText(text, x, y);
+  }
+  function panel(x, y, w, h) { ctx.fillStyle = "rgba(60,20,70,0.6)"; ctx.beginPath(); ctx.roundRect(x, y, w, h, 10); ctx.fill(); }
+  function drawSide() {
+    // left: the level, the goal, the moves
+    panel(10, BY, 146, 160);
+    ctx.textAlign = "center";
+    outlined(`LIVELLO ${lvN + 1}`, 83, BY + 22, "900 14px system-ui", "#ffffff", 4);
+    ctx.fillStyle = "#f0c8e0"; ctx.font = "800 9px system-ui"; ctx.fillText(lv.goal === "punti" ? "PUNTI CHE MANCANO" : lv.goal === "colore" ? `CARAMELLE ${SWEETS[lv.color].name.toUpperCase()}` : lv.goal === "gelatina" ? "GELATINA DA TOGLIERE" : "CILIEGIE DA PORTARE GIÙ", 83, BY + 42);
+    if (lv.goal === "colore") sweetShape({ c: lv.color }, 50, BY + 68, 0.9);
+    else if (lv.goal === "ciliegie") sweetShape({ c: CHERRY }, 50, BY + 68, 0.9);
+    else if (lv.goal === "gelatina") { ctx.fillStyle = "rgba(255,120,200,0.8)"; ctx.beginPath(); ctx.roundRect(36, BY + 54, 28, 28, 6); ctx.fill(); }
+    outlined(String(goalLeft()), lv.goal === "punti" ? 83 : 108, BY + 76, "900 20px system-ui", goalDone() ? "#5aff7a" : "#ffffff", 4);
+    ctx.fillStyle = "#f0c8e0"; ctx.font = "800 9px system-ui"; ctx.fillText("MOSSE", 83, BY + 108);
+    outlined(String(moves), 83, BY + 142, "900 32px system-ui", moves <= 3 ? "#ff6a6a" : "#ffd23a", 5);
+    // the lives
+    panel(10, BY + 170, 146, 34);
+    for (let i = 0; i < diff.lives; i++) { ctx.fillStyle = i < lives ? "#ff3a6a" : "rgba(255,255,255,0.2)"; ctx.font = "16px system-ui"; ctx.fillText("♥", 30 + i * 26, BY + 193); }
+    // right: the score and the stars of this level
+    panel(W - 156, BY, 146, 120);
+    ctx.fillStyle = "#f0c8e0"; ctx.font = "800 9px system-ui"; ctx.fillText("PUNTI", W - 83, BY + 18);
+    outlined(score.toLocaleString("it-IT"), W - 83, BY + 44, "900 20px system-ui", "#ffffff", 4);
+    ctx.fillStyle = "#f0c8e0"; ctx.font = "700 9px system-ui"; ctx.fillText(`REC ${Math.max(bestCache, score).toLocaleString("it-IT")}`, W - 83, BY + 60);
+    const ref = lv.goal === "punti" ? lv.n : 4000 + lvN * 600, k = clamp(levelScore / (ref * 2), 0, 1);
+    ctx.fillStyle = "rgba(255,255,255,0.2)"; ctx.fillRect(W - 146, BY + 76, 126, 10);
+    ctx.fillStyle = "#ffd23a"; ctx.fillRect(W - 146, BY + 76, 126 * k, 10);
+    for (const [f, n] of [[0.5, 1], [0.7, 2], [1, 3]]) { ctx.fillStyle = k >= f ? "#ffd23a" : "rgba(255,255,255,0.4)"; ctx.font = "14px system-ui"; ctx.fillText("★", W - 146 + 126 * f, BY + 104); }
+    panel(W - 156, BY + 130, 146, 34);
+    ctx.fillStyle = "#ffffff"; ctx.font = "800 11px system-ui"; ctx.fillText(`★ ${totalStars} stelle`, W - 83, BY + 152);
+  }
+  function draw() {
+    ctx.setTransform(pxRatio, 0, 0, pxRatio, 0, 0);
+    drawBack();
+    if (!lv) { lv = levelDef(0); jelly = Array.from({ length: N }, () => Array(N).fill(0)); fillBoard(); for (const row of grid) for (const p of row) p.dy = 0; }
+    drawBoard();
+    if (state === "menu") return;
+    ctx.fillStyle = "rgba(42,14,36,0.92)"; ctx.fillRect(0, 0, W, TOP);
+    ctx.textAlign = "center"; ctx.fillStyle = "#ffffff"; ctx.font = "900 12px system-ui"; ctx.textBaseline = "middle";
+    ctx.fillText(`DOLCI IN FILA · ${goalText()}`, W / 2, 14); ctx.textBaseline = "alphabetic";
+    drawSide();
+    ctx.textAlign = "center";
+    for (const p of popups) { ctx.globalAlpha = Math.max(0, 1 - p.t); outlined(p.text, p.x, p.y, "900 13px system-ui", p.col, 4); }
+    ctx.globalAlpha = 1;
+    if (cascade >= 2 && phase !== "idle") outlined(`CASCATA ×${cascade}`, BX + N * S / 2, BY + N * S - 8, "900 14px system-ui", "#ffd23a", 4);
+    if (message) {
+      ctx.globalAlpha = Math.min(1, ((message.long ? 3 : 2.2) - message.t) * 2);
+      ctx.fillStyle = "rgba(60,20,70,0.75)"; ctx.fillRect(BX - 6, 140, N * S + 12, 60);
+      outlined(message.text, W / 2, 168, "italic 900 22px system-ui", message.col || "#ff6ab8", 5);
+      if (message.sub) outlined(message.sub, W / 2, 188, "800 11px system-ui", "#ffffff", 4);
+      ctx.globalAlpha = 1;
+    }
+  }
+
+  // ---------- Loop ----------
+  const STEP = 1 / 120;
+  let last = performance.now(), acc = 0;
+  function frame(now) {
+    const dt = Math.min(0.1, (now - last) / 1000);
+    last = now;
+    if (isPlaying()) {
+      acc += dt;
+      while (acc >= STEP && isPlaying()) { update(STEP); acc -= STEP; }
+    } else { acc = 0; update(dt); }
+    draw();
+    requestAnimationFrame(frame);
+  }
+  syncControls();
+  showTitle();
+  requestAnimationFrame(frame);
+})();
+</script>
+<script src="../../shared/iniziali.js" data-record="dolci-best-" data-kind="score"></script>
+</body>
+</html>
+
