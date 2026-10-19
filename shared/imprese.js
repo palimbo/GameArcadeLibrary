@@ -14,6 +14,11 @@
       { id: "illeso", name: "Senza un graffio", desc: "sconfiggi un cattivo senza farti colpire neanche una volta" },
       { id: "ricetta", name: "La ricetta completa", desc: "riprendi la ricetta da tutti e quattro i cattivi, fino a Dongo e Parrot" },
     ],
+    "dolci-best-": [   // dolci-in-fila
+      { id: "bomba", name: "Bomba di cioccolato", desc: "metti cinque dolci in fila e crea una bomba di cioccolato" },
+      { id: "cascata", name: "Cascata da cinque", desc: "fai una cascata di 5 file con una mossa sola" },
+      { id: "dieci", name: "Dieci livelli", desc: "supera il decimo livello" },
+    ],
     "svelato-best-": [   // pianeta-svelato
       { id: "retata", name: "Retata", desc: "schiaccia 3 alieni chiudendoli dentro con una sola linea" },
       { id: "abbattuto", name: "Guardiano abbattuto", desc: "distruggi il guardiano di un pianeta con il laser" },
