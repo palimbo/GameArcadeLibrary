@@ -9,6 +9,11 @@
   "use strict";
   // record key prefix of the game (as in trofei.js) → its feats
   const LIST = {
+    "scala40-best-": [   // scala-40
+      { id: "inmano", name: "Chiusura in mano", desc: "apri e chiudi nello stesso turno, calando tutte le carte in una volta" },
+      { id: "jolly", name: "Ladro di jolly", desc: "prendi un jolly dal tavolo mettendo al suo posto la carta vera" },
+      { id: "tris", name: "Tre di fila", desc: "chiudi tre smazzate di fila" },
+    ],
     "dolci-best-": [   // dolci-in-fila
       { id: "bomba", name: "Bomba di cioccolato", desc: "metti cinque dolci in fila e crea una bomba di cioccolato" },
       { id: "cascata", name: "Cascata da cinque", desc: "fai una cascata di 5 file con una mossa sola" },
