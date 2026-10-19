@@ -9,6 +9,11 @@
   "use strict";
   // record key prefix of the game (as in trofei.js) → its feats
   const LIST = {
+    "fresche-best-": [   // avventure-fresche
+      { id: "strike", name: "Valanga", desc: "travolgi 3 nemici con un solo blocco di ghiaccio preso a calci" },
+      { id: "illeso", name: "Senza un graffio", desc: "sconfiggi un cattivo senza farti colpire neanche una volta" },
+      { id: "ricetta", name: "La ricetta completa", desc: "riprendi la ricetta da tutti e quattro i cattivi, fino a Dongo e Parrot" },
+    ],
     "svelato-best-": [   // pianeta-svelato
       { id: "retata", name: "Retata", desc: "schiaccia 3 alieni chiudendoli dentro con una sola linea" },
       { id: "abbattuto", name: "Guardiano abbattuto", desc: "distruggi il guardiano di un pianeta con il laser" },
