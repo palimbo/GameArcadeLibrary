@@ -9,6 +9,11 @@
   "use strict";
   // record key prefix of the game (as in trofei.js) → its feats
   const LIST = {
+    "fresche-best-": [   // avventure-fresche
+      { id: "strike", name: "Valanga", desc: "travolgi 3 nemici con un solo blocco di ghiaccio preso a calci" },
+      { id: "illeso", name: "Senza un graffio", desc: "sconfiggi un cattivo senza farti colpire neanche una volta" },
+      { id: "ricetta", name: "La ricetta completa", desc: "riprendi la ricetta da tutti e quattro i cattivi, fino a Dongo e Parrot" },
+    ],
     "dolci-best-": [   // dolci-in-fila
       { id: "bomba", name: "Bomba di cioccolato", desc: "metti cinque dolci in fila e crea una bomba di cioccolato" },
       { id: "cascata", name: "Cascata da cinque", desc: "fai una cascata di 5 file con una mossa sola" },
