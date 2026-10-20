@@ -240,10 +240,15 @@
     k -= penalty(c) / (opened ? 5 : 12) * (skill ? 1 : 0.5);
     return k;
   }
+  // the rules: a card that could be attached to a meld on the table cannot be discarded, unless it is the
+  // last card (the closing discard) or there is no other card to throw
+  const discardable = (hand, c, table) => hand.length === 1 || !attachSpot(table, c);
   function chooseDiscard(hand, opened, skill, forbidden, table, nextOpened) {
     let pool = hand.filter((c) => !c.j && c.id !== forbidden);
     if (!pool.length) pool = hand.filter((c) => c.id !== forbidden);
     if (!pool.length) pool = hand.slice();
+    const legal = pool.filter((c) => discardable(hand, c, table));
+    if (legal.length) pool = legal;
     if (skill === 0 && Math.random() < 0.35) return pool[Math.floor(Math.random() * pool.length)];
     const inMelds = new Set();
     if (!opened) for (const m of findMelds(hand, "open").melds) for (const c of m) inMelds.add(c.id);
@@ -259,7 +264,7 @@
   // is the card on top of the discard pile worth taking? (not opened yet: only to open with it)
   function wantsDiscard(hand, top, opened, skill, table) {
     if (!top || (skill === 0 && Math.random() < 0.5)) return false;
-    if (opened) return !!attachSpot(table, top) || findMelds([...hand, top], "max").n > findMelds(hand, "max").n;
+    if (opened) return !!attachSpot(table, top) || findMelds([...hand, top], "max").melds.some((m) => m.includes(top));
     const f = findMelds([...hand, top], "open");
     return f.pts >= OPEN && f.melds.some((m) => m.includes(top));
   }
@@ -310,17 +315,44 @@
     osc.start(t); osc.stop(t + dur + 0.02);
   }
   const arp = (notes, gap, d, type = "square", vol = 0.04) => notes.forEach((f, i) => beep(f, d, type, vol, 0, i * gap));
+  // the sounds of real cards: short bursts of filtered noise (paper sliding, a card snapping on the felt)
+  let noiseBuf = null;
+  function noise(dur, vol, f0, f1, type = "bandpass", delay = 0, q = 1) {
+    if (!audioCtx) return;
+    if (!noiseBuf) { noiseBuf = audioCtx.createBuffer(1, audioCtx.sampleRate, audioCtx.sampleRate); const d = noiseBuf.getChannelData(0); for (let i = 0; i < d.length; i++) d[i] = Math.random() * 2 - 1; }
+    const t = audioCtx.currentTime + delay, src = audioCtx.createBufferSource(), fl = audioCtx.createBiquadFilter(), g = audioCtx.createGain();
+    src.buffer = noiseBuf; fl.type = type; fl.Q.value = q;
+    fl.frequency.setValueAtTime(f0, t); fl.frequency.exponentialRampToValueAtTime(Math.max(40, f1), t + dur);
+    g.gain.setValueAtTime(0.0001, t); g.gain.linearRampToValueAtTime(vol, t + Math.min(0.012, dur / 4)); g.gain.exponentialRampToValueAtTime(0.0001, t + dur);
+    src.connect(fl).connect(g).connect(audioCtx.destination); src.start(t, Math.random() * 0.5); src.stop(t + dur + 0.03);
+  }
+  const slide = (delay = 0, vol = 0.09) => noise(0.11, vol, 2600, 5200, "bandpass", delay, 0.8);   // a card sliding off the deck
+  const clack = (delay = 0, vol = 0.14) => { noise(0.035, vol, 3500, 1800, "highpass", delay); noise(0.07, vol * 0.6, 260, 120, "lowpass", delay); };   // a card put down on the felt
+  const tap = (delay = 0) => noise(0.03, 0.07, 2200, 1500, "bandpass", delay, 1.4);
+  function riffle(len = 0.9, delay = 0) {
+    // the two halves of the deck riffled together, then squared up
+    let t = delay;
+    while (t < delay + len) { noise(0.02, 0.05 + Math.random() * 0.04, 3000 + Math.random() * 2500, 2000, "bandpass", t, 2); t += 0.012 + Math.random() * 0.018; }
+    noise(0.12, 0.1, 900, 300, "lowpass", t + 0.03);
+  }
+  function applause(len = 1.8) {
+    for (let i = 0; i < 70; i++) noise(0.05, 0.03 + Math.random() * 0.05, 1200 + Math.random() * 2500, 800, "bandpass", Math.random() * len, 1.5);
+  }
+  function bell(f, delay = 0, vol = 0.03) { beep(f, 0.6, "sine", vol, 0, delay); beep(f * 2.01, 0.35, "sine", vol * 0.4, 0, delay); beep(f * 3.02, 0.2, "sine", vol * 0.2, 0, delay); }
   const sfx = {
-    pick: () => beep(700, 0.03, "square", 0.015),
-    draw: () => beep(320, 0.07, "triangle", 0.04, 200),
-    lay: () => arp([523, 659, 784], 0.04, 0.08, "triangle", 0.04),
-    attach: () => beep(880, 0.06, "triangle", 0.04, 200),
-    discard: () => beep(240, 0.08, "triangle", 0.05, -80),
-    bad: () => beep(180, 0.14, "triangle", 0.05, -60),
-    jolly: () => arp([784, 1047, 1319, 1568], 0.05, 0.1, "square", 0.035),
-    open: () => arp([523, 659, 784, 1047], 0.07, 0.12, "square", 0.04),
-    win: () => arp([523, 659, 784, 1047, 784, 1047, 1319, 1568], 0.08, 0.16, "square", 0.045),
-    lose: () => arp([523, 466, 415, 392, 330, 262], 0.15, 0.24, "triangle", 0.05),
+    pick: () => tap(),
+    draw: () => slide(),
+    deal: (i) => slide(i, 0.06),
+    shuffle: () => riffle(),
+    lay: (n = 3) => { for (let i = 0; i < n; i++) clack(i * 0.07, 0.11); },
+    attach: () => { slide(0, 0.06); clack(0.06, 0.1); },
+    discard: () => { slide(0, 0.05); clack(0.05, 0.16); },
+    bad: () => { beep(140, 0.12, "sine", 0.06, -30); noise(0.06, 0.05, 400, 200, "lowpass"); },
+    jolly: () => { [1047, 1319, 1568, 2093].forEach((f, i) => bell(f, i * 0.06, 0.025)); noise(0.5, 0.025, 6000, 9000, "highpass", 0.1); },
+    open: () => { clack(0, 0.12); [784, 988, 1175].forEach((f, i) => bell(f, 0.05 + i * 0.08, 0.025)); },
+    win: () => { applause(2.2); [523, 659, 784, 1047].forEach((f, i) => bell(f, i * 0.12, 0.03)); },
+    lose: () => { [392, 330, 262].forEach((f, i) => bell(f, i * 0.22, 0.03)); noise(0.6, 0.04, 500, 150, "lowpass", 0.5); },
+    think: () => tap(),
   };
 
   // ---------- State ----------
@@ -334,6 +366,7 @@
   let drewFrom = null, forbidden = -1, mustUse = new Set(), snap = null, laid = 0, openAtStart = false;
   let sel = new Set(), cursor = 0, kbd = false, newCard = -1, newT = 0;
   let aiGen = null, aiWait = 0, flying = [], popups = [], flash = null, banner = null, results = null, hintPile = null, glowMeld = null;
+  let confetti = [], sparkles = [], lift = new Map(), deckWiggle = 0, dealDur = 1.2;
   const isPlaying = () => state === "play";
   const me = () => players[0];
 
@@ -349,6 +382,7 @@
       deck = pile; pile = top ? [top] : [];
       for (let i = deck.length - 1; i > 0; i--) { const k = Math.floor(Math.random() * (i + 1)); [deck[i], deck[k]] = [deck[k], deck[i]]; }
       say("Il mazzo è finito: si rimescolano gli scarti");
+      deckWiggle = 0.9; sfx.shuffle();
     }
     return deck.pop();
   }
@@ -375,13 +409,25 @@
     for (const p of players) { p.hand = []; p.opened = false; }
     for (let k = 0; k < 13; k++) for (const p of players) p.hand.push(deck.pop());
     sortHand(me().hand);
-    pile.push(deck.pop());
+    // the discard pile never starts with a jolly: it goes back into the deck
+    let first = deck.pop();
+    while (first.j) { deck.splice(Math.floor(Math.random() * deck.length), 0, first); first = deck.pop(); }
+    first.rot = rnd(-0.12, 0.12);
+    pile.push(first);
     dealer = (dealer + 1) % players.length;
     turn = dealer;
     sel.clear(); cursor = 0;
     banner = { text: `SMAZZATA ${handN}`, sub: `si gioca fino a ${LIMIT} punti di penalità`, t: 0 };
     phase = "deal"; phaseT = 0;
-    sfx.draw();
+    // the cards are shuffled, then dealt one at a time round the table
+    sfx.shuffle();
+    const np = players.length, gap = 0.035;
+    for (let k = 0; k < 13; k++) for (let i = 0; i < np; i++) {
+      const d = 0.95 + (k * np + i) * gap;
+      flying.push({ c: players[i].hand[k], x0: L.deck.x, y0: L.deck.y, x1: seatPos(i).x, y1: seatPos(i).y, t: -d, dur: 0.28, up: false });
+      if ((k * np + i) % 2 === 0) sfx.deal(d);
+    }
+    dealDur = 0.95 + 13 * np * gap + 0.45;
   }
   function nextTurn() {
     turn = (turn + 1) % players.length;
@@ -422,12 +468,13 @@
       c = pile.pop();
       if (!c) return;
       drewFrom = "pile"; forbidden = c.id;
-      if (!p.opened) { mustUse.add(c.id); say("Per prendere lo scarto devi aprire usando quella carta"); }
+      mustUse.add(c.id);
+      say(p.opened ? "La carta presa dagli scarti va usata subito: calala o attaccala" : "Per prendere lo scarto devi aprire usando quella carta");
       fly(c, L.pile, handCenter(), true);
     } else {
       c = drawCardFromDeck();
       drewFrom = "deck";
-      fly(c, L.deck, handCenter(), false);
+      fly(c, L.deck, handCenter(), false, true);
     }
     p.hand.push(c); sortHand(p.hand);
     newCard = c.id; newT = 0; sel.clear();
@@ -446,7 +493,7 @@
     table.push(meld);
     removeFromHand(cards);
     laid += meldPts(meld);
-    sfx.lay();
+    sfx.lay(cards.length);
     if (meld.staged) {
       const p = stagedPts();
       say(p >= OPEN ? `Apertura: ${p} punti, ci sei! Scarta per aprire` : `Apertura: ${p} su ${OPEN} punti`);
@@ -491,7 +538,7 @@
     removeFromHand([c]);
     me().hand.push(jk); sortHand(me().hand);
     mustUse.add(jk.id); newCard = jk.id; newT = 0;
-    sfx.jolly();
+    sfx.jolly(); sparkleAt(meldRect(m), 20, "#c87aff");
     impresa("jolly");
     say("Jolly recuperato: devi calarlo in questo turno");
   }
@@ -501,10 +548,13 @@
     if (c.id === forbidden) { say("Non puoi scartare la carta appena presa dagli scarti", true); return; }
     const pending = me().hand.filter((x) => mustUse.has(x.id) && x !== c);
     if (pending.length || mustUse.has(c.id)) { say(pending.some((x) => x.j) || c.j ? "Prima devi calare il jolly recuperato" : "Prima devi calare la carta presa dagli scarti", true); return; }
+    const tbl = table.filter((m) => !m.staged || stagedPts() >= OPEN);
+    if (!discardable(me().hand, c, tbl) && me().hand.some((x) => x !== c && x.id !== forbidden && !mustUse.has(x.id) && discardable(me().hand, x, tbl))) { say("Questa carta si attacca a una combinazione sul tavolo: le regole non la fanno scartare (solo per chiudere)", true); return; }
     const sp = stagedPts();
     if (staged().length && sp < OPEN) { say(`Per aprire servono ${OPEN} punti (ne hai ${sp}): cala ancora o premi ANNULLA`, true); return; }
     if (staged().length) { for (const m of staged()) m.staged = false; me().opened = true; sfx.open(); }
     removeFromHand([c]);
+    c.rot = rnd(-0.14, 0.14);
     pile.push(c);
     fly(c, handCenter(), L.pile, true);
     sfx.discard();
@@ -569,7 +619,7 @@
         p.hand = p.hand.filter((y) => y !== x); p.hand.push(jk);
         const f = findMelds(p.hand, "max");
         if (f.melds.some((ms) => ms.includes(jk)) || table.some((t) => t !== m && tryAttach(t, [jk]))) {
-          m.born = 0; sfx.jolly();
+          m.born = 0; sfx.jolly(); sparkleAt(meldRect(m), 20, "#c87aff");
           if (!p.ai) impresa("jolly");
           yield 0.5;
           for (const cards of findMelds(p.hand, "max").melds) { aiLay(i, cards); yield 0.45; }
@@ -588,9 +638,13 @@
         }
       }
     }
+    // the card taken from the discard pile must be used this very turn
+    const tookCard = p.hand.find((x) => x.id === took);
+    if (tookCard && p.opened && p.hand.length > 1) { const t = attachSpot(table, tookCard); if (t) { aiAttach(i, t, tookCard); yield 0.4; } }
     const nxt = players[(i + 1) % players.length];
     const d = chooseDiscard(p.hand, p.opened, skill, took, table, nxt.opened);
     p.hand = p.hand.filter((x) => x !== d);
+    d.rot = rnd(-0.14, 0.14);
     pile.push(d);
     fly(d, seatPos(i), L.pile, true);
     sfx.discard();
@@ -609,7 +663,7 @@
     if (!p.ai) laidAi += meldPts(meld);
     const r = meldRect(meld);
     if (r) fly(cards[0], seatPos(i), r, true);
-    sfx.lay();
+    sfx.lay(cards.length);
   }
   function aiAttach(i, m, c) {
     const n = tryAttach(m, [c]);
@@ -640,6 +694,7 @@
       if (inHand) impresa("inmano");
       if (streak >= 3) impresa("tris");
       sfx.win();
+      for (let k = 0; k < 140; k++) confetti.push({ x: rnd(0, W), y: rnd(-80, 0), vx: rnd(-40, 40), vy: rnd(30, 140), t: 0, a: rnd(0, TAU), va: rnd(-7, 7), col: ["#ffd23a", "#ff5a6a", "#5aff7a", "#5ab8ff", "#ffffff"][k % 5] });
     } else { streak = 0; sfx.lose(); }
     const out = rows.filter((r, i) => i && r.out).length;
     if (out && !rows[0].out) { got += out * 2000; beaten += out; lines.push(`${out === 1 ? "Un avversario eliminato" : `${out} avversari eliminati`}: ${fmt(out * 2000)}`); }
@@ -663,13 +718,19 @@
     popups = popups.filter((p) => p.t < 1.4);
     for (const f of flying) f.t += dt;
     flying = flying.filter((f) => f.t < f.dur);
+    for (const p of confetti) { p.t += dt; p.vy += 90 * dt; p.x += p.vx * dt; p.y += p.vy * dt; p.a += p.va * dt; }
+    confetti = confetti.filter((p) => p.t < 3.5);
+    for (const p of sparkles) { p.t += dt; p.x += p.vx * dt; p.y += p.vy * dt; }
+    sparkles = sparkles.filter((p) => p.t < 0.8);
+    deckWiggle = Math.max(0, deckWiggle - dt);
+    if (players.length) for (const c of me().hand) { const v = lift.get(c.id) || 0, goal = sel.has(c.id) ? 10 : 0; lift.set(c.id, v + (goal - v) * Math.min(1, dt * 16)); }
     for (const m of table) m.born += dt;
     if (flash) { flash.t += dt; if (flash.t > 2.8) flash = null; }
     if (banner) { banner.t += dt; if (banner.t > 1.6) banner = null; }
     newT += dt;
     if (state !== "play") return;
     phaseT += dt;
-    if (phase === "deal") { if (phaseT > 1.2) beginTurn(); }
+    if (phase === "deal") { if (phaseT > dealDur) beginTurn(); }
     else if (phase === "ai") {
       aiWait -= dt;
       if (aiWait <= 0) { const r = aiGen.next(); if (!r.done) aiWait = r.value; }
@@ -826,7 +887,7 @@
     const { per, ch, cw, step } = best, out = [];
     hand.forEach((c, i) => {
       const row = Math.floor(i / per), k = i - row * per, inRow = Math.min(per, n - row * per);
-      const x = R.x + (R.w - (cw + step * (inRow - 1))) / 2 + k * step, y = R.y + 12 + row * (ch + 4) - (sel.has(c.id) ? 10 : 0);
+      const x = R.x + (R.w - (cw + step * (inRow - 1))) / 2 + k * step, y = R.y + 12 + row * (ch + 4) - (lift.get(c.id) || 0);
       out.push({ c, x, y, w: cw, h: ch });
     });
     return out;
@@ -855,7 +916,8 @@
     return tlCache;
   }
   const meldRect = (m) => tableLayout().rects.find((r) => r.m === m);
-  function fly(c, from, to, up) { flying.push({ c, x0: from.x, y0: from.y, x1: to.x, y1: to.y, t: 0, dur: 0.32, up }); }
+  function fly(c, from, to, up, flip = false) { flying.push({ c, x0: from.x, y0: from.y, x1: to.x, y1: to.y, t: 0, dur: flip ? 0.42 : 0.34, up, flip, spin: rnd(-0.6, 0.6) }); }
+  function sparkleAt(r, n = 14, col = "#ffd23a") { if (!r) return; for (let i = 0; i < n; i++) { const a = rnd(0, TAU), v = rnd(30, 110); sparkles.push({ x: r.x + r.w / 2, y: r.y + r.h / 2, vx: Math.cos(a) * v, vy: Math.sin(a) * v, t: 0, col }); } }
   function buttons() {
     if (!players.length || players[turn] !== me() || window.__bot || (phase !== "draw" && phase !== "play")) return [];
     const list = [];
@@ -961,7 +1023,10 @@
     for (let i = 1; i < players.length; i++) {
       const p = players[i], r = { x: L.opp.x + (i - 1) * (gw + 6), y: L.opp.y, w: gw, h: L.opp.h };
       panel(r, turn === i && phase !== "results" ? "rgba(255,210,58,0.22)" : "rgba(0,0,0,0.3)");
-      if (turn === i && phase === "ai") { ctx.strokeStyle = "#ffd23a"; ctx.lineWidth = 2; rr(r.x, r.y, r.w, r.h, 8); ctx.stroke(); }
+      if (turn === i && phase === "ai") {
+        ctx.strokeStyle = `rgba(255,210,58,${0.6 + 0.4 * Math.sin(clock * 6)})`; ctx.lineWidth = 2; rr(r.x, r.y, r.w, r.h, 8); ctx.stroke();
+        for (let k = 0; k < 3; k++) { ctx.fillStyle = `rgba(255,255,255,${0.35 + 0.65 * Math.max(0, Math.sin(clock * 7 - k * 0.8))})`; ctx.beginPath(); ctx.arc(r.x + r.w / 2 - 6 + k * 6, r.y + r.h - 12, 1.8, 0, TAU); ctx.fill(); }
+      }
       ctx.fillStyle = p.col; ctx.fillRect(r.x + 6, r.y + 6, 4, 11);
       ctx.textAlign = "right"; ctx.fillStyle = p.pen >= 80 ? "#ff6a5a" : "#fff"; ctx.font = "800 9px system-ui";
       ctx.fillText(`${p.pen}/${LIMIT}`, r.x + r.w - 6, r.y + 15);
@@ -974,8 +1039,8 @@
       ctx.fillText(p.opened ? "APERTO" : "DA APRIRE", r.x + 14, r.y + 29);
       // the cards in the hand
       ctx.textAlign = "right"; ctx.fillStyle = "#fff"; ctx.font = "800 10px system-ui";
-      ctx.fillText(String(p.hand.length), r.x + r.w - 6, r.y + 30);
-      const cw = ctx.measureText(String(p.hand.length)).width;
+      ctx.fillText(String(dealt(i)), r.x + r.w - 6, r.y + 30);
+      const cw = ctx.measureText(String(dealt(i))).width;
       drawBack(r.x + r.w - 20 - cw, r.y + 19, 10, 14);
       ctx.fillStyle = "rgba(255,255,255,0.15)"; ctx.fillRect(r.x + 6, r.y + r.h - 5, r.w - 12, 2.5);
       ctx.fillStyle = p.pen >= 80 ? "#ff5a4a" : "#ffd23a"; ctx.fillRect(r.x + 6, r.y + r.h - 5, (r.w - 12) * Math.min(1, p.pen / LIMIT), 2.5);
@@ -991,7 +1056,10 @@
     for (const r of tl.rects) {
       const m = r.m;
       ctx.fillStyle = SEAT_COL[m.owner] || "#fff"; ctx.globalAlpha = 0.8; ctx.fillRect(r.x, r.y + r.h + 1.5, r.w, 2.5); ctx.globalAlpha = 1;
+      const bounce = m.born < 0.35 ? 1 + 0.14 * Math.sin(m.born / 0.35 * Math.PI) : 1;
+      ctx.save(); ctx.translate(r.x + r.w / 2, r.y + r.h / 2); ctx.scale(bounce, bounce); ctx.translate(-(r.x + r.w / 2), -(r.y + r.h / 2));
       m.ent.forEach((e, k) => drawCard(e.c, r.x + k * tl.step, r.y, tl.cw, tl.ch, { mini: true, rep: e.c.j ? e : null }));
+      ctx.restore();
       if (m.staged) { ctx.strokeStyle = "#ffffff"; ctx.setLineDash([3, 3]); ctx.lineWidth = 1.5; rr(r.x - 2, r.y - 2, r.w + 4, r.h + 4, 4); ctx.stroke(); ctx.setLineDash([]); }
       if (m.born < 0.9) { ctx.strokeStyle = `rgba(255,230,120,${1 - m.born / 0.9})`; ctx.lineWidth = 3; rr(r.x - 2, r.y - 2, r.w + 4, r.h + 4, 4); ctx.stroke(); }
     }
@@ -999,10 +1067,14 @@
   function drawPiles() {
     const myTurn = players[turn] === me() && !window.__bot && phase === "draw", pulse = 0.5 + 0.5 * Math.sin(clock * 6);
     const D = L.deck, P = L.pile;
-    for (let k = Math.min(4, Math.ceil(deck.length / 12)); k >= 0; k--) drawBack(D.x - k, D.y - k, D.w, D.h);
+    const wig = deckWiggle > 0 ? Math.sin(clock * 50) * 3 * deckWiggle : 0;
+    for (let k = Math.min(4, Math.ceil(deck.length / 12)); k >= 0; k--) drawBack(D.x - k + (k % 2 ? wig : -wig), D.y - k, D.w, D.h);
     const top = pile[pile.length - 1];
-    if (top) drawCard(top, P.x, P.y, P.w, P.h);
-    else { ctx.strokeStyle = "rgba(255,255,255,0.3)"; ctx.setLineDash([4, 3]); rr(P.x, P.y, P.w, P.h, 4); ctx.stroke(); ctx.setLineDash([]); }
+    for (const c of pile.slice(-4)) {
+      ctx.save(); ctx.translate(P.x + P.w / 2, P.y + P.h / 2); ctx.rotate(c.rot || 0);
+      drawCard(c, -P.w / 2, -P.h / 2, P.w, P.h); ctx.restore();
+    }
+    if (!top) { ctx.strokeStyle = "rgba(255,255,255,0.3)"; ctx.setLineDash([4, 3]); rr(P.x, P.y, P.w, P.h, 4); ctx.stroke(); ctx.setLineDash([]); }
     if (myTurn) {
       for (const [r, id] of [[D, "deck"], [P, "pile"]]) {
         if (id === "pile" && !top) continue;
@@ -1031,9 +1103,11 @@
     ctx.fillText(`in mano: ${p.opened ? inHand : 100}`, R.x + 8, R.y + 54);
     if (R.h > 66) ctx.fillText(`smazzata ${handN}`, R.x + 8, R.y + 67);
   }
+  const dealt = (i) => phase !== "deal" ? players[i].hand.length : clamp(Math.floor((phaseT - 0.95 - 0.28 - i * 0.035) / (players.length * 0.035)) + 1, 0, players[i].hand.length);
   function drawHand() {
-    const hl = handLayout(), mine = players[turn] === me() && !window.__bot;
+    const hl = handLayout(), mine = players[turn] === me() && !window.__bot, shown = dealt(0);
     hl.forEach((h, i) => {
+      if (i >= shown) return;
       const glow = sel.has(h.c.id) ? "#ffd23a" : h.c.id === newCard && newT < 2.5 ? `rgba(90,220,255,${1 - newT / 2.5})` : mustUse.has(h.c.id) ? "#c87aff" : null;
       drawCard(h.c, h.x, h.y, h.w, h.h, { glow });
       if (kbd && mine && i === cursor && phase === "play") { ctx.fillStyle = "#ffffff"; ctx.beginPath(); ctx.moveTo(h.x + h.w / 2 - 5, h.y + h.h + 7); ctx.lineTo(h.x + h.w / 2 + 5, h.y + h.h + 7); ctx.lineTo(h.x + h.w / 2, h.y + h.h + 2); ctx.fill(); }
@@ -1109,13 +1183,20 @@
     drawInfo();
     drawButtons();
     drawHand();
+    // cards in the air: an arc, a little spin, and the ones you draw turn over on the way
     for (const f of flying) {
+      if (f.t < 0) continue;
       const k = f.t / f.dur, e = 1 - (1 - k) * (1 - k);
-      const x = f.x0 + (f.x1 - f.x0) * e, y = f.y0 + (f.y1 - f.y0) * e;
-      drawCard(f.c, x, y, 30, 42, { back: !f.up, mini: true });
+      const x = f.x0 + (f.x1 - f.x0) * e, y = f.y0 + (f.y1 - f.y0) * e - Math.sin(k * Math.PI) * 26;
+      const fl = f.flip ? Math.abs(Math.cos(k * Math.PI)) : 1, face = f.flip ? k > 0.5 : f.up;
+      ctx.save(); ctx.translate(x + 15, y + 21); ctx.rotate((f.spin || 0) * Math.sin(k * Math.PI)); ctx.scale(Math.max(0.05, fl) * (1 + 0.15 * Math.sin(k * Math.PI)), 1 + 0.15 * Math.sin(k * Math.PI));
+      drawCard(f.c, -15, -21, 30, 42, { back: !face, mini: true });
+      ctx.restore();
     }
+    for (const p of sparkles) { ctx.globalAlpha = 1 - p.t / 0.8; ctx.fillStyle = p.col; ctx.save(); ctx.translate(p.x, p.y); ctx.rotate(p.t * 6); ctx.fillRect(-2.5, -0.8, 5, 1.6); ctx.fillRect(-0.8, -2.5, 1.6, 5); ctx.restore(); }
+    ctx.globalAlpha = 1;
     ctx.textAlign = "center";
-    for (const p of popups) { ctx.globalAlpha = Math.max(0, 1 - p.t / 1.4); outlined(p.text, p.x, p.y, "900 15px system-ui", p.col); }
+    for (const p of popups) { ctx.globalAlpha = Math.max(0, 1 - p.t / 1.4); const z = 1 + Math.max(0, 0.25 - p.t) * 2; ctx.save(); ctx.translate(p.x, p.y); ctx.scale(z, z); outlined(p.text, 0, 0, "900 15px system-ui", p.col); ctx.restore(); }
     ctx.globalAlpha = 1;
     if (banner) {
       ctx.globalAlpha = Math.min(1, (1.6 - banner.t) * 3);
@@ -1126,6 +1207,8 @@
       ctx.globalAlpha = 1;
     }
     if (results) drawResults();
+    for (const p of confetti) { ctx.save(); ctx.translate(p.x, p.y); ctx.rotate(p.a); ctx.globalAlpha = Math.min(1, 3.5 - p.t); ctx.fillStyle = p.col; ctx.fillRect(-3, -1.5, 6, 3); ctx.restore(); }
+    ctx.globalAlpha = 1;
   }
 
   // ---------- Loop ----------
