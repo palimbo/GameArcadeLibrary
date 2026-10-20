@@ -9,6 +9,11 @@
   "use strict";
   // record key prefix of the game (as in trofei.js) → its feats
   const LIST = {
+    "scala40-best-": [   // scala-40
+      { id: "inmano", name: "Chiusura in mano", desc: "apri e chiudi nello stesso turno, calando tutte le carte in una volta" },
+      { id: "jolly", name: "Ladro di jolly", desc: "prendi un jolly dal tavolo mettendo al suo posto la carta vera" },
+      { id: "tris", name: "Tre di fila", desc: "chiudi tre smazzate di fila" },
+    ],
     "fresche-best-": [   // avventure-fresche
       { id: "strike", name: "Valanga", desc: "travolgi 3 nemici con un solo blocco di ghiaccio preso a calci" },
       { id: "illeso", name: "Senza un graffio", desc: "sconfiggi un cattivo senza farti colpire neanche una volta" },
