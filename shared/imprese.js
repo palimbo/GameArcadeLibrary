@@ -9,6 +9,11 @@
   "use strict";
   // record key prefix of the game (as in trofei.js) → its feats
   const LIST = {
+    "fusione-best-": [   // fusione-cosmica
+      { id: "catena", name: "Reazione a catena", desc: "provoca 6 fusioni con un solo lancio" },
+      { id: "sole", name: "Accendi una stella", desc: "fondi due Giove e crea il Sole" },
+      { id: "trecento", name: "Trecento lanci", desc: "lascia cadere 300 corpi nella stessa partita" },
+    ],
     "scala40-best-": [   // scala-40
       { id: "inmano", name: "Chiusura in mano", desc: "apri e chiudi nello stesso turno, calando tutte le carte in una volta" },
       { id: "jolly", name: "Ladro di jolly", desc: "prendi un jolly dal tavolo mettendo al suo posto la carta vera" },
