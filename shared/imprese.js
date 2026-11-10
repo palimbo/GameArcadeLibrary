@@ -9,6 +9,11 @@
   "use strict";
   // record key prefix of the game (as in trofei.js) → its feats
   const LIST = {
+    "briscola-best-": [   // briscola
+      { id: "ottanta", name: "Ottanta", desc: "fai almeno 80 punti in una mano" },
+      { id: "netto", name: "Due a zero", desc: "batti un avversario senza perdere neanche una mano" },
+      { id: "campione", name: "Campione del circolo", desc: "batti il Campione, il sesto avversario" },
+    ],
     "scopa-best-": [   // scopa
       { id: "tris", name: "Tris di scope", desc: "fai 3 scope nella stessa smazzata" },
       { id: "piatto", name: "Piatto pieno", desc: "prendi carte, denari, settebello e primiera nella stessa smazzata" },
