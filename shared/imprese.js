@@ -9,6 +9,11 @@
   "use strict";
   // record key prefix of the game (as in trofei.js) → its feats
   const LIST = {
+    "scopa-best-": [   // scopa
+      { id: "tris", name: "Tris di scope", desc: "fai 3 scope nella stessa smazzata" },
+      { id: "piatto", name: "Piatto pieno", desc: "prendi carte, denari, settebello e primiera nella stessa smazzata" },
+      { id: "campione", name: "Campione del circolo", desc: "batti il Campione, il sesto avversario" },
+    ],
     "fagiolo-best-": [   // su-per-il-fagiolo
       { id: "mille", name: "Mille metri", desc: "sali fino a 1.000 metri sopra l'orto" },
       { id: "uova", name: "Paniere d'oro", desc: "raccogli 25 uova d'oro nella stessa partita" },

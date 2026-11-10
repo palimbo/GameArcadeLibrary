@@ -1,0 +1,761 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no, viewport-fit=cover">
+<title>Scopa</title>
+<style>
+  :root {
+    --bg: #0a1a10;
+    --fg: #f4f6ee;
+    --muted: #d0f0c8;
+    --pink: #ffd23a;
+    --yellow: #7ad8ff;
+    --red: #ff4a3a;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  html, body {
+    height: 100%;
+    background: var(--bg);
+    color: var(--fg);
+    font-family: system-ui, -apple-system, "Segoe UI", sans-serif;
+    overflow: hidden;
+    user-select: none;
+    -webkit-user-select: none;
+    touch-action: none;
+  }
+  #wrap { position: fixed; inset: 0; display: flex; align-items: center; justify-content: center; }
+  canvas { cursor: pointer; display: block; touch-action: none; border-radius: 6px; box-shadow: 0 0 0 2px #2a6a3a, 0 10px 40px rgba(0,0,0,0.6); }
+  #pauseBtn {
+    position: fixed; z-index: 3; display: none; right: 10px; top: calc(10px + env(safe-area-inset-top, 0px));
+    font: 700 13px system-ui, sans-serif; color: var(--fg);
+    background: rgba(0, 0, 0, 0.6); border: 1px solid rgba(244, 246, 238, 0.35);
+    border-radius: 8px; padding: 6px 10px; cursor: pointer;
+  }
+  #touch { display: none !important; }
+  #overlay {
+    position: fixed; inset: 0; z-index: 5;
+    display: flex; flex-direction: column; align-items: center; justify-content: flex-start;
+    gap: 14px; padding: 16px; text-align: center; overflow-y: auto;
+    background: rgba(10, 26, 16, 0.93);
+  }
+  #overlay > :first-child { margin-top: auto; }
+  #overlay > :last-child { margin-bottom: auto; }
+  #overlay.hidden { display: none; }
+  #homeLink {
+    position: fixed; top: calc(10px + env(safe-area-inset-top, 0px)); left: 10px; z-index: 6;
+    font: 600 13px/1 system-ui, sans-serif; color: #fff; text-decoration: none;
+    padding: 8px 12px; border-radius: 999px; background: rgba(0,0,0,.55);
+    border: 1px solid rgba(255,255,255,.25);
+  }
+  #homeLink:hover { background: rgba(0,0,0,.8); }
+  #overlay.hidden ~ #homeLink { display: none; }
+  @media (max-width: 700px) { #overlay { padding-top: calc(52px + env(safe-area-inset-top, 0px)); } }
+  #overlay h1 { font-size: clamp(32px, 10vw, 58px); font-weight: 900; font-style: italic; letter-spacing: 1px; color: var(--pink);
+    text-shadow: 3px 3px 0 #0a3a10, 0 0 22px rgba(255,210,58,0.35); }
+  #overlay h2 { font-size: clamp(26px, 7vw, 42px); font-weight: 900; letter-spacing: 2px; color: var(--pink); }
+  #overlay h2.lose { color: var(--red); }
+  #overlay p { max-width: 540px; font-size: clamp(13px, 3.4vw, 16px); line-height: 1.55; }
+  #overlay p.muted { color: var(--muted); }
+  #overlay .pts { display: grid; grid-template-columns: repeat(2, auto); gap: 4px 18px; font-size: 13px; color: var(--muted); text-align: left; max-width: 560px; }
+  #overlay .pts b { color: var(--fg); }
+  #overlay .diff { display: flex; gap: 10px; flex-wrap: wrap; justify-content: center; }
+  #overlay button {
+    font: 800 15px system-ui, sans-serif; letter-spacing: 1.5px; color: var(--fg);
+    background: transparent; cursor: pointer;
+    border: 2px solid rgba(244,246,238,0.3); border-radius: 10px; padding: 9px 16px;
+  }
+  #overlay .mode button { font-size: 12px; padding: 7px 12px; }
+  #overlay .diff button.on { border-color: var(--c); color: var(--c); box-shadow: 0 0 12px var(--c); }
+  #overlay button.start { border-color: var(--pink); color: #06200a; background: var(--pink); padding: 11px 30px; box-shadow: 0 4px 0 #b8901a; }
+  @media (max-height: 560px) {
+    #overlay { gap: 8px; }
+    #overlay h1 { font-size: 30px; }
+    #overlay p { font-size: 13px; line-height: 1.4; }
+    #overlay .help, #overlay .pts { display: none; }
+  }
+</style>
+</head>
+<body>
+<div id="wrap"><canvas id="game"></canvas></div>
+<div id="touch"></div>
+<button id="pauseBtn" type="button" aria-label="Pausa">❚❚</button>
+<div id="overlay"></div>
+<a id="homeLink" href="../../index.html">← Sala Giochi</a>
+
+
+<script>
+(() => {
+  "use strict";
+
+  const W = 640, H = 360, TAU = Math.PI * 2, TOP = 28;
+  const CW = 46, CH = 70, GOAL = 11;
+  // the Italian deck: four suits, ace to seven, then knave (8), knight (9) and king (10)
+  const SUITS = [
+    { name: "denari", col: "#d89a1a" },
+    { name: "coppe", col: "#d83a3a" },
+    { name: "spade", col: "#3a6ad8" },
+    { name: "bastoni", col: "#3a8a4a" },
+  ];
+  const PRIME = { 7: 21, 6: 18, 1: 16, 5: 15, 4: 14, 3: 13, 2: 12, 8: 10, 9: 10, 10: 10 };
+  const VNAME = { 1: "asso", 8: "fante", 9: "cavallo", 10: "re" };
+  const cardName = (c) => `${VNAME[c.v] || c.v} di ${SUITS[c.s].name}`;
+  // the players of the club, one after the other: how well each of them plays
+  const RIVALS = [
+    { name: "Nonna Pina", skill: 0.2, col: "#e87ab8" },
+    { name: "Zio Tano", skill: 0.38, col: "#7ab8e8" },
+    { name: "il Barista", skill: 0.55, col: "#e8a84a" },
+    { name: "Don Mimmo", skill: 0.7, col: "#9a9ab0" },
+    { name: "la Maestra", skill: 0.84, col: "#7ad88a" },
+    { name: "il Campione", skill: 0.96, col: "#ffd23a" },
+  ];
+
+  const DIFFICULTIES = {
+    facile:    { label: "FACILE",    color: "#7ed87a", desc: "avversari distratti, il pulsante AIUTO e due rivincite", skill: -0.2, help: true, lives: 2 },
+    normale:   { label: "NORMALE",   color: "#ffd23a", desc: "il circolo com'è, con una rivincita", skill: 0, help: false, lives: 1 },
+    difficile: { label: "DIFFICILE", color: "#ff5a5a", desc: "tutti contano le carte uscite e non c'è rivincita", skill: 0.2, help: false, lives: 0 },
+  };
+  const DIFF_IDS = Object.keys(DIFFICULTIES);
+  const DIFF_KEY = "scopa-difficulty";
+  const bestKey = (id) => `scopa-best-${id}`;
+  function store(k, v) { try { localStorage.setItem(k, v); } catch { /* ignore */ } }
+  function load(k) { try { return localStorage.getItem(k); } catch { return null; } }
+  const impresa = (id) => window.dispatchEvent(new CustomEvent("sala:impresa", { detail: id }));
+  const rnd = (a, b) => a + Math.random() * (b - a);
+  const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
+
+  // ---------- Canvas ----------
+  const canvas = document.getElementById("game");
+  const ctx = canvas.getContext("2d");
+  const wrapEl = document.getElementById("wrap");
+  const overlay = document.getElementById("overlay");
+  const touchEl = document.getElementById("touch");
+  const pauseBtn = document.getElementById("pauseBtn");
+  let pxRatio = 1, touchMode = !!(window.matchMedia && matchMedia("(pointer: coarse)").matches);
+  function resize() {
+    touchEl.style.display = "none";
+    wrapEl.style.paddingBottom = "0";
+    const availW = window.innerWidth - 8, availH = window.innerHeight - 8;
+    const s = Math.max(0.2, Math.min(availW / W, availH / H));
+    pxRatio = Math.min(3, s * (window.devicePixelRatio || 1));
+    canvas.style.width = W * s + "px";
+    canvas.style.height = H * s + "px";
+    canvas.width = Math.round(W * pxRatio);
+    canvas.height = Math.round(H * pxRatio);
+  }
+  window.addEventListener("resize", () => syncControls());
+
+  // ---------- Audio ----------
+  let audioCtx = null, noiseBuf = null;
+  function beep(freq, dur, type = "square", vol = 0.04, slide = 0, delay = 0) {
+    if (!audioCtx) return;
+    const t = audioCtx.currentTime + delay;
+    const osc = audioCtx.createOscillator(), gain = audioCtx.createGain();
+    osc.type = type;
+    osc.frequency.setValueAtTime(freq, t);
+    if (slide) osc.frequency.exponentialRampToValueAtTime(Math.max(20, freq + slide), t + dur);
+    gain.gain.setValueAtTime(vol, t);
+    gain.gain.exponentialRampToValueAtTime(0.0001, t + dur);
+    osc.connect(gain).connect(audioCtx.destination);
+    osc.start(t); osc.stop(t + dur + 0.02);
+  }
+  function noise(dur, vol, freq, q = 1, delay = 0, slide = 0) {
+    if (!audioCtx) return;
+    if (!noiseBuf) {
+      noiseBuf = audioCtx.createBuffer(1, audioCtx.sampleRate, audioCtx.sampleRate);
+      const d = noiseBuf.getChannelData(0);
+      for (let i = 0; i < d.length; i++) d[i] = Math.random() * 2 - 1;
+    }
+    const t = audioCtx.currentTime + delay;
+    const src = audioCtx.createBufferSource(), f = audioCtx.createBiquadFilter(), g = audioCtx.createGain();
+    src.buffer = noiseBuf; f.type = "bandpass"; f.frequency.setValueAtTime(freq, t); f.Q.value = q;
+    if (slide) f.frequency.exponentialRampToValueAtTime(Math.max(30, freq + slide), t + dur);
+    g.gain.setValueAtTime(vol, t); g.gain.exponentialRampToValueAtTime(0.0001, t + dur);
+    src.connect(f).connect(g).connect(audioCtx.destination);
+    src.start(t, Math.random() * 0.5, dur + 0.05);
+  }
+  const arp = (notes, gap, d, type = "square", vol = 0.04) => notes.forEach((f, i) => beep(f, d, type, vol, 0, i * gap));
+  const sfx = {
+    // a card sliding out of the hand and slapping the cloth
+    card: () => { noise(0.09, 0.05, 2600, 0.8, 0, -1200); noise(0.05, 0.1, 500, 1.2, 0.08); beep(140, 0.05, "sine", 0.05, -40, 0.08); },
+    take: () => { noise(0.14, 0.06, 2000, 0.7, 0, 900); noise(0.05, 0.08, 600, 1.2, 0.12); },
+    deal: (n) => { for (let i = 0; i < n; i++) noise(0.06, 0.035, 2800, 1, i * 0.08, -1000); },
+    shuffle: () => { for (let i = 0; i < 14; i++) noise(0.03, 0.03, 2200 + i * 60, 1.5, i * 0.035); noise(0.2, 0.04, 1200, 0.6, 0.5); },
+    scopa: () => { arp([523, 659, 784, 1047], 0.07, 0.2, "triangle", 0.06); noise(0.3, 0.06, 3000, 0.6, 0, -2000); },
+    ouch: () => arp([392, 330, 262], 0.1, 0.2, "triangle", 0.05),
+    sette: () => arp([784, 988, 1319], 0.06, 0.16, "sine", 0.05),
+    win: () => arp([523, 659, 784, 1047, 1319, 1568], 0.09, 0.26, "triangle", 0.06),
+    lose: () => arp([523, 466, 415, 392, 330, 262], 0.15, 0.24, "triangle", 0.05),
+    tick: () => beep(900, 0.03, "square", 0.02),
+  };
+
+  // ---------- State ----------
+  let difficulty = DIFFICULTIES[load(DIFF_KEY)] ? load(DIFF_KEY) : "normale";
+  let diff = DIFFICULTIES[difficulty];
+  let state = "menu", menu = null, pausedFrom = null, clock = 0;
+  let score = 0, bestCache = 0, rival = 0, wins = 0, lives = 0;
+  let cards = [], deck = [], hands = [[], []], table = [], piles = [[], []], scope = [0, 0], pts = [0, 0], lastCap = null, turn = 0, dealer = 1, phase = "idle", result = null, seen = new Set();
+  let sel = null, opts = [], optIdx = 0, pick = new Set(), kb = 0, hover = null, hint = null, banner = null, popups = [], todo = null, fast = false, totalScope = 0, roundN = 0;
+  const isPlaying = () => state === "play";
+  const who = () => RIVALS[Math.min(rival, RIVALS.length - 1)];
+  const rivalSkill = () => clamp(who().skill + diff.skill + (rival >= RIVALS.length ? 0.1 : 0), 0, 1);
+  const myTurn = () => phase === "play" && turn === 0 && !todo;
+
+  // one thing at a time: what happens next, and how long the table waits before it does
+  function after(t, fn) {
+    if (fast) { fn(); return; }
+    todo = { t, fn };
+  }
+
+  // ---------- Rules ----------
+  // what a card can take from the table: a card of the same value if there is one, otherwise any group that adds up to it
+  function options(card, tbl = table) {
+    const same = tbl.filter((t) => t.v === card.v);
+    if (same.length) return same.map((t) => [t]);
+    const out = [], n = tbl.length;
+    for (let m = 1; m < 1 << n; m++) {
+      let sum = 0; const set = [];
+      for (let i = 0; i < n; i++) if (m >> i & 1) { sum += tbl[i].v; set.push(tbl[i]); }
+      if (sum === card.v && set.length > 1) out.push(set);
+    }
+    return out;
+  }
+  const lastPlay = (p) => deck.length === 0 && hands[p].length === 1 && hands[1 - p].length === 0;
+  // how good a move looks: the better the player, the more it weighs the cards still out and the less it plays at random
+  function evaluate(p, card, take, skill) {
+    let v = (Math.random() - 0.5) * (1 - skill) * 9;
+    const unseen = (val) => { let n = 0; for (const c of cards) if (c.v === val && !seen.has(c.id) && !hands[p].includes(c)) n++; return n; };
+    const risk = (tbl) => {   // leaving a table that one card can sweep
+      const sum = tbl.reduce((a, c) => a + c.v, 0);
+      if (!tbl.length || sum > 10 || lastPlay(p)) return 0;
+      return (2 + 7 * skill) * Math.min(1, unseen(sum) / 2.5 + (1 - skill) * 0.3);
+    };
+    if (take.length) {
+      const got = [card, ...take];
+      for (const c of got) {
+        v += 1;
+        if (c.s === 0) v += 1.6;
+        if (c.v === 7) v += c.s === 0 ? 9 : 3.2; else if (c.v === 6) v += 1.4; else if (c.v === 1) v += 0.8;
+      }
+      const rest = table.filter((t) => !take.includes(t));
+      if (!rest.length && !lastPlay(p)) v += 12;
+      v -= risk(rest);
+    } else {
+      v -= risk([...table, card]);
+      if (card.s === 0) v -= 1.6;
+      if (card.v === 7) v -= card.s === 0 ? 14 : 4.5; else if (card.v === 6) v -= 1.2;
+      if (hands[p].some((c) => c !== card && c.v === card.v)) v += 1.2 * skill;   // a card I can come back for
+      // do not hand over an easy seven
+      if (table.some((t) => t.v + card.v === 7) && unseen(7) > 0) v -= 2.5 * skill;
+    }
+    return v;
+  }
+  function bestMove(p, skill) {
+    let best = null;
+    for (const card of hands[p]) {
+      const os = options(card);
+      for (const take of os.length ? os : [[]]) { const v = evaluate(p, card, take, skill); if (!best || v > best.v) best = { card, take, v }; }
+    }
+    return best;
+  }
+
+  // ---------- The round ----------
+  function newMatch() {
+    pts = [0, 0]; roundN = 0; dealer = 1;
+    newRound();
+  }
+  function newRound() {
+    roundN++;
+    cards = [];
+    for (let s = 0; s < 4; s++) for (let v = 1; v <= 10; v++) cards.push({ id: s * 10 + v, s, v, x: 52, y: 160, rot: 0, f: 0, zone: "deck", hold: 0, sc: 1 });
+    do { for (let i = cards.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); [cards[i], cards[j]] = [cards[j], cards[i]]; } }
+    while (cards.slice(0, 4).filter((c) => c.v === 10).length >= 3);   // three kings on the table: deal again
+    deck = cards.slice(); hands = [[], []]; table = []; piles = [[], []]; scope = [0, 0]; lastCap = null; seen = new Set(); result = null;
+    sel = null; pick.clear(); hint = null;
+    sfx.shuffle();
+    phase = "deal";
+    after(0.9, () => {
+      for (let i = 0; i < 4; i++) { const c = deck.shift(); c.zone = "table"; c.hold = i * 0.09; table.push(c); seen.add(c.id); }
+      sfx.deal(4);
+      after(0.5, () => { turn = 1 - dealer; dealHands(); });
+    });
+  }
+  function dealHands() {
+    for (let i = 0; i < 3; i++) for (const p of [1 - dealer, dealer]) { const c = deck.shift(); c.zone = "hand" + p; c.hold = (i * 2 + (p === dealer ? 1 : 0)) * 0.08; hands[p].push(c); }
+    hands[0].sort((a, b) => a.v - b.v || a.s - b.s);
+    sfx.deal(6);
+    kb = 0;
+    phase = "play";
+    after(0.7, () => { if (turn === 1) aiTurn(); });
+  }
+  function aiTurn() {
+    after(fast ? 0 : rnd(0.5, 1), () => { const m = bestMove(1, rivalSkill()); play(1, m.card, m.take); });
+  }
+  function play(p, card, take) {
+    const final = lastPlay(p);
+    hands[p].splice(hands[p].indexOf(card), 1);
+    seen.add(card.id);
+    sel = null; pick.clear(); hint = null; opts = [];
+    turn = 1 - p;
+    if (take.length) {
+      table = table.filter((t) => !take.includes(t));
+      lastCap = p;
+      const got = [card, ...take];
+      card.zone = "show"; card.tx = take[0].x + 12; card.ty = take[0].y + 12;
+      for (const c of take) c.zone = "show";
+      sfx.card();
+      const sweep = !table.length && !final;
+      if (got.some((c) => c.v === 7 && c.s === 0)) { popups.push({ text: p === 0 ? "SETTEBELLO!" : `${who().name} prende il settebello`, t: 0, col: "#ffd23a" }); if (p === 0) sfx.sette(); }
+      if (sweep) {
+        scope[p]++;
+        banner = { text: "SCOPA!", sub: p === 0 ? "+1 punto" : `di ${who().name}`, t: 0, col: p === 0 ? "#ffd23a" : "#ff6a5a" };
+        if (p === 0) { score += 50; totalScope++; sfx.scopa(); if (scope[0] === 3) impresa("tris"); } else sfx.ouch();
+      }
+      after(sweep ? 1.1 : 0.6, () => {
+        for (const c of got) { c.zone = "pile" + p; piles[p].push(c); }
+        if (sweep) got[0].mark = true;   // the card of a sweep stays face up across the pile
+        sfx.take();
+        after(0.35, next);
+      });
+    } else {
+      card.zone = "table"; table.push(card);
+      sfx.card();
+      after(0.5, next);
+    }
+  }
+  function next() {
+    if (!hands[0].length && !hands[1].length) {
+      if (deck.length) { dealHands(); return; }
+      endRound(); return;
+    }
+    if (turn === 1) aiTurn();
+  }
+  function tally(p) {
+    const pile = piles[p], prim = [0, 0, 0, 0];
+    for (const c of pile) prim[c.s] = Math.max(prim[c.s], PRIME[c.v]);
+    return { carte: pile.length, denari: pile.filter((c) => c.s === 0).length, sette: pile.some((c) => c.s === 0 && c.v === 7), prim: prim.reduce((a, b) => a + b, 0), scope: scope[p] };
+  }
+  function endRound() {
+    if (table.length && lastCap !== null) { for (const c of table) { c.zone = "pile" + lastCap; piles[lastCap].push(c); } table = []; sfx.take(); }
+    const a = tally(0), b = tally(1), gain = [0, 0];
+    const rows = [
+      ["Carte", a.carte, b.carte, a.carte > b.carte ? 0 : b.carte > a.carte ? 1 : -1],
+      ["Denari", a.denari, b.denari, a.denari > b.denari ? 0 : b.denari > a.denari ? 1 : -1],
+      ["Settebello", a.sette ? "sì" : "—", b.sette ? "sì" : "—", a.sette ? 0 : 1],
+      ["Primiera", a.prim, b.prim, a.prim > b.prim ? 0 : b.prim > a.prim ? 1 : -1],
+    ];
+    for (const r of rows) if (r[3] >= 0) gain[r[3]]++;
+    gain[0] += a.scope; gain[1] += b.scope;
+    rows.push(["Scope", a.scope, b.scope, -2]);
+    pts[0] += gain[0]; pts[1] += gain[1];
+    score += gain[0] * 100;
+    if (rows.slice(0, 4).every((r) => r[3] === 0)) impresa("piatto");
+    const over = (pts[0] >= GOAL || pts[1] >= GOAL) && pts[0] !== pts[1], won = over && pts[0] > pts[1];
+    let bonus = 0;
+    if (won) { bonus = 1000 + 100 * (pts[0] - pts[1]); score += bonus; wins++; if (rival === RIVALS.length - 1) impresa("campione"); }
+    result = { rows, gain, over, won, bonus, t: 0 };
+    after(0.8, () => { phase = "score"; if (over) (won ? sfx.win : sfx.lose)(); });
+  }
+  function proceed() {
+    if (phase !== "score" || todo) return;
+    sfx.tick();
+    if (!result.over) { dealer = 1 - dealer; newRound(); return; }
+    if (!result.won) {
+      if (lives <= 0) { gameOver(); return; }
+      lives--;
+      banner = { text: "RIVINCITA", sub: `ancora contro ${who().name}`, t: 0, col: who().col };
+      newMatch(); return;
+    }
+    rival++;
+    banner = { text: who().name.toUpperCase(), sub: rival >= RIVALS.length ? "la rivincita del Campione" : `avversario ${rival + 1} di ${RIVALS.length}`, t: 0, col: who().col };
+    newMatch();
+  }
+
+  function startGame() {
+    if (!audioCtx) { try { audioCtx = new (window.AudioContext || window.webkitAudioContext)(); } catch { audioCtx = null; } }
+    if (audioCtx && audioCtx.state === "suspended") audioCtx.resume();
+    score = 0; rival = 0; wins = 0; lives = diff.lives; totalScope = 0; popups = []; todo = null; hover = null;
+    bestCache = parseInt(load(bestKey(difficulty)), 10) || 0;
+    banner = { text: who().name.toUpperCase(), sub: `avversario 1 di ${RIVALS.length} · si vince a ${GOAL} punti`, t: 0, col: who().col };
+    state = "play";
+    menu = null;
+    overlay.classList.add("hidden");
+    newMatch();
+    syncControls();
+    last = performance.now();
+  }
+
+  // ---------- The player's hand ----------
+  function choose(card) {
+    if (!myTurn()) return;
+    if (sel === card) { sel = null; pick.clear(); return; }
+    const os = options(card);
+    if (os.length <= 1) { play(0, card, os[0] || []); return; }
+    sel = card; opts = os; optIdx = 0; pick.clear(); sfx.tick();
+  }
+  function toggle(t) {
+    if (!sel || !opts.some((o) => o.includes(t))) return;
+    if (pick.has(t)) pick.delete(t); else pick.add(t);
+    sfx.tick();
+    const sum = [...pick].reduce((a, c) => a + c.v, 0);
+    if (sum > sel.v) { pick.clear(); pick.add(t); }
+    const hit = opts.find((o) => o.length === pick.size && o.every((c) => pick.has(c)));
+    if (hit) play(0, sel, hit);
+  }
+  function showHint() {
+    if (!myTurn() || !diff.help) return;
+    const m = bestMove(0, 1);
+    hint = { card: m.card, take: m.take, t: 0 };
+    sfx.tick();
+  }
+
+  // ---------- Update ----------
+  function place() {
+    const n0 = hands[0].length, n1 = hands[1].length, nt = table.length;
+    hands[0].forEach((c, i) => { c.tx = 320 + (i - (n0 - 1) / 2) * 58; c.ty = 299 - (c === sel ? 10 : 0) - (hint && hint.card === c ? 6 : 0); c.ts = 1; c.tf = 1; });
+    hands[1].forEach((c, i) => { c.tx = 320 + (i - (n1 - 1) / 2) * 34; c.ty = 56; c.ts = 0.6; c.tf = 0; });
+    const rows = nt <= 7 ? [table] : [table.slice(0, Math.ceil(nt / 2)), table.slice(Math.ceil(nt / 2))];
+    rows.forEach((row, r) => row.forEach((c, i) => {
+      const gap = Math.min(54, 360 / row.length);
+      c.tx = 320 + (i - (row.length - 1) / 2) * gap; c.ty = rows.length === 1 ? 168 : 132 + r * 74; c.ts = rows.length === 1 ? 1 : 0.94; c.tf = 1;
+    }));
+    deck.forEach((c, i) => { c.tx = 52 - i * 0.15; c.ty = 168 - i * 0.25; c.ts = 0.9; c.tf = 0; });
+    for (const p of [0, 1]) piles[p].forEach((c, i) => { c.tx = 596 + (c.mark ? -16 : 0) - i * 0.1; c.ty = (p === 0 ? 292 : 72) - i * 0.2; c.ts = 0.7; c.tf = c.mark ? 1 : 0; c.trot = c.mark ? Math.PI / 2 : 0; });
+    for (const c of cards) if (c.zone === "show") { c.ts = 1; c.tf = 1; }
+  }
+  function update(dt) {
+    clock += dt;
+    if (state !== "play") return;
+    place();
+    for (const c of cards) {
+      if (c.hold > 0) { c.hold -= dt; continue; }
+      const k = Math.min(1, dt * 13);
+      c.x += (c.tx - c.x) * k; c.y += (c.ty - c.y) * k; c.sc += ((c.ts || 1) - c.sc) * k; c.f += ((c.tf || 0) - c.f) * Math.min(1, dt * 9); c.rot += ((c.trot || 0) - c.rot) * k;
+    }
+    if (banner) { banner.t += dt; if (banner.t > 2) banner = null; }
+    for (const p of popups) p.t += dt;
+    popups = popups.filter((p) => p.t < 1.8);
+    if (hint) hint.t += dt;
+    if (result) result.t += dt;
+    if (todo) { todo.t -= dt; if (todo.t <= 0) { const fn = todo.fn; todo = null; fn(); } }
+  }
+
+  function gameOver() {
+    state = "over";
+    const prev = parseInt(load(bestKey(difficulty)), 10) || 0;
+    const record = score > prev;
+    if (record) store(bestKey(difficulty), String(score));
+    const lost = result && result.over && !result.won;
+    menu = () => showOverlay(
+      `<h2 class="lose">${lost ? "PARTITA PERSA" : "FINE DEL TORNEO"}</h2>
+       <p>Punteggio: <b>${score.toLocaleString("it-IT")}</b> · ${wins} ${wins === 1 ? "avversario battuto" : "avversari battuti"}${lost ? ` · fermato da ${who().name} (${pts[0]} a ${pts[1]})` : ""} · ${totalScope} ${totalScope === 1 ? "scopa" : "scope"} · ${diff.label}</p>
+       ${record ? "<p style='color:var(--pink)'>★ NUOVO RECORD! ★</p>" : ""}
+       ${difficultyHTML()}
+       <button class="start" data-start>NUOVO TORNEO</button>`
+    );
+    menu();
+    syncControls();
+  }
+  function togglePause() {
+    if (isPlaying()) {
+      pausedFrom = state; state = "paused";
+      showOverlay(`<h2>PAUSA</h2><button class="start" data-resume>CONTINUA</button><p class="muted">Premi P per continuare</p>`);
+    } else if (state === "paused") {
+      state = pausedFrom; overlay.classList.add("hidden"); last = performance.now();
+    }
+    syncControls();
+  }
+  // the pause menu can end the game (shared/iniziali.js): it ends here the usual way, saving the record
+  window.addEventListener("sala:termina", () => { if (state !== "paused") return; state = pausedFrom; overlay.classList.add("hidden"); gameOver(); syncControls(); });
+  function syncControls() {
+    pauseBtn.style.display = isPlaying() && touchMode ? "block" : "none";
+    resize();
+  }
+  pauseBtn.addEventListener("click", () => togglePause());
+  function showOverlay(html) { overlay.innerHTML = html; overlay.classList.remove("hidden"); }
+  function difficultyHTML() {
+    const buttons = DIFF_IDS.map((id) => {
+      const d = DIFFICULTIES[id];
+      return `<button type="button" data-diff="${id}" class="${id === difficulty ? "on" : ""}" style="--c:${d.color}">${d.label}</button>`;
+    }).join("");
+    const best = parseInt(load(bestKey(difficulty)), 10);
+    return `<div class="diff">${buttons}</div><p class="muted">${diff.desc}${best ? ` · Record: ${best.toLocaleString("it-IT")}` : ""}</p>`;
+  }
+  function setDifficulty(id) { if (!DIFFICULTIES[id]) return; difficulty = id; diff = DIFFICULTIES[id]; store(DIFF_KEY, id); if (menu) menu(); }
+  function showTitle() {
+    menu = showTitle;
+    showOverlay(
+      `<h1>SCOPA</h1>
+       <p>Il gioco di carte dei bar italiani, con il mazzo da 40 a denari, coppe, spade e bastoni. A turno si cala una carta: se sul tavolo ce n'è una dello stesso valore la prendi, altrimenti puoi prendere un gruppo di carte che sommate fanno quel valore (fante 8, cavallo 9, re 10). Se svuoti il tavolo è <b>scopa</b>! Sei avversari uno dopo l'altro, a chi arriva prima a ${GOAL} punti.</p>
+       <div class="pts">
+         <span><b>Punti di mazzo</b></span><span>uno a testa per: più carte, più denari, il settebello (7 di denari) e la primiera</span>
+         <span><b>Primiera</b></span><span>la carta migliore di ogni seme: il 7 vale 21, il 6 18, l'asso 16, il 5 15… le figure 10</span>
+         <span><b>Scope</b></span><span>un punto l'una; l'ultima carta della smazzata non fa scopa</span>
+       </div>
+       <p class="muted help">${touchMode ? "Tocca una carta per calarla; se può prendere in più modi, tocca le carte del tavolo che vuoi · ❚❚ pausa" : "Clicca una carta per calarla; se può prendere in più modi, clicca le carte del tavolo che vuoi · oppure ← → e Invio · P pausa"}</p>
+       ${difficultyHTML()}
+       <button class="start" data-start>SIEDITI AL TAVOLO</button>`
+    );
+  }
+  overlay.addEventListener("click", (e) => {
+    const d = e.target.closest("[data-diff]");
+    if (d) { setDifficulty(d.dataset.diff); return; }
+    if (e.target.closest("[data-start]")) startGame();
+    if (e.target.closest("[data-resume]")) togglePause();
+  });
+
+  // ---------- Input ----------
+  window.addEventListener("keydown", (e) => {
+    const k = e.key.toLowerCase();
+    if (state === "menu" || state === "over") {
+      if (e.key === "Enter") startGame();
+      else if (["1", "2", "3"].includes(k)) setDifficulty(DIFF_IDS[+k - 1]);
+      return;
+    }
+    if (k === "p") { if (!e.repeat) togglePause(); return; }
+    if (state === "paused") { if (e.key === "Enter" || k === "escape") togglePause(); return; }
+    if (k === "escape") { if (sel) { sel = null; pick.clear(); } else if (!e.repeat) togglePause(); return; }
+    if (["arrowleft", "arrowright", "arrowup", "arrowdown", " ", "enter"].includes(k)) e.preventDefault();
+    if (e.repeat) return;
+    if (phase === "score") { if (k === "enter" || k === " ") proceed(); return; }
+    if (!myTurn()) return;
+    const d = k === "arrowleft" || k === "a" ? -1 : k === "arrowright" || k === "d" ? 1 : 0;
+    if (sel) {   // choosing among the ways to take
+      if (d) { optIdx = (optIdx + d + opts.length) % opts.length; pick = new Set(opts[optIdx]); sfx.tick(); }
+      else if (k === "enter" || k === " ") play(0, sel, opts[optIdx]);
+      else if (k === "arrowdown") { sel = null; pick.clear(); }
+      return;
+    }
+    if (d) { kb = (kb + d + hands[0].length) % hands[0].length; hover = hands[0][kb]; sfx.tick(); }
+    else if (k === "enter" || k === " " || k === "arrowup") { const c = hands[0][Math.min(kb, hands[0].length - 1)]; choose(c); if (sel) pick = new Set(opts[0]); kb = Math.min(kb, Math.max(0, hands[0].length - 1)); }
+    else if (k === "h") showHint();
+  });
+  window.addEventListener("blur", () => { if (isPlaying()) togglePause(); });
+  const toGame = (e) => { const r = canvas.getBoundingClientRect(); return [(e.clientX - r.left) * W / r.width, (e.clientY - r.top) * H / r.height]; };
+  const inCard = (c, x, y) => Math.abs(x - c.x) < CW * c.sc / 2 + 2 && Math.abs(y - c.y) < CH * c.sc / 2 + 2;
+  const cardAt = (list, x, y) => { for (let i = list.length - 1; i >= 0; i--) if (inCard(list[i], x, y)) return list[i]; return null; };
+  const HELP = { x: 20, y: 276, w: 62, h: 26 };
+  canvas.addEventListener("pointerdown", (e) => {
+    e.preventDefault();
+    if (!isPlaying()) return;
+    const [x, y] = toGame(e);
+    if (phase === "score") { proceed(); return; }
+    if (!myTurn()) return;
+    if (diff.help && x > HELP.x && x < HELP.x + HELP.w && y > HELP.y && y < HELP.y + HELP.h) { showHint(); return; }
+    const c = cardAt(hands[0], x, y);
+    if (c) { kb = hands[0].indexOf(c); choose(c); return; }
+    const t = cardAt(table, x, y);
+    if (t && sel) toggle(t);
+    else if (sel) { sel = null; pick.clear(); }
+  });
+  canvas.addEventListener("pointermove", (e) => { if (e.pointerType === "touch" || !isPlaying()) return; const [x, y] = toGame(e); hover = myTurn() ? cardAt(hands[0], x, y) : null; });
+  window.addEventListener("pointerdown", (e) => { if (e.pointerType === "touch" && !touchMode) { touchMode = true; syncControls(); if (menu) menu(); } }, true);
+
+  // ---------- Drawing ----------
+  function outlined(text, x, y, font, fill, lw = 5) {
+    ctx.font = font; ctx.lineWidth = lw; ctx.lineJoin = "round"; ctx.strokeStyle = "#0a1a10"; ctx.strokeText(text, x, y); ctx.fillStyle = fill; ctx.fillText(text, x, y);
+  }
+  // the four suits, drawn small: a coin, a cup, a sword, a club
+  function pip(s, x, y, r) {
+    ctx.save(); ctx.translate(x, y); ctx.scale(r, r);
+    if (s === 0) {
+      ctx.fillStyle = "#e8a820"; ctx.beginPath(); ctx.arc(0, 0, 1, 0, TAU); ctx.fill();
+      ctx.strokeStyle = "#a86a10"; ctx.lineWidth = 0.16; ctx.beginPath(); ctx.arc(0, 0, 0.92, 0, TAU); ctx.stroke();
+      ctx.fillStyle = "#fff0b0"; ctx.beginPath(); ctx.arc(0, 0, 0.55, 0, TAU); ctx.fill();
+      ctx.fillStyle = "#d83a3a"; ctx.beginPath(); ctx.arc(0, 0, 0.26, 0, TAU); ctx.fill();
+    } else if (s === 1) {
+      ctx.fillStyle = "#d83a3a"; ctx.beginPath(); ctx.moveTo(-0.8, -0.95); ctx.lineTo(0.8, -0.95); ctx.quadraticCurveTo(0.8, 0.2, 0, 0.25); ctx.quadraticCurveTo(-0.8, 0.2, -0.8, -0.95); ctx.fill();
+      ctx.fillStyle = "#e8a820"; ctx.fillRect(-0.85, -1, 1.7, 0.24); ctx.fillRect(-0.13, 0.2, 0.26, 0.5);
+      ctx.beginPath(); ctx.moveTo(-0.62, 1); ctx.lineTo(0.62, 1); ctx.lineTo(0.3, 0.65); ctx.lineTo(-0.3, 0.65); ctx.fill();
+    } else if (s === 2) {
+      ctx.fillStyle = "#8aa8e0"; ctx.beginPath(); ctx.moveTo(0, -1.1); ctx.lineTo(0.2, -0.8); ctx.lineTo(0.2, 0.42); ctx.lineTo(-0.2, 0.42); ctx.lineTo(-0.2, -0.8); ctx.fill();
+      ctx.fillStyle = "#3a6ad8"; ctx.fillRect(0, -0.9, 0.2, 1.3);
+      ctx.fillStyle = "#e8a820"; ctx.fillRect(-0.62, 0.38, 1.24, 0.2); ctx.fillRect(-0.1, 0.55, 0.2, 0.36); ctx.beginPath(); ctx.arc(0, 0.98, 0.17, 0, TAU); ctx.fill();
+    } else {
+      ctx.rotate(0.35);
+      ctx.fillStyle = "#3a8a4a"; ctx.beginPath(); ctx.moveTo(-0.34, -1); ctx.quadraticCurveTo(0, -1.2, 0.34, -1); ctx.lineTo(0.2, 1); ctx.quadraticCurveTo(0, 1.1, -0.2, 1); ctx.fill();
+      ctx.fillStyle = "#8a5a2a"; ctx.fillRect(-0.24, 0.55, 0.48, 0.2);
+      ctx.fillStyle = "#2a6a3a"; ctx.beginPath(); ctx.arc(-0.28, -0.4, 0.14, 0, TAU); ctx.arc(0.3, 0, 0.14, 0, TAU); ctx.arc(0.26, -0.75, 0.12, 0, TAU); ctx.fill();
+    }
+    ctx.restore();
+  }
+  const SPOTS = {
+    1: [[0, 0]], 2: [[0, -0.55], [0, 0.55]], 3: [[0, -0.7], [0, 0], [0, 0.7]], 4: [[-0.5, -0.5], [0.5, -0.5], [-0.5, 0.5], [0.5, 0.5]],
+    5: [[-0.5, -0.6], [0.5, -0.6], [0, 0], [-0.5, 0.6], [0.5, 0.6]], 6: [[-0.5, -0.7], [0.5, -0.7], [-0.5, 0], [0.5, 0], [-0.5, 0.7], [0.5, 0.7]],
+    7: [[-0.5, -0.7], [0.5, -0.7], [0, -0.35], [-0.5, 0], [0.5, 0], [-0.5, 0.7], [0.5, 0.7]],
+  };
+  function figure(c) {
+    const col = SUITS[c.s].col;
+    ctx.fillStyle = col;
+    if (c.v === 9) {   // the knight: a horse's head
+      ctx.beginPath(); ctx.moveTo(-9, 12); ctx.quadraticCurveTo(-11, -4, -1, -13); ctx.lineTo(1, -18); ctx.lineTo(4, -13); ctx.quadraticCurveTo(12, -8, 12, 1); ctx.lineTo(7, 3); ctx.quadraticCurveTo(3, -2, 1, 2); ctx.quadraticCurveTo(4, 8, 6, 12); ctx.fill();
+      ctx.fillStyle = "#fffaf0"; ctx.beginPath(); ctx.arc(4, -8, 1.4, 0, TAU); ctx.fill();
+      ctx.strokeStyle = "#fffaf0"; ctx.lineWidth = 1.2; ctx.beginPath(); ctx.moveTo(-7, 6); ctx.quadraticCurveTo(-8, -3, -2, -10); ctx.stroke();
+    } else {
+      ctx.beginPath(); ctx.moveTo(-10, 12); ctx.quadraticCurveTo(-10, -2, 0, -2); ctx.quadraticCurveTo(10, -2, 10, 12); ctx.fill();
+      ctx.fillStyle = "#f8d0a8"; ctx.beginPath(); ctx.arc(0, -8, 5.5, 0, TAU); ctx.fill();
+      ctx.fillStyle = "#3a2a1a"; ctx.beginPath(); ctx.arc(-1.8, -8.5, 0.8, 0, TAU); ctx.arc(1.8, -8.5, 0.8, 0, TAU); ctx.fill();
+      if (c.v === 10) { ctx.fillStyle = "#e8a820"; ctx.beginPath(); ctx.moveTo(-6, -12); ctx.lineTo(-6, -19); ctx.lineTo(-3, -15); ctx.lineTo(0, -20); ctx.lineTo(3, -15); ctx.lineTo(6, -19); ctx.lineTo(6, -12); ctx.fill(); ctx.fillStyle = "#fffaf0"; ctx.beginPath(); ctx.moveTo(-4, -4); ctx.quadraticCurveTo(0, 2, 4, -4); ctx.fill(); }
+      else { ctx.fillStyle = col; ctx.beginPath(); ctx.ellipse(0, -13, 7, 3, 0, 0, TAU); ctx.fill(); ctx.fillRect(-4.5, -17, 9, 4); ctx.strokeStyle = "#e8a820"; ctx.lineWidth = 1.2; ctx.beginPath(); ctx.moveTo(4, -16); ctx.quadraticCurveTo(10, -22, 9, -14); ctx.stroke(); }
+    }
+    pip(c.s, 0, 21, 5);
+  }
+  function drawCard(c, glow) {
+    ctx.save(); ctx.translate(c.x, c.y); ctx.rotate(c.rot); ctx.scale(c.sc, c.sc);
+    const up = c.f > 0.5;
+    ctx.scale(Math.max(0.04, Math.abs(c.f * 2 - 1)), 1);
+    ctx.fillStyle = "rgba(0,0,0,0.25)"; ctx.beginPath(); ctx.roundRect(-CW / 2 + 1.5, -CH / 2 + 2.5, CW, CH, 5); ctx.fill();
+    if (glow) { ctx.shadowColor = glow; ctx.shadowBlur = 12; }
+    ctx.fillStyle = up ? "#fffaf0" : "#8a2a3a"; ctx.beginPath(); ctx.roundRect(-CW / 2, -CH / 2, CW, CH, 5); ctx.fill();
+    ctx.shadowBlur = 0;
+    ctx.strokeStyle = glow || (up ? "#b8a888" : "#5a1a26"); ctx.lineWidth = glow ? 2.2 : 1; ctx.stroke();
+    if (!up) {
+      ctx.strokeStyle = "#c86a7a"; ctx.lineWidth = 1; ctx.beginPath(); ctx.roundRect(-CW / 2 + 4, -CH / 2 + 4, CW - 8, CH - 8, 3); ctx.stroke();
+      ctx.save(); ctx.beginPath(); ctx.rect(-CW / 2 + 5, -CH / 2 + 5, CW - 10, CH - 10); ctx.clip();
+      ctx.strokeStyle = "rgba(255,200,210,0.35)"; ctx.beginPath(); for (let i = -80; i < 80; i += 8) { ctx.moveTo(i, -40); ctx.lineTo(i + 80, 40); ctx.moveTo(i + 80, -40); ctx.lineTo(i, 40); } ctx.stroke(); ctx.restore();
+    } else {
+      const col = SUITS[c.s].col;
+      ctx.fillStyle = col; ctx.font = "900 11px system-ui"; ctx.textAlign = "center"; ctx.textBaseline = "middle";
+      ctx.fillText(String(c.v), -CW / 2 + 8, -CH / 2 + 9);
+      ctx.save(); ctx.rotate(Math.PI); ctx.fillText(String(c.v), -CW / 2 + 8, -CH / 2 + 9); ctx.restore();
+      pip(c.s, CW / 2 - 7.5, -CH / 2 + 8.5, 3.6);
+      if (c.v <= 7) for (const [px, py] of SPOTS[c.v]) pip(c.s, px * 13 - 1, py * 21 + 3, c.v === 1 ? 13 : c.v <= 3 ? 7.5 : 6.2);
+      else figure(c);
+      ctx.textBaseline = "alphabetic";
+    }
+    ctx.restore();
+  }
+  function drawTable() {
+    const g = ctx.createRadialGradient(320, 190, 40, 320, 190, 380);
+    g.addColorStop(0, "#2a8a52"); g.addColorStop(1, "#124a2a");
+    ctx.fillStyle = g; ctx.fillRect(0, 0, W, H);
+    ctx.strokeStyle = "rgba(255,255,255,0.08)"; ctx.lineWidth = 2; ctx.beginPath(); ctx.roundRect(100, 88, 440, 160, 16); ctx.stroke();
+    ctx.fillStyle = "#5a3a1a"; ctx.fillRect(0, H - 6, W, 6);
+  }
+  function drawSeats() {
+    const r = who();
+    ctx.textAlign = "center"; ctx.textBaseline = "middle";
+    // the rival: a face, a name
+    ctx.fillStyle = r.col; ctx.beginPath(); ctx.arc(206, 56, 15, 0, TAU); ctx.fill();
+    ctx.fillStyle = "#f8d0a8"; ctx.beginPath(); ctx.arc(206, 57, 9.5, 0, TAU); ctx.fill();
+    ctx.fillStyle = "#3a2a1a"; ctx.beginPath(); ctx.arc(202.5, 55, 1.2, 0, TAU); ctx.arc(209.5, 55, 1.2, 0, TAU); ctx.fill();
+    ctx.strokeStyle = "#3a2a1a"; ctx.lineWidth = 1.2; ctx.beginPath(); if (phase === "play" && turn === 1) { ctx.moveTo(203, 61); ctx.lineTo(209, 61); } else ctx.arc(206, 59, 3.5, 0.2, Math.PI - 0.2); ctx.stroke();
+    ctx.textAlign = "right"; ctx.fillStyle = "#ffffff"; ctx.font = "800 11px system-ui"; ctx.fillText(r.name, 184, 51);
+    ctx.fillStyle = "#c8e8d0"; ctx.font = "700 9px system-ui"; ctx.fillText(phase === "play" && turn === 1 ? "sta pensando" + ".".repeat(1 + Math.floor(clock * 3) % 3) : `avversario ${Math.min(rival + 1, RIVALS.length)} di ${RIVALS.length}`, 184, 64);
+    // the piles and the sweeps
+    ctx.textAlign = "center";
+    for (const p of [0, 1]) {
+      const y = p === 0 ? 292 : 72;
+      if (!piles[p].length) { ctx.strokeStyle = "rgba(255,255,255,0.18)"; ctx.setLineDash([4, 4]); ctx.lineWidth = 1; ctx.beginPath(); ctx.roundRect(596 - 16, y - 24, 32, 49, 4); ctx.stroke(); ctx.setLineDash([]); }
+      ctx.fillStyle = "#c8e8d0"; ctx.font = "700 9px system-ui"; ctx.fillText(`${piles[p].length} carte`, 596, y + (p === 0 ? -34 : 36));
+      if (scope[p]) { ctx.fillStyle = "#ffd23a"; ctx.font = "900 9px system-ui"; ctx.fillText(`${scope[p]} ${scope[p] === 1 ? "scopa" : "scope"}`, 596, y + (p === 0 ? -45 : 47)); }
+    }
+    ctx.fillStyle = "#c8e8d0"; ctx.font = "700 9px system-ui";
+    if (deck.length) ctx.fillText(`mazzo ${deck.length}`, 50, 212); else if (phase === "play") ctx.fillText("ultime carte", 50, 172);
+    if (diff.help && myTurn()) {
+      ctx.fillStyle = "rgba(0,0,0,0.35)"; ctx.strokeStyle = "#7ed87a"; ctx.lineWidth = 1.5; ctx.beginPath(); ctx.roundRect(HELP.x, HELP.y, HELP.w, HELP.h, 7); ctx.fill(); ctx.stroke();
+      ctx.fillStyle = "#7ed87a"; ctx.font = "900 10px system-ui"; ctx.fillText("AIUTO", HELP.x + HELP.w / 2, HELP.y + HELP.h / 2 + 0.5);
+    }
+    // what is going on
+    let line = "";
+    if (phase === "play" && turn === 0 && !todo) {
+      if (sel) line = `${cardName(sel)}: scegli le carte da prendere (${opts.length} modi)`;
+      else if (hint) line = hint.take.length ? `Consiglio: ${cardName(hint.card)} prende ${hint.take.map((c) => VNAME[c.v] || c.v).join(" + ")}` : `Consiglio: cala ${cardName(hint.card)}`;
+      else if (hover && hands[0].includes(hover)) { const os = options(hover); line = os.length ? `${cardName(hover)}: prende ${os.map((o) => o.map((c) => VNAME[c.v] || c.v).join(" + ")).join("  oppure  ")}` : `${cardName(hover)}: non prende niente, resta sul tavolo`; }
+      else line = "Tocca a te";
+    }
+    if (line) { ctx.fillStyle = "#ffffff"; ctx.font = "700 10px system-ui"; ctx.fillText(line, 320, 244); }
+    ctx.textBaseline = "alphabetic";
+  }
+  function drawHud() {
+    ctx.fillStyle = "rgba(10,26,16,0.92)"; ctx.fillRect(0, 0, W, TOP);
+    ctx.textBaseline = "middle"; ctx.textAlign = "left";
+    ctx.fillStyle = "#ffffff"; ctx.font = "900 15px system-ui"; ctx.fillText(score.toLocaleString("it-IT"), 10, 14);
+    ctx.fillStyle = "#d0f0c8"; ctx.font = "700 9px system-ui"; ctx.fillText(`REC ${Math.max(bestCache, score).toLocaleString("it-IT")}`, 84, 9);
+    ctx.fillStyle = "#ffd23a"; ctx.font = "900 9px system-ui"; ctx.fillText(diff.label, 84, 20);
+    ctx.textAlign = "center"; ctx.fillStyle = "#ffffff"; ctx.font = "800 12px system-ui";
+    ctx.fillText(`Tu ${pts[0]}  ·  ${pts[1]} ${who().name}`, 330, 10);
+    ctx.fillStyle = "#d0f0c8"; ctx.font = "700 8px system-ui"; ctx.fillText(`smazzata ${roundN} · si vince a ${GOAL}${lives ? ` · ${lives} ${lives === 1 ? "rivincita" : "rivincite"}` : ""}`, 330, 22);
+    ctx.textBaseline = "alphabetic";
+  }
+  function drawResult() {
+    const r = result, x = 150, y = 46, w = 340, h = 272, a = clamp(r.t * 4, 0, 1);
+    ctx.globalAlpha = a;
+    ctx.fillStyle = "rgba(6,20,12,0.94)"; ctx.strokeStyle = "#ffd23a"; ctx.lineWidth = 2; ctx.beginPath(); ctx.roundRect(x, y, w, h, 12); ctx.fill(); ctx.stroke();
+    ctx.textAlign = "center"; ctx.textBaseline = "middle";
+    ctx.fillStyle = "#ffd23a"; ctx.font = "italic 900 17px system-ui"; ctx.fillText(`FINE DELLA SMAZZATA ${roundN}`, 320, y + 22);
+    ctx.font = "800 10px system-ui"; ctx.fillStyle = "#c8e8d0"; ctx.fillText("TU", 340, y + 44); ctx.fillText(who().name.toUpperCase(), 430, y + 44);
+    r.rows.forEach((row, i) => {
+      const ry = y + 64 + i * 22;
+      ctx.textAlign = "left"; ctx.fillStyle = "#ffffff"; ctx.font = "700 12px system-ui"; ctx.fillText(row[0], x + 26, ry);
+      ctx.textAlign = "center";
+      for (const p of [0, 1]) {
+        const won = row[3] === p || (row[3] === -2 && row[1 + p] > 0);
+        ctx.fillStyle = won ? "#ffd23a" : "#9ab8a4"; ctx.font = won ? "900 13px system-ui" : "700 12px system-ui";
+        ctx.fillText(`${row[1 + p]}${won && row[3] !== -2 ? "  ★" : ""}`, p === 0 ? 340 : 430, ry);
+      }
+    });
+    ctx.strokeStyle = "rgba(255,255,255,0.2)"; ctx.lineWidth = 1; ctx.beginPath(); ctx.moveTo(x + 20, y + 172); ctx.lineTo(x + w - 20, y + 172); ctx.stroke();
+    ctx.textAlign = "left"; ctx.fillStyle = "#ffffff"; ctx.font = "800 12px system-ui"; ctx.fillText("Punti della smazzata", x + 26, y + 188); ctx.fillText("Partita", x + 26, y + 208);
+    ctx.textAlign = "center";
+    for (const p of [0, 1]) { const cx = p === 0 ? 340 : 430; ctx.fillStyle = "#ffffff"; ctx.font = "800 12px system-ui"; ctx.fillText(`+${r.gain[p]}`, cx, y + 188); ctx.fillStyle = "#ffd23a"; ctx.font = "900 16px system-ui"; ctx.fillText(String(pts[p]), cx, y + 208); }
+    if (r.over) { ctx.fillStyle = r.won ? "#7ed87a" : "#ff6a5a"; ctx.font = "italic 900 15px system-ui"; ctx.fillText(r.won ? `HAI BATTUTO ${who().name.toUpperCase()}!  +${r.bonus.toLocaleString("it-IT")}` : `${who().name.toUpperCase()} VINCE LA PARTITA${lives ? " · hai una rivincita" : ""}`, 320, y + 232); }
+    else if (pts[0] >= GOAL && pts[0] === pts[1]) { ctx.fillStyle = "#ffffff"; ctx.font = "800 11px system-ui"; ctx.fillText("Pari: si gioca un'altra smazzata", 320, y + 232); }
+    ctx.fillStyle = `rgba(255,255,255,${0.6 + 0.4 * Math.sin(clock * 5)})`; ctx.font = "800 10px system-ui";
+    ctx.fillText(touchMode ? "tocca per continuare" : "clicca o premi Invio per continuare", 320, y + 256);
+    ctx.textBaseline = "alphabetic"; ctx.globalAlpha = 1;
+  }
+  function draw() {
+    ctx.setTransform(pxRatio, 0, 0, pxRatio, 0, 0);
+    drawTable();
+    if (state === "menu") {   // a fan of cards behind the title
+      for (let i = 0; i < 9; i++) drawCard({ x: 140 + i * 45, y: 300 + Math.abs(i - 4) * 5, rot: (i - 4) * 0.1, sc: 1.1, f: 1, s: i % 4, v: [7, 1, 10, 9, 7, 8, 6, 3, 5][i] });
+      return;
+    }
+    drawSeats();
+    const canTake = new Set();
+    const src = sel || (myTurn() ? hover : null);
+    if (src && hands[0].includes(src)) for (const o of sel ? opts : options(src)) for (const c of o) canTake.add(c);
+    const order = [...deck].reverse().concat(piles[1], piles[0], hands[1], table, hands[0], cards.filter((c) => c.zone === "show"));
+    for (const c of order) {
+      let glow = null;
+      if (c.zone === "show") glow = "#ffd23a";
+      else if (pick.has(c)) glow = "#ffd23a";
+      else if (hint && (hint.card === c || hint.take.includes(c))) glow = "#7ed87a";
+      else if (canTake.has(c)) glow = sel ? "#ffffff" : "rgba(255,255,255,0.6)";
+      else if (c === sel) glow = "#ffd23a";
+      else if (myTurn() && c === hover && hands[0].includes(c)) glow = "#ffffff";
+      drawCard(c, glow);
+    }
+    drawHud();
+    ctx.textAlign = "center";
+    popups.forEach((p) => { ctx.globalAlpha = clamp((1.8 - p.t) * 3, 0, 1); outlined(p.text, 320, 110 - p.t * 10, "900 13px system-ui", p.col, 4); });
+    ctx.globalAlpha = 1;
+    if (banner) {
+      ctx.globalAlpha = clamp(Math.min(banner.t * 8, (2 - banner.t) * 3), 0, 1);
+      const s = 1 + Math.max(0, 0.25 - banner.t) * 2;
+      ctx.save(); ctx.translate(320, 160); ctx.scale(s, s);
+      outlined(banner.text, 0, 0, "italic 900 38px system-ui", banner.col, 8);
+      outlined(banner.sub, 0, 22, "800 12px system-ui", "#ffffff", 4);
+      ctx.restore(); ctx.globalAlpha = 1;
+    }
+    if (phase === "score" && result) drawResult();
+  }
+
+  // ---------- Loop ----------
+  let last = performance.now();
+  function frame(now) {
+    const dt = Math.min(0.1, (now - last) / 1000);
+    last = now;
+    update(dt);
+    draw();
+    requestAnimationFrame(frame);
+  }
+  syncControls();
+  showTitle();
+  requestAnimationFrame(frame);
+})();
+</script>
+<script src="../../shared/iniziali.js" data-record="scopa-best-" data-kind="score"></script>
+</body>
+</html>
