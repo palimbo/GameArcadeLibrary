@@ -9,6 +9,11 @@
   "use strict";
   // record key prefix of the game (as in trofei.js) → its feats
   const LIST = {
+    "fagiolo-best-": [   // su-per-il-fagiolo
+      { id: "mille", name: "Mille metri", desc: "sali fino a 1.000 metri sopra l'orto" },
+      { id: "uova", name: "Paniere d'oro", desc: "raccogli 25 uova d'oro nella stessa partita" },
+      { id: "schiaccia", name: "Schiacciatutto", desc: "schiaccia 5 nemici nella stessa partita" },
+    ],
     "salsicce-best-": [   // ladro-di-salsicce
       { id: "fuga", name: "La grande fuga", desc: "scappa per 1.000 metri" },
       { id: "ghiotto", name: "Ghiottone", desc: "raccogli 150 ossi nella stessa partita" },

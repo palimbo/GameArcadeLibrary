@@ -1,0 +1,650 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no, viewport-fit=cover">
+<title>Su per il Fagiolo</title>
+<style>
+  :root {
+    --bg: #0a1a10;
+    --fg: #f4f6ee;
+    --muted: #d0f0c8;
+    --pink: #7ad84a;
+    --yellow: #7ad8ff;
+    --red: #ff4a3a;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  html, body {
+    height: 100%;
+    background: var(--bg);
+    color: var(--fg);
+    font-family: system-ui, -apple-system, "Segoe UI", sans-serif;
+    overflow: hidden;
+    user-select: none;
+    -webkit-user-select: none;
+    touch-action: none;
+  }
+  #wrap { position: fixed; inset: 0; display: flex; align-items: center; justify-content: center; }
+  canvas { cursor: pointer; display: block; touch-action: none; border-radius: 6px; box-shadow: 0 0 0 2px #2a6a3a, 0 10px 40px rgba(0,0,0,0.6); }
+  #pauseBtn {
+    position: fixed; z-index: 3; display: none; right: 10px; top: calc(10px + env(safe-area-inset-top, 0px));
+    font: 700 13px system-ui, sans-serif; color: var(--fg);
+    background: rgba(0, 0, 0, 0.6); border: 1px solid rgba(244, 246, 238, 0.35);
+    border-radius: 8px; padding: 6px 10px; cursor: pointer;
+  }
+  #touch { display: none !important; }
+  #overlay {
+    position: fixed; inset: 0; z-index: 5;
+    display: flex; flex-direction: column; align-items: center; justify-content: flex-start;
+    gap: 14px; padding: 16px; text-align: center; overflow-y: auto;
+    background: rgba(10, 26, 16, 0.93);
+  }
+  #overlay > :first-child { margin-top: auto; }
+  #overlay > :last-child { margin-bottom: auto; }
+  #overlay.hidden { display: none; }
+  #homeLink {
+    position: fixed; top: calc(10px + env(safe-area-inset-top, 0px)); left: 10px; z-index: 6;
+    font: 600 13px/1 system-ui, sans-serif; color: #fff; text-decoration: none;
+    padding: 8px 12px; border-radius: 999px; background: rgba(0,0,0,.55);
+    border: 1px solid rgba(255,255,255,.25);
+  }
+  #homeLink:hover { background: rgba(0,0,0,.8); }
+  #overlay.hidden ~ #homeLink { display: none; }
+  @media (max-width: 700px) { #overlay { padding-top: calc(52px + env(safe-area-inset-top, 0px)); } }
+  #overlay h1 { font-size: clamp(32px, 10vw, 58px); font-weight: 900; font-style: italic; letter-spacing: 1px; color: var(--pink);
+    text-shadow: 3px 3px 0 #0a3a10, 0 0 22px rgba(122,216,74,0.35); }
+  #overlay h2 { font-size: clamp(26px, 7vw, 42px); font-weight: 900; letter-spacing: 2px; color: var(--pink); }
+  #overlay h2.lose { color: var(--red); }
+  #overlay p { max-width: 540px; font-size: clamp(13px, 3.4vw, 16px); line-height: 1.55; }
+  #overlay p.muted { color: var(--muted); }
+  #overlay .pts { display: grid; grid-template-columns: repeat(2, auto); gap: 4px 18px; font-size: 13px; color: var(--muted); text-align: left; max-width: 560px; }
+  #overlay .pts b { color: var(--fg); }
+  #overlay .diff { display: flex; gap: 10px; flex-wrap: wrap; justify-content: center; }
+  #overlay button {
+    font: 800 15px system-ui, sans-serif; letter-spacing: 1.5px; color: var(--fg);
+    background: transparent; cursor: pointer;
+    border: 2px solid rgba(244,246,238,0.3); border-radius: 10px; padding: 9px 16px;
+  }
+  #overlay .mode button { font-size: 12px; padding: 7px 12px; }
+  #overlay .diff button.on { border-color: var(--c); color: var(--c); box-shadow: 0 0 12px var(--c); }
+  #overlay button.start { border-color: var(--pink); color: #06200a; background: var(--pink); padding: 11px 30px; box-shadow: 0 4px 0 #3a8a2a; }
+  @media (max-height: 560px) {
+    #overlay { gap: 8px; }
+    #overlay h1 { font-size: 30px; }
+    #overlay p { font-size: 13px; line-height: 1.4; }
+    #overlay .help, #overlay .pts { display: none; }
+  }
+</style>
+</head>
+<body>
+<div id="wrap"><canvas id="game"></canvas></div>
+<div id="touch"></div>
+<button id="pauseBtn" type="button" aria-label="Pausa">❚❚</button>
+<div id="overlay"></div>
+<a id="homeLink" href="../../index.html">← Sala Giochi</a>
+
+
+<script>
+(() => {
+  "use strict";
+
+  const W = 640, H = 360, TAU = Math.PI * 2, TOP = 28;
+  const GRAV = 950, BOUNCE = 445, SPRING = 800, RUN = 310, FLY = 620;
+  // the climb, zone by zone (heights in metres: ten pixels each)
+  const ZONES = [
+    { at: 0, name: "L'ORTO", top: [122, 200, 248], bot: [208, 240, 255] },
+    { at: 300, name: "IL CIELO APERTO", top: [58, 144, 232], bot: [168, 216, 255] },
+    { at: 700, name: "IL MARE DI NUVOLE", top: [136, 184, 240], bot: [244, 248, 255] },
+    { at: 1200, name: "IL TRAMONTO", top: [90, 58, 152], bot: [255, 168, 104] },
+    { at: 1800, name: "LE STELLE", top: [10, 10, 42], bot: [42, 42, 106] },
+    { at: 2600, name: "IL CASTELLO DEL GIGANTE", top: [26, 10, 58], bot: [106, 58, 138] },
+  ];
+
+  const DIFFICULTIES = {
+    facile:    { label: "FACILE",    color: "#7ed87a", desc: "foglie larghe e l'oca ti ripesca due volte", pw: 72, rescues: 2, hard: 0.7 },
+    normale:   { label: "NORMALE",   color: "#ffd23a", desc: "l'oca ti ripesca una volta", pw: 60, rescues: 1, hard: 1 },
+    difficile: { label: "DIFFICILE", color: "#ff5a5a", desc: "foglie strette, più nemici e nessun aiuto", pw: 52, rescues: 0, hard: 1.35 },
+  };
+  const DIFF_IDS = Object.keys(DIFFICULTIES);
+  const DIFF_KEY = "fagiolo-difficulty";
+  const bestKey = (id) => `fagiolo-best-${id}`;
+  function store(k, v) { try { localStorage.setItem(k, v); } catch { /* ignore */ } }
+  function load(k) { try { return localStorage.getItem(k); } catch { return null; } }
+  const impresa = (id) => window.dispatchEvent(new CustomEvent("sala:impresa", { detail: id }));
+  const rnd = (a, b) => a + Math.random() * (b - a);
+  const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
+  const hash = (n) => { const x = Math.sin(n * 127.1 + 311.7) * 43758.5453; return x - Math.floor(x); };
+  // the shortest way across, going round the edges of the screen
+  const wrapDx = (d) => { d = ((d % W) + W) % W; return d > W / 2 ? d - W : d; };
+
+  // ---------- Canvas ----------
+  const canvas = document.getElementById("game");
+  const ctx = canvas.getContext("2d");
+  const wrapEl = document.getElementById("wrap");
+  const overlay = document.getElementById("overlay");
+  const touchEl = document.getElementById("touch");
+  const pauseBtn = document.getElementById("pauseBtn");
+  let pxRatio = 1, touchMode = !!(window.matchMedia && matchMedia("(pointer: coarse)").matches);
+  function resize() {
+    touchEl.style.display = "none";
+    wrapEl.style.paddingBottom = "0";
+    const availW = window.innerWidth - 8, availH = window.innerHeight - 8;
+    const s = Math.max(0.2, Math.min(availW / W, availH / H));
+    pxRatio = Math.min(3, s * (window.devicePixelRatio || 1));
+    canvas.style.width = W * s + "px";
+    canvas.style.height = H * s + "px";
+    canvas.width = Math.round(W * pxRatio);
+    canvas.height = Math.round(H * pxRatio);
+  }
+  window.addEventListener("resize", () => syncControls());
+
+  // ---------- Audio ----------
+  let audioCtx = null, noiseBuf = null;
+  function beep(freq, dur, type = "square", vol = 0.04, slide = 0, delay = 0) {
+    if (!audioCtx) return;
+    const t = audioCtx.currentTime + delay;
+    const osc = audioCtx.createOscillator(), gain = audioCtx.createGain();
+    osc.type = type;
+    osc.frequency.setValueAtTime(freq, t);
+    if (slide) osc.frequency.exponentialRampToValueAtTime(Math.max(20, freq + slide), t + dur);
+    gain.gain.setValueAtTime(vol, t);
+    gain.gain.exponentialRampToValueAtTime(0.0001, t + dur);
+    osc.connect(gain).connect(audioCtx.destination);
+    osc.start(t); osc.stop(t + dur + 0.02);
+  }
+  function noise(dur, vol, freq, q = 1, delay = 0, slide = 0) {
+    if (!audioCtx) return;
+    if (!noiseBuf) {
+      noiseBuf = audioCtx.createBuffer(1, audioCtx.sampleRate, audioCtx.sampleRate);
+      const d = noiseBuf.getChannelData(0);
+      for (let i = 0; i < d.length; i++) d[i] = Math.random() * 2 - 1;
+    }
+    const t = audioCtx.currentTime + delay;
+    const src = audioCtx.createBufferSource(), f = audioCtx.createBiquadFilter(), g = audioCtx.createGain();
+    src.buffer = noiseBuf; f.type = "bandpass"; f.frequency.setValueAtTime(freq, t); f.Q.value = q;
+    if (slide) f.frequency.exponentialRampToValueAtTime(Math.max(30, freq + slide), t + dur);
+    g.gain.setValueAtTime(vol, t); g.gain.exponentialRampToValueAtTime(0.0001, t + dur);
+    src.connect(f).connect(g).connect(audioCtx.destination);
+    src.start(t, Math.random() * 0.5, dur + 0.05);
+  }
+  const arp = (notes, gap, d, type = "square", vol = 0.04) => notes.forEach((f, i) => beep(f, d, type, vol, 0, i * gap));
+  const sfx = {
+    hop: () => { beep(300, 0.12, "sine", 0.06, 260); noise(0.04, 0.02, 1400, 1); },
+    spring: () => { beep(260, 0.35, "sine", 0.07, 900); beep(520, 0.3, "triangle", 0.03, 1200, 0.03); },
+    snap: () => { noise(0.12, 0.07, 1200, 1.5, 0, -700); beep(200, 0.08, "square", 0.03, -80); },
+    crumble: () => noise(0.25, 0.08, 500, 0.7, 0, -300),
+    egg: () => arp([1047, 1319, 1568], 0.05, 0.1, "triangle", 0.04),
+    stomp: () => { beep(500, 0.1, "square", 0.05, -300); beep(900, 0.12, "triangle", 0.04, 300, 0.06); },
+    // the goose: two honks and the wings
+    goose: () => { beep(420, 0.14, "sawtooth", 0.05, -120); beep(470, 0.18, "sawtooth", 0.05, -140, 0.18); noise(0.5, 0.04, 700, 0.6, 0.1); },
+    hit: () => { noise(0.2, 0.1, 400, 0.7); beep(300, 0.3, "sawtooth", 0.06, -220); },
+    zone: () => arp([523, 659, 784, 1047], 0.08, 0.18, "triangle", 0.045),
+    end: () => arp([523, 466, 415, 392, 330, 262], 0.13, 0.22, "triangle", 0.05),
+  };
+
+  // ---------- State ----------
+  let difficulty = DIFFICULTIES[load(DIFF_KEY)] ? load(DIFF_KEY) : "normale";
+  let diff = DIFFICULTIES[difficulty];
+  let state = "menu", menu = null, pausedFrom = null, clock = 0;
+  let score = 0, bestCache = 0, camY = 0, maxY = 0, plats = [], foes = [], parts = [], popups = [], message = null;
+  let genY = 0, lastX = 320, eggs = 0, stomps = 0, rescues = 0, flight = 0, inv = 0, zone = 0, nextId = 1, shake = 0;
+  const p = { x: 320, y: 0, vx: 0, vy: 0, face: 1, dead: false, spin: 0, squash: 0 };
+  const keys = { left: false, right: false };
+  let ptr = null;
+  const isPlaying = () => state === "play";
+  const metres = () => Math.floor(maxY / 10);
+  const total = () => metres() * 10 + eggs * 50 + stomps * 100;
+
+  // ---------- The plant, leaf after leaf ----------
+  function addPlat(x, y, type, sure) {
+    const pl = { id: nextId++, x, y, w: diff.pw, type, dip: 0, vx: 0, item: null, sure };
+    const m = y / 10, d = clamp(m / 2200, 0, 1) * diff.hard;
+    if (type === "mobile") { pl.vx = rnd(50, 80 + 50 * d) * (Math.random() < 0.5 ? -1 : 1); pl.x0 = x; pl.range = rnd(40, 80); }
+    if (type === "foglia") {
+      const r = Math.random();
+      if (r < 0.07) pl.item = { kind: "fiore" };
+      else if (r < 0.24) pl.item = { kind: "uovo" };
+      else if (r < 0.253) { if (m > 120) pl.item = { kind: "oca" }; }
+      else if (m > 250 && r < 0.263 + 0.05 * d + (m > 500 ? 0.025 * diff.hard : 0)) foes.push({ kind: "bruco", pl, off: 0, dir: Math.random() < 0.5 ? -1 : 1, x, y });
+    }
+    plats.push(pl);
+    return pl;
+  }
+  function generate() {
+    while (genY < camY + H + 160) {
+      const m = genY / 10, d = clamp(m / 2200, 0, 1), dh = Math.min(1, d * diff.hard);
+      genY += rnd(38, 52 + 36 * dh);
+      // the leaf you can always reach from the one before
+      lastX += rnd(-1, 1) * (120 + 100 * d);
+      if (lastX < 46) lastX = 92 - lastX; else if (lastX > W - 46) lastX = 2 * (W - 46) - lastX;
+      const r = Math.random();
+      addPlat(lastX, genY, r < 0.08 + 0.24 * dh ? "mobile" : r < 0.13 + 0.42 * dh ? "fragile" : "foglia", true);
+      // and the others: more leaves, and the dry ones that give way
+      if (Math.random() < 0.85 - 0.55 * dh) {
+        // never so far from the sure one that you cannot get back to it
+        let x = lastX + (Math.random() < 0.5 ? -1 : 1) * rnd(110, 250);
+        if (x < 46) x = lastX + rnd(110, 250); else if (x > W - 46) x = lastX - rnd(110, 250);
+        const q = Math.random();
+        addPlat(x, genY + rnd(-14, 14), q < 0.14 + 0.2 * dh ? "secca" : q < 0.3 + 0.2 * dh ? "fragile" : q < 0.42 + 0.2 * dh ? "mobile" : "foglia", false);
+      } else if (Math.random() < 0.25 + 0.3 * dh) addPlat(clamp(lastX + (Math.random() < 0.5 ? -1 : 1) * rnd(90, 150), 46, W - 46), genY + rnd(-10, 10), "secca", false);
+      if (m > 600 && Math.random() < (0.035 + 0.06 * d) * diff.hard) foes.push({ kind: "corvo", x: rnd(60, W - 60), y: genY + rnd(20, 34), vx: rnd(70, 120) * (Math.random() < 0.5 ? -1 : 1) });
+    }
+  }
+
+  function startGame() {
+    if (!audioCtx) { try { audioCtx = new (window.AudioContext || window.webkitAudioContext)(); } catch { audioCtx = null; } }
+    if (audioCtx && audioCtx.state === "suspended") audioCtx.resume();
+    score = 0; camY = 0; maxY = 0; plats = []; foes = []; parts = []; popups = []; genY = 20; lastX = 320; eggs = 0; stomps = 0; rescues = diff.rescues; flight = 0; inv = 0; zone = 0; shake = 0;
+    Object.assign(p, { x: 320, y: 0, vx: 0, vy: BOUNCE, face: 1, dead: false, spin: 0, squash: 0 });
+    keys.left = keys.right = false; ptr = null;
+    generate();
+    bestCache = parseInt(load(bestKey(difficulty)), 10) || 0;
+    message = { text: "SU PER IL FAGIOLO!", sub: "di foglia in foglia, fino al castello del gigante", t: 0 };
+    state = "play";
+    menu = null;
+    overlay.classList.add("hidden");
+    syncControls();
+    last = performance.now();
+  }
+  function burst(x, y, n, col, sp = 120) {
+    for (let i = 0; i < n; i++) { const a = rnd(0, TAU), v = rnd(0.3, 1) * sp; parts.push({ x, y, vx: Math.cos(a) * v, vy: Math.sin(a) * v, t: 0, life: rnd(0.3, 0.7), col, s: rnd(1.5, 3.2) }); }
+  }
+  function rescue() {
+    rescues--; flight = 1.5; inv = 3; p.vy = FLY; p.y = Math.max(p.y, camY + 10); p.dead = false; p.spin = 0;
+    sfx.goose();
+    popups.push({ text: "L'OCA TI RIPESCA!", t: 0, col: "#ffffff" });
+  }
+  function hurt() {
+    if (inv > 0 || flight > 0 || p.dead) return;
+    sfx.hit(); shake = 0.3; burst(p.x, p.y + 14, 10, "#ffffff");
+    if (rescues > 0) { rescue(); return; }
+    p.dead = true; p.vy = 240;
+  }
+  function land(pl) {
+    if (pl.type === "secca") { pl.broken = 0.001; sfx.crumble(); burst(pl.x, pl.y, 8, "#a8824a", 70); return false; }
+    p.y = pl.y; pl.dip = 1; p.squash = 1;
+    if (pl.item && pl.item.kind === "fiore" && Math.abs(wrapDx(p.x - pl.x)) < 22) { p.vy = SPRING; pl.item.t = 0.001; sfx.spring(); }
+    else { p.vy = BOUNCE; sfx.hop(); }
+    if (pl.type === "fragile") { pl.falling = 0.001; sfx.snap(); }
+    return true;
+  }
+
+  // ---------- Update ----------
+  function update(dt) {
+    clock += dt;
+    for (const q of parts) { q.t += dt; q.x += q.vx * dt; q.y += q.vy * dt; q.vy -= 300 * dt; }
+    parts = parts.filter((q) => q.t < q.life);
+    for (const q of popups) q.t += dt;
+    popups = popups.filter((q) => q.t < 1.4);
+    shake = Math.max(0, shake - dt);
+    if (!isPlaying()) return;
+    if (message) { message.t += dt; if (message.t > 2.6) message = null; }
+    inv = Math.max(0, inv - dt); p.squash = Math.max(0, p.squash - dt * 5);
+    // steering: the keys, or toward the finger
+    let want = ((keys.right ? 1 : 0) - (keys.left ? 1 : 0)) * RUN;
+    if (!want && ptr !== null) want = clamp((ptr - p.x) * 9, -RUN, RUN);
+    if (p.dead) want = 0;
+    p.vx += (want - p.vx) * Math.min(1, dt * 11);
+    if (Math.abs(p.vx) > 20) p.face = p.vx > 0 ? 1 : -1;
+    const prevY = p.y;
+    p.x = ((p.x + p.vx * dt) % W + W) % W;
+    if (flight > 0) {
+      flight -= dt; p.vy = FLY;
+      if (flight <= 0) p.vy = 380;
+    } else p.vy = Math.max(-900, p.vy - GRAV * dt);
+    p.y += p.vy * dt;
+    if (p.dead) p.spin += dt * 9;
+    // the leaves
+    for (const pl of plats) {
+      pl.dip = Math.max(0, pl.dip - dt * 5);
+      if (pl.vx) { pl.x += pl.vx * dt; if (Math.abs(pl.x - pl.x0) > pl.range || pl.x < 40 || pl.x > W - 40) { pl.vx = -pl.vx; pl.x += pl.vx * dt * 2; } }
+      if (pl.falling) { pl.falling += dt; pl.y -= (60 + pl.falling * 500) * dt; }
+      if (pl.broken) pl.broken += dt;
+      if (pl.item && pl.item.t) pl.item.t += dt;
+      if (pl.item && !pl.item.got && pl.item.kind !== "fiore" && !p.dead && Math.abs(wrapDx(p.x - pl.x)) < 20 && p.y > pl.y - 26 && p.y < pl.y + 34) {
+        pl.item.got = true;
+        if (pl.item.kind === "uovo") { eggs++; sfx.egg(); burst(pl.x, pl.y + 16, 8, "#ffd23a", 80); popups.push({ text: "+50", t: 0, col: "#ffd23a", x: pl.x, y: pl.y + 30 }); if (eggs === 25) impresa("uova"); }
+        else { flight = 2.4; inv = 3.4; sfx.goose(); popups.push({ text: "IN VOLO CON L'OCA!", t: 0, col: "#ffffff" }); }
+      }
+    }
+    if (!p.dead && flight <= 0 && p.vy < 0) {
+      if (prevY >= 0 && p.y <= 0 && camY < 60) { p.y = 0; p.vy = BOUNCE; p.squash = 1; sfx.hop(); }
+      else for (const pl of plats) {
+        if (pl.falling || pl.broken || prevY < pl.y || p.y > pl.y || Math.abs(wrapDx(p.x - pl.x)) > pl.w / 2 + 7) continue;
+        if (land(pl)) break;
+      }
+    }
+    // caterpillars on their leaf, crows across the sky
+    for (const f of foes) {
+      if (f.dead) { f.dead += dt; f.y -= (80 + f.dead * 500) * dt; continue; }
+      if (f.kind === "bruco") {
+        if (f.pl.falling || f.pl.broken) { f.dead = 0.001; continue; }
+        f.off += f.dir * 22 * dt; if (Math.abs(f.off) > f.pl.w / 2 - 12) { f.dir = -f.dir; f.off += f.dir * 22 * dt * 2; }
+        f.x = f.pl.x + f.off; f.y = f.pl.y - f.pl.dip * 3;
+      } else { f.x += f.vx * dt; if (f.x < 24 || f.x > W - 24) f.vx = -f.vx; }
+      if (p.dead) continue;
+      const dx = wrapDx(p.x - f.x), cy = f.kind === "bruco" ? f.y + 7 : f.y, dy = p.y + 14 - cy;
+      if (Math.abs(dx) > (f.kind === "bruco" ? 20 : 24) || Math.abs(dy) > 22) continue;
+      if (flight > 0 || (p.vy < 0 && p.y > cy - 2)) {   // from above, or with the goose: flattened
+        f.dead = 0.001; stomps++; sfx.stomp(); burst(f.x, cy, 10, f.kind === "bruco" ? "#9ae04a" : "#3a3a4a");
+        popups.push({ text: "+100", t: 0, col: "#ffffff", x: f.x, y: cy + 20 });
+        if (flight <= 0) { p.vy = BOUNCE * 1.1; p.squash = 1; }
+        if (stomps === 5) impresa("schiaccia");
+      } else hurt();
+    }
+    // the view follows the climb, never the fall
+    const before = metres();
+    maxY = Math.max(maxY, p.y);
+    if (before < 1000 && metres() >= 1000) impresa("mille");
+    const target = Math.max(camY, p.y - 150);
+    camY += (target - camY) * Math.min(1, dt * 10);
+    score = total();
+    const z = ZONES.reduce((n, zn, i) => (metres() >= zn.at ? i : n), 0);
+    if (z > zone) { zone = z; sfx.zone(); message = { text: ZONES[z].name, sub: `${ZONES[z].at} metri sopra l'orto`, t: 0 }; }
+    if (p.y < camY - 24) {
+      if (!p.dead && rescues > 0 && flight <= 0) rescue();
+      else if (p.y < camY - 60) { gameOver(); return; }
+    }
+    plats = plats.filter((pl) => pl.y > camY - 80 && !(pl.broken > 0.6));
+    foes = foes.filter((f) => f.y > camY - 80);
+    generate();
+  }
+
+  function gameOver() {
+    state = "over";
+    sfx.end();
+    const sc = total(), prev = parseInt(load(bestKey(difficulty)), 10) || 0;
+    const record = sc > prev;
+    if (record) store(bestKey(difficulty), String(sc));
+    menu = () => showOverlay(
+      `<h2 class="lose">GIÙ DAL FAGIOLO</h2>
+       <p>Punteggio: <b>${sc.toLocaleString("it-IT")}</b> · ${metres().toLocaleString("it-IT")} metri · ${ZONES[zone].name.toLowerCase()} · ${eggs} ${eggs === 1 ? "uovo d'oro" : "uova d'oro"} · ${stomps} ${stomps === 1 ? "nemico schiacciato" : "nemici schiacciati"} · ${diff.label}</p>
+       ${record ? "<p style='color:var(--pink)'>★ NUOVO RECORD! ★</p>" : ""}
+       ${difficultyHTML()}
+       <button class="start" data-start>RISALI</button>`
+    );
+    menu();
+    syncControls();
+  }
+  function togglePause() {
+    if (isPlaying()) {
+      pausedFrom = state; state = "paused"; keys.left = keys.right = false;
+      showOverlay(`<h2>PAUSA</h2><button class="start" data-resume>CONTINUA</button><p class="muted">Premi P per continuare</p>`);
+    } else if (state === "paused") {
+      state = pausedFrom; overlay.classList.add("hidden"); last = performance.now();
+    }
+    syncControls();
+  }
+  // the pause menu can end the game (shared/iniziali.js): it ends here the usual way, saving the record
+  window.addEventListener("sala:termina", () => { if (state !== "paused") return; state = pausedFrom; overlay.classList.add("hidden"); gameOver(); syncControls(); });
+  function syncControls() {
+    pauseBtn.style.display = isPlaying() && touchMode ? "block" : "none";
+    resize();
+  }
+  pauseBtn.addEventListener("click", () => togglePause());
+  function showOverlay(html) { overlay.innerHTML = html; overlay.classList.remove("hidden"); }
+  function difficultyHTML() {
+    const buttons = DIFF_IDS.map((id) => {
+      const d = DIFFICULTIES[id];
+      return `<button type="button" data-diff="${id}" class="${id === difficulty ? "on" : ""}" style="--c:${d.color}">${d.label}</button>`;
+    }).join("");
+    const best = parseInt(load(bestKey(difficulty)), 10);
+    return `<div class="diff">${buttons}</div><p class="muted">${diff.desc}${best ? ` · Record: ${best.toLocaleString("it-IT")}` : ""}</p>`;
+  }
+  function setDifficulty(id) { if (!DIFFICULTIES[id]) return; difficulty = id; diff = DIFFICULTIES[id]; store(DIFF_KEY, id); if (menu) menu(); }
+  function showTitle() {
+    menu = showTitle;
+    showOverlay(
+      `<h1>SU PER IL FAGIOLO</h1>
+       <p>Il fagiolo magico è cresciuto fino al cielo e Giacomino ci salta su, di foglia in foglia. Lui rimbalza da solo: tu lo sposti a destra e a sinistra, e se esce da un lato rientra dall'altro. Attento a dove atterri: le foglie gialle reggono un salto solo, quelle secche si sbriciolano. Se cadi sotto lo schermo è finita.</p>
+       <div class="pts">
+         <span><b>Punti</b></span><span>10 per metro · uovo d'oro 50 · nemico schiacciato 100</span>
+         <span><b>Aiuti</b></span><span>il tulipano ti lancia in alto · l'oca ti porta in volo per un tratto</span>
+         <span><b>Nemici</b></span><span>bruchi e corvi: saltaci sopra per schiacciarli, ma non toccarli da sotto o di fianco</span>
+       </div>
+       <p class="muted help">${touchMode ? "Tieni il dito sullo schermo: Giacomino lo segue a destra e a sinistra · ❚❚ pausa" : "← → (o A D) per spostarti · oppure muovi il mouse: Giacomino lo segue · P pausa"}</p>
+       ${difficultyHTML()}
+       <button class="start" data-start>SALTA SU</button>`
+    );
+  }
+  overlay.addEventListener("click", (e) => {
+    const d = e.target.closest("[data-diff]");
+    if (d) { setDifficulty(d.dataset.diff); return; }
+    if (e.target.closest("[data-start]")) startGame();
+    if (e.target.closest("[data-resume]")) togglePause();
+  });
+
+  // ---------- Input ----------
+  window.addEventListener("keydown", (e) => {
+    const k = e.key.toLowerCase();
+    if (state === "menu" || state === "over") {
+      if (e.key === "Enter") startGame();
+      else if (["1", "2", "3"].includes(k)) setDifficulty(DIFF_IDS[+k - 1]);
+      return;
+    }
+    if (k === "p" || k === "escape") { if (!e.repeat) togglePause(); return; }
+    if (state === "paused") { if (e.key === "Enter") togglePause(); return; }
+    if (k === "arrowleft" || k === "a") { keys.left = true; ptr = null; e.preventDefault(); }
+    else if (k === "arrowright" || k === "d") { keys.right = true; ptr = null; e.preventDefault(); }
+  });
+  window.addEventListener("keyup", (e) => {
+    const k = e.key.toLowerCase();
+    if (k === "arrowleft" || k === "a") keys.left = false;
+    else if (k === "arrowright" || k === "d") keys.right = false;
+  });
+  window.addEventListener("blur", () => { keys.left = keys.right = false; if (isPlaying()) togglePause(); });
+  const toGameX = (e) => { const r = canvas.getBoundingClientRect(); return clamp((e.clientX - r.left) * W / r.width, 0, W); };
+  let held = false;
+  canvas.addEventListener("pointerdown", (e) => { e.preventDefault(); if (!isPlaying()) return; held = true; ptr = toGameX(e); try { canvas.setPointerCapture(e.pointerId); } catch { /* ignore */ } });
+  canvas.addEventListener("pointermove", (e) => { if (!isPlaying()) return; if (e.pointerType === "touch" && !held) return; ptr = toGameX(e); });
+  for (const ev of ["pointerup", "pointercancel"]) canvas.addEventListener(ev, (e) => { held = false; if (e.pointerType === "touch") ptr = null; });
+  window.addEventListener("pointerdown", (e) => { if (e.pointerType === "touch" && !touchMode) { touchMode = true; syncControls(); if (menu) menu(); } }, true);
+
+  // ---------- Drawing ----------
+  const sy = (wy) => H - (wy - camY);
+  function outlined(text, x, y, font, fill, lw = 5) {
+    ctx.font = font; ctx.lineWidth = lw; ctx.lineJoin = "round"; ctx.strokeStyle = "#0a1a10"; ctx.strokeText(text, x, y); ctx.fillStyle = fill; ctx.fillText(text, x, y);
+  }
+  const mix = (a, b, t) => `rgb(${a.map((v, i) => Math.round(v + (b[i] - v) * t)).join(",")})`;
+  const clouds = Array.from({ length: 16 }, (_, i) => ({ x: hash(i) * W, y: hash(i + 40) * 900, s: 0.6 + hash(i + 80) * 0.9 }));
+  const stars = Array.from({ length: 70 }, (_, i) => ({ x: hash(i + 200) * W, y: hash(i + 300) * H, p: hash(i + 400) * TAU }));
+  function drawSky() {
+    const m = camY / 10 + 15;
+    let i = 0; while (i < ZONES.length - 1 && m >= ZONES[i + 1].at) i++;
+    const nx = ZONES[Math.min(ZONES.length - 1, i + 1)], t = i < ZONES.length - 1 ? clamp((m - (nx.at - 80)) / 80, 0, 1) : 0;
+    const g = ctx.createLinearGradient(0, TOP, 0, H);
+    g.addColorStop(0, mix(ZONES[i].top, nx.top, t)); g.addColorStop(1, mix(ZONES[i].bot, nx.bot, t));
+    ctx.fillStyle = g; ctx.fillRect(0, 0, W, H);
+    const night = clamp((m - 1500) / 300, 0, 1);
+    if (night > 0) for (const s of stars) { ctx.globalAlpha = night * (0.4 + 0.6 * Math.abs(Math.sin(clock * 1.5 + s.p))); ctx.fillStyle = "#ffffff"; ctx.fillRect(s.x, s.y, 1.5, 1.5); }
+    if (m > 1100 && m < 2000) { const a = clamp(Math.min(m - 1100, 2000 - m) / 200, 0, 1); ctx.globalAlpha = a; ctx.fillStyle = "#ffd88a"; ctx.beginPath(); ctx.arc(500, 250 + (m - 1200) * 0.1, 46, 0, TAU); ctx.fill(); }
+    if (night > 0.5) { ctx.globalAlpha = (night - 0.5) * 2; ctx.fillStyle = "#fff8d8"; ctx.beginPath(); ctx.arc(520, 90, 26, 0, TAU); ctx.fill(); ctx.fillStyle = mix(ZONES[i].top, nx.top, t); ctx.beginPath(); ctx.arc(510, 84, 22, 0, TAU); ctx.fill(); }
+    // clouds drift past at half the speed of the climb: thick in the sea of clouds
+    const thick = m > 600 && m < 1300 ? 1 : 0.55;
+    for (const c of clouds) {
+      const y = H - (((c.y - camY * 0.45) % 900) + 900) % 900 * 0.5 + 40, x = (c.x + clock * 6 * c.s) % (W + 160) - 80;
+      ctx.globalAlpha = thick * (1 - night * 0.7) * 0.85; ctx.fillStyle = m > 1150 && m < 1900 ? "#ffd0c0" : "#ffffff";
+      ctx.beginPath(); ctx.ellipse(x, y, 44 * c.s, 13 * c.s, 0, 0, TAU); ctx.ellipse(x - 22 * c.s, y - 8 * c.s, 22 * c.s, 13 * c.s, 0, 0, TAU); ctx.ellipse(x + 16 * c.s, y - 11 * c.s, 26 * c.s, 16 * c.s, 0, 0, TAU); ctx.fill();
+    }
+    ctx.globalAlpha = 1;
+  }
+  // the beanstalk itself, winding up behind everything
+  function drawStalk() {
+    const par = 0.7, y0 = Math.floor(camY * par / 20) * 20 - 40;
+    const vx = (wy) => 320 + Math.sin(wy * 0.011) * 70 + Math.sin(wy * 0.027) * 22;
+    for (const [lw, col] of [[26, "#2a7a32"], [16, "#3a9a42"], [5, "#5aba5a"]]) {
+      ctx.strokeStyle = col; ctx.lineWidth = lw; ctx.lineCap = "round"; ctx.beginPath();
+      for (let wy = y0; wy < camY * par + H + 40; wy += 20) { const y = H - (wy - camY * par), x = vx(wy) - (lw === 5 ? 4 : 0); if (wy === y0) ctx.moveTo(x, y); else ctx.lineTo(x, y); }
+      ctx.stroke();
+    }
+    for (let k = Math.floor(camY * par / 110) - 1; k < (camY * par + H) / 110 + 1; k++) {
+      const wy = k * 110 + 30, y = H - (wy - camY * par), x = vx(wy), sd = k % 2 ? 1 : -1;
+      ctx.fillStyle = "#2f8a38"; ctx.beginPath(); ctx.ellipse(x + sd * 36, y - 6, 30, 10, sd * -0.35, 0, TAU); ctx.fill();
+      ctx.strokeStyle = "#2a7a32"; ctx.lineWidth = 3; ctx.beginPath(); ctx.moveTo(x, y); ctx.quadraticCurveTo(x + sd * 30, y + 14, x + sd * 46, y + 2 + Math.sin(clock * 2 + k) * 3); ctx.stroke();
+    }
+  }
+  function drawGround() {
+    const y = sy(0);
+    if (y > H + 140) return;
+    ctx.fillStyle = "#8ad0f0";
+    ctx.fillStyle = "#6ab85a"; ctx.beginPath(); ctx.ellipse(120, y + 6, 240, 46, 0, Math.PI, TAU); ctx.ellipse(520, y + 6, 260, 34, 0, Math.PI, TAU); ctx.fill();
+    // the cottage
+    ctx.fillStyle = "#f0e0c0"; ctx.fillRect(70, y - 44, 70, 44); ctx.fillStyle = "#c8583a"; ctx.beginPath(); ctx.moveTo(60, y - 44); ctx.lineTo(105, y - 76); ctx.lineTo(150, y - 44); ctx.fill();
+    ctx.fillStyle = "#7a4a2a"; ctx.fillRect(96, y - 26, 16, 26); ctx.fillStyle = "#6ab8e8"; ctx.fillRect(76, y - 34, 13, 13); ctx.fillRect(120, y - 34, 13, 13);
+    ctx.fillStyle = "#5aa84a"; ctx.fillRect(0, y, W, H);
+    ctx.fillStyle = "#7ad85a"; ctx.fillRect(0, y, W, 5);
+    for (let x = 14; x < W; x += 46) { ctx.fillStyle = ["#ff6a8a", "#ffd23a", "#ffffff"][Math.floor(x / 46) % 3]; ctx.beginPath(); ctx.arc(x + hash(x) * 20, y + 12 + hash(x + 1) * 20, 2.5, 0, TAU); ctx.fill(); }
+  }
+  const LEAF = { foglia: ["#3aa83a", "#5ad04a", "#2a7a2a"], mobile: ["#2aa8a0", "#5ae0d0", "#1a7a78"], fragile: ["#c8c83a", "#f0f06a", "#8a8a2a"], secca: ["#a8824a", "#c8a068", "#6a4a2a"] };
+  function drawLeaf(pl) {
+    const x = pl.x, y = sy(pl.y) + pl.dip * 4, w = pl.w / 2, [dark, light, vein] = LEAF[pl.type];
+    ctx.save(); ctx.translate(x, y);
+    if (pl.falling) { ctx.rotate(pl.falling * 2.5); ctx.globalAlpha = Math.max(0, 1 - pl.falling * 1.6); }
+    if (pl.broken) {   // two halves, falling apart
+      ctx.globalAlpha = Math.max(0, 1 - pl.broken * 1.8);
+      for (const sd of [-1, 1]) { ctx.save(); ctx.translate(sd * (w / 2 + pl.broken * 30), pl.broken * pl.broken * 220); ctx.rotate(sd * pl.broken * 3); ctx.fillStyle = dark; ctx.beginPath(); ctx.ellipse(0, 4, w / 2, 5, 0, 0, TAU); ctx.fill(); ctx.restore(); }
+      ctx.restore(); return;
+    }
+    ctx.fillStyle = dark; ctx.beginPath(); ctx.moveTo(-w - 5, 2); ctx.quadraticCurveTo(-w * 0.4, 13, w, 6); ctx.quadraticCurveTo(w + 7, 2, w, 0); ctx.quadraticCurveTo(0, -3, -w - 5, 2); ctx.fill();
+    ctx.fillStyle = light; ctx.beginPath(); ctx.moveTo(-w - 3, 2); ctx.quadraticCurveTo(-w * 0.4, 6, w - 2, 3); ctx.quadraticCurveTo(0, -2, -w - 3, 2); ctx.fill();
+    ctx.strokeStyle = vein; ctx.lineWidth = 1; ctx.beginPath(); ctx.moveTo(-w, 3); ctx.lineTo(w, 3);
+    if (pl.type === "fragile") { ctx.moveTo(-6, 0); ctx.lineTo(-1, 5); ctx.lineTo(-5, 9); ctx.moveTo(10, 0); ctx.lineTo(13, 6); }
+    if (pl.type === "secca") { ctx.moveTo(-12, 0); ctx.lineTo(-7, 6); ctx.lineTo(-12, 10); ctx.moveTo(4, 0); ctx.lineTo(0, 5); ctx.lineTo(6, 10); ctx.moveTo(16, 1); ctx.lineTo(13, 8); }
+    ctx.stroke();
+    if (pl.type === "secca") { ctx.fillStyle = "rgba(0,0,0,0.35)"; ctx.beginPath(); ctx.arc(-w * 0.5, 4, 2, 0, TAU); ctx.arc(w * 0.45, 4, 1.6, 0, TAU); ctx.fill(); }
+    if (pl.type === "mobile") { ctx.fillStyle = "#ffffff"; ctx.font = "900 8px system-ui"; ctx.textAlign = "center"; ctx.fillText("‹  ›", 0, 6); }
+    const it = pl.item;
+    if (it && !it.got) {
+      if (it.kind === "fiore") {   // the tulip: it stretches when it throws you
+        const up = it.t ? Math.max(0, Math.sin(Math.min(it.t, 0.35) / 0.35 * Math.PI)) * 14 : 0;
+        ctx.strokeStyle = "#2a8a2a"; ctx.lineWidth = 2.5; ctx.beginPath(); ctx.moveTo(0, 2); ctx.lineTo(0, -8 - up); ctx.stroke();
+        ctx.fillStyle = "#ff4a6a"; ctx.beginPath(); ctx.moveTo(-8, -15 - up); ctx.quadraticCurveTo(-8, -5 - up, 0, -5 - up); ctx.quadraticCurveTo(8, -5 - up, 8, -15 - up); ctx.lineTo(4, -10 - up); ctx.lineTo(0, -16 - up); ctx.lineTo(-4, -10 - up); ctx.fill();
+      } else if (it.kind === "uovo") {
+        const b = Math.sin(clock * 4 + pl.id) * 2;
+        ctx.fillStyle = "#ffd23a"; ctx.beginPath(); ctx.ellipse(0, -15 + b, 6.5, 8.5, 0, 0, TAU); ctx.fill();
+        ctx.fillStyle = "#fff4b0"; ctx.beginPath(); ctx.ellipse(-2, -18 + b, 2, 3, 0.4, 0, TAU); ctx.fill();
+      } else drawGoose(0, -16 + Math.sin(clock * 4) * 2, 0.8, 0);
+    }
+    ctx.restore();
+  }
+  function drawGoose(x, y, s, flap) {
+    ctx.save(); ctx.translate(x, y); ctx.scale(s, s);
+    ctx.fillStyle = "#ffffff"; ctx.strokeStyle = "#8a98a8"; ctx.lineWidth = 1;
+    ctx.beginPath(); ctx.ellipse(0, 0, 13, 8, 0, 0, TAU); ctx.fill(); ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(8, -3); ctx.quadraticCurveTo(14, -16, 12, -20); ctx.lineTo(17, -19); ctx.quadraticCurveTo(19, -10, 12, 0); ctx.fill();
+    ctx.beginPath(); ctx.arc(14, -21, 4.5, 0, TAU); ctx.fill();
+    ctx.fillStyle = "#ff9a2a"; ctx.beginPath(); ctx.moveTo(18, -22); ctx.lineTo(25, -20); ctx.lineTo(18, -18); ctx.fill();
+    ctx.fillStyle = "#1a1a2a"; ctx.beginPath(); ctx.arc(15, -22, 1, 0, TAU); ctx.fill();
+    ctx.fillStyle = "#e8eef4"; ctx.beginPath(); ctx.ellipse(-2, -2 - flap * 9, 11, 5 + Math.abs(flap) * 6, -0.3 - flap * 0.7, 0, TAU); ctx.fill(); ctx.stroke();
+    ctx.restore();
+  }
+  function drawFoe(f) {
+    const x = f.x, y = sy(f.y);
+    ctx.save(); ctx.translate(x, y);
+    if (f.dead) { ctx.rotate(f.dead * 8); ctx.globalAlpha = Math.max(0, 1 - f.dead * 1.5); }
+    if (f.kind === "bruco") {
+      for (let k = 3; k >= 0; k--) { ctx.fillStyle = k % 2 ? "#7ac83a" : "#9ae04a"; ctx.beginPath(); ctx.arc(-f.dir * k * 6, -6 - Math.abs(Math.sin(clock * 8 + k)) * 2, 5.5, 0, TAU); ctx.fill(); }
+      ctx.fillStyle = "#ffffff"; ctx.beginPath(); ctx.arc(f.dir * 2, -8, 2, 0, TAU); ctx.fill(); ctx.fillStyle = "#1a1a1a"; ctx.beginPath(); ctx.arc(f.dir * 2.6, -8, 1, 0, TAU); ctx.fill();
+      ctx.strokeStyle = "#3a6a1a"; ctx.lineWidth = 1; ctx.beginPath(); ctx.moveTo(-1, -11); ctx.lineTo(-3, -16); ctx.moveTo(2, -11); ctx.lineTo(4, -16); ctx.stroke();
+    } else {
+      const d = f.vx > 0 ? 1 : -1, fl = Math.sin(clock * 14);
+      ctx.scale(d, 1);
+      ctx.fillStyle = "#2a2a3a"; ctx.beginPath(); ctx.ellipse(0, 0, 12, 7, 0, 0, TAU); ctx.fill();
+      ctx.beginPath(); ctx.arc(11, -4, 5.5, 0, TAU); ctx.fill();
+      ctx.beginPath(); ctx.moveTo(-10, -2); ctx.lineTo(-20, -6); ctx.lineTo(-18, 2); ctx.fill();
+      ctx.fillStyle = "#3a3a4e"; ctx.beginPath(); ctx.moveTo(-6, -3); ctx.lineTo(0, -6 - fl * 14); ctx.lineTo(8, -3); ctx.fill();
+      ctx.fillStyle = "#ffb02a"; ctx.beginPath(); ctx.moveTo(15, -5); ctx.lineTo(22, -3); ctx.lineTo(15, -1); ctx.fill();
+      ctx.fillStyle = "#ffffff"; ctx.beginPath(); ctx.arc(12, -5, 1.6, 0, TAU); ctx.fill();
+    }
+    ctx.restore();
+  }
+  // Giacomino: green cap with a feather, blue tunic, and legs that tuck in on the way up
+  function drawBoy(x) {
+    const y = sy(p.y);
+    ctx.save(); ctx.translate(x, y);
+    if (p.dead) ctx.rotate(p.spin);
+    const sq = p.squash * 0.25, st = clamp(p.vy / 1400, -0.12, 0.18);
+    ctx.scale(p.face * (1 + sq - st * 0.5), 1 - sq + st);
+    const up = p.vy > 60 || flight > 0;
+    ctx.fillStyle = "#6a4a2a";
+    if (up) { ctx.fillRect(-7, -8, 5, 6); ctx.fillRect(2, -9, 5, 6); } else { ctx.fillRect(-7, -9, 5, 9); ctx.fillRect(2, -9, 5, 9); }
+    ctx.fillStyle = "#3a6ad8"; ctx.beginPath(); ctx.roundRect(-9, -22, 18, 15, 5); ctx.fill();
+    ctx.fillStyle = "#8a5a2a"; ctx.fillRect(-9, -13, 18, 2.5);
+    ctx.strokeStyle = "#3a6ad8"; ctx.lineWidth = 4; ctx.lineCap = "round";
+    ctx.beginPath(); if (flight > 0) { ctx.moveTo(-7, -19); ctx.lineTo(-5, -34); ctx.moveTo(7, -19); ctx.lineTo(5, -34); } else { ctx.moveTo(-8, -19); ctx.lineTo(-13, up ? -26 : -13); ctx.moveTo(8, -19); ctx.lineTo(13, up ? -26 : -13); } ctx.stroke();
+    ctx.fillStyle = "#f8d0a8"; ctx.beginPath(); ctx.arc(0, -28, 8, 0, TAU); ctx.fill();
+    ctx.fillStyle = "#1a1a2a"; ctx.beginPath(); ctx.arc(3.5, -29, 1.3, 0, TAU); ctx.fill();
+    ctx.strokeStyle = "#a85a3a"; ctx.lineWidth = 1; ctx.beginPath(); ctx.arc(3, -26, 2.4, 0.2, 1.8); ctx.stroke();
+    ctx.fillStyle = "#3aa83a"; ctx.beginPath(); ctx.moveTo(-9, -31); ctx.quadraticCurveTo(-2, -44, 10, -32); ctx.lineTo(12, -30); ctx.lineTo(-9, -30); ctx.fill();
+    ctx.strokeStyle = "#ff4a3a"; ctx.lineWidth = 2; ctx.beginPath(); ctx.moveTo(-4, -37); ctx.quadraticCurveTo(-10, -44, -13, -40); ctx.stroke();
+    ctx.restore();
+    if (flight > 0) drawGoose(x, y - 44, 1.15, Math.sin(clock * 22));
+  }
+  function drawHud() {
+    ctx.fillStyle = "rgba(10,26,16,0.9)"; ctx.fillRect(0, 0, W, TOP);
+    ctx.textBaseline = "middle"; ctx.textAlign = "left";
+    ctx.fillStyle = "#ffffff"; ctx.font = "900 15px system-ui"; ctx.fillText(score.toLocaleString("it-IT"), 10, 14);
+    ctx.fillStyle = "#d0f0c8"; ctx.font = "700 9px system-ui"; ctx.fillText(`REC ${Math.max(bestCache, score).toLocaleString("it-IT")}`, 90, 9);
+    ctx.fillStyle = "#7ad84a"; ctx.font = "900 9px system-ui"; ctx.fillText(diff.label, 90, 20);
+    ctx.fillStyle = "#ffffff"; ctx.font = "800 11px system-ui"; ctx.fillText(`${metres().toLocaleString("it-IT")} m`, 176, 14);
+    ctx.fillStyle = "#ffd23a"; ctx.beginPath(); ctx.ellipse(246, 14, 5, 6.5, 0, 0, TAU); ctx.fill();
+    ctx.fillStyle = "#ffffff"; ctx.fillText(String(eggs), 256, 14);
+    ctx.textAlign = "center"; ctx.fillStyle = "#d0f0c8"; ctx.font = "800 10px system-ui"; ctx.fillText(ZONES[zone].name, 370, 14);
+    for (let i = 0; i < rescues; i++) drawGoose((touchMode ? 470 : 540) + i * 34, 20, 0.62, 0);
+    ctx.textBaseline = "alphabetic";
+  }
+  function draw() {
+    ctx.setTransform(pxRatio, 0, 0, pxRatio, 0, 0);
+    if (state === "menu") camY = 40 + clock * 30;
+    ctx.save();
+    if (shake > 0) ctx.translate(rnd(-1, 1) * shake * 8, rnd(-1, 1) * shake * 8);
+    drawSky();
+    drawStalk();
+    drawGround();
+    if (state === "menu") { ctx.restore(); return; }
+    for (const pl of plats) if (pl.y < camY + H + 30) drawLeaf(pl);
+    for (const f of foes) drawFoe(f);
+    if (!(inv > 0 && flight <= 0 && Math.floor(clock * 14) % 2)) {
+      drawBoy(p.x);
+      if (p.x < 24) drawBoy(p.x + W); else if (p.x > W - 24) drawBoy(p.x - W);
+    }
+    for (const q of parts) { ctx.globalAlpha = 1 - q.t / q.life; ctx.fillStyle = q.col; ctx.beginPath(); ctx.arc(q.x, sy(q.y), q.s, 0, TAU); ctx.fill(); }
+    ctx.globalAlpha = 1;
+    ctx.restore();
+    drawHud();
+    ctx.textAlign = "center";
+    for (const q of popups) {
+      ctx.globalAlpha = clamp((1.4 - q.t) * 3, 0, 1);
+      if (q.x !== undefined) outlined(q.text, q.x, sy(q.y) - q.t * 24, "900 12px system-ui", q.col, 4);
+      else outlined(q.text, W / 2, 150 - q.t * 18, "900 16px system-ui", q.col, 4);
+    }
+    ctx.globalAlpha = 1;
+    if (message) {
+      ctx.globalAlpha = clamp((2.6 - message.t) * 2, 0, 1);
+      outlined(message.text, W / 2, 86, "italic 900 28px system-ui", "#7ad84a", 6);
+      outlined(message.sub, W / 2, 106, "800 12px system-ui", "#ffffff", 4);
+      ctx.globalAlpha = 1;
+    }
+  }
+
+  // ---------- Loop ----------
+  const STEP = 1 / 120;
+  let last = performance.now(), acc = 0;
+  function frame(now) {
+    const dt = Math.min(0.1, (now - last) / 1000);
+    last = now;
+    if (isPlaying()) {
+      acc += dt;
+      while (acc >= STEP && isPlaying()) { update(STEP); acc -= STEP; }
+    } else { acc = 0; update(dt); }
+    draw();
+    requestAnimationFrame(frame);
+  }
+  syncControls();
+  showTitle();
+  requestAnimationFrame(frame);
+})();
+</script>
+<script src="../../shared/iniziali.js" data-record="fagiolo-best-" data-kind="score"></script>
+</body>
+</html>
