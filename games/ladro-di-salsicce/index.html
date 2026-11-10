@@ -1,0 +1,683 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no, viewport-fit=cover">
+<title>Il Ladro di Salsicce</title>
+<style>
+  :root {
+    --bg: #1a1208;
+    --fg: #f4f6ee;
+    --muted: #f0dcc0;
+    --pink: #ff8a3a;
+    --yellow: #7ad8ff;
+    --red: #ff4a3a;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  html, body {
+    height: 100%;
+    background: var(--bg);
+    color: var(--fg);
+    font-family: system-ui, -apple-system, "Segoe UI", sans-serif;
+    overflow: hidden;
+    user-select: none;
+    -webkit-user-select: none;
+    touch-action: none;
+  }
+  #wrap { position: fixed; inset: 0; display: flex; align-items: center; justify-content: center; }
+  canvas { cursor: pointer; display: block; touch-action: none; border-radius: 6px; box-shadow: 0 0 0 2px #6a4a2a, 0 10px 40px rgba(0,0,0,0.6); }
+  #pauseBtn {
+    position: fixed; z-index: 3; display: none; right: 10px; top: calc(10px + env(safe-area-inset-top, 0px));
+    font: 700 13px system-ui, sans-serif; color: var(--fg);
+    background: rgba(0, 0, 0, 0.6); border: 1px solid rgba(244, 246, 238, 0.35);
+    border-radius: 8px; padding: 6px 10px; cursor: pointer;
+  }
+  #touch { display: none !important; }
+  #overlay {
+    position: fixed; inset: 0; z-index: 5;
+    display: flex; flex-direction: column; align-items: center; justify-content: flex-start;
+    gap: 14px; padding: 16px; text-align: center; overflow-y: auto;
+    background: rgba(26, 18, 8, 0.93);
+  }
+  #overlay > :first-child { margin-top: auto; }
+  #overlay > :last-child { margin-bottom: auto; }
+  #overlay.hidden { display: none; }
+  #homeLink {
+    position: fixed; top: calc(10px + env(safe-area-inset-top, 0px)); left: 10px; z-index: 6;
+    font: 600 13px/1 system-ui, sans-serif; color: #fff; text-decoration: none;
+    padding: 8px 12px; border-radius: 999px; background: rgba(0,0,0,.55);
+    border: 1px solid rgba(255,255,255,.25);
+  }
+  #homeLink:hover { background: rgba(0,0,0,.8); }
+  #overlay.hidden ~ #homeLink { display: none; }
+  @media (max-width: 700px) { #overlay { padding-top: calc(52px + env(safe-area-inset-top, 0px)); } }
+  #overlay h1 { font-size: clamp(32px, 10vw, 58px); font-weight: 900; font-style: italic; letter-spacing: 1px; color: var(--pink);
+    text-shadow: 3px 3px 0 #5a2a0a, 0 0 22px rgba(255,184,58,0.35); }
+  #overlay h2 { font-size: clamp(26px, 7vw, 42px); font-weight: 900; letter-spacing: 2px; color: var(--pink); }
+  #overlay h2.lose { color: var(--red); }
+  #overlay p { max-width: 540px; font-size: clamp(13px, 3.4vw, 16px); line-height: 1.55; }
+  #overlay p.muted { color: var(--muted); }
+  #overlay .pts { display: grid; grid-template-columns: repeat(2, auto); gap: 4px 18px; font-size: 13px; color: var(--muted); text-align: left; max-width: 560px; }
+  #overlay .pts b { color: var(--fg); }
+  #overlay .diff { display: flex; gap: 10px; flex-wrap: wrap; justify-content: center; }
+  #overlay button {
+    font: 800 15px system-ui, sans-serif; letter-spacing: 1.5px; color: var(--fg);
+    background: transparent; cursor: pointer;
+    border: 2px solid rgba(244,246,238,0.3); border-radius: 10px; padding: 9px 16px;
+  }
+  #overlay .mode button { font-size: 12px; padding: 7px 12px; }
+  #overlay .diff button.on { border-color: var(--c); color: var(--c); box-shadow: 0 0 12px var(--c); }
+  #overlay button.start { border-color: var(--pink); color: #2a1400; background: var(--pink); padding: 11px 30px; box-shadow: 0 4px 0 #b8501a; }
+  @media (max-height: 560px) {
+    #overlay { gap: 8px; }
+    #overlay h1 { font-size: 30px; }
+    #overlay p { font-size: 13px; line-height: 1.4; }
+    #overlay .help, #overlay .pts { display: none; }
+  }
+</style>
+</head>
+<body>
+<div id="wrap"><canvas id="game"></canvas></div>
+<div id="touch"></div>
+<button id="pauseBtn" type="button" aria-label="Pausa">❚❚</button>
+<div id="overlay"></div>
+<a id="homeLink" href="../../index.html">← Sala Giochi</a>
+
+
+<script>
+(() => {
+  "use strict";
+
+  const W = 640, H = 360, TAU = Math.PI * 2, TOP = 28;
+  // the camera: behind the dog, looking down the market street
+  const CX = 320, HOR = 104, CAMH = 2.2, F = 384, ZP = 4, FAR = 58;
+  const LANES = [-0.8, 0, 0.8], ROAD = 1.25, WALL = 2.15;
+  const GRAV = 16, JUMP = 5.3, SLIDE = 0.6;
+  // what stands in the way: how deep it is and how you get past it
+  const KINDS = {
+    cassa:      { depth: 0.5, pass: "salta" },     // a crate of fruit: jump it
+    striscione: { depth: 0.2, pass: "scivola" },   // a low banner: slide under it
+    carro:      { depth: 1.1, pass: "cambia" },    // a market cart: change lane
+    bici:       { depth: 0.8, pass: "cambia" },    // the delivery boy, coming the other way
+  };
+  const BIKE_SP = 5;
+
+  const DIFFICULTIES = {
+    facile:    { label: "FACILE",    color: "#7ed87a", desc: "il macellaio è lento: ti prende al terzo inciampo", lead: 2, regen: 10, v0: 7, vmax: 14, acc: 0.09 },
+    normale:   { label: "NORMALE",   color: "#ffd23a", desc: "ti prende al secondo inciampo", lead: 1, regen: 14, v0: 8, vmax: 17, acc: 0.12 },
+    difficile: { label: "DIFFICILE", color: "#ff5a5a", desc: "si corre di più e il macellaio non molla", lead: 1, regen: 26, v0: 9.5, vmax: 20, acc: 0.16 },
+  };
+  const DIFF_IDS = Object.keys(DIFFICULTIES);
+  const DIFF_KEY = "salsicce-difficulty";
+  const bestKey = (id) => `salsicce-best-${id}`;
+  function store(k, v) { try { localStorage.setItem(k, v); } catch { /* ignore */ } }
+  function load(k) { try { return localStorage.getItem(k); } catch { return null; } }
+  const impresa = (id) => window.dispatchEvent(new CustomEvent("sala:impresa", { detail: id }));
+  const rnd = (a, b) => a + Math.random() * (b - a);
+  const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
+  const hash = (n) => { const x = Math.sin(n * 127.1 + 311.7) * 43758.5453; return x - Math.floor(x); };
+
+  // ---------- Canvas ----------
+  const canvas = document.getElementById("game");
+  const ctx = canvas.getContext("2d");
+  const wrapEl = document.getElementById("wrap");
+  const overlay = document.getElementById("overlay");
+  const touchEl = document.getElementById("touch");
+  const pauseBtn = document.getElementById("pauseBtn");
+  let pxRatio = 1, touchMode = !!(window.matchMedia && matchMedia("(pointer: coarse)").matches);
+  function resize() {
+    touchEl.style.display = "none";
+    wrapEl.style.paddingBottom = "0";
+    const availW = window.innerWidth - 8, availH = window.innerHeight - 8;
+    const s = Math.max(0.2, Math.min(availW / W, availH / H));
+    pxRatio = Math.min(3, s * (window.devicePixelRatio || 1));
+    canvas.style.width = W * s + "px";
+    canvas.style.height = H * s + "px";
+    canvas.width = Math.round(W * pxRatio);
+    canvas.height = Math.round(H * pxRatio);
+  }
+  window.addEventListener("resize", () => syncControls());
+
+  // ---------- Audio ----------
+  let audioCtx = null, noiseBuf = null;
+  function beep(freq, dur, type = "square", vol = 0.04, slide = 0, delay = 0) {
+    if (!audioCtx) return;
+    const t = audioCtx.currentTime + delay;
+    const osc = audioCtx.createOscillator(), gain = audioCtx.createGain();
+    osc.type = type;
+    osc.frequency.setValueAtTime(freq, t);
+    if (slide) osc.frequency.exponentialRampToValueAtTime(Math.max(20, freq + slide), t + dur);
+    gain.gain.setValueAtTime(vol, t);
+    gain.gain.exponentialRampToValueAtTime(0.0001, t + dur);
+    osc.connect(gain).connect(audioCtx.destination);
+    osc.start(t); osc.stop(t + dur + 0.02);
+  }
+  function noise(dur, vol, freq, q = 1, delay = 0, slide = 0) {
+    if (!audioCtx) return;
+    if (!noiseBuf) {
+      noiseBuf = audioCtx.createBuffer(1, audioCtx.sampleRate, audioCtx.sampleRate);
+      const d = noiseBuf.getChannelData(0);
+      for (let i = 0; i < d.length; i++) d[i] = Math.random() * 2 - 1;
+    }
+    const t = audioCtx.currentTime + delay;
+    const src = audioCtx.createBufferSource(), f = audioCtx.createBiquadFilter(), g = audioCtx.createGain();
+    src.buffer = noiseBuf; f.type = "bandpass"; f.frequency.setValueAtTime(freq, t); f.Q.value = q;
+    if (slide) f.frequency.exponentialRampToValueAtTime(Math.max(30, freq + slide), t + dur);
+    g.gain.setValueAtTime(vol, t); g.gain.exponentialRampToValueAtTime(0.0001, t + dur);
+    src.connect(f).connect(g).connect(audioCtx.destination);
+    src.start(t, Math.random() * 0.5, dur + 0.05);
+  }
+  const arp = (notes, gap, d, type = "square", vol = 0.04) => notes.forEach((f, i) => beep(f, d, type, vol, 0, i * gap));
+  const sfx = {
+    jump: () => beep(380, 0.16, "square", 0.035, 420),
+    slide: () => noise(0.25, 0.06, 1800, 0.8, 0, -1200),
+    lane: () => noise(0.06, 0.03, 2600, 1.5),
+    bone: (n) => { const f = 880 * Math.pow(1.06, Math.min(12, n)); beep(f, 0.07, "square", 0.03); beep(f * 1.5, 0.09, "square", 0.025, 0, 0.05); },
+    power: () => arp([523, 659, 784, 1047, 1319], 0.05, 0.14, "triangle", 0.05),
+    // the thud, and the yelp
+    hit: () => { noise(0.2, 0.12, 300, 0.7); beep(160, 0.2, "square", 0.07, -90); beep(900, 0.12, "sawtooth", 0.04, 500, 0.08); beep(1300, 0.16, "sawtooth", 0.035, -700, 0.2); },
+    crash: () => noise(0.3, 0.09, 900, 0.6, 0, -500),
+    shield: () => { noise(0.25, 0.08, 1500, 0.8); beep(700, 0.2, "triangle", 0.05, -300); },
+    bell: () => { beep(2100, 0.25, "sine", 0.05); beep(2100, 0.25, "sine", 0.05, 0, 0.16); },
+    back: () => arp([392, 523, 659], 0.07, 0.12, "triangle", 0.04),
+    caught: () => { arp([523, 415, 330, 262, 196], 0.13, 0.22, "triangle", 0.06); noise(0.4, 0.08, 400, 0.6); },
+    step: () => noise(0.03, 0.012, 500, 1),
+  };
+
+  // ---------- State ----------
+  let difficulty = DIFFICULTIES[load(DIFF_KEY)] ? load(DIFF_KEY) : "normale";
+  let diff = DIFFICULTIES[difficulty];
+  let state = "menu", menu = null, pausedFrom = null, clock = 0;
+  let score = 0, bestCache = 0, dist = 0, speed = 8, lane = 1, px = 0, py = 0, vy = 0, slideT = 0, runT = 0, objs = [], coins = [], parts = [], popups = [], message = null;
+  let lead = 1, leadT = 0, chase = 0, inv = 0, stumble = 0, magnetT = 0, doubleT = 0, shield = false, bones = 0, boneRun = 0, boneRunT = 0, genZ = 0, nextPower = 0, hits = 0, cleanFrom = 0, caught = 0, shake = 0, stepT = 0, camX = 0;
+  let bSide = -1;
+  const isPlaying = () => state === "play";
+  const mult = () => (doubleT > 0 ? 2 : 1);
+
+  // ---------- The street ahead ----------
+  function genRow(wz) {
+    const d = clamp(dist / 1500, 0, 1);
+    const order = [0, 1, 2].sort(() => Math.random() - 0.5);
+    const r = Math.random(), n = r < 0.4 - d * 0.2 ? 1 : r < 0.88 - d * 0.18 || dist < 150 ? 2 : 3;
+    const row = [null, null, null];
+    for (let i = 0; i < n; i++) { const t = Math.random(); row[order[i]] = t < 0.36 ? "carro" : t < 0.7 ? "cassa" : "striscione"; }
+    if (row.every((k) => k === "carro")) row[order[0]] = "cassa";
+    row.forEach((kind, l) => { if (kind) objs.push({ kind, lane: l, x: LANES[l], wz, hit: 0, id: Math.random() }); });
+    // bones lead the way: along a free lane, or in an arc over a crate
+    const free = [0, 1, 2].filter((l) => !row[l]), low = [0, 1, 2].filter((l) => row[l] === "cassa");
+    if (dist + FAR > nextPower && free.length) {
+      const l = free[Math.floor(Math.random() * free.length)];
+      coins.push({ x: LANES[l], y: 0.45, wz, kind: ["calamita", "doppio", "scudo"][Math.floor(Math.random() * 3)] });
+      nextPower = dist + FAR + rnd(240, 400);
+    } else if (Math.random() < 0.75) {
+      if (low.length && (Math.random() < 0.5 || !free.length)) {
+        const l = low[Math.floor(Math.random() * low.length)], reach = speed * 0.33;
+        for (let i = -2; i <= 2; i++) coins.push({ x: LANES[l], y: 0.3 + 0.75 * (1 - (i / 2.4) ** 2), wz: wz + i * reach * 0.42 });
+      } else if (free.length) {
+        const l = free[Math.floor(Math.random() * free.length)];
+        for (let i = 0; i < 5; i++) coins.push({ x: LANES[l], y: 0.3, wz: wz - 1.6 + i * 0.8 });
+      }
+    }
+    // the delivery boy on his bike comes down a lane, and meets you where no row stands
+    if (dist > 250 && Math.random() < 0.1 + d * 0.16) {
+      const meet = dist + (wz - dist) * speed / (speed + BIKE_SP), l = Math.floor(Math.random() * 3);
+      if (!objs.some((o) => o.kind !== "bici" && Math.abs(o.wz - meet) < 4.5) && !objs.some((o) => o.kind === "bici" && Math.abs(o.wz - wz) < 30))
+        objs.push({ kind: "bici", lane: l, x: LANES[l], wz: wz + 2, hit: 0, id: Math.random(), rung: false });
+    }
+  }
+  function fill() {
+    while (genZ < dist + FAR) { genRow(genZ); genZ += Math.max(7.5, speed * 0.82) * rnd(0.92, 1.3); }
+  }
+
+  function startGame() {
+    if (!audioCtx) { try { audioCtx = new (window.AudioContext || window.webkitAudioContext)(); } catch { audioCtx = null; } }
+    if (audioCtx && audioCtx.state === "suspended") audioCtx.resume();
+    score = 0; dist = 0; speed = diff.v0; lane = 1; px = 0; py = 0; vy = 0; slideT = 0; runT = 0; objs = []; coins = []; parts = []; popups = [];
+    lead = diff.lead; leadT = 0; chase = 1; inv = 0; stumble = 0; magnetT = 0; doubleT = 0; shield = false; bones = 0; boneRun = 0; boneRunT = 0; hits = 0; cleanFrom = 0; caught = 0; shake = 0; camX = 0;
+    genZ = 26; nextPower = rnd(160, 260);
+    fill();
+    bestCache = parseInt(load(bestKey(difficulty)), 10) || 0;
+    message = { text: "SCAPPA!", sub: "il macellaio rivuole le sue salsicce", t: 0 };
+    state = "play";
+    menu = null;
+    overlay.classList.add("hidden");
+    syncControls();
+    last = performance.now();
+  }
+
+  // ---------- Moves ----------
+  function move(d) { if (!isPlaying() || caught) return; const l = clamp(lane + d, 0, 2); if (l !== lane) { lane = l; sfx.lane(); } }
+  function jump() { if (!isPlaying() || caught) return; if (py <= 0.001) { vy = JUMP; slideT = 0; sfx.jump(); } }
+  function slide() { if (!isPlaying() || caught) return; if (py > 0.001) vy = Math.min(vy, -9); if (slideT <= 0) sfx.slide(); slideT = SLIDE; }
+
+  function burst(x, y, wz, n, col, sp = 2) {
+    for (let i = 0; i < n; i++) parts.push({ x, y, wz, vx: rnd(-1, 1) * sp, vy: rnd(0.5, 1.6) * sp, vz: rnd(-0.3, 1) * sp, t: 0, life: rnd(0.4, 0.8), col, s: rnd(0.03, 0.07) });
+  }
+  function crash(o) {
+    o.hit = 0.001;
+    if (shield) {   // the golden collar takes the blow
+      shield = false; inv = 0.8; sfx.shield(); sfx.crash();
+      burst(o.x, 0.5, o.wz, 14, "#ffd23a", 3);
+      popups.push({ text: "COLLARE!", t: 0, col: "#ffd23a" });
+      return;
+    }
+    hits++; cleanFrom = dist; lead--; leadT = 0; inv = 1.3; stumble = 0.6; shake = 0.4; speed = Math.max(diff.v0 * 0.8, speed * 0.72);
+    sfx.hit(); sfx.crash();
+    burst(o.x, 0.4, o.wz, 12, o.kind === "cassa" ? "#ff8a3a" : o.kind === "striscione" ? "#ff5a6a" : "#c8a070", 3);
+    if (lead < 0) { caught = 0.001; sfx.caught(); }
+    else popups.push({ text: lead === 0 ? "IL MACELLAIO TI È ADDOSSO!" : "AHI!", t: 0, col: "#ff5a4a" });
+  }
+  function take(c) {
+    c.got = true;
+    if (c.kind) {
+      sfx.power();
+      if (c.kind === "calamita") { magnetT = 9; popups.push({ text: "CALAMITA!", t: 0, col: "#ff5a6a" }); }
+      else if (c.kind === "doppio") { doubleT = 10; popups.push({ text: "PUNTI DOPPI!", t: 0, col: "#7ad8ff" }); }
+      else { shield = true; popups.push({ text: "COLLARE D'ORO!", t: 0, col: "#ffd23a" }); }
+      score += 100 * mult();
+      return;
+    }
+    bones++; boneRun = boneRunT > 0 ? boneRun + 1 : 0; boneRunT = 0.5;
+    score += 10 * mult();
+    sfx.bone(boneRun);
+    if (bones === 150) impresa("ghiotto");
+  }
+
+  // ---------- Update ----------
+  function update(dt) {
+    clock += dt;
+    for (const p of parts) { p.t += dt; p.x += p.vx * dt; p.y += p.vy * dt; p.wz += p.vz * dt; p.vy -= 9 * dt; }
+    parts = parts.filter((p) => p.t < p.life && p.y > -0.1);
+    for (const p of popups) p.t += dt;
+    popups = popups.filter((p) => p.t < 1.3);
+    shake = Math.max(0, shake - dt);
+    if (!isPlaying()) return;
+    if (message) { message.t += dt; if (message.t > 2.4) message = null; }
+    if (caught) {
+      caught += dt; speed = Math.max(0, speed - 30 * dt); chase += (0 - chase) * Math.min(1, dt * 8);
+      dist += speed * dt;
+      if (caught > 1.8) gameOver();
+      return;
+    }
+    speed = Math.min(diff.vmax, speed + diff.acc * dt * (speed < diff.v0 ? 12 : 1));
+    const before = dist;
+    dist += speed * dt;
+    score += (dist - before) * mult();
+    if (before < 1000 && dist >= 1000) impresa("fuga");
+    if (dist - cleanFrom >= 600 && before - cleanFrom < 600) impresa("intoccabile");
+    runT += dt * (5 + speed * 0.55);
+    stepT -= dt; if (stepT <= 0 && py <= 0 && slideT <= 0) { sfx.step(); stepT = 2.2 / (5 + speed * 0.55); }
+    // the dog
+    px += (LANES[lane] - px) * Math.min(1, dt * 16);
+    camX += (px * 0.55 - camX) * Math.min(1, dt * 8);
+    if (py > 0 || vy > 0) { vy -= GRAV * dt; py += vy * dt; if (py <= 0) { py = 0; vy = 0; } }
+    slideT = Math.max(0, slideT - dt);
+    inv = Math.max(0, inv - dt); stumble = Math.max(0, stumble - dt);
+    magnetT = Math.max(0, magnetT - dt); doubleT = Math.max(0, doubleT - dt); boneRunT = Math.max(0, boneRunT - dt);
+    // the butcher falls back if you run clean for a while
+    if (lead < diff.lead) { leadT += dt; if (leadT >= diff.regen) { lead++; leadT = 0; sfx.back(); popups.push({ text: "IL MACELLAIO RESTA INDIETRO", t: 0, col: "#7ed87a" }); } }
+    const want = lead >= diff.lead ? 1 : lead === 0 ? 0.12 : 0.5;
+    chase += (want - chase) * Math.min(1, dt * 2.5);
+    // what is in the way
+    for (const o of objs) {
+      if (o.kind === "bici") { o.wz -= BIKE_SP * dt; if (!o.rung && o.wz - dist < 24) { o.rung = true; sfx.bell(); } }
+      if (o.hit) { o.hit += dt; continue; }
+      const k = KINDS[o.kind];
+      if (inv > 0 || Math.abs(o.wz - dist) > k.depth / 2 + 0.22 || Math.abs(o.x - px) > 0.42) continue;
+      if (k.pass === "salta" && py > 0.38) continue;
+      if (k.pass === "scivola" && slideT > 0 && py < 0.2) continue;
+      crash(o);
+    }
+    objs = objs.filter((o) => o.wz > dist - ZP - 1 && !(o.hit > 1));
+    for (const c of coins) {
+      if (c.got) continue;
+      const dz = c.wz - dist;
+      if (magnetT > 0 && !c.kind && dz < 7 && dz > -1) { c.x += (px - c.x) * Math.min(1, dt * 9); c.y += (py + 0.4 - c.y) * Math.min(1, dt * 9); }
+      if (Math.abs(dz) < 0.45 && Math.abs(c.x - px) < 0.45 && Math.abs(c.y - (py + (slideT > 0 ? 0.2 : 0.4))) < 0.62) take(c);
+    }
+    coins = coins.filter((c) => !c.got && c.wz > dist - ZP);
+    fill();
+  }
+
+  function gameOver() {
+    state = "over";
+    const total = Math.floor(score);
+    const prev = parseInt(load(bestKey(difficulty)), 10) || 0;
+    const record = total > prev;
+    if (record) store(bestKey(difficulty), String(total));
+    menu = () => showOverlay(
+      `<h2 class="lose">PRESO!</h2>
+       <p>Punteggio: <b>${total.toLocaleString("it-IT")}</b> · ${Math.floor(dist).toLocaleString("it-IT")} metri di fuga · ${bones} ${bones === 1 ? "osso" : "ossi"} · ${hits} ${hits === 1 ? "inciampo" : "inciampi"} · ${diff.label}</p>
+       ${record ? "<p style='color:var(--pink)'>★ NUOVO RECORD! ★</p>" : ""}
+       ${difficultyHTML()}
+       <button class="start" data-start>SCAPPA DI NUOVO</button>`
+    );
+    menu();
+    syncControls();
+  }
+  function togglePause() {
+    if (isPlaying()) {
+      pausedFrom = state; state = "paused";
+      showOverlay(`<h2>PAUSA</h2><button class="start" data-resume>CONTINUA</button><p class="muted">Premi P per continuare</p>`);
+    } else if (state === "paused") {
+      state = pausedFrom; overlay.classList.add("hidden"); last = performance.now();
+    }
+    syncControls();
+  }
+  // the pause menu can end the game (shared/iniziali.js): it ends here the usual way, saving the record
+  window.addEventListener("sala:termina", () => { if (state !== "paused") return; state = pausedFrom; overlay.classList.add("hidden"); gameOver(); syncControls(); });
+  function syncControls() {
+    pauseBtn.style.display = isPlaying() && touchMode ? "block" : "none";
+    resize();
+  }
+  pauseBtn.addEventListener("click", () => togglePause());
+  function showOverlay(html) { overlay.innerHTML = html; overlay.classList.remove("hidden"); }
+  function difficultyHTML() {
+    const buttons = DIFF_IDS.map((id) => {
+      const d = DIFFICULTIES[id];
+      return `<button type="button" data-diff="${id}" class="${id === difficulty ? "on" : ""}" style="--c:${d.color}">${d.label}</button>`;
+    }).join("");
+    const best = parseInt(load(bestKey(difficulty)), 10);
+    return `<div class="diff">${buttons}</div><p class="muted">${diff.desc}${best ? ` · Record: ${best.toLocaleString("it-IT")}` : ""}</p>`;
+  }
+  function setDifficulty(id) { if (!DIFFICULTIES[id]) return; difficulty = id; diff = DIFFICULTIES[id]; store(DIFF_KEY, id); if (menu) menu(); }
+  function showTitle() {
+    menu = showTitle;
+    showOverlay(
+      `<h1>IL LADRO DI SALSICCE</h1>
+       <p>Il cane Birba ha rubato una fila di salsicce e il macellaio gli corre dietro per tutta la via del mercato. Tre corsie e sempre più velocità: salta le casse di frutta, scivola sotto gli striscioni, cambia corsia davanti ai carretti e al garzone in bicicletta. A ogni inciampo il macellaio si avvicina; se inciampi quando ti è addosso, ti prende.</p>
+       <div class="pts">
+         <span><b>Punti</b></span><span>1 per metro · 10 per ogni osso</span>
+         <span><b>Aiuti</b></span><span>la calamita attira gli ossi · la stella raddoppia i punti · il collare d'oro para un urto</span>
+       </div>
+       <p class="muted help">${touchMode ? "Striscia il dito: a sinistra e a destra per cambiare corsia, in su per saltare, in giù per scivolare · ❚❚ pausa" : "← → cambia corsia · ↑ o Spazio salta · ↓ scivola (in aria: torna giù subito) · P pausa"}</p>
+       ${difficultyHTML()}
+       <button class="start" data-start>SCAPPA!</button>`
+    );
+  }
+  overlay.addEventListener("click", (e) => {
+    const d = e.target.closest("[data-diff]");
+    if (d) { setDifficulty(d.dataset.diff); return; }
+    if (e.target.closest("[data-start]")) startGame();
+    if (e.target.closest("[data-resume]")) togglePause();
+  });
+
+  // ---------- Input ----------
+  window.addEventListener("keydown", (e) => {
+    const k = e.key.toLowerCase();
+    if (state === "menu" || state === "over") {
+      if (e.key === "Enter") startGame();
+      else if (["1", "2", "3"].includes(k)) setDifficulty(DIFF_IDS[+k - 1]);
+      return;
+    }
+    if (k === "p" || k === "escape") { if (!e.repeat) togglePause(); return; }
+    if (state === "paused") { if (e.key === "Enter") togglePause(); return; }
+    if (["arrowleft", "arrowright", "arrowup", "arrowdown", " "].includes(k)) e.preventDefault();
+    if (e.repeat) return;
+    if (k === "arrowleft" || k === "a") move(-1);
+    else if (k === "arrowright" || k === "d") move(1);
+    else if (k === "arrowup" || k === "w" || k === " ") jump();
+    else if (k === "arrowdown" || k === "s") slide();
+  });
+  window.addEventListener("blur", () => { if (isPlaying()) togglePause(); });
+  // swipes: the move starts as soon as the finger has gone far enough, without waiting for it to lift
+  let swipe = null;
+  canvas.addEventListener("pointerdown", (e) => { e.preventDefault(); if (!isPlaying()) return; swipe = { id: e.pointerId, x: e.clientX, y: e.clientY, used: false }; try { canvas.setPointerCapture(e.pointerId); } catch { /* ignore */ } });
+  canvas.addEventListener("pointermove", (e) => {
+    if (!swipe || swipe.id !== e.pointerId || !isPlaying()) return;
+    const dx = e.clientX - swipe.x, dy = e.clientY - swipe.y, min = Math.max(18, canvas.getBoundingClientRect().width * 0.035);
+    if (Math.abs(dx) < min && Math.abs(dy) < min) return;
+    if (Math.abs(dx) > Math.abs(dy)) move(dx > 0 ? 1 : -1); else if (dy < 0) jump(); else slide();
+    swipe.x = e.clientX; swipe.y = e.clientY; swipe.used = true;
+  });
+  canvas.addEventListener("pointerup", (e) => { if (swipe && swipe.id === e.pointerId) { if (!swipe.used) jump(); swipe = null; } });
+  canvas.addEventListener("pointercancel", () => { swipe = null; });
+  window.addEventListener("pointerdown", (e) => { if (e.pointerType === "touch" && !touchMode) { touchMode = true; syncControls(); if (menu) menu(); } }, true);
+
+  // ---------- Drawing ----------
+  // world (x across, y up, wz along the street) → screen x, y and pixels per metre
+  function P(x, y, wz) {
+    const cz = Math.max(0.35, wz - dist + ZP), s = F / cz;
+    return [CX + (x - camX) * s, HOR + (CAMH - y) * s, s];
+  }
+  function quad(a, b, c, d, col) { ctx.fillStyle = col; ctx.beginPath(); ctx.moveTo(a[0], a[1]); ctx.lineTo(b[0], b[1]); ctx.lineTo(c[0], c[1]); ctx.lineTo(d[0], d[1]); ctx.closePath(); ctx.fill(); }
+  // a box standing on the street: its front, its top and the side you can see
+  function box(x, y, wz, w, h, d, front, top, side) {
+    const x0 = x - w / 2, x1 = x + w / 2, z1 = wz + d / 2, z0 = wz - d / 2;
+    quad(P(x0, y + h, z0), P(x1, y + h, z0), P(x1, y + h, z1), P(x0, y + h, z1), top);
+    if (x0 > camX) quad(P(x0, y, z0), P(x0, y, z1), P(x0, y + h, z1), P(x0, y + h, z0), side);
+    else if (x1 < camX) quad(P(x1, y, z0), P(x1, y, z1), P(x1, y + h, z1), P(x1, y + h, z0), side);
+    quad(P(x0, y, z0), P(x1, y, z0), P(x1, y + h, z0), P(x0, y + h, z0), front);
+  }
+  function outlined(text, x, y, font, fill, lw = 5) {
+    ctx.font = font; ctx.lineWidth = lw; ctx.lineJoin = "round"; ctx.strokeStyle = "#1a1208"; ctx.strokeText(text, x, y); ctx.fillStyle = fill; ctx.fillText(text, x, y);
+  }
+  const HOUSE = ["#e8b87a", "#d88a6a", "#e8d8a0", "#c8a0a0", "#a8c0a8", "#e0a060", "#d8c8b0"];
+  const AWN = ["#e04a3a", "#3a8ae0", "#3aa85a", "#e0a02a"];
+  function drawStreet() {
+    const sky = ctx.createLinearGradient(0, 0, 0, HOR);
+    sky.addColorStop(0, "#5ab0f0"); sky.addColorStop(1, "#d8f0ff");
+    ctx.fillStyle = sky; ctx.fillRect(0, 0, W, HOR + 2);
+    // the far end of the street: the church and the roofs
+    ctx.fillStyle = "#b8c8d8";
+    for (let i = 0; i < 9; i++) { const x = CX - 150 + i * 34 - camX * 4, h = 10 + hash(i + 3) * 16; ctx.fillRect(x, HOR - h, 30, h + 2); }
+    ctx.fillRect(CX - 8 - camX * 4, HOR - 46, 16, 46); ctx.beginPath(); ctx.moveTo(CX - 10 - camX * 4, HOR - 46); ctx.lineTo(CX - camX * 4, HOR - 62); ctx.lineTo(CX + 10 - camX * 4, HOR - 46); ctx.fill();
+    ctx.fillStyle = "#b8a890"; ctx.fillRect(0, HOR, W, H - HOR);
+    // the cobbles, in bands that run toward you
+    const z0 = Math.floor((dist - ZP) / 2) * 2;
+    for (let z = z0 + FAR + 4; z >= z0; z -= 2) {
+      const a = P(0, 0, z), b = P(0, 0, z + 2), odd = Math.floor(z / 2) % 2;
+      if (b[1] >= a[1]) continue;
+      ctx.fillStyle = odd ? "#c8b8a0" : "#c0b098"; ctx.fillRect(0, b[1], W, a[1] - b[1] + 1);
+      const l0 = P(-ROAD, 0, z), l1 = P(-ROAD, 0, z + 2), r0 = P(ROAD, 0, z), r1 = P(ROAD, 0, z + 2);
+      quad(l0, r0, r1, l1, odd ? "#8a8078" : "#827870");
+      if (odd) for (const x of [-0.4, 0.4]) quad(P(x - 0.025, 0, z + 0.3), P(x + 0.025, 0, z + 0.3), P(x + 0.025, 0, z + 1.7), P(x - 0.025, 0, z + 1.7), "rgba(255,255,255,0.35)");
+      for (const sx of [-1, 1]) quad(P(sx * ROAD, 0, z), P(sx * (ROAD + 0.08), 0, z), P(sx * (ROAD + 0.08), 0, z + 2), P(sx * ROAD, 0, z + 2), "#e8e0d0");
+    }
+  }
+  // the houses and the stalls, one every four metres on each side
+  function drawHouse(i, side) {
+    const z0 = Math.max(i * 4, dist - ZP + 0.4), z1 = i * 4 + 4;
+    if (z1 <= z0 + 0.05) return;
+    const h = hash(i * 2 + (side > 0 ? 0.5 : 0)), x = side * WALL, ht = 2.4 + h * 1.6, col = HOUSE[Math.floor(h * 97) % HOUSE.length];
+    quad(P(x, 0, z0), P(x, 0, z1), P(x, ht, z1), P(x, ht, z0), col);
+    quad(P(x, ht - 0.12, z0), P(x, ht - 0.12, z1), P(x, ht, z1), P(x, ht, z0), "rgba(0,0,0,0.25)");
+    quad(P(x, 0, z1 - 0.06), P(x, 0, z1), P(x, ht, z1), P(x, ht, z1 - 0.06), "rgba(0,0,0,0.18)");
+    for (const wz of [i * 4 + 0.7, i * 4 + 2.5]) {
+      if (wz < z0) continue;
+      quad(P(x, 1.55, wz), P(x, 1.55, wz + 0.8), P(x, 2.25, wz + 0.8), P(x, 2.25, wz), "#4a5a78");
+      quad(P(x, 1.5, wz - 0.05), P(x, 1.5, wz + 0.85), P(x, 1.56, wz + 0.85), P(x, 1.56, wz - 0.05), "#f4ece0");
+    }
+    if (h > 0.35 && i * 4 + 0.4 >= z0) {   // a stall under its awning
+      const aw = AWN[Math.floor(h * 53) % AWN.length], a0 = i * 4 + 0.4, a1 = i * 4 + 3.4, xo = side * (WALL - 0.75);
+      box(side * (WALL - 0.4), 0, (a0 + a1) / 2, 0.6, 0.55, 2.6, "#8a5a3a", "#a87048", "#7a4a2a");
+      for (let k = 0; k < 5; k++) { const fz = a0 + 0.45 + k * 0.55; const p = P(side * (WALL - 0.42), 0.62, fz); ctx.fillStyle = ["#ff5a3a", "#ffc83a", "#7ad84a", "#ff8a3a", "#c84ae0"][(k + i) % 5]; ctx.beginPath(); ctx.arc(p[0], p[1], Math.max(1, p[2] * 0.09), 0, TAU); ctx.fill(); }
+      for (let k = 0; k < 6; k++) { const s0 = a0 + (a1 - a0) * k / 6, s1 = a0 + (a1 - a0) * (k + 1) / 6; quad(P(x, 1.35, s0), P(x, 1.35, s1), P(xo, 1.1, s1), P(xo, 1.1, s0), k % 2 ? "#fff4e8" : aw); }
+    } else if (i * 4 + 1.6 >= z0) quad(P(x, 0, i * 4 + 1.6), P(x, 0, i * 4 + 2.3), P(x, 1.25, i * 4 + 2.3), P(x, 1.25, i * 4 + 1.6), "#6a4a32");
+  }
+  function drawBone(sx, sy, s, spin) {
+    const w = Math.max(0.35, Math.abs(Math.cos(spin))) * s * 0.17, r = s * 0.055;
+    ctx.fillStyle = "#fffaf0"; ctx.strokeStyle = "#b8a078"; ctx.lineWidth = Math.max(0.5, s * 0.012);
+    ctx.beginPath(); ctx.rect(sx - w, sy - r * 0.6, w * 2, r * 1.2);
+    for (const dx of [-w, w]) for (const dy of [-r * 0.7, r * 0.7]) { ctx.moveTo(sx + dx + r, sy + dy); ctx.arc(sx + dx, sy + dy, r, 0, TAU); }
+    ctx.fill();
+  }
+  function drawPickup(c) {
+    const cz = c.wz - dist + ZP;
+    if (cz < 0.6) return;
+    const [sx, sy, s] = P(c.x, c.y + (c.kind ? Math.sin(clock * 4) * 0.06 : 0), c.wz);
+    ctx.globalAlpha = clamp((FAR - cz) / 10, 0, 1);
+    if (!c.kind) { drawBone(sx, sy, s, clock * 4 + c.wz); ctx.globalAlpha = 1; return; }
+    const r = s * 0.2, col = c.kind === "calamita" ? "#ff5a6a" : c.kind === "doppio" ? "#7ad8ff" : "#ffd23a";
+    ctx.fillStyle = "rgba(255,255,255,0.25)"; ctx.beginPath(); ctx.arc(sx, sy, r * 1.5 + Math.sin(clock * 6) * r * 0.15, 0, TAU); ctx.fill();
+    ctx.fillStyle = col; ctx.strokeStyle = "#1a1208"; ctx.lineWidth = Math.max(1, s * 0.02);
+    ctx.beginPath(); ctx.arc(sx, sy, r, 0, TAU); ctx.fill(); ctx.stroke();
+    ctx.fillStyle = "#1a1208"; ctx.textAlign = "center"; ctx.textBaseline = "middle"; ctx.font = `900 ${Math.max(4, r * 1.15)}px system-ui`;
+    ctx.fillText(c.kind === "calamita" ? "U" : c.kind === "doppio" ? "×2" : "◯", sx, sy + r * 0.05);
+    ctx.textBaseline = "alphabetic"; ctx.globalAlpha = 1;
+  }
+  function drawObstacle(o) {
+    const cz = o.wz - dist + ZP;
+    if (cz < 0.5) return;
+    ctx.globalAlpha = clamp((FAR - cz) / 10, 0, 1) * (o.hit ? Math.max(0, 1 - o.hit * 2.5) : 1);
+    const fly = o.hit ? o.hit * 3 : 0;
+    if (o.kind === "cassa") {
+      box(o.x, fly, o.wz, 0.66, 0.4, 0.5, "#c88a4a", "#e0a868", "#a8703a");
+      for (const y of [0.13, 0.27]) quad(P(o.x - 0.33, fly + y, o.wz - 0.25), P(o.x + 0.33, fly + y, o.wz - 0.25), P(o.x + 0.33, fly + y + 0.025, o.wz - 0.25), P(o.x - 0.33, fly + y + 0.025, o.wz - 0.25), "#8a5a2a");
+      for (let k = 0; k < 4; k++) { const p = P(o.x - 0.22 + k * 0.15, fly + 0.43, o.wz - 0.08 + (k % 2) * 0.14); ctx.fillStyle = k % 2 ? "#ff5a3a" : "#ff9a2a"; ctx.beginPath(); ctx.arc(p[0], p[1], p[2] * 0.085, 0, TAU); ctx.fill(); }
+    } else if (o.kind === "striscione") {
+      for (const sx of [-0.38, 0.38]) box(o.x + sx, 0, o.wz, 0.05, 1.3, 0.05, "#7a5a3a", "#9a7a5a", "#6a4a2a");
+      const sag = Math.sin(clock * 3 + o.id * 9) * 0.02 + fly;
+      const a = P(o.x - 0.36, 0.62 + sag, o.wz), b = P(o.x + 0.36, 0.62 - sag, o.wz), c = P(o.x + 0.36, 1.22 - sag, o.wz), d = P(o.x - 0.36, 1.22 + sag, o.wz);
+      quad(a, b, c, d, "#f04a5a");
+      quad(P(o.x - 0.36, 0.62 + sag, o.wz), P(o.x + 0.36, 0.62 - sag, o.wz), P(o.x + 0.36, 0.7 - sag, o.wz), P(o.x - 0.36, 0.7 + sag, o.wz), "#ffd23a");
+      if (a[2] > 30) { ctx.fillStyle = "#fff4e8"; ctx.textAlign = "center"; ctx.font = `900 ${a[2] * 0.24}px system-ui`; ctx.fillText("SALDI", (a[0] + b[0]) / 2, (a[1] + d[1]) / 2 + a[2] * 0.11); }
+    } else if (o.kind === "carro") {
+      for (const sx of [-0.36, 0.36]) for (const sz of [-0.3, 0.3]) { const p = P(o.x + sx, 0.16, o.wz + sz); ctx.fillStyle = "#3a2a1a"; ctx.beginPath(); ctx.ellipse(p[0], p[1], p[2] * 0.05, p[2] * 0.16, 0, 0, TAU); ctx.fill(); }
+      box(o.x, 0.22, o.wz, 0.7, 0.42, 1.1, "#3a8a5a", "#4aa86a", "#2a6a42");
+      box(o.x, 0.64, o.wz, 0.6, 0.5, 0.9, "#e8d8a0", "#f4e8b8", "#c8b880");
+      const p = P(o.x, 1.14, o.wz - 0.2);
+      for (let k = 0; k < 5; k++) { ctx.fillStyle = ["#7ad84a", "#ff8a3a", "#ff5a3a", "#ffc83a", "#7ad84a"][k]; ctx.beginPath(); ctx.arc(p[0] + (k - 2) * p[2] * 0.12, p[1] - (k % 2) * p[2] * 0.05, p[2] * 0.11, 0, TAU); ctx.fill(); }
+    } else {   // the delivery boy on his bike, seen from the front
+      const [sx, sy, s] = P(o.x, 0, o.wz), wob = Math.sin(clock * 12 + o.id * 7) * s * 0.02;
+      ctx.fillStyle = "#2a2a2a"; ctx.beginPath(); ctx.ellipse(sx, sy - s * 0.24, s * 0.05, s * 0.24, 0, 0, TAU); ctx.fill();
+      ctx.strokeStyle = "#d83a3a"; ctx.lineWidth = s * 0.04; ctx.beginPath(); ctx.moveTo(sx, sy - s * 0.4); ctx.lineTo(sx, sy - s * 0.72); ctx.moveTo(sx - s * 0.24, sy - s * 0.72); ctx.lineTo(sx + s * 0.24, sy - s * 0.72); ctx.stroke();
+      ctx.fillStyle = "#c8a070"; ctx.fillRect(sx - s * 0.17, sy - s * 0.66, s * 0.34, s * 0.2);
+      ctx.fillStyle = "#3a6ad8"; ctx.beginPath(); ctx.roundRect(sx - s * 0.17 + wob, sy - s * 1.22, s * 0.34, s * 0.5, s * 0.08); ctx.fill();
+      ctx.fillStyle = "#f0c8a0"; ctx.beginPath(); ctx.arc(sx + wob, sy - s * 1.36, s * 0.13, 0, TAU); ctx.fill();
+      ctx.fillStyle = "#d83a3a"; ctx.beginPath(); ctx.arc(sx + wob, sy - s * 1.4, s * 0.135, Math.PI, TAU); ctx.fill(); ctx.fillRect(sx + wob - s * 0.16, sy - s * 1.41, s * 0.32, s * 0.035);
+      ctx.fillStyle = "#1a1208"; for (const dx of [-0.05, 0.05]) { ctx.beginPath(); ctx.arc(sx + wob + dx * s, sy - s * 1.35, s * 0.018, 0, TAU); ctx.fill(); }
+    }
+    ctx.globalAlpha = 1;
+  }
+  // Birba, from behind: legs, body, wagging tail, ears and the string of sausages flying from his mouth
+  function drawDog() {
+    const [sx, gy, s] = P(px, 0, dist), sy = gy - py * s, air = py > 0.02, low = slideT > 0 && !air;
+    ctx.fillStyle = "rgba(0,0,0,0.3)"; ctx.beginPath(); ctx.ellipse(sx, gy, s * 0.24 * (1 - py * 0.4), s * 0.07 * (1 - py * 0.4), 0, 0, TAU); ctx.fill();
+    if (inv > 0 && !caught && Math.floor(clock * 14) % 2) return;
+    const tilt = stumble > 0 ? Math.sin(stumble * 20) * 0.25 : (LANES[lane] - px) * 0.35;
+    ctx.save(); ctx.translate(sx, sy); ctx.rotate(tilt); ctx.scale(s, s);
+    const run = Math.sin(runT), body = low ? 0.2 : 0.42, bh = low ? 0.15 : 0.25;
+    // the sausages
+    ctx.strokeStyle = "#8a3a2a"; ctx.lineWidth = 0.015;
+    for (let k = 0; k < 5; k++) {
+      const x = 0.16 + k * 0.13, y = -(body + (low ? 0.16 : 0.33)) + Math.sin(clock * 11 - k * 0.9) * 0.035 + k * 0.03;
+      ctx.fillStyle = "#e8684a"; ctx.beginPath(); ctx.ellipse(x, y, 0.065, 0.036, 0.3, 0, TAU); ctx.fill(); ctx.stroke();
+    }
+    ctx.fillStyle = "#a8683a";
+    if (!low) for (const sd of [-1, 1]) { const up = air ? 0.1 : Math.max(0, run * sd) * 0.12; ctx.beginPath(); ctx.roundRect(sd * 0.11 - 0.05, -0.2 - up, 0.1, 0.2, 0.04); ctx.fill(); ctx.fillStyle = "#f4e8d8"; ctx.beginPath(); ctx.ellipse(sd * 0.11, -up - 0.02, 0.06, 0.035, 0, 0, TAU); ctx.fill(); ctx.fillStyle = "#a8683a"; }
+    ctx.fillStyle = "#c8844a"; ctx.beginPath(); ctx.ellipse(0, -body, low ? 0.26 : 0.2, bh, 0, 0, TAU); ctx.fill();
+    ctx.fillStyle = "#a8683a"; ctx.beginPath(); ctx.ellipse(0.04, -body - 0.02, 0.1, bh * 0.55, 0.3, 0, TAU); ctx.fill();
+    // the tail
+    ctx.strokeStyle = "#c8844a"; ctx.lineWidth = 0.055; ctx.lineCap = "round";
+    ctx.beginPath(); ctx.moveTo(0, -body + bh * 0.2); ctx.quadraticCurveTo(Math.sin(clock * 16) * 0.12, -body - 0.02, Math.sin(clock * 16) * 0.2, -body + bh * 0.2 - 0.26); ctx.stroke();
+    if (shield) { ctx.strokeStyle = "#ffd23a"; ctx.lineWidth = 0.045; ctx.beginPath(); ctx.ellipse(0, -body - bh + 0.03, 0.13, 0.04, 0, 0, TAU); ctx.stroke(); }
+    const hy = -body - bh - (low ? 0.02 : 0.1), flap = air ? -0.5 : run * 0.25;
+    ctx.fillStyle = "#8a4a2a";
+    for (const sd of [-1, 1]) { ctx.save(); ctx.translate(sd * 0.13, hy - 0.05); ctx.rotate(sd * (0.5 + flap * sd * 0.6 + (air ? 0.7 : 0))); ctx.beginPath(); ctx.ellipse(sd * 0.03, 0.09, 0.055, 0.12, 0, 0, TAU); ctx.fill(); ctx.restore(); }
+    ctx.fillStyle = "#c8844a"; ctx.beginPath(); ctx.arc(0, hy, 0.16, 0, TAU); ctx.fill();
+    ctx.restore();
+    if (shield) { ctx.strokeStyle = `rgba(255,210,58,${0.4 + 0.3 * Math.sin(clock * 8)})`; ctx.lineWidth = 2; ctx.beginPath(); ctx.ellipse(sx, sy - s * 0.42, s * 0.36, s * 0.5, 0, 0, TAU); ctx.stroke(); }
+  }
+  // the butcher: you only see him when he is close, a big back with the cleaver in the air
+  function drawButcher() {
+    if (chase > 0.62) return;
+    // beside the dog, so he never hides the way ahead; he comes up from the bottom of the screen as he closes in
+    const near = clamp((chase - 0.12) / 0.5, 0, 1), grab = clamp(chase / 0.12, 0, 1);
+    bSide += ((px > 0.1 ? -1 : 1) - bSide) * 0.06;
+    const [sx, gy, s] = P(px + bSide * 0.85 * grab, 0, dist - 0.9 + (1 - grab) * 0.7), bob = Math.abs(Math.sin(clock * 9)) * s * 0.05;
+    const y = gy - bob + 40 + near * 300;
+    ctx.save(); ctx.translate(sx, y); ctx.scale(s, s);
+    ctx.fillStyle = "#3a3a4a"; for (const sd of [-1, 1]) { ctx.beginPath(); ctx.roundRect(sd * 0.17 - 0.1, -0.5, 0.2, 0.5, 0.05); ctx.fill(); }
+    ctx.fillStyle = "#e8e8f0"; ctx.beginPath(); ctx.roundRect(-0.36, -1.35, 0.72, 0.95, 0.2); ctx.fill();
+    ctx.fillStyle = "#d84a3a"; for (let k = 0; k < 4; k++) ctx.fillRect(-0.3 + k * 0.17, -1.33, 0.07, 0.9);
+    ctx.fillStyle = "#fffaf0"; ctx.fillRect(-0.36, -0.95, 0.72, 0.06); ctx.beginPath(); ctx.arc(0, -0.92, 0.06, 0, TAU); ctx.fill();
+    // the arm with the cleaver
+    const sw = Math.sin(clock * 9) * 0.25;
+    ctx.save(); ctx.translate(0.36, -1.2); ctx.rotate(-0.5 + sw);
+    ctx.fillStyle = "#f0c8a0"; ctx.beginPath(); ctx.roundRect(-0.07, -0.5, 0.14, 0.55, 0.06); ctx.fill();
+    ctx.fillStyle = "#6a4a2a"; ctx.fillRect(-0.03, -0.66, 0.06, 0.2);
+    ctx.fillStyle = "#d8e0e8"; ctx.beginPath(); ctx.roundRect(-0.05, -0.98, 0.3, 0.34, 0.03); ctx.fill(); ctx.fillStyle = "#f4f8ff"; ctx.fillRect(0.19, -0.98, 0.06, 0.34);
+    ctx.restore();
+    ctx.fillStyle = "#f0c8a0"; ctx.beginPath(); ctx.arc(0, -1.5, 0.19, 0, TAU); ctx.fill();
+    ctx.fillStyle = "#6a4a2a"; ctx.beginPath(); ctx.arc(0, -1.5, 0.19, Math.PI * 0.1, Math.PI * 0.9); ctx.fill();
+    ctx.fillStyle = "#fffaf0"; ctx.beginPath(); ctx.roundRect(-0.17, -1.82, 0.34, 0.24, 0.06); ctx.fill(); ctx.beginPath(); ctx.arc(-0.1, -1.83, 0.1, 0, TAU); ctx.arc(0.1, -1.83, 0.1, 0, TAU); ctx.arc(0, -1.87, 0.11, 0, TAU); ctx.fill();
+    ctx.restore();
+  }
+  function drawHud() {
+    ctx.fillStyle = "rgba(26,18,8,0.9)"; ctx.fillRect(0, 0, W, TOP);
+    ctx.textBaseline = "middle"; ctx.textAlign = "left";
+    ctx.fillStyle = "#ffffff"; ctx.font = "900 15px system-ui"; ctx.fillText(Math.floor(score).toLocaleString("it-IT"), 10, 14);
+    ctx.fillStyle = "#f0dcc0"; ctx.font = "700 9px system-ui"; ctx.fillText(`REC ${Math.max(bestCache, Math.floor(score)).toLocaleString("it-IT")}`, 84, 9);
+    ctx.fillStyle = "#ff8a3a"; ctx.font = "900 9px system-ui"; ctx.fillText(diff.label, 84, 20);
+    ctx.fillStyle = "#ffffff"; ctx.font = "800 11px system-ui";
+    ctx.fillText(`${Math.floor(dist).toLocaleString("it-IT")} m`, 176, 14);
+    drawBone(258, 14, 60, 0); ctx.fillStyle = "#ffffff"; ctx.font = "800 11px system-ui"; ctx.fillText(String(bones), 276, 14);
+    // how far behind the butcher is
+    ctx.textAlign = "center";
+    const x0 = touchMode ? 400 : 460;
+    ctx.fillStyle = "#f0dcc0"; ctx.font = "700 8px system-ui"; ctx.fillText("MACELLAIO", x0 + 30, 8);
+    for (let i = 0; i <= diff.lead; i++) { ctx.fillStyle = i <= lead ? "#7ed87a" : (Math.floor(clock * 6) % 2 ? "#ff5a4a" : "#8a2a1a"); ctx.beginPath(); ctx.roundRect(x0 + i * 22, 14, 18, 7, 3); ctx.fill(); }
+    let x = 330;
+    for (const [t, max, col, label] of [[magnetT, 9, "#ff5a6a", "U"], [doubleT, 10, "#7ad8ff", "×2"]]) {
+      if (t <= 0) continue;
+      ctx.fillStyle = "rgba(255,255,255,0.15)"; ctx.fillRect(x, 19, 30, 4); ctx.fillStyle = col; ctx.fillRect(x, 19, 30 * t / max, 4);
+      ctx.font = "900 10px system-ui"; ctx.fillText(label, x + 15, 11); x += 38;
+    }
+    ctx.textBaseline = "alphabetic";
+  }
+  function draw() {
+    ctx.setTransform(pxRatio, 0, 0, pxRatio, 0, 0);
+    if (state === "menu") dist = clock * 5;
+    ctx.save();
+    if (shake > 0) ctx.translate(rnd(-1, 1) * shake * 8, rnd(-1, 1) * shake * 8);
+    drawStreet();
+    const i0 = Math.floor((dist - ZP) / 4), i1 = Math.floor((dist + FAR) / 4);
+    // far to near: houses, then everything standing in the street
+    const haze = ctx.createLinearGradient(0, HOR, 0, HOR + 14);
+    haze.addColorStop(0, "rgba(216,240,255,0.9)"); haze.addColorStop(1, "rgba(216,240,255,0)");
+    ctx.fillStyle = haze; ctx.fillRect(0, HOR, W, 14);
+    for (let i = i1; i >= i0; i--) { drawHouse(i, -1); drawHouse(i, 1); }
+    if (state !== "menu") {
+      const things = [...objs.map((o) => ({ z: o.wz, o })), ...coins.map((c) => ({ z: c.wz, c })), { z: dist, dog: true }].sort((a, b) => b.z - a.z);
+      for (const t of things) { if (t.dog) drawDog(); else if (t.o) drawObstacle(t.o); else drawPickup(t.c); }
+      for (const p of parts) { const [sx, sy, s] = P(p.x, p.y, p.wz); ctx.globalAlpha = 1 - p.t / p.life; ctx.fillStyle = p.col; ctx.beginPath(); ctx.arc(sx, sy, Math.max(1, p.s * s), 0, TAU); ctx.fill(); }
+      ctx.globalAlpha = 1;
+      drawButcher();
+    }
+    ctx.restore();
+    if (state === "menu") return;
+    drawHud();
+    ctx.textAlign = "center";
+    popups.forEach((p, i) => { ctx.globalAlpha = clamp((1.3 - p.t) * 3, 0, 1); outlined(p.text, CX, 150 - p.t * 18 - i * 0, "900 15px system-ui", p.col, 4); });
+    ctx.globalAlpha = 1;
+    if (message) {
+      ctx.globalAlpha = clamp((2.4 - message.t) * 2, 0, 1);
+      outlined(message.text, CX, 84, "italic 900 30px system-ui", "#ff8a3a", 6);
+      outlined(message.sub, CX, 104, "800 12px system-ui", "#ffffff", 4);
+      ctx.globalAlpha = 1;
+    }
+    if (caught) outlined("PRESO!", CX, 150, "italic 900 44px system-ui", "#ff5a4a", 8);
+  }
+
+  // ---------- Loop ----------
+  const STEP = 1 / 120;
+  let last = performance.now(), acc = 0;
+  function frame(now) {
+    const dt = Math.min(0.1, (now - last) / 1000);
+    last = now;
+    if (isPlaying()) {
+      acc += dt;
+      while (acc >= STEP && isPlaying()) { update(STEP); acc -= STEP; }
+    } else { acc = 0; update(dt); }
+    draw();
+    requestAnimationFrame(frame);
+  }
+  syncControls();
+  showTitle();
+  requestAnimationFrame(frame);
+})();
+</script>
+<script src="../../shared/iniziali.js" data-record="salsicce-best-" data-kind="score"></script>
+</body>
+</html>

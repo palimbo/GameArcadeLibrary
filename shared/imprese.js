@@ -9,6 +9,11 @@
   "use strict";
   // record key prefix of the game (as in trofei.js) → its feats
   const LIST = {
+    "salsicce-best-": [   // ladro-di-salsicce
+      { id: "fuga", name: "La grande fuga", desc: "scappa per 1.000 metri" },
+      { id: "ghiotto", name: "Ghiottone", desc: "raccogli 150 ossi nella stessa partita" },
+      { id: "intoccabile", name: "Intoccabile", desc: "corri 600 metri di fila senza inciampare" },
+    ],
     "fusione-best-": [   // fusione-cosmica
       { id: "catena", name: "Reazione a catena", desc: "provoca 6 fusioni con un solo lancio" },
       { id: "sole", name: "Accendi una stella", desc: "fondi due Giove e crea il Sole" },
