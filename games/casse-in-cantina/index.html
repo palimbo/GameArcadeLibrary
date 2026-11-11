@@ -1,0 +1,643 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no, viewport-fit=cover">
+<title>Casse in Cantina</title>
+<style>
+  :root {
+    --bg: #1a120c;
+    --fg: #f4f6ee;
+    --muted: #f0dcc8;
+    --pink: #f0a04a;
+    --yellow: #7ad8ff;
+    --red: #ff4a3a;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  html, body {
+    height: 100%;
+    background: var(--bg);
+    color: var(--fg);
+    font-family: system-ui, -apple-system, "Segoe UI", sans-serif;
+    overflow: hidden;
+    user-select: none;
+    -webkit-user-select: none;
+    touch-action: none;
+  }
+  #wrap { position: fixed; inset: 0; display: flex; align-items: center; justify-content: center; }
+  canvas { cursor: pointer; display: block; touch-action: none; border-radius: 6px; box-shadow: 0 0 0 2px #6a4a2a, 0 10px 40px rgba(0,0,0,0.6); }
+  #pauseBtn {
+    position: fixed; z-index: 3; display: none; right: 10px; top: calc(10px + env(safe-area-inset-top, 0px));
+    font: 700 13px system-ui, sans-serif; color: var(--fg);
+    background: rgba(0, 0, 0, 0.6); border: 1px solid rgba(244, 246, 238, 0.35);
+    border-radius: 8px; padding: 6px 10px; cursor: pointer;
+  }
+  #touch { display: none !important; }
+  #overlay {
+    position: fixed; inset: 0; z-index: 5;
+    display: flex; flex-direction: column; align-items: center; justify-content: flex-start;
+    gap: 14px; padding: 16px; text-align: center; overflow-y: auto;
+    background: rgba(26, 18, 12, 0.93);
+  }
+  #overlay > :first-child { margin-top: auto; }
+  #overlay > :last-child { margin-bottom: auto; }
+  #overlay.hidden { display: none; }
+  #homeLink {
+    position: fixed; top: calc(10px + env(safe-area-inset-top, 0px)); left: 10px; z-index: 6;
+    font: 600 13px/1 system-ui, sans-serif; color: #fff; text-decoration: none;
+    padding: 8px 12px; border-radius: 999px; background: rgba(0,0,0,.55);
+    border: 1px solid rgba(255,255,255,.25);
+  }
+  #homeLink:hover { background: rgba(0,0,0,.8); }
+  #overlay.hidden ~ #homeLink { display: none; }
+  @media (max-width: 700px) { #overlay { padding-top: calc(52px + env(safe-area-inset-top, 0px)); } }
+  #overlay h1 { font-size: clamp(32px, 10vw, 58px); font-weight: 900; font-style: italic; letter-spacing: 1px; color: var(--pink);
+    text-shadow: 3px 3px 0 #4a2408, 0 0 22px rgba(240,160,74,0.35); }
+  #overlay h2 { font-size: clamp(26px, 7vw, 42px); font-weight: 900; letter-spacing: 2px; color: var(--pink); }
+  #overlay h2.lose { color: var(--red); }
+  #overlay p { max-width: 540px; font-size: clamp(13px, 3.4vw, 16px); line-height: 1.55; }
+  #overlay p.muted { color: var(--muted); }
+  #overlay .pts { display: grid; grid-template-columns: repeat(2, auto); gap: 4px 18px; font-size: 13px; color: var(--muted); text-align: left; max-width: 560px; }
+  #overlay .pts b { color: var(--fg); }
+  #overlay .diff { display: flex; gap: 10px; flex-wrap: wrap; justify-content: center; }
+  #overlay button {
+    font: 800 15px system-ui, sans-serif; letter-spacing: 1.5px; color: var(--fg);
+    background: transparent; cursor: pointer;
+    border: 2px solid rgba(244,246,238,0.3); border-radius: 10px; padding: 9px 16px;
+  }
+  #overlay .mode button { font-size: 12px; padding: 7px 12px; }
+  #overlay .diff button.on { border-color: var(--c); color: var(--c); box-shadow: 0 0 12px var(--c); }
+  #overlay button.start { border-color: var(--pink); color: #2a1400; background: var(--pink); padding: 11px 30px; box-shadow: 0 4px 0 #a8601a; }
+  @media (max-height: 560px) {
+    #overlay { gap: 8px; }
+    #overlay h1 { font-size: 30px; }
+    #overlay p { font-size: 13px; line-height: 1.4; }
+    #overlay .help, #overlay .pts { display: none; }
+  }
+</style>
+</head>
+<body>
+<div id="wrap"><canvas id="game"></canvas></div>
+<div id="touch"></div>
+<button id="pauseBtn" type="button" aria-label="Pausa">❚❚</button>
+<div id="overlay"></div>
+<a id="homeLink" href="../../index.html">← Sala Giochi</a>
+
+
+<script>
+(() => {
+  "use strict";
+
+  const W = 640, H = 360, TOP = 28, TAU = Math.PI * 2;
+  // the cellars, from the first one to the last: the map, and the fewest pushes it can be done in
+  //   # wall · - outside · space floor · . cross · $ crate · * crate on its cross · @ you · + you on a cross
+  const LEVELS = [
+    { r: ["#######", "#@ $ .#", "#######"], b: 2 },
+    { r: ["-######", "-#.   #", "##$## #", "#  @  #", "#  $ .#", "#######"], b: 3 },
+    { r: ["#######", "#.    #", "#   ###", "#   $@#", "#   $ #", "#. #  #", "#######"], b: 9 },
+    { r: ["#######", "#.    #", "#.  # #", "#   # #", "# $ $ #", "# @ # #", "#######"], b: 9 },
+    { r: ["#######", "#    .#", "# $ # #", "#     #", "#   $##", "#. #@ #", "#######"], b: 10 },
+    { r: ["#######", "# .   #", "#@$   #", "## #  #", "-# #$ #", "-##  .#", "--#####"], b: 11 },
+    { r: ["#######", "#. #  #", "#.##$ #", "#  #  #", "#   $@#", "#   ###", "#####--"], b: 13 },
+    { r: ["----####", "#####. #", "# $    #", "#@$    #", "##     #", "#     .#", "########"], b: 10 },
+    { r: ["########", "#  @#  #", "# $$#  #", "##   # #", "#      #", "#.    .#", "########"], b: 10 },
+    { r: ["-####---", "##  ####", "# $    #", "#@$    #", "#      #", "#   . .#", "########"], b: 11 },
+    { r: ["########", "#  #   #", "# $#   #", "#@$    #", "# ##.  #", "#  # . #", "########"], b: 11 },
+    { r: ["########", "#   #  #", "#    $@#", "# $ ##.#", "#    ###", "#   .  #", "########"], b: 12 },
+    { r: ["########", "#.  # @#", "# .  $$#", "#  ##  #", "#   ## #", "# $  # #", "#     .#", "########"], b: 12 },
+    { r: ["#######-", "#  @  #-", "###$# ##", "# $    #", "# $    #", "#     .#", "# . .  #", "########"], b: 13 },
+    { r: ["########", "#      #", "#   $$ #", "#     .#", "##   . #", "-#$#  ##", "-#@ #.#-", "-######-"], b: 13 },
+    { r: ["#######-", "#.    ##", "# $  $ #", "###@$  #", "# #    #", "# .  ###", "### . #-", "--#####-"], b: 13 },
+    { r: ["########", "#@ #   #", "#$$   .#", "#    ###", "# #   .#", "# $    #", "#.     #", "########"], b: 13 },
+    { r: ["########", "#.     #", "#    $ #", "#      #", "#. ### #", "# .$@$ #", "##     #", "-#######"], b: 13 },
+    { r: ["########", "#     .#", "#  $   #", "# $ # ##", "#  #  ##", "###@$..#", "#      #", "########"], b: 13 },
+    { r: ["-#######", "##   . #", "#    . #", "#      #", "# $ .# #", "# $$ # #", "#  @## #", "########"], b: 14 },
+    { r: ["#########", "#    #  #", "# $     #", "#       #", "#   .#  #", "# #$$   #", "## @#.. #", "-########"], b: 14 },
+    { r: ["#########", "#. .  # #", "#    ## #", "#   $   #", "### $   #", "-#@$ #. #", "-###    #", "---######"], b: 14 },
+    { r: ["########-", "#  ..  #-", "#    ####", "#   $   #", "#  ###. #", "# $@$  ##", "##     #-", "-#######-"], b: 14 },
+    { r: ["########-", "#@#    ##", "#$ . ##.#", "#  #  # #", "#   $## #", "#     $ #", "#.      #", "#########"], b: 15 },
+    { r: ["###--####", "# ####@ #", "#   # $##", "##$ #   #", "#   #   #", "# $ #   #", "# ...   #", "#########"], b: 15 },
+    { r: ["-########", "##  # $.#", "#     $@#", "#  ###.##", "##  .#  #", "-#  $ ###", "-#      #", "-########"], b: 17 },
+    { r: ["-########", "-#. .   #", "#### # .#", "# ####$ #", "#       #", "# $   $ #", "# @#    #", "#########"], b: 20 },
+    { r: ["#########", "#. @$   #", "##### $ #", "#       #", "#  ##   #", "# $#    #", "#  # . .#", "#########"], b: 22 },
+    { r: ["######---", "# ## ###-", "# #   .##", "#    .  #", "# $    .#", "#       #", "# $$  $ #", "#  .# @ #", "#########"], b: 16 },
+    { r: ["#########", "#       #", "#  #.#$##", "#    # ##", "#.  $@$ #", "##  #$  #", "##    . #", "#   ###.#", "#####-###"], b: 17 },
+    { r: ["#########", "#       #", "# $.@$ $#", "#  $ #. #", "##  #   #", "#    #  #", "#   #   #", "#   #. .#", "#########"], b: 18 },
+    { r: ["#########", "# .#   .#", "#  # .$@#", "#      .#", "# $### ##", "#  #   #-", "# $   $#-", "#      #-", "########-"], b: 18 },
+    { r: ["#########", "# ##  ..#", "#     ###", "# $#  # #", "#@$   $ #", "# .#  # #", "#  # $# #", "# .     #", "#########"], b: 19 },
+    { r: ["#########", "#   .## #", "# .#   .#", "#     . #", "#   $#  #", "# $ @# ##", "# $  $  #", "###    ##", "--######-"], b: 19 },
+    { r: ["-########", "##    . #", "# $     #", "#@$  #  #", "# $ $#. #", "###  .  #", "### # . #", "#       #", "#########"], b: 20 },
+    { r: ["#########", "#   ##  #", "# $ @## #", "# # $ $ #", "# #     #", "#       #", "# . $   #", "# # .. .#", "#########"], b: 21 },
+    { r: ["####-####-", "# @###  ##", "##$    $ #", "#        #", "#     $. #", "# #      #", "# # $ . .#", "#     .  #", "##########"], b: 17 },
+    { r: ["#######---", "#     ##--", "# $  $@#--", "#     $##-", "##      ##", "##       #", "#   $.   #", "# .   . .#", "##########"], b: 18 },
+    { r: ["##########", "#.    #@ #", "#     #$$#", "# $#     #", "#        #", "##     # #", "#   # $#.#", "#.  # .###", "########--"], b: 19 },
+    { r: ["##########", "# # #  # #", "# # #    #", "#    # $ #", "# ..$  @ #", "###    $ #", "#.   $   #", "#.       #", "##########"], b: 19 },
+    { r: ["-#########", "-#.     .#", "-#       #", "-##.# ####", "-##$@$  #-", "##  # $ ##", "#   $ #  #", "#    .   #", "##########"], b: 19 },
+    { r: ["##########", "#   .   .#", "#   #.  ##", "#      ###", "#  ##  $+#", "# ##   $ #", "#    $ $ #", "#      ###", "########--"], b: 20 },
+    { r: ["##########", "#      . #", "#   $ $  #", "#  #   $##", "#       ##", "#     ## #", "# . .  $@#", "#. ##    #", "##########"], b: 21 },
+    { r: ["##########", "#        #", "## #.    #", "## ##.  .#", "# $ # ## #", "#  # $ $ #", "#    $+# #", "##    ####", "-######---"], b: 24 },
+  ];
+  const DIRS = { up: [0, -1], right: [1, 0], down: [0, 1], left: [-1, 0] };
+
+  const DIFFICULTIES = {
+    facile:    { label: "FACILE",    color: "#7ed87a", desc: "più tempo, e annullare non costa niente", time: 240, add: 50, undo: 0, reset: 0 },
+    normale:   { label: "NORMALE",   color: "#ffd23a", desc: "annullare costa 2 secondi, ricominciare 5", time: 180, add: 40, undo: 2, reset: 5 },
+    difficile: { label: "DIFFICILE", color: "#ff5a5a", desc: "meno tempo; annullare costa 4 secondi, ricominciare 10", time: 150, add: 32, undo: 4, reset: 10 },
+  };
+  const DIFF_IDS = Object.keys(DIFFICULTIES);
+  const DIFF_KEY = "cantina-difficulty";
+  const bestKey = (id) => `cantina-best-${id}`;
+  function store(k, v) { try { localStorage.setItem(k, v); } catch { /* ignore */ } }
+  function load(k) { try { return localStorage.getItem(k); } catch { return null; } }
+  const impresa = (id) => window.dispatchEvent(new CustomEvent("sala:impresa", { detail: id }));
+  const rnd = (a, b) => a + Math.random() * (b - a);
+  const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
+  const hash = (n) => { const x = Math.sin(n * 127.1 + 311.7) * 43758.5453; return x - Math.floor(x); };
+
+  // ---------- Canvas ----------
+  const canvas = document.getElementById("game");
+  const ctx = canvas.getContext("2d");
+  const wrapEl = document.getElementById("wrap");
+  const overlay = document.getElementById("overlay");
+  const touchEl = document.getElementById("touch");
+  const pauseBtn = document.getElementById("pauseBtn");
+  let pxRatio = 1, touchMode = !!(window.matchMedia && matchMedia("(pointer: coarse)").matches);
+  function resize() {
+    touchEl.style.display = "none";
+    wrapEl.style.paddingBottom = "0";
+    const availW = window.innerWidth - 8, availH = window.innerHeight - 8;
+    const s = Math.max(0.2, Math.min(availW / W, availH / H));
+    pxRatio = Math.min(3, s * (window.devicePixelRatio || 1));
+    canvas.style.width = W * s + "px";
+    canvas.style.height = H * s + "px";
+    canvas.width = Math.round(W * pxRatio);
+    canvas.height = Math.round(H * pxRatio);
+  }
+  window.addEventListener("resize", () => syncControls());
+
+  // ---------- Audio ----------
+  let audioCtx = null, noiseBuf = null;
+  function beep(freq, dur, type = "square", vol = 0.04, slide = 0, delay = 0) {
+    if (!audioCtx) return;
+    const t = audioCtx.currentTime + delay;
+    const osc = audioCtx.createOscillator(), gain = audioCtx.createGain();
+    osc.type = type;
+    osc.frequency.setValueAtTime(freq, t);
+    if (slide) osc.frequency.exponentialRampToValueAtTime(Math.max(20, freq + slide), t + dur);
+    gain.gain.setValueAtTime(vol, t);
+    gain.gain.exponentialRampToValueAtTime(0.0001, t + dur);
+    osc.connect(gain).connect(audioCtx.destination);
+    osc.start(t); osc.stop(t + dur + 0.02);
+  }
+  function noise(dur, vol, freq, q = 1, delay = 0, slide = 0) {
+    if (!audioCtx) return;
+    if (!noiseBuf) {
+      noiseBuf = audioCtx.createBuffer(1, audioCtx.sampleRate, audioCtx.sampleRate);
+      const d = noiseBuf.getChannelData(0);
+      for (let i = 0; i < d.length; i++) d[i] = Math.random() * 2 - 1;
+    }
+    const t = audioCtx.currentTime + delay;
+    const src = audioCtx.createBufferSource(), f = audioCtx.createBiquadFilter(), g = audioCtx.createGain();
+    src.buffer = noiseBuf; f.type = "bandpass"; f.frequency.setValueAtTime(freq, t); f.Q.value = q;
+    if (slide) f.frequency.exponentialRampToValueAtTime(Math.max(30, freq + slide), t + dur);
+    g.gain.setValueAtTime(vol, t); g.gain.exponentialRampToValueAtTime(0.0001, t + dur);
+    src.connect(f).connect(g).connect(audioCtx.destination);
+    src.start(t, Math.random() * 0.5, dur + 0.05);
+  }
+  const arp = (notes, gap, d, type = "square", vol = 0.04) => notes.forEach((f, i) => beep(f, d, type, vol, 0, i * gap));
+  let stepAlt = 0;
+  const sfx = {
+    step: () => { stepAlt ^= 1; noise(0.035, 0.02, stepAlt ? 900 : 700, 2); },
+    // wood scraping on stone
+    push: () => { noise(0.13, 0.05, 260, 1.4, 0, 120); noise(0.06, 0.03, 1400, 3); },
+    bump: () => { noise(0.05, 0.05, 180, 1); beep(90, 0.06, "sine", 0.05); },
+    goal: (n) => { beep(660 * Math.pow(1.122, n), 0.12, "triangle", 0.05); beep(990 * Math.pow(1.122, n), 0.14, "sine", 0.03, 0, 0.05); },
+    off: () => beep(330, 0.1, "triangle", 0.035, -80),
+    undo: () => beep(520, 0.06, "sine", 0.03, -200),
+    reset: () => { noise(0.25, 0.05, 600, 0.6, 0, -400); },
+    win: () => { arp([523, 659, 784, 1047, 1319], 0.07, 0.2, "triangle", 0.055); noise(0.3, 0.03, 3000, 0.8, 0.3, -1500); },
+    tick: () => beep(1400, 0.03, "square", 0.025),
+    end: () => arp([523, 466, 415, 392, 330, 262], 0.15, 0.24, "triangle", 0.05),
+  };
+
+  // ---------- State ----------
+  let difficulty = DIFFICULTIES[load(DIFF_KEY)] ? load(DIFF_KEY) : "normale";
+  let diff = DIFFICULTIES[difficulty];
+  let state = "menu", menu = null, pausedFrom = null, clock = 0;
+  let score = 0, bestCache = 0, lv = 0, time = 0, solved = 0, perfects = 0;
+  let map = null, goals = new Set(), crates = [], hero = null, hist = [], moves = 0, pushes = 0, path = [], stepT = 0, won = 0, lvT = 0, clean = true;
+  let parts = [], popups = [], message = null, lastTick = 0, ending = 0, endWhy = "";
+  const isPlaying = () => state === "play";
+  const at = (x, y) => (y >= 0 && y < map.h && x >= 0 && x < map.w ? map.cells[y][x] : "-");
+  const crateAt = (x, y) => crates.find((c) => c.x === x && c.y === y);
+  const onGoal = (c) => goals.has(c.x + "," + c.y);
+  const placed = () => crates.filter(onGoal).length;
+
+  function loadLevel(i) {
+    const L = LEVELS[i], rows = L.r;
+    map = { w: Math.max(...rows.map((r) => r.length)), h: rows.length, cells: [] };
+    goals = new Set(); crates = [];
+    rows.forEach((row, y) => {
+      const line = [];
+      for (let x = 0; x < map.w; x++) {
+        const ch = row[x] || "-";
+        line.push(ch === "#" ? "#" : ch === "-" ? "-" : " ");
+        if (".*+".includes(ch)) goals.add(x + "," + y);
+        if ("$*".includes(ch)) crates.push({ x, y, rx: x, ry: y, glow: ch === "*" ? 1 : 0 });
+        if ("@+".includes(ch)) hero = { x, y, rx: x, ry: y, face: "down", walk: 0, bump: 0 };
+      }
+      map.cells.push(line);
+    });
+    hist = []; moves = 0; pushes = 0; path = []; won = 0; lvT = 0; clean = true;
+    // the board as big as it fits, to the right of the panel
+    map.cs = Math.min(44, Math.floor(484 / map.w), Math.floor(318 / map.h));
+    map.ox = 146 + Math.floor((484 - map.w * map.cs) / 2);
+    map.oy = TOP + 8 + Math.floor((318 - map.h * map.cs) / 2);
+  }
+  function startGame() {
+    if (!audioCtx) { try { audioCtx = new (window.AudioContext || window.webkitAudioContext)(); } catch { audioCtx = null; } }
+    if (audioCtx && audioCtx.state === "suspended") audioCtx.resume();
+    score = 0; lv = 0; time = diff.time; solved = 0; perfects = 0; parts = []; popups = []; ending = 0;
+    loadLevel(0);
+    bestCache = parseInt(load(bestKey(difficulty)), 10) || 0;
+    message = { text: "CANTINA 1", sub: "spingi ogni cassa su una croce", t: 0 };
+    state = "play";
+    menu = null;
+    overlay.classList.add("hidden");
+    syncControls();
+    last = performance.now();
+  }
+
+  // ---------- Moves ----------
+  function step(dir) {
+    if (!isPlaying() || won || ending) return false;
+    const [dx, dy] = DIRS[dir], nx = hero.x + dx, ny = hero.y + dy;
+    hero.face = dir;
+    if (at(nx, ny) !== " ") { hero.bump = 1; sfx.bump(); path = []; return false; }
+    const c = crateAt(nx, ny);
+    if (c) {
+      const bx = nx + dx, by = ny + dy;
+      if (at(bx, by) !== " " || crateAt(bx, by)) { hero.bump = 1; sfx.bump(); path = []; return false; }
+      const was = onGoal(c);
+      hist.push({ hx: hero.x, hy: hero.y, c, cx: c.x, cy: c.y });
+      c.x = bx; c.y = by; pushes++;
+      sfx.push();
+      if (onGoal(c) && !was) { sfx.goal(placed()); c.glow = 0.001; burst(map.ox + (bx + 0.5) * map.cs, map.oy + (by + 0.5) * map.cs, 10, "#ffd23a"); }
+      else if (was && !onGoal(c)) sfx.off();
+    } else {
+      hist.push({ hx: hero.x, hy: hero.y, c: null });
+      sfx.step();
+    }
+    hero.x = nx; hero.y = ny; moves++; hero.walk += 1;
+    if (placed() === crates.length) win();
+    return true;
+  }
+  function undo() {
+    if (!isPlaying() || won || ending || !hist.length) return;
+    const h = hist.pop();
+    hero.x = h.hx; hero.y = h.hy; moves--;
+    if (h.c) { h.c.x = h.cx; h.c.y = h.cy; pushes--; }
+    path = []; clean = false;
+    if (diff.undo) { time -= diff.undo; popups.push({ text: `−${diff.undo} s`, t: 0, x: 66, y: 120, col: "#ff8a6a" }); }
+    sfx.undo();
+  }
+  function restart() {
+    if (!isPlaying() || won || ending || !hist.length) return;
+    loadLevel(lv); clean = false;
+    if (diff.reset) { time -= diff.reset; popups.push({ text: `−${diff.reset} s`, t: 0, x: 66, y: 120, col: "#ff8a6a" }); }
+    sfx.reset();
+  }
+  // walking to a square: the shortest way round the walls and the crates
+  function walkTo(tx, ty) {
+    if (at(tx, ty) !== " " || crateAt(tx, ty)) return false;
+    const key = (x, y) => x + "," + y, prev = new Map([[key(hero.x, hero.y), null]]), q = [[hero.x, hero.y]];
+    while (q.length) {
+      const [x, y] = q.shift();
+      if (x === tx && y === ty) break;
+      for (const d in DIRS) { const [dx, dy] = DIRS[d], nx = x + dx, ny = y + dy, k = key(nx, ny); if (prev.has(k) || at(nx, ny) !== " " || crateAt(nx, ny)) continue; prev.set(k, [x, y, d]); q.push([nx, ny]); }
+    }
+    if (!prev.has(key(tx, ty))) return false;
+    const out = []; let k = key(tx, ty);
+    while (prev.get(k)) { const [x, y, d] = prev.get(k); out.unshift(d); k = key(x, y); }
+    path = out; stepT = 0;
+    return true;
+  }
+  function win() {
+    won = 0.001;
+    const L = LEVELS[lv], n = crates.length, perfect = pushes <= L.b;
+    const gain = 100 * n + 50 * (lv + 1) + (perfect ? 300 : 0) + (clean ? 100 : 0);
+    score += gain; solved++; if (perfect) perfects++;
+    time += diff.add + n * 6;
+    sfx.win();
+    popups.push({ text: `+${gain.toLocaleString("it-IT")}`, t: 0, x: map.ox + map.w * map.cs / 2, y: map.oy + map.h * map.cs / 2 + 30, col: "#ffd23a", big: true });
+    for (const c of crates) burst(map.ox + (c.x + 0.5) * map.cs, map.oy + (c.y + 0.5) * map.cs, 8, ["#ffd23a", "#ff6a5a", "#7ad8ff", "#7ed87a"][Math.floor(Math.random() * 4)], 120);
+    message = { text: perfect ? "PERFETTO!" : "CANTINA IN ORDINE!", sub: `${pushes} spinte${perfect ? " · il minimo possibile" : ` · si poteva in ${L.b}`} · +${diff.add + n * 6} secondi`, t: 0 };
+    if (perfects === 5) impresa("perfetto");
+    if (lv === 9) impresa("dieci");
+    if (clean && n >= 4) impresa("pulito");
+  }
+  function nextLevel() {
+    if (lv + 1 >= LEVELS.length) {   // the last cellar: what is left of the clock becomes points
+      score += Math.floor(time) * 20;
+      ending = 0.001; endWhy = "fine";
+      sfx.win();
+      return;
+    }
+    lv++;
+    loadLevel(lv);
+    message = { text: `CANTINA ${lv + 1}`, sub: `${crates.length} casse`, t: 0 };
+  }
+  function burst(x, y, n, col, sp = 80) {
+    for (let i = 0; i < n; i++) { const a = rnd(0, TAU), v = rnd(0.3, 1) * sp; parts.push({ x, y, vx: Math.cos(a) * v, vy: Math.sin(a) * v - 30, t: 0, life: rnd(0.4, 0.8), col, s: rnd(1.5, 3) }); }
+  }
+
+  // ---------- Update ----------
+  function update(dt) {
+    clock += dt;
+    for (const p of parts) { p.t += dt; p.x += p.vx * dt; p.y += p.vy * dt; p.vy += 200 * dt; }
+    parts = parts.filter((p) => p.t < p.life);
+    for (const p of popups) p.t += dt;
+    popups = popups.filter((p) => p.t < 1.3);
+    if (!isPlaying()) return;
+    if (message) { message.t += dt; if (message.t > 2.2) message = null; }
+    if (ending) { ending += dt; if (ending > (endWhy === "fine" ? 3 : 1.6)) gameOver(); return; }
+    const k = Math.min(1, dt * 18);
+    hero.rx += (hero.x - hero.rx) * k; hero.ry += (hero.y - hero.ry) * k; hero.bump = Math.max(0, hero.bump - dt * 6);
+    for (const c of crates) { c.rx += (c.x - c.rx) * k; c.ry += (c.y - c.ry) * k; c.glow = onGoal(c) ? Math.min(1, c.glow + dt * 4) : Math.max(0, c.glow - dt * 4); }
+    if (won) { won += dt; if (won > 1.6) nextLevel(); return; }
+    lvT += dt;
+    time -= dt;
+    if (time < 10 && Math.ceil(time) !== lastTick) { lastTick = Math.ceil(time); sfx.tick(); }
+    if (time <= 0) { time = 0; ending = 0.001; endWhy = "tempo"; sfx.end(); return; }
+    if (path.length) { stepT -= dt; if (stepT <= 0) { stepT = 0.075; if (!step(path.shift())) path = []; } }
+    else if (held && heldT >= 0) { heldT -= dt; if (heldT <= 0) { heldT = 0.13; step(held); } }
+  }
+
+  function gameOver() {
+    state = "over";
+    const prev = parseInt(load(bestKey(difficulty)), 10) || 0;
+    const record = score > prev;
+    if (record) store(bestKey(difficulty), String(score));
+    const all = endWhy === "fine";
+    menu = () => showOverlay(
+      `<h2 class="${all ? "" : "lose"}">${all ? "TUTTE LE CANTINE IN ORDINE!" : "TEMPO SCADUTO"}</h2>
+       <p>Punteggio: <b>${score.toLocaleString("it-IT")}</b> · ${solved} ${solved === 1 ? "cantina sistemata" : "cantine sistemate"} su ${LEVELS.length} · ${perfects} ${perfects === 1 ? "perfetta" : "perfette"} · ${diff.label}</p>
+       ${record ? "<p style='color:var(--pink)'>★ NUOVO RECORD! ★</p>" : ""}
+       ${difficultyHTML()}
+       <button class="start" data-start>RICOMINCIA</button>`
+    );
+    menu();
+    syncControls();
+  }
+  function togglePause() {
+    if (isPlaying()) {
+      pausedFrom = state; state = "paused"; held = null; path = [];
+      showOverlay(`<h2>PAUSA</h2><button class="start" data-resume>CONTINUA</button><p class="muted">Premi P per continuare</p>`);
+    } else if (state === "paused") {
+      state = pausedFrom; overlay.classList.add("hidden"); last = performance.now();
+    }
+    syncControls();
+  }
+  // the pause menu can end the game (shared/iniziali.js): it ends here the usual way, saving the record
+  window.addEventListener("sala:termina", () => { if (state !== "paused") return; state = pausedFrom; overlay.classList.add("hidden"); endWhy = "tempo"; gameOver(); syncControls(); });
+  function syncControls() {
+    pauseBtn.style.display = isPlaying() && touchMode ? "block" : "none";
+    resize();
+  }
+  pauseBtn.addEventListener("click", () => togglePause());
+  function showOverlay(html) { overlay.innerHTML = html; overlay.classList.remove("hidden"); }
+  function difficultyHTML() {
+    const buttons = DIFF_IDS.map((id) => {
+      const d = DIFFICULTIES[id];
+      return `<button type="button" data-diff="${id}" class="${id === difficulty ? "on" : ""}" style="--c:${d.color}">${d.label}</button>`;
+    }).join("");
+    const best = parseInt(load(bestKey(difficulty)), 10);
+    return `<div class="diff">${buttons}</div><p class="muted">${diff.desc}${best ? ` · Record: ${best.toLocaleString("it-IT")}` : ""}</p>`;
+  }
+  function setDifficulty(id) { if (!DIFFICULTIES[id]) return; difficulty = id; diff = DIFFICULTIES[id]; store(DIFF_KEY, id); if (menu) menu(); }
+  function showTitle() {
+    menu = showTitle;
+    showOverlay(
+      `<h1>CASSE IN CANTINA</h1>
+       <p>Il magazziniere deve mettere in ordine le cantine del palazzo: ogni cassa va spinta su una croce dipinta sul pavimento. Le casse si spingono soltanto, una alla volta: non si tirano. Una cassa finita in un angolo non esce più, quindi pensa prima di spingere, e se sbagli annulla. Il tempo scorre: ogni cantina sistemata te ne regala dell'altro.</p>
+       <div class="pts">
+         <span><b>Punti</b></span><span>100 per cassa e 50 per il numero della cantina · 300 se usi il minimo di spinte possibile · 100 se non annulli mai</span>
+         <span><b>Le cantine</b></span><span>${LEVELS.length}, da una cassa fino a quattro; finirle tutte trasforma il tempo rimasto in punti</span>
+       </div>
+       <p class="muted help">${touchMode ? "Tocca una casella per andarci, tocca accanto a una cassa per spingerla, o striscia il dito · ↶ annulla · ↻ ricomincia · ❚❚ pausa" : "Frecce o WASD per muoverti e spingere · oppure clicca una casella · Z o Backspace annulla · R ricomincia · P pausa"}</p>
+       ${difficultyHTML()}
+       <button class="start" data-start>SCENDI IN CANTINA</button>`
+    );
+  }
+  overlay.addEventListener("click", (e) => {
+    const d = e.target.closest("[data-diff]");
+    if (d) { setDifficulty(d.dataset.diff); return; }
+    if (e.target.closest("[data-start]")) startGame();
+    if (e.target.closest("[data-resume]")) togglePause();
+  });
+
+  // ---------- Input ----------
+  const KEYDIR = { arrowup: "up", w: "up", arrowright: "right", d: "right", arrowdown: "down", s: "down", arrowleft: "left", a: "left" };
+  let held = null, heldT = 0;
+  window.addEventListener("keydown", (e) => {
+    const k = e.key.toLowerCase();
+    if (state === "menu" || state === "over") {
+      if (e.key === "Enter") startGame();
+      else if (["1", "2", "3"].includes(k)) setDifficulty(DIFF_IDS[+k - 1]);
+      return;
+    }
+    if (k === "p" || k === "escape") { if (!e.repeat) togglePause(); return; }
+    if (state === "paused") { if (e.key === "Enter") togglePause(); return; }
+    if (KEYDIR[k]) { e.preventDefault(); if (e.repeat) return; path = []; step(KEYDIR[k]); held = KEYDIR[k]; heldT = 0.26; }
+    else if (k === "z" || k === "u" || k === "backspace") { e.preventDefault(); undo(); }
+    else if (k === "r" && !e.repeat) restart();
+  });
+  window.addEventListener("keyup", (e) => { const k = e.key.toLowerCase(); if (KEYDIR[k] === held) held = null; });
+  window.addEventListener("blur", () => { held = null; if (isPlaying()) togglePause(); });
+  const toGame = (e) => { const r = canvas.getBoundingClientRect(); return [(e.clientX - r.left) * W / r.width, (e.clientY - r.top) * H / r.height]; };
+  const BTN = { undo: { x: 14, y: 236, w: 112, h: 34 }, reset: { x: 14, y: 278, w: 112, h: 34 } };
+  const inBtn = (b, x, y) => x >= b.x && x <= b.x + b.w && y >= b.y && y <= b.y + b.h;
+  let swipe = null;
+  canvas.addEventListener("pointerdown", (e) => {
+    e.preventDefault();
+    if (!isPlaying()) return;
+    const [x, y] = toGame(e);
+    if (inBtn(BTN.undo, x, y)) { undo(); return; }
+    if (inBtn(BTN.reset, x, y)) { restart(); return; }
+    swipe = { id: e.pointerId, x: e.clientX, y: e.clientY, gx: x, gy: y, used: false };
+    try { canvas.setPointerCapture(e.pointerId); } catch { /* ignore */ }
+  });
+  canvas.addEventListener("pointermove", (e) => {
+    if (!swipe || swipe.id !== e.pointerId) return;
+    const dx = e.clientX - swipe.x, dy = e.clientY - swipe.y, min = Math.max(20, canvas.getBoundingClientRect().width * 0.04);
+    if (Math.abs(dx) < min && Math.abs(dy) < min) return;
+    path = []; step(Math.abs(dx) > Math.abs(dy) ? (dx > 0 ? "right" : "left") : dy > 0 ? "down" : "up");
+    swipe.x = e.clientX; swipe.y = e.clientY; swipe.used = true;
+  });
+  canvas.addEventListener("pointerup", (e) => {
+    if (!swipe || swipe.id !== e.pointerId) return;
+    const s = swipe; swipe = null;
+    if (s.used || !isPlaying() || won || ending) return;
+    const cx = Math.floor((s.gx - map.ox) / map.cs), cy = Math.floor((s.gy - map.oy) / map.cs);
+    const ddx = cx - hero.x, ddy = cy - hero.y;
+    // next to you: one step that way (pushing whatever is there); farther: walk there
+    if (Math.abs(ddx) + Math.abs(ddy) === 1) { path = []; step(ddx === 1 ? "right" : ddx === -1 ? "left" : ddy === 1 ? "down" : "up"); }
+    else if (ddx || ddy) walkTo(cx, cy);
+  });
+  canvas.addEventListener("pointercancel", () => { swipe = null; });
+  window.addEventListener("pointerdown", (e) => { if (e.pointerType === "touch" && !touchMode) { touchMode = true; syncControls(); if (menu) menu(); } }, true);
+
+  // ---------- Drawing ----------
+  function outlined(text, x, y, font, fill, lw = 5) {
+    ctx.font = font; ctx.lineWidth = lw; ctx.lineJoin = "round"; ctx.strokeStyle = "#1a120c"; ctx.strokeText(text, x, y); ctx.fillStyle = fill; ctx.fillText(text, x, y);
+  }
+  function drawCellar() {
+    ctx.fillStyle = "#1e1610"; ctx.fillRect(0, 0, W, H);
+    // the old brick wall behind everything
+    for (let y = TOP; y < H; y += 12) for (let x = -((y / 12) % 2) * 14; x < W; x += 28) { ctx.fillStyle = hash(x * 3 + y) > 0.5 ? "#2a1e16" : "#261a12"; ctx.fillRect(x + 1, y + 1, 26, 10); }
+    const g = ctx.createRadialGradient(390, 190, 40, 390, 190, 360);
+    g.addColorStop(0, "rgba(255,190,110,0.1)"); g.addColorStop(1, "rgba(0,0,0,0.45)");
+    ctx.fillStyle = g; ctx.fillRect(0, 0, W, H);
+  }
+  function drawBoard() {
+    const { cs, ox, oy } = map;
+    for (let y = 0; y < map.h; y++) for (let x = 0; x < map.w; x++) {
+      const c = map.cells[y][x], px = ox + x * cs, py = oy + y * cs;
+      if (c === " ") {
+        ctx.fillStyle = (x + y) % 2 ? "#8a7058" : "#94785e"; ctx.fillRect(px, py, cs, cs);
+        ctx.strokeStyle = "rgba(60,40,24,0.35)"; ctx.lineWidth = 1; ctx.strokeRect(px + 0.5, py + 0.5, cs - 1, cs - 1);
+        if (goals.has(x + "," + y)) {   // the painted cross
+          const m = cs * 0.24;
+          ctx.strokeStyle = "rgba(255,210,58,0.85)"; ctx.lineWidth = Math.max(2, cs * 0.09); ctx.lineCap = "round";
+          ctx.beginPath(); ctx.moveTo(px + m, py + m); ctx.lineTo(px + cs - m, py + cs - m); ctx.moveTo(px + cs - m, py + m); ctx.lineTo(px + m, py + cs - m); ctx.stroke();
+          ctx.strokeStyle = "rgba(255,210,58,0.35)"; ctx.lineWidth = 1.5; ctx.beginPath(); ctx.arc(px + cs / 2, py + cs / 2, cs * 0.4, 0, TAU); ctx.stroke();
+        }
+      }
+    }
+    // the walls stand up a little, over the floor
+    for (let y = 0; y < map.h; y++) for (let x = 0; x < map.w; x++) {
+      if (map.cells[y][x] !== "#") continue;
+      const px = ox + x * cs, py = oy + y * cs, h = cs * 0.18;
+      ctx.fillStyle = "#4a3a30"; ctx.fillRect(px, py, cs, cs);
+      ctx.fillStyle = "#6a5648"; ctx.fillRect(px, py - h * 0, cs, cs - h);
+      ctx.strokeStyle = "#3a2c22"; ctx.lineWidth = 1;
+      const bh = (cs - h) / 3;
+      for (let r = 0; r < 3; r++) { ctx.beginPath(); ctx.moveTo(px, py + r * bh); ctx.lineTo(px + cs, py + r * bh); ctx.stroke(); const off = (r + x) % 2 ? cs / 2 : cs / 4; ctx.beginPath(); ctx.moveTo(px + off, py + r * bh); ctx.lineTo(px + off, py + (r + 1) * bh); ctx.stroke(); }
+    }
+  }
+  function drawCrate(c) {
+    const { cs, ox, oy } = map, s = cs * 0.86, px = ox + (c.rx + 0.5) * cs - s / 2, py = oy + (c.ry + 0.5) * cs - s / 2;
+    ctx.fillStyle = "rgba(0,0,0,0.3)"; ctx.fillRect(px + 2, py + 4, s, s);
+    const wood = c.glow > 0.5 ? "#d8a44a" : "#b8783a", dark = c.glow > 0.5 ? "#9a6a20" : "#7a4a22";
+    ctx.fillStyle = wood; ctx.fillRect(px, py, s, s);
+    ctx.strokeStyle = dark; ctx.lineWidth = Math.max(2, s * 0.09); ctx.strokeRect(px + ctx.lineWidth / 2, py + ctx.lineWidth / 2, s - ctx.lineWidth, s - ctx.lineWidth);
+    ctx.beginPath(); ctx.moveTo(px + s * 0.12, py + s * 0.12); ctx.lineTo(px + s * 0.88, py + s * 0.88); ctx.moveTo(px + s * 0.88, py + s * 0.12); ctx.lineTo(px + s * 0.12, py + s * 0.88); ctx.stroke();
+    ctx.fillStyle = dark; for (const [a, b] of [[0.12, 0.12], [0.88, 0.12], [0.12, 0.88], [0.88, 0.88]]) { ctx.beginPath(); ctx.arc(px + s * a, py + s * b, Math.max(1, s * 0.035), 0, TAU); ctx.fill(); }
+    if (c.glow > 0) { ctx.globalAlpha = c.glow * (0.5 + 0.2 * Math.sin(clock * 4)); ctx.strokeStyle = "#ffe68a"; ctx.lineWidth = 2; ctx.strokeRect(px - 1.5, py - 1.5, s + 3, s + 3); ctx.globalAlpha = 1; }
+  }
+  // the cellarman, seen from above and a little in front: cap, moustache, blue apron
+  function drawHero() {
+    const { cs, ox, oy } = map, [fx, fy] = DIRS[hero.face];
+    const x = ox + (hero.rx + 0.5) * cs + fx * hero.bump * cs * 0.08, y = oy + (hero.ry + 0.5) * cs + fy * hero.bump * cs * 0.08;
+    const s = cs / 40, moving = Math.abs(hero.x - hero.rx) + Math.abs(hero.y - hero.ry) > 0.05, leg = moving ? Math.sin(clock * 30) * 3 : 0;
+    ctx.save(); ctx.translate(x, y); ctx.scale(s, s);
+    ctx.fillStyle = "rgba(0,0,0,0.3)"; ctx.beginPath(); ctx.ellipse(0, 14, 12, 4, 0, 0, TAU); ctx.fill();
+    ctx.fillStyle = "#3a2a20"; ctx.fillRect(-7, 6 + leg, 5, 9); ctx.fillRect(2, 6 - leg, 5, 9);
+    ctx.fillStyle = "#e8e0d0"; ctx.beginPath(); ctx.roundRect(-10, -8, 20, 17, 5); ctx.fill();
+    ctx.fillStyle = "#3a5aa8"; ctx.beginPath(); ctx.roundRect(-8, -3, 16, 14, 3); ctx.fill();
+    // arms reach out the way he faces
+    ctx.strokeStyle = "#e8e0d0"; ctx.lineWidth = 4.5; ctx.lineCap = "round"; ctx.beginPath();
+    if (fx) { ctx.moveTo(fx * 7, -4); ctx.lineTo(fx * 15, -1); ctx.moveTo(-fx * 8, -4); ctx.lineTo(-fx * 10, 4); }
+    else if (fy < 0) { ctx.moveTo(-8, -5); ctx.lineTo(-9, -14); ctx.moveTo(8, -5); ctx.lineTo(9, -14); }
+    else { ctx.moveTo(-9, -4); ctx.lineTo(-12, 5); ctx.moveTo(9, -4); ctx.lineTo(12, 5); }
+    ctx.stroke();
+    ctx.fillStyle = "#f4c8a0"; ctx.beginPath(); ctx.arc(0, -15, 8, 0, TAU); ctx.fill();
+    if (fy >= 0) {
+      ctx.fillStyle = "#1a1a1a"; ctx.beginPath(); ctx.arc(-3 + fx * 2, -15, 1.3, 0, TAU); ctx.arc(3 + fx * 2, -15, 1.3, 0, TAU); ctx.fill();
+      ctx.fillStyle = "#5a3a22"; ctx.beginPath(); ctx.ellipse(fx * 2, -11, 5, 1.8, 0, 0, TAU); ctx.fill();
+    }
+    ctx.fillStyle = "#a83a2a"; ctx.beginPath(); ctx.arc(0, -18, 8.5, Math.PI, TAU); ctx.fill(); ctx.fillRect(-8.5, -19, 17, 3);
+    ctx.fillStyle = "#8a2a1e"; if (fy >= 0) ctx.fillRect(-6 + fx * 4, -17, 12, 2.5);
+    ctx.restore();
+  }
+  function drawPanel() {
+    ctx.fillStyle = "rgba(20,14,10,0.85)"; ctx.fillRect(0, TOP, 140, H - TOP);
+    ctx.textAlign = "center"; ctx.textBaseline = "middle";
+    ctx.fillStyle = "#f0dcc8"; ctx.font = "800 9px system-ui"; ctx.fillText("CANTINA", 70, 46);
+    ctx.fillStyle = "#ffffff"; ctx.font = "900 26px system-ui"; ctx.fillText(`${lv + 1}`, 70, 68);
+    ctx.fillStyle = "#f0dcc8"; ctx.font = "700 9px system-ui"; ctx.fillText(`di ${LEVELS.length}`, 70, 86);
+    // the clock
+    const low = time < 20, t = Math.max(0, Math.ceil(time));
+    ctx.fillStyle = low && Math.floor(clock * 4) % 2 ? "#ff5a4a" : "#ffffff"; ctx.font = "900 22px system-ui";
+    ctx.fillText(`${Math.floor(t / 60)}:${String(t % 60).padStart(2, "0")}`, 70, 120);
+    ctx.fillStyle = "#f0dcc8"; ctx.font = "700 9px system-ui"; ctx.fillText("tempo", 70, 137);
+    // the crates in place
+    const n = crates.length, done = placed(), bw = Math.min(16, 100 / n);
+    for (let i = 0; i < n; i++) { ctx.fillStyle = i < done ? "#ffd23a" : "rgba(255,255,255,0.15)"; ctx.fillRect(70 - n * bw / 2 + i * bw + 1, 158, bw - 2, 12); }
+    ctx.fillStyle = "#f0dcc8"; ctx.font = "700 9px system-ui"; ctx.fillText(`casse a posto ${done}/${n}`, 70, 182);
+    ctx.fillStyle = "#ffffff"; ctx.font = "800 10px system-ui"; ctx.fillText(`spinte ${pushes}`, 70, 202);
+    ctx.fillStyle = "#f0dcc8"; ctx.font = "700 9px system-ui"; ctx.fillText(`il minimo: ${LEVELS[lv].b}`, 70, 216);
+    for (const [b, label, cost] of [[BTN.undo, "↶ ANNULLA", diff.undo], [BTN.reset, "↻ RICOMINCIA", diff.reset]]) {
+      const on = hist.length && !won;
+      ctx.globalAlpha = on ? 1 : 0.4;
+      ctx.fillStyle = "rgba(255,255,255,0.08)"; ctx.strokeStyle = "#f0a04a"; ctx.lineWidth = 1.5; ctx.beginPath(); ctx.roundRect(b.x, b.y, b.w, b.h, 8); ctx.fill(); ctx.stroke();
+      ctx.fillStyle = "#ffffff"; ctx.font = "900 11px system-ui"; ctx.fillText(label, b.x + b.w / 2, b.y + b.h / 2 - (cost ? 4 : 0));
+      if (cost) { ctx.fillStyle = "#ff9a7a"; ctx.font = "700 8px system-ui"; ctx.fillText(`−${cost} s`, b.x + b.w / 2, b.y + b.h / 2 + 9); }
+      ctx.globalAlpha = 1;
+    }
+    ctx.fillStyle = "rgba(240,220,200,0.6)"; ctx.font = "700 8px system-ui"; ctx.fillText(touchMode ? "tocca o striscia" : "Z annulla · R ricomincia", 70, 330);
+    ctx.textBaseline = "alphabetic";
+  }
+  function drawHud() {
+    ctx.fillStyle = "rgba(26,18,12,0.95)"; ctx.fillRect(0, 0, W, TOP);
+    ctx.textBaseline = "middle"; ctx.textAlign = "left";
+    ctx.fillStyle = "#ffffff"; ctx.font = "900 15px system-ui"; ctx.fillText(score.toLocaleString("it-IT"), 10, 14);
+    ctx.fillStyle = "#f0dcc8"; ctx.font = "700 9px system-ui"; ctx.fillText(`REC ${Math.max(bestCache, score).toLocaleString("it-IT")}`, 90, 9);
+    ctx.fillStyle = "#f0a04a"; ctx.font = "900 9px system-ui"; ctx.fillText(diff.label, 90, 20);
+    ctx.textAlign = "center"; ctx.fillStyle = "#ffffff"; ctx.font = "800 11px system-ui";
+    ctx.fillText(`${solved} ${solved === 1 ? "cantina sistemata" : "cantine sistemate"} · ${perfects} ${perfects === 1 ? "perfetta" : "perfette"}`, 390, 14);
+    ctx.textBaseline = "alphabetic";
+  }
+  function draw() {
+    ctx.setTransform(pxRatio, 0, 0, pxRatio, 0, 0);
+    drawCellar();
+    if (state === "menu") return;
+    drawBoard();
+    for (const c of crates) drawCrate(c);
+    drawHero();
+    for (const p of parts) { ctx.globalAlpha = 1 - p.t / p.life; ctx.fillStyle = p.col; ctx.beginPath(); ctx.arc(p.x, p.y, p.s, 0, TAU); ctx.fill(); }
+    ctx.globalAlpha = 1;
+    drawPanel();
+    drawHud();
+    ctx.textAlign = "center";
+    for (const p of popups) { ctx.globalAlpha = clamp((1.3 - p.t) * 3, 0, 1); outlined(p.text, p.x, p.y - p.t * 18, p.big ? "900 20px system-ui" : "900 12px system-ui", p.col, 4); }
+    ctx.globalAlpha = 1;
+    if (message) {
+      ctx.globalAlpha = clamp((2.2 - message.t) * 2.5, 0, 1);
+      outlined(message.text, 388, 70, "italic 900 26px system-ui", "#f0a04a", 6);
+      outlined(message.sub, 388, 90, "800 11px system-ui", "#ffffff", 4);
+      ctx.globalAlpha = 1;
+    }
+    if (ending) {
+      ctx.fillStyle = `rgba(20,14,10,${Math.min(0.6, ending)})`; ctx.fillRect(0, TOP, W, H - TOP);
+      outlined(endWhy === "fine" ? "TUTTE IN ORDINE!" : "TEMPO SCADUTO!", W / 2, 180, "italic 900 36px system-ui", endWhy === "fine" ? "#ffd23a" : "#ff5a4a", 8);
+    }
+  }
+
+  // ---------- Loop ----------
+  let last = performance.now();
+  function frame(now) {
+    const dt = Math.min(0.1, (now - last) / 1000);
+    last = now;
+    update(dt);
+    draw();
+    requestAnimationFrame(frame);
+  }
+  syncControls();
+  showTitle();
+  requestAnimationFrame(frame);
+})();
+</script>
+<script src="../../shared/iniziali.js" data-record="cantina-best-" data-kind="score"></script>
+</body>
+</html>

@@ -9,6 +9,11 @@
   "use strict";
   // record key prefix of the game (as in trofei.js) → its feats
   const LIST = {
+    "cantina-best-": [   // casse-in-cantina
+      { id: "perfetto", name: "Cinque perfette", desc: "sistema 5 cantine con il minimo di spinte nella stessa partita" },
+      { id: "dieci", name: "Dieci cantine", desc: "sistema la decima cantina" },
+      { id: "pulito", name: "Senza ripensamenti", desc: "sistema una cantina da 4 casse senza annullare e senza ricominciare" },
+    ],
     "pollaio-best-": [   // guardia-del-pollaio
       { id: "orso", name: "Via l'orso", desc: "scaccia un orso" },
       { id: "intatta", name: "Notte tranquilla", desc: "supera una notte, dalla terza in poi, senza perdere neanche un difensore" },
