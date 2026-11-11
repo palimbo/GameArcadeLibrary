@@ -9,6 +9,11 @@
   "use strict";
   // record key prefix of the game (as in trofei.js) → its feats
   const LIST = {
+    "pollaio-best-": [   // guardia-del-pollaio
+      { id: "orso", name: "Via l'orso", desc: "scaccia un orso" },
+      { id: "intatta", name: "Notte tranquilla", desc: "supera una notte, dalla terza in poi, senza perdere neanche un difensore" },
+      { id: "dieci", name: "Dieci notti", desc: "supera la decima notte" },
+    ],
     "tuttogas-best-": [   // colline-a-tutto-gas
       { id: "capriola", name: "Capriola", desc: "fai un giro completo in aria e atterra sulle ruote" },
       { id: "luna", name: "Fin sulla Luna", desc: "arriva alla Luna, 1.600 metri dopo la partenza" },
