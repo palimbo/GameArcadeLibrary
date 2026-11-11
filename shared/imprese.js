@@ -9,6 +9,11 @@
   "use strict";
   // record key prefix of the game (as in trofei.js) → its feats
   const LIST = {
+    "tuttogas-best-": [   // colline-a-tutto-gas
+      { id: "capriola", name: "Capriola", desc: "fai un giro completo in aria e atterra sulle ruote" },
+      { id: "luna", name: "Fin sulla Luna", desc: "arriva alla Luna, 1.600 metri dopo la partenza" },
+      { id: "goccia", name: "All'ultima goccia", desc: "prendi una tanica con meno del 5% di benzina nel serbatoio" },
+    ],
     "briscola-best-": [   // briscola
       { id: "ottanta", name: "Ottanta", desc: "fai almeno 80 punti in una mano" },
       { id: "netto", name: "Due a zero", desc: "batti un avversario senza perdere neanche una mano" },
