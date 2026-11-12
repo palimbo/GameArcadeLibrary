@@ -1,0 +1,529 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no, viewport-fit=cover">
+<title>Il Lanciatore di Coltelli</title>
+<style>
+  :root {
+    --bg: #1a0a10;
+    --fg: #f4f6ee;
+    --muted: #f0d0d0;
+    --pink: #ffd23a;
+    --yellow: #7ad8ff;
+    --red: #ff4a3a;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  html, body {
+    height: 100%;
+    background: var(--bg);
+    color: var(--fg);
+    font-family: system-ui, -apple-system, "Segoe UI", sans-serif;
+    overflow: hidden;
+    user-select: none;
+    -webkit-user-select: none;
+    touch-action: none;
+  }
+  #wrap { position: fixed; inset: 0; display: flex; align-items: center; justify-content: center; }
+  canvas { cursor: pointer; display: block; touch-action: none; border-radius: 6px; box-shadow: 0 0 0 2px #7a2a3a, 0 10px 40px rgba(0,0,0,0.6); }
+  #pauseBtn {
+    position: fixed; z-index: 3; display: none; right: 10px; top: calc(10px + env(safe-area-inset-top, 0px));
+    font: 700 13px system-ui, sans-serif; color: var(--fg);
+    background: rgba(0, 0, 0, 0.6); border: 1px solid rgba(244, 246, 238, 0.35);
+    border-radius: 8px; padding: 6px 10px; cursor: pointer;
+  }
+  #touch { display: none !important; }
+  #overlay {
+    position: fixed; inset: 0; z-index: 5;
+    display: flex; flex-direction: column; align-items: center; justify-content: flex-start;
+    gap: 14px; padding: 16px; text-align: center; overflow-y: auto;
+    background: rgba(26, 10, 16, 0.93);
+  }
+  #overlay > :first-child { margin-top: auto; }
+  #overlay > :last-child { margin-bottom: auto; }
+  #overlay.hidden { display: none; }
+  #homeLink {
+    position: fixed; top: calc(10px + env(safe-area-inset-top, 0px)); left: 10px; z-index: 6;
+    font: 600 13px/1 system-ui, sans-serif; color: #fff; text-decoration: none;
+    padding: 8px 12px; border-radius: 999px; background: rgba(0,0,0,.55);
+    border: 1px solid rgba(255,255,255,.25);
+  }
+  #homeLink:hover { background: rgba(0,0,0,.8); }
+  #overlay.hidden ~ #homeLink { display: none; }
+  @media (max-width: 700px) { #overlay { padding-top: calc(52px + env(safe-area-inset-top, 0px)); } }
+  #overlay h1 { font-size: clamp(32px, 10vw, 58px); font-weight: 900; font-style: italic; letter-spacing: 1px; color: var(--pink);
+    text-shadow: 3px 3px 0 #5a1020, 0 0 22px rgba(255,210,58,0.35); }
+  #overlay h2 { font-size: clamp(26px, 7vw, 42px); font-weight: 900; letter-spacing: 2px; color: var(--pink); }
+  #overlay h2.lose { color: var(--red); }
+  #overlay p { max-width: 540px; font-size: clamp(13px, 3.4vw, 16px); line-height: 1.55; }
+  #overlay p.muted { color: var(--muted); }
+  #overlay .pts { display: grid; grid-template-columns: repeat(2, auto); gap: 4px 18px; font-size: 13px; color: var(--muted); text-align: left; max-width: 560px; }
+  #overlay .pts b { color: var(--fg); }
+  #overlay .diff { display: flex; gap: 10px; flex-wrap: wrap; justify-content: center; }
+  #overlay button {
+    font: 800 15px system-ui, sans-serif; letter-spacing: 1.5px; color: var(--fg);
+    background: transparent; cursor: pointer;
+    border: 2px solid rgba(244,246,238,0.3); border-radius: 10px; padding: 9px 16px;
+  }
+  #overlay .mode button { font-size: 12px; padding: 7px 12px; }
+  #overlay .diff button.on { border-color: var(--c); color: var(--c); box-shadow: 0 0 12px var(--c); }
+  #overlay button.start { border-color: var(--pink); color: #2a1400; background: var(--pink); padding: 11px 30px; box-shadow: 0 4px 0 #b8901a; }
+  @media (max-height: 560px) {
+    #overlay { gap: 8px; }
+    #overlay h1 { font-size: 30px; }
+    #overlay p { font-size: 13px; line-height: 1.4; }
+    #overlay .help, #overlay .pts { display: none; }
+  }
+</style>
+</head>
+<body>
+<div id="wrap"><canvas id="game"></canvas></div>
+<div id="touch"></div>
+<button id="pauseBtn" type="button" aria-label="Pausa">❚❚</button>
+<div id="overlay"></div>
+<a id="homeLink" href="../../index.html">← Sala Giochi</a>
+
+
+<script>
+(() => {
+  "use strict";
+
+  const W = 640, H = 360, TOP = 28, TAU = Math.PI * 2;
+  const CX = 320, CY = 136, R = 58;          // the wheel
+  const KNIFE_Y = 318, KNIFE_SP = 1500, KNIFE_LEN = 46, DEPTH = 13;
+  const HIT = 0.17;                           // how close two knives can be on the rim, in radians
+  const APPLE = 0.17;
+  // every fifth target is a special one, with its own look and its own way of turning
+  const BOSSES = [
+    { name: "L'ANGURIA", skin: "anguria" },
+    { name: "LA PIZZA", skin: "pizza" },
+    { name: "IL FORMAGGIO", skin: "formaggio" },
+    { name: "LA LUNA", skin: "luna" },
+  ];
+
+  const DIFFICULTIES = {
+    facile:    { label: "FACILE",    color: "#7ed87a", desc: "tre errori concessi e ruote più lente", lives: 3, sp: 0.85 },
+    normale:   { label: "NORMALE",   color: "#ffd23a", desc: "due errori concessi", lives: 2, sp: 1 },
+    difficile: { label: "DIFFICILE", color: "#ff5a5a", desc: "al primo coltello che rimbalza è finita", lives: 1, sp: 1.12 },
+  };
+  const DIFF_IDS = Object.keys(DIFFICULTIES);
+  const DIFF_KEY = "coltelli-difficulty";
+  const bestKey = (id) => `coltelli-best-${id}`;
+  function store(k, v) { try { localStorage.setItem(k, v); } catch { /* ignore */ } }
+  function load(k) { try { return localStorage.getItem(k); } catch { return null; } }
+  const impresa = (id) => window.dispatchEvent(new CustomEvent("sala:impresa", { detail: id }));
+  const rnd = (a, b) => a + Math.random() * (b - a);
+  const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
+  const angDist = (a, b) => { const d = ((a - b) % TAU + TAU) % TAU; return d > Math.PI ? TAU - d : d; };
+
+  // ---------- Canvas ----------
+  const canvas = document.getElementById("game");
+  const ctx = canvas.getContext("2d");
+  const wrapEl = document.getElementById("wrap");
+  const overlay = document.getElementById("overlay");
+  const touchEl = document.getElementById("touch");
+  const pauseBtn = document.getElementById("pauseBtn");
+  let pxRatio = 1, touchMode = !!(window.matchMedia && matchMedia("(pointer: coarse)").matches);
+  function resize() {
+    touchEl.style.display = "none";
+    wrapEl.style.paddingBottom = "0";
+    const availW = window.innerWidth - 8, availH = window.innerHeight - 8;
+    const s = Math.max(0.2, Math.min(availW / W, availH / H));
+    pxRatio = Math.min(3, s * (window.devicePixelRatio || 1));
+    canvas.style.width = W * s + "px";
+    canvas.style.height = H * s + "px";
+    canvas.width = Math.round(W * pxRatio);
+    canvas.height = Math.round(H * pxRatio);
+  }
+  window.addEventListener("resize", () => syncControls());
+
+  // ---------- Audio ----------
+  let audioCtx = null, noiseBuf = null;
+  function beep(freq, dur, type = "square", vol = 0.04, slide = 0, delay = 0) {
+    if (!audioCtx) return;
+    const t = audioCtx.currentTime + delay;
+    const osc = audioCtx.createOscillator(), gain = audioCtx.createGain();
+    osc.type = type;
+    osc.frequency.setValueAtTime(freq, t);
+    if (slide) osc.frequency.exponentialRampToValueAtTime(Math.max(20, freq + slide), t + dur);
+    gain.gain.setValueAtTime(vol, t);
+    gain.gain.exponentialRampToValueAtTime(0.0001, t + dur);
+    osc.connect(gain).connect(audioCtx.destination);
+    osc.start(t); osc.stop(t + dur + 0.02);
+  }
+  function noise(dur, vol, freq, q = 1, delay = 0, slide = 0) {
+    if (!audioCtx) return;
+    if (!noiseBuf) {
+      noiseBuf = audioCtx.createBuffer(1, audioCtx.sampleRate, audioCtx.sampleRate);
+      const d = noiseBuf.getChannelData(0);
+      for (let i = 0; i < d.length; i++) d[i] = Math.random() * 2 - 1;
+    }
+    const t = audioCtx.currentTime + delay;
+    const src = audioCtx.createBufferSource(), f = audioCtx.createBiquadFilter(), g = audioCtx.createGain();
+    src.buffer = noiseBuf; f.type = "bandpass"; f.frequency.setValueAtTime(freq, t); f.Q.value = q;
+    if (slide) f.frequency.exponentialRampToValueAtTime(Math.max(30, freq + slide), t + dur);
+    g.gain.setValueAtTime(vol, t); g.gain.exponentialRampToValueAtTime(0.0001, t + dur);
+    src.connect(f).connect(g).connect(audioCtx.destination);
+    src.start(t, Math.random() * 0.5, dur + 0.05);
+  }
+  const arp = (notes, gap, d, type = "square", vol = 0.04) => notes.forEach((f, i) => beep(f, d, type, vol, 0, i * gap));
+  const sfx = {
+    throw: () => noise(0.09, 0.05, 2600, 1.2, 0, 2400),
+    // steel into wood: a thud and the blade still humming
+    stick: (n) => { noise(0.06, 0.12, 320, 1.2); beep(150, 0.07, "sine", 0.09, -60); beep(1900 + n * 40, 0.18, "sine", 0.018, -200, 0.02); },
+    clang: () => { beep(2400, 0.25, "square", 0.05, -900); beep(3100, 0.3, "triangle", 0.04, -1200); noise(0.15, 0.08, 4000, 2); },
+    apple: () => { noise(0.1, 0.07, 900, 0.8, 0, -500); arp([784, 1175], 0.05, 0.1, "triangle", 0.045); },
+    crack: () => { noise(0.45, 0.14, 500, 0.5, 0, -300); beep(110, 0.3, "sawtooth", 0.07, -60); arp([523, 659, 784, 1047], 0.06, 0.16, "triangle", 0.05); },
+    boss: () => { beep(98, 0.5, "sawtooth", 0.07); arp([392, 370, 392, 523], 0.14, 0.2, "square", 0.045); },
+    drum: () => { for (let i = 0; i < 10; i++) noise(0.04, 0.03 + i * 0.004, 240, 1.5, i * 0.05); },
+    end: () => arp([523, 466, 415, 392, 330, 262], 0.15, 0.24, "triangle", 0.05),
+  };
+
+  // ---------- State ----------
+  let difficulty = DIFFICULTIES[load(DIFF_KEY)] ? load(DIFF_KEY) : "normale";
+  let diff = DIFFICULTIES[difficulty];
+  let state = "menu", menu = null, pausedFrom = null, clock = 0;
+  let score = 0, bestCache = 0, stage = 0, lives = 0, apples = 0;
+  let wheel = null, flying = null, cool = 0, left = 0, need = 0, missed = false, broken = 0, pieces = [], loose = [], parts = [], popups = [], message = null, shake = 0, ending = 0, streak = 0;
+  const isPlaying = () => state === "play";
+  const isBoss = (s) => s % 5 === 0;
+
+  // how fast the wheel turns at a moment of its stage: steady, in waves, back and forth, in jerks
+  function speedAt(w, t) {
+    const b = w.base;
+    switch (w.pattern) {
+      case 1: return b * (0.55 + 0.6 * Math.sin(t * 1.4));
+      case 2: return b * 1.35 * Math.sin(t * 0.95);
+      case 3: return b * 1.7 * Math.pow(Math.max(0, Math.sin(t * 1.5)), 0.6);
+      case 4: return b * (0.35 + 1.5 * Math.abs(Math.sin(t * 0.8)) * (Math.sin(t * 0.4) > 0 ? 1 : -1));
+      case 5: return b * 1.2 * (Math.sin(t * 1.1) + 0.6 * Math.sin(t * 2.7));
+      default: return b;
+    }
+  }
+  function newStage() {
+    stage++;
+    const boss = isBoss(stage), n = Math.floor(stage / 5);
+    need = boss ? Math.min(7 + n, 9) : Math.min(5 + Math.floor(stage * 0.5), 9);
+    const obst = boss ? Math.min(n, 2) : Math.min(Math.floor((stage - 1) / 3), 2);   // never more than eleven knives on a wheel: there is always room
+    const base = (1.5 + Math.min(1.5, stage * 0.07)) * diff.sp * (Math.random() < 0.5 ? 1 : -1);
+    const pattern = boss ? [2, 4, 5, 4][(n - 1) % 4] : stage <= 2 ? 0 : [0, 1, 0, 2, 3, 1, 4][(stage - 3) % 7];
+    wheel = { rot: rnd(0, TAU), t: rnd(0, 6), base, pattern, knives: [], apples: [], boss: boss ? BOSSES[(n - 1) % BOSSES.length] : null, kick: 0, wood: stage % 3 };
+    const taken = [];
+    const place = (gap) => { for (let i = 0; i < 60; i++) { const a = rnd(0, TAU); if (taken.every((b) => angDist(a, b) > gap)) { taken.push(a); return a; } } return null; };
+    for (let i = 0; i < obst; i++) { const a = place(0.75); if (a !== null) wheel.knives.push({ a, old: true }); }
+    const na = Math.random() < 0.75 ? 1 + (Math.random() < 0.3 ? 1 : 0) : 0;
+    for (let i = 0; i < na; i++) { const a = place(0.45); if (a !== null) wheel.apples.push({ a }); }
+    left = need; missed = false; broken = 0; flying = null; cool = 0.25;
+    message = { text: boss ? wheel.boss.name : `BERSAGLIO ${stage}`, sub: boss ? "il numero speciale" : `${need} coltelli da piantare`, t: 0 };
+    if (boss) sfx.boss();
+  }
+  function startGame() {
+    if (!audioCtx) { try { audioCtx = new (window.AudioContext || window.webkitAudioContext)(); } catch { audioCtx = null; } }
+    if (audioCtx && audioCtx.state === "suspended") audioCtx.resume();
+    score = 0; stage = 0; lives = diff.lives; apples = 0; pieces = []; loose = []; parts = []; popups = []; shake = 0; ending = 0; streak = 0;
+    newStage();
+    bestCache = parseInt(load(bestKey(difficulty)), 10) || 0;
+    state = "play";
+    menu = null;
+    overlay.classList.add("hidden");
+    syncControls();
+    last = performance.now();
+  }
+  function burst(x, y, n, col, sp = 120) {
+    for (let i = 0; i < n; i++) { const a = rnd(0, TAU), v = rnd(0.3, 1) * sp; parts.push({ x, y, vx: Math.cos(a) * v, vy: Math.sin(a) * v - 40, t: 0, life: rnd(0.3, 0.7), col, s: rnd(1.5, 3.2) }); }
+  }
+  function throwKnife() {
+    if (!isPlaying() || ending || broken || flying || cool > 0 || left <= 0) return;
+    flying = { y: KNIFE_Y };
+    sfx.throw();
+  }
+  // the knife reaches the rim, at the bottom of the wheel
+  function land() {
+    const a = ((Math.PI / 2 - wheel.rot) % TAU + TAU) % TAU;
+    flying = null; cool = 0.11;
+    if (wheel.knives.some((k) => angDist(k.a, a) < HIT)) {   // steel on steel: it bounces away
+      sfx.clang(); shake = 0.35; missed = true; streak = 0; lives--;
+      loose.push({ x: CX, y: CY + R + KNIFE_LEN / 2 - 4, vx: rnd(-160, 160), vy: 140, rot: 0, vr: rnd(8, 16) * (Math.random() < 0.5 ? -1 : 1), t: 0 });
+      burst(CX, CY + R, 12, "#fff4c0", 200);
+      popups.push({ text: lives > 0 ? "CLANG!" : "CLANG! È FINITA", t: 0, x: CX, y: CY + R + 46, col: "#ff6a5a" });
+      if (lives <= 0) { ending = 0.001; sfx.end(); }
+      return;
+    }
+    wheel.knives.push({ a, born: clock }); wheel.kick = 1; left--; streak++;
+    const gain = 10 + stage + Math.min(20, streak);
+    score += gain;
+    sfx.stick(need - left);
+    burst(CX, CY + R, 5, "#d8a868", 90);
+    const ap = wheel.apples.find((p) => !p.gone && angDist(p.a, a) < APPLE);
+    if (ap) { ap.gone = true; apples++; score += 50; sfx.apple(); burst(CX, CY + R + 8, 14, "#ff4a3a", 160); burst(CX, CY + R + 8, 6, "#fff4d8", 120); popups.push({ text: "MELA! +50", t: 0, x: CX + 40, y: CY + R + 30, col: "#ff8a6a" }); if (apples === 10) impresa("mele"); }
+    if (left <= 0) clearStage();
+  }
+  function clearStage() {
+    const boss = !!wheel.boss, bonus = 100 + 20 * stage + (boss ? 500 : 0) + (missed ? 0 : 100);
+    score += bonus; broken = 0.001; shake = 0.4;
+    sfx.crack();
+    popups.push({ text: `${missed ? "" : "PERFETTO! "}+${bonus.toLocaleString("it-IT")}`, t: 0, x: CX, y: CY, col: "#ffd23a", big: true });
+    // the target flies apart, and the knives with it
+    for (let i = 0; i < 6; i++) { const a = wheel.rot + i * TAU / 6 + TAU / 12; pieces.push({ i, a0: wheel.rot + i * TAU / 6, x: CX, y: CY, vx: Math.cos(a) * rnd(120, 220), vy: Math.sin(a) * rnd(120, 220) - 120, rot: 0, vr: rnd(-6, 6), t: 0, skin: wheel.boss ? wheel.boss.skin : "legno" + wheel.wood }); }
+    for (const k of wheel.knives) { const a = k.a + wheel.rot; loose.push({ x: CX + Math.cos(a) * (R + 10), y: CY + Math.sin(a) * (R + 10), vx: Math.cos(a) * rnd(100, 260), vy: Math.sin(a) * rnd(100, 260) - 160, rot: a - Math.PI / 2, vr: rnd(-12, 12), t: 0 }); }
+    burst(CX, CY, 30, "#d8a868", 260);
+    if (boss && stage === 5) impresa("anguria");
+    if (stage === 10) impresa("dieci");
+  }
+
+  // ---------- Update ----------
+  function update(dt) {
+    clock += dt;
+    for (const p of parts) { p.t += dt; p.x += p.vx * dt; p.y += p.vy * dt; p.vy += 420 * dt; }
+    parts = parts.filter((p) => p.t < p.life);
+    for (const p of popups) p.t += dt;
+    popups = popups.filter((p) => p.t < 1.2);
+    for (const k of [...loose, ...pieces]) { k.t += dt; k.x += k.vx * dt; k.y += k.vy * dt; k.vy += 900 * dt; k.rot += k.vr * dt; }
+    loose = loose.filter((k) => k.y < H + 60); pieces = pieces.filter((k) => k.y < H + 90);
+    shake = Math.max(0, shake - dt);
+    if (!isPlaying()) return;
+    if (message) { message.t += dt; if (message.t > 1.8) message = null; }
+    if (ending) { ending += dt; if (ending > 1.5) gameOver(); return; }
+    if (broken) { broken += dt; if (broken > 1) newStage(); return; }
+    wheel.t += dt; wheel.rot += speedAt(wheel, wheel.t) * dt; wheel.kick = Math.max(0, wheel.kick - dt * 9);
+    cool = Math.max(0, cool - dt);
+    if (flying) { flying.y -= KNIFE_SP * dt; if (flying.y - KNIFE_LEN / 2 <= CY + R - DEPTH) land(); }
+  }
+
+  function gameOver() {
+    state = "over";
+    const prev = parseInt(load(bestKey(difficulty)), 10) || 0;
+    const record = score > prev;
+    if (record) store(bestKey(difficulty), String(score));
+    menu = () => showOverlay(
+      `<h2 class="lose">GIÙ IL SIPARIO</h2>
+       <p>Punteggio: <b>${score.toLocaleString("it-IT")}</b> · ${stage - 1} ${stage - 1 === 1 ? "bersaglio spaccato" : "bersagli spaccati"} · ${apples} ${apples === 1 ? "mela" : "mele"} · ${diff.label}</p>
+       ${record ? "<p style='color:var(--pink)'>★ NUOVO RECORD! ★</p>" : ""}
+       ${difficultyHTML()}
+       <button class="start" data-start>ANCORA UN NUMERO</button>`
+    );
+    menu();
+    syncControls();
+  }
+  function togglePause() {
+    if (isPlaying()) {
+      pausedFrom = state; state = "paused";
+      showOverlay(`<h2>PAUSA</h2><button class="start" data-resume>CONTINUA</button><p class="muted">Premi P per continuare</p>`);
+    } else if (state === "paused") {
+      state = pausedFrom; overlay.classList.add("hidden"); last = performance.now();
+    }
+    syncControls();
+  }
+  // the pause menu can end the game (shared/iniziali.js): it ends here the usual way, saving the record
+  window.addEventListener("sala:termina", () => { if (state !== "paused") return; state = pausedFrom; overlay.classList.add("hidden"); gameOver(); syncControls(); });
+  function syncControls() {
+    pauseBtn.style.display = isPlaying() && touchMode ? "block" : "none";
+    resize();
+  }
+  pauseBtn.addEventListener("click", () => togglePause());
+  function showOverlay(html) { overlay.innerHTML = html; overlay.classList.remove("hidden"); }
+  function difficultyHTML() {
+    const buttons = DIFF_IDS.map((id) => {
+      const d = DIFFICULTIES[id];
+      return `<button type="button" data-diff="${id}" class="${id === difficulty ? "on" : ""}" style="--c:${d.color}">${d.label}</button>`;
+    }).join("");
+    const best = parseInt(load(bestKey(difficulty)), 10);
+    return `<div class="diff">${buttons}</div><p class="muted">${diff.desc}${best ? ` · Record: ${best.toLocaleString("it-IT")}` : ""}</p>`;
+  }
+  function setDifficulty(id) { if (!DIFFICULTIES[id]) return; difficulty = id; diff = DIFFICULTIES[id]; store(DIFF_KEY, id); if (menu) menu(); }
+  function showTitle() {
+    menu = showTitle;
+    showOverlay(
+      `<h1>IL LANCIATORE DI COLTELLI</h1>
+       <p>Sotto il tendone, il bersaglio di legno gira e tu lanci i coltelli: un tasto solo, al momento giusto. Ogni coltello deve piantarsi nel legno libero: se tocca un coltello già conficcato rimbalza via, ed è un errore. Piantali tutti e il bersaglio si spacca. Poi ne arriva un altro, che gira più in fretta, a scatti o avanti e indietro, e con qualche coltello già piantato.</p>
+       <div class="pts">
+         <span><b>Punti</b></span><span>ogni coltello piantato, di più se non sbagli da un pezzo · mela colpita 50 · bersaglio spaccato, con un premio se non hai sbagliato</span>
+         <span><b>Numeri speciali</b></span><span>ogni cinque bersagli: l'anguria, la pizza, il formaggio e la Luna, più capricciosi e da 500 punti</span>
+       </div>
+       <p class="muted help">${touchMode ? "Tocca lo schermo per lanciare · ❚❚ pausa" : "Spazio, Invio o un clic per lanciare · P pausa"}</p>
+       ${difficultyHTML()}
+       <button class="start" data-start>SI VA IN SCENA</button>`
+    );
+  }
+  overlay.addEventListener("click", (e) => {
+    const d = e.target.closest("[data-diff]");
+    if (d) { setDifficulty(d.dataset.diff); return; }
+    if (e.target.closest("[data-start]")) startGame();
+    if (e.target.closest("[data-resume]")) togglePause();
+  });
+
+  // ---------- Input ----------
+  window.addEventListener("keydown", (e) => {
+    const k = e.key.toLowerCase();
+    if (state === "menu" || state === "over") {
+      if (e.key === "Enter") startGame();
+      else if (["1", "2", "3"].includes(k)) setDifficulty(DIFF_IDS[+k - 1]);
+      return;
+    }
+    if (k === "p" || k === "escape") { if (!e.repeat) togglePause(); return; }
+    if (state === "paused") { if (e.key === "Enter") togglePause(); return; }
+    if (k === " " || k === "enter" || k === "arrowup" || k === "w" || k === "x") { e.preventDefault(); if (!e.repeat) throwKnife(); }
+  });
+  window.addEventListener("blur", () => { if (isPlaying()) togglePause(); });
+  canvas.addEventListener("pointerdown", (e) => { e.preventDefault(); throwKnife(); });
+  window.addEventListener("pointerdown", (e) => { if (e.pointerType === "touch" && !touchMode) { touchMode = true; syncControls(); if (menu) menu(); } }, true);
+
+  // ---------- Drawing ----------
+  function outlined(text, x, y, font, fill, lw = 5) {
+    ctx.font = font; ctx.lineWidth = lw; ctx.lineJoin = "round"; ctx.strokeStyle = "#1a0a10"; ctx.strokeText(text, x, y); ctx.fillStyle = fill; ctx.fillText(text, x, y);
+  }
+  // a knife pointing up, its middle at 0,0
+  function drawKnife(old) {
+    const L = KNIFE_LEN;
+    ctx.fillStyle = old ? "#a8a8b4" : "#e8eef4"; ctx.beginPath(); ctx.moveTo(0, -L / 2); ctx.lineTo(4, -L / 2 + 9); ctx.lineTo(4, 2); ctx.lineTo(-4, 2); ctx.lineTo(-4, -L / 2 + 9); ctx.closePath(); ctx.fill();
+    ctx.fillStyle = old ? "#8a8a98" : "#b8c4d0"; ctx.beginPath(); ctx.moveTo(0, -L / 2); ctx.lineTo(4, -L / 2 + 9); ctx.lineTo(4, 2); ctx.lineTo(0, 2); ctx.closePath(); ctx.fill();
+    ctx.fillStyle = "#d8a02a"; ctx.fillRect(-6.5, 2, 13, 3.5);
+    ctx.fillStyle = old ? "#5a3a2a" : "#c82a2a"; ctx.beginPath(); ctx.roundRect(-3.5, 5.5, 7, L / 2 - 5.5, 3); ctx.fill();
+    ctx.fillStyle = "rgba(255,255,255,0.3)"; ctx.fillRect(-2, 8, 1.6, L / 2 - 11);
+  }
+  // the face of the target: plain wood, or one of the special ones
+  function drawFace(skin) {
+    if (skin === "anguria") {
+      ctx.fillStyle = "#2a8a3a"; ctx.beginPath(); ctx.arc(0, 0, R, 0, TAU); ctx.fill();
+      ctx.fillStyle = "#e8f4c8"; ctx.beginPath(); ctx.arc(0, 0, R - 6, 0, TAU); ctx.fill();
+      ctx.fillStyle = "#f0485a"; ctx.beginPath(); ctx.arc(0, 0, R - 10, 0, TAU); ctx.fill();
+      ctx.fillStyle = "#2a1a1a"; for (let i = 0; i < 14; i++) { const a = i * 2.4, r = 12 + (i * 7) % 30; ctx.beginPath(); ctx.ellipse(Math.cos(a) * r, Math.sin(a) * r, 2, 3.2, a, 0, TAU); ctx.fill(); }
+    } else if (skin === "pizza") {
+      ctx.fillStyle = "#d89a4a"; ctx.beginPath(); ctx.arc(0, 0, R, 0, TAU); ctx.fill();
+      ctx.fillStyle = "#e8482a"; ctx.beginPath(); ctx.arc(0, 0, R - 7, 0, TAU); ctx.fill();
+      ctx.fillStyle = "#ffe8a0"; for (let i = 0; i < 9; i++) { const a = i * 1.9, r = 10 + (i * 11) % 34; ctx.beginPath(); ctx.ellipse(Math.cos(a) * r, Math.sin(a) * r, 9, 7, a, 0, TAU); ctx.fill(); }
+      ctx.fillStyle = "#b82a1a"; for (let i = 0; i < 7; i++) { const a = i * 2.7 + 1, r = 14 + (i * 13) % 30; ctx.beginPath(); ctx.arc(Math.cos(a) * r, Math.sin(a) * r, 5.5, 0, TAU); ctx.fill(); }
+      ctx.fillStyle = "#3a8a3a"; for (let i = 0; i < 5; i++) { const a = i * 3.3 + 2, r = 8 + (i * 17) % 36; ctx.beginPath(); ctx.ellipse(Math.cos(a) * r, Math.sin(a) * r, 5, 2.5, a, 0, TAU); ctx.fill(); }
+    } else if (skin === "formaggio") {
+      ctx.fillStyle = "#e8a82a"; ctx.beginPath(); ctx.arc(0, 0, R, 0, TAU); ctx.fill();
+      ctx.fillStyle = "#ffd24a"; ctx.beginPath(); ctx.arc(0, 0, R - 5, 0, TAU); ctx.fill();
+      ctx.fillStyle = "#e0a020"; for (let i = 0; i < 9; i++) { const a = i * 2.2, r = 6 + (i * 13) % 38; ctx.beginPath(); ctx.arc(Math.cos(a) * r, Math.sin(a) * r, 4 + (i * 5) % 7, 0, TAU); ctx.fill(); }
+    } else if (skin === "luna") {
+      ctx.fillStyle = "#c8c8d8"; ctx.beginPath(); ctx.arc(0, 0, R, 0, TAU); ctx.fill();
+      ctx.fillStyle = "#a8a8bc"; for (let i = 0; i < 8; i++) { const a = i * 2.5, r = 8 + (i * 11) % 36; ctx.beginPath(); ctx.arc(Math.cos(a) * r, Math.sin(a) * r, 5 + (i * 3) % 7, 0, TAU); ctx.fill(); }
+      ctx.fillStyle = "#e0e0ec"; for (let i = 0; i < 8; i++) { const a = i * 2.5, r = 8 + (i * 11) % 36; ctx.beginPath(); ctx.arc(Math.cos(a) * r - 1.5, Math.sin(a) * r - 1.5, 2, 0, TAU); ctx.fill(); }
+    } else {
+      const [dark, mid, light] = [["#8a5a2a", "#b8823a", "#d8a85a"], ["#7a4a32", "#a86a48", "#c88a62"], ["#8a6a3a", "#b8964a", "#d8bc6a"]][+skin.slice(5) || 0];
+      ctx.fillStyle = dark; ctx.beginPath(); ctx.arc(0, 0, R, 0, TAU); ctx.fill();
+      ctx.fillStyle = mid; ctx.beginPath(); ctx.arc(0, 0, R - 5, 0, TAU); ctx.fill();
+      ctx.strokeStyle = dark; ctx.lineWidth = 1.2; for (const r of [14, 26, 38, 48]) { ctx.beginPath(); ctx.arc(1, 1, r, 0, TAU); ctx.stroke(); }
+      ctx.fillStyle = light; ctx.beginPath(); ctx.arc(0, 0, 9, 0, TAU); ctx.fill();
+      ctx.strokeStyle = "rgba(60,30,10,0.35)"; ctx.lineWidth = 1; for (let i = 0; i < 6; i++) { const a = i * TAU / 6; ctx.beginPath(); ctx.moveTo(Math.cos(a) * 12, Math.sin(a) * 12); ctx.lineTo(Math.cos(a) * (R - 6), Math.sin(a) * (R - 6)); ctx.stroke(); }
+      ctx.fillStyle = "#5a3a1a"; for (let i = 0; i < 6; i++) { const a = i * TAU / 6 + 0.5; ctx.beginPath(); ctx.arc(Math.cos(a) * (R - 9), Math.sin(a) * (R - 9), 2, 0, TAU); ctx.fill(); }
+    }
+  }
+  function drawApple() {
+    ctx.fillStyle = "#e83a2a"; ctx.beginPath(); ctx.arc(-3.5, 0, 7.5, 0, TAU); ctx.arc(3.5, 0, 7.5, 0, TAU); ctx.fill();
+    ctx.fillStyle = "rgba(255,255,255,0.4)"; ctx.beginPath(); ctx.ellipse(-5, -3, 2, 3, 0.4, 0, TAU); ctx.fill();
+    ctx.strokeStyle = "#5a3a1a"; ctx.lineWidth = 1.6; ctx.beginPath(); ctx.moveTo(0, -5); ctx.lineTo(1, -11); ctx.stroke();
+    ctx.fillStyle = "#4aa83a"; ctx.beginPath(); ctx.ellipse(5, -10, 4.5, 2.2, -0.5, 0, TAU); ctx.fill();
+  }
+  function drawWheel() {
+    const w = wheel, y = CY - w.kick * 3;
+    ctx.fillStyle = "rgba(0,0,0,0.3)"; ctx.beginPath(); ctx.arc(CX + 4, y + 6, R + 1, 0, TAU); ctx.fill();
+    // knives and apples sit on the rim, under the face where the blade goes in
+    for (const k of w.knives) {
+      const a = k.a + w.rot, wob = k.born !== undefined ? Math.max(0, 1 - (clock - k.born) * 5) * Math.sin((clock - k.born) * 60) * 0.12 : 0;
+      ctx.save(); ctx.translate(CX + Math.cos(a) * (R - DEPTH + KNIFE_LEN / 2), y + Math.sin(a) * (R - DEPTH + KNIFE_LEN / 2)); ctx.rotate(a - Math.PI / 2 + wob); drawKnife(k.old); ctx.restore();
+    }
+    ctx.save(); ctx.translate(CX, y); ctx.rotate(w.rot); drawFace(w.boss ? w.boss.skin : "legno" + w.wood); ctx.restore();
+    for (const p of w.apples) { if (p.gone) continue; const a = p.a + w.rot; ctx.save(); ctx.translate(CX + Math.cos(a) * (R + 8), y + Math.sin(a) * (R + 8)); ctx.rotate(a + Math.PI / 2); drawApple(); ctx.restore(); }
+  }
+  function drawTent() {
+    // the big top: stripes fanning out from the pole, and the ring below
+    ctx.fillStyle = "#5a1020"; ctx.fillRect(0, 0, W, H);
+    for (let i = 0; i < 14; i++) { ctx.fillStyle = i % 2 ? "#a82a3a" : "#e8d8b8"; ctx.beginPath(); ctx.moveTo(CX, -40); ctx.lineTo(-240 + i * 80, 250); ctx.lineTo(-160 + i * 80, 250); ctx.closePath(); ctx.fill(); }
+    ctx.fillStyle = "rgba(40,6,16,0.55)"; ctx.fillRect(0, 0, W, 250);
+    const g = ctx.createRadialGradient(CX, CY, 20, CX, CY, 230);
+    g.addColorStop(0, "rgba(255,240,190,0.35)"); g.addColorStop(1, "rgba(255,240,190,0)");
+    ctx.fillStyle = g; ctx.fillRect(0, 0, W, H);
+    // bunting
+    for (let i = 0; i < 17; i++) { const x = 8 + i * 39, y = 36 + Math.sin(i / 16 * Math.PI) * 14; ctx.fillStyle = ["#ffd23a", "#3ab8ff", "#ff6a5a", "#7ed87a"][i % 4]; ctx.beginPath(); ctx.moveTo(x, y); ctx.lineTo(x + 22, y); ctx.lineTo(x + 11, y + 15); ctx.fill(); }
+    // the audience in the dark, and the boards of the ring
+    ctx.fillStyle = "#2a0a14"; ctx.beginPath(); ctx.moveTo(0, 262); for (let x = 0; x <= W; x += 20) ctx.arc(x, 262 + Math.sin(x * 0.7) * 2, 11, Math.PI, TAU); ctx.lineTo(W, 300); ctx.lineTo(0, 300); ctx.fill();
+    ctx.fillStyle = "#8a5a32"; ctx.fillRect(0, 276, W, H - 276);
+    ctx.strokeStyle = "#6a4222"; ctx.lineWidth = 1; for (let y = 288; y < H; y += 14) { ctx.beginPath(); ctx.moveTo(0, y); ctx.lineTo(W, y); ctx.stroke(); }
+    ctx.fillStyle = "#c82a3a"; ctx.fillRect(0, 272, W, 6); ctx.fillStyle = "#ffd23a"; for (let x = 6; x < W; x += 24) { ctx.beginPath(); ctx.arc(x, 275, 2, 0, TAU); ctx.fill(); }
+    // the post the target hangs on
+    ctx.fillStyle = "#4a2a1a"; ctx.fillRect(CX - 5, CY, 10, 140); ctx.fillStyle = "#3a2014"; ctx.fillRect(CX - 26, 270, 52, 8);
+  }
+  function drawHud() {
+    ctx.fillStyle = "rgba(26,10,16,0.94)"; ctx.fillRect(0, 0, W, TOP);
+    ctx.textBaseline = "middle"; ctx.textAlign = "left";
+    ctx.fillStyle = "#ffffff"; ctx.font = "900 15px system-ui"; ctx.fillText(score.toLocaleString("it-IT"), 10, 14);
+    ctx.fillStyle = "#f0d0d0"; ctx.font = "700 9px system-ui"; ctx.fillText(`REC ${Math.max(bestCache, score).toLocaleString("it-IT")}`, 90, 9);
+    ctx.fillStyle = "#ffd23a"; ctx.font = "900 9px system-ui"; ctx.fillText(diff.label, 90, 20);
+    // the five targets up to the special one
+    const base = Math.floor((stage - 1) / 5) * 5;
+    for (let i = 1; i <= 5; i++) {
+      const x = 268 + i * 22, s = base + i, done = s < stage, now = s === stage;
+      ctx.fillStyle = done ? "#ffd23a" : now ? "#ffffff" : "rgba(255,255,255,0.22)";
+      ctx.beginPath(); if (i === 5) { for (let k = 0; k < 10; k++) { const a = -Math.PI / 2 + k * TAU / 10, r = k % 2 ? 3.5 : 8; ctx.lineTo(x + Math.cos(a) * r, 14 + Math.sin(a) * r); } } else ctx.arc(x, 14, now ? 5.5 : 4, 0, TAU);
+      ctx.fill();
+    }
+    ctx.textAlign = "left"; ctx.fillStyle = "#f0d0d0"; ctx.font = "800 10px system-ui"; ctx.fillText(`bersaglio ${stage}`, 196, 14);
+    ctx.save(); ctx.translate(432, 15); ctx.scale(0.62, 0.62); drawApple(); ctx.restore();
+    ctx.fillStyle = "#ffffff"; ctx.font = "800 11px system-ui"; ctx.fillText(String(apples), 442, 14);
+    // the mistakes you can still afford
+    for (let i = 0; i < diff.lives; i++) { ctx.fillStyle = i < lives ? "#ff5a6a" : "rgba(255,255,255,0.2)"; const x = (touchMode ? 500 : 560) + i * 18; ctx.beginPath(); ctx.arc(x - 3.2, 12, 4.2, 0, TAU); ctx.arc(x + 3.2, 12, 4.2, 0, TAU); ctx.moveTo(x - 7, 14); ctx.lineTo(x, 22); ctx.lineTo(x + 7, 14); ctx.fill(); }
+    ctx.textBaseline = "alphabetic";
+  }
+  function draw() {
+    ctx.setTransform(pxRatio, 0, 0, pxRatio, 0, 0);
+    ctx.save();
+    if (shake > 0) ctx.translate(rnd(-1, 1) * shake * 8, rnd(-1, 1) * shake * 8);
+    drawTent();
+    if (state === "menu") { ctx.restore(); return; }
+    if (!broken) drawWheel();
+    for (const p of pieces) {   // a sixth of the target, tumbling
+      ctx.save(); ctx.translate(p.x, p.y); ctx.rotate(p.rot); ctx.globalAlpha = Math.max(0, 1 - p.t * 0.9);
+      ctx.beginPath(); ctx.moveTo(0, 0); ctx.arc(0, 0, R, p.a0, p.a0 + TAU / 6); ctx.closePath(); ctx.clip();
+      ctx.rotate(p.a0 - p.i * TAU / 6); drawFace(p.skin); ctx.restore();
+    }
+    ctx.globalAlpha = 1;
+    for (const k of loose) { ctx.save(); ctx.translate(k.x, k.y); ctx.rotate(k.rot); drawKnife(false); ctx.restore(); }
+    // the knives still to throw, and the one in your hand
+    for (let i = 0; i < need; i++) {
+      ctx.save(); ctx.translate(34 + (i % 2) * 16, 330 - Math.floor(i / 2) * 22 - (i % 2) * 8); ctx.rotate(-0.5); ctx.scale(0.55, 0.55); ctx.globalAlpha = i < left - (flying ? 1 : 0) ? 1 : 0.18; drawKnife(false); ctx.restore();
+    }
+    ctx.globalAlpha = 1;
+    if (flying) { ctx.save(); ctx.translate(CX, flying.y); drawKnife(false); ctx.restore(); }
+    else if (left > 0 && !broken && !ending) { ctx.save(); ctx.translate(CX, KNIFE_Y + cool * 60); ctx.globalAlpha = cool > 0 ? 0.6 : 1; drawKnife(false); ctx.restore(); ctx.globalAlpha = 1; }
+    for (const p of parts) { ctx.globalAlpha = 1 - p.t / p.life; ctx.fillStyle = p.col; ctx.beginPath(); ctx.arc(p.x, p.y, p.s, 0, TAU); ctx.fill(); }
+    ctx.globalAlpha = 1;
+    ctx.restore();
+    drawHud();
+    ctx.textAlign = "center";
+    ctx.fillStyle = "#ffffff"; ctx.font = "900 13px system-ui"; if (!broken) ctx.fillText(`${left}`, 42, 352 - Math.ceil(need / 2) * 22 - 26);
+    for (const p of popups) { ctx.globalAlpha = clamp((1.2 - p.t) * 3, 0, 1); outlined(p.text, p.x, p.y - p.t * 22, p.big ? "900 20px system-ui" : "900 13px system-ui", p.col, 4); }
+    ctx.globalAlpha = 1;
+    if (message) {
+      ctx.globalAlpha = clamp((1.8 - message.t) * 2.5, 0, 1);
+      outlined(message.text, CX, 238, "italic 900 24px system-ui", wheel && wheel.boss ? "#ff8a5a" : "#ffd23a", 6);
+      outlined(message.sub, CX, 256, "800 11px system-ui", "#ffffff", 4);
+      ctx.globalAlpha = 1;
+    }
+    if (ending) outlined("GIÙ IL SIPARIO!", CX, 240, "italic 900 34px system-ui", "#ff5a4a", 8);
+  }
+
+  // ---------- Loop ----------
+  const STEP = 1 / 240;
+  let last = performance.now(), acc = 0;
+  function frame(now) {
+    const dt = Math.min(0.1, (now - last) / 1000);
+    last = now;
+    if (isPlaying()) {
+      acc += dt;
+      while (acc >= STEP && isPlaying()) { update(STEP); acc -= STEP; }
+    } else { acc = 0; update(dt); }
+    draw();
+    requestAnimationFrame(frame);
+  }
+  syncControls();
+  showTitle();
+  requestAnimationFrame(frame);
+})();
+</script>
+<script src="../../shared/iniziali.js" data-record="coltelli-best-" data-kind="score"></script>
+</body>
+</html>

@@ -9,6 +9,7 @@
   "use strict";
   // record key prefix → [bronzo, argento, oro] (and t for times)
   const DATA = {
+    "coltelli-best-": [3000, 5000, 4000],   // lanciatore-di-coltelli (bot)
     "cantina-best-": [15000, 20000, 12000],   // casse-in-cantina (bot)
     "pollaio-best-": [20000, 50000, 35000],   // guardia-del-pollaio (bot)
     "tuttogas-best-": [6000, 14000, 12000],   // colline-a-tutto-gas (bot)

@@ -9,6 +9,11 @@
   "use strict";
   // record key prefix of the game (as in trofei.js) → its feats
   const LIST = {
+    "coltelli-best-": [   // lanciatore-di-coltelli
+      { id: "anguria", name: "L'anguria", desc: "spacca l'anguria, il primo numero speciale" },
+      { id: "dieci", name: "Dieci bersagli", desc: "spacca il decimo bersaglio" },
+      { id: "mele", name: "Guglielmo Tell", desc: "infilza 10 mele nella stessa partita" },
+    ],
     "cantina-best-": [   // casse-in-cantina
       { id: "perfetto", name: "Cinque perfette", desc: "sistema 5 cantine con il minimo di spinte nella stessa partita" },
       { id: "dieci", name: "Dieci cantine", desc: "sistema la decima cantina" },
