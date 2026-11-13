@@ -1,0 +1,588 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no, viewport-fit=cover">
+<title>Bocce</title>
+<style>
+  :root {
+    --bg: #0a1a10;
+    --fg: #f4f6ee;
+    --muted: #d0f0c8;
+    --pink: #ffd23a;
+    --yellow: #7ad8ff;
+    --red: #ff4a3a;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  html, body {
+    height: 100%;
+    background: var(--bg);
+    color: var(--fg);
+    font-family: system-ui, -apple-system, "Segoe UI", sans-serif;
+    overflow: hidden;
+    user-select: none;
+    -webkit-user-select: none;
+    touch-action: none;
+  }
+  #wrap { position: fixed; inset: 0; display: flex; align-items: center; justify-content: center; }
+  canvas { cursor: pointer; display: block; touch-action: none; border-radius: 6px; box-shadow: 0 0 0 2px #2a6a3a, 0 10px 40px rgba(0,0,0,0.6); }
+  #pauseBtn {
+    position: fixed; z-index: 3; display: none; right: 10px; top: calc(10px + env(safe-area-inset-top, 0px));
+    font: 700 13px system-ui, sans-serif; color: var(--fg);
+    background: rgba(0, 0, 0, 0.6); border: 1px solid rgba(244, 246, 238, 0.35);
+    border-radius: 8px; padding: 6px 10px; cursor: pointer;
+  }
+  #touch { display: none !important; }
+  #overlay {
+    position: fixed; inset: 0; z-index: 5;
+    display: flex; flex-direction: column; align-items: center; justify-content: flex-start;
+    gap: 14px; padding: 16px; text-align: center; overflow-y: auto;
+    background: rgba(10, 26, 16, 0.93);
+  }
+  #overlay > :first-child { margin-top: auto; }
+  #overlay > :last-child { margin-bottom: auto; }
+  #overlay.hidden { display: none; }
+  #homeLink {
+    position: fixed; top: calc(10px + env(safe-area-inset-top, 0px)); left: 10px; z-index: 6;
+    font: 600 13px/1 system-ui, sans-serif; color: #fff; text-decoration: none;
+    padding: 8px 12px; border-radius: 999px; background: rgba(0,0,0,.55);
+    border: 1px solid rgba(255,255,255,.25);
+  }
+  #homeLink:hover { background: rgba(0,0,0,.8); }
+  #overlay.hidden ~ #homeLink { display: none; }
+  @media (max-width: 700px) { #overlay { padding-top: calc(52px + env(safe-area-inset-top, 0px)); } }
+  #overlay h1 { font-size: clamp(32px, 10vw, 58px); font-weight: 900; font-style: italic; letter-spacing: 1px; color: var(--pink);
+    text-shadow: 3px 3px 0 #0a3a10, 0 0 22px rgba(255,210,58,0.35); }
+  #overlay h2 { font-size: clamp(26px, 7vw, 42px); font-weight: 900; letter-spacing: 2px; color: var(--pink); }
+  #overlay h2.lose { color: var(--red); }
+  #overlay p { max-width: 540px; font-size: clamp(13px, 3.4vw, 16px); line-height: 1.55; }
+  #overlay p.muted { color: var(--muted); }
+  #overlay .pts { display: grid; grid-template-columns: repeat(2, auto); gap: 4px 18px; font-size: 13px; color: var(--muted); text-align: left; max-width: 560px; }
+  #overlay .pts b { color: var(--fg); }
+  #overlay .diff { display: flex; gap: 10px; flex-wrap: wrap; justify-content: center; }
+  #overlay button {
+    font: 800 15px system-ui, sans-serif; letter-spacing: 1.5px; color: var(--fg);
+    background: transparent; cursor: pointer;
+    border: 2px solid rgba(244,246,238,0.3); border-radius: 10px; padding: 9px 16px;
+  }
+  #overlay .mode button { font-size: 12px; padding: 7px 12px; }
+  #overlay .diff button.on { border-color: var(--c); color: var(--c); box-shadow: 0 0 12px var(--c); }
+  #overlay button.start { border-color: var(--pink); color: #06200a; background: var(--pink); padding: 11px 30px; box-shadow: 0 4px 0 #b8901a; }
+  @media (max-height: 560px) {
+    #overlay { gap: 8px; }
+    #overlay h1 { font-size: 30px; }
+    #overlay p { font-size: 13px; line-height: 1.4; }
+    #overlay .help, #overlay .pts { display: none; }
+  }
+</style>
+</head>
+<body>
+<div id="wrap"><canvas id="game"></canvas></div>
+<div id="touch"></div>
+<button id="pauseBtn" type="button" aria-label="Pausa">❚❚</button>
+<div id="overlay"></div>
+<a id="homeLink" href="../../index.html">← Sala Giochi</a>
+
+
+<script>
+(() => {
+  "use strict";
+
+  const W = 640, H = 360, TOP = 28, TAU = Math.PI * 2;
+  // the court, seen from above: you throw from the left end
+  const X0 = 44, X1 = 612, Y0 = 92, Y1 = 268, LX = 70, LY = (Y0 + Y1) / 2;
+  const RB = 8, RP = 4.5, FR = 110, EACH = 4, GOAL = 7, MAXA = 0.62;
+  const reach = (p) => 70 + p * 500;                    // how far a throw of that strength rolls
+  const speedFor = (d) => Math.sqrt(2 * FR * d);
+  const RIVALS = [
+    { name: "Nonno Gino", skill: 0.15, col: "#e8a84a" },
+    { name: "la Signora Carla", skill: 0.33, col: "#e87ab8" },
+    { name: "il Geometra", skill: 0.5, col: "#7ab8e8" },
+    { name: "Padre Anselmo", skill: 0.66, col: "#9a9ab0" },
+    { name: "la Campionessa", skill: 0.82, col: "#7ad88a" },
+    { name: "il Maestro", skill: 0.95, col: "#ffd23a" },
+  ];
+  const DIFFICULTIES = {
+    facile:    { label: "FACILE",    color: "#7ed87a", desc: "la forza sale piano, avversari imprecisi, due rivincite", rate: 0.3, skill: -0.2, lives: 2 },
+    normale:   { label: "NORMALE",   color: "#ffd23a", desc: "il bocciodromo com'è, con una rivincita", rate: 0.42, skill: 0, lives: 1 },
+    difficile: { label: "DIFFICILE", color: "#ff5a5a", desc: "la forza corre, avversari precisi, nessuna rivincita", rate: 0.55, skill: 0.18, lives: 0 },
+  };
+  const DIFF_IDS = Object.keys(DIFFICULTIES);
+  const DIFF_KEY = "bocce-difficulty";
+  const bestKey = (id) => `bocce-best-${id}`;
+  function store(k, v) { try { localStorage.setItem(k, v); } catch { /* ignore */ } }
+  function load(k) { try { return localStorage.getItem(k); } catch { return null; } }
+  const impresa = (id) => window.dispatchEvent(new CustomEvent("sala:impresa", { detail: id }));
+  const rnd = (a, b) => a + Math.random() * (b - a);
+  const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
+  const gauss = () => { let s = 0; for (let i = 0; i < 6; i++) s += Math.random(); return (s - 3) / 0.707; };
+
+  // ---------- Canvas ----------
+  const canvas = document.getElementById("game");
+  const ctx = canvas.getContext("2d");
+  const wrapEl = document.getElementById("wrap");
+  const overlay = document.getElementById("overlay");
+  const touchEl = document.getElementById("touch");
+  const pauseBtn = document.getElementById("pauseBtn");
+  let pxRatio = 1, touchMode = !!(window.matchMedia && matchMedia("(pointer: coarse)").matches);
+  function resize() {
+    touchEl.style.display = "none";
+    wrapEl.style.paddingBottom = "0";
+    const availW = window.innerWidth - 8, availH = window.innerHeight - 8;
+    const s = Math.max(0.2, Math.min(availW / W, availH / H));
+    pxRatio = Math.min(3, s * (window.devicePixelRatio || 1));
+    canvas.style.width = W * s + "px";
+    canvas.style.height = H * s + "px";
+    canvas.width = Math.round(W * pxRatio);
+    canvas.height = Math.round(H * pxRatio);
+  }
+  window.addEventListener("resize", () => syncControls());
+
+  // ---------- Audio ----------
+  let audioCtx = null, noiseBuf = null;
+  function beep(freq, dur, type = "square", vol = 0.04, slide = 0, delay = 0) {
+    if (!audioCtx) return;
+    const t = audioCtx.currentTime + delay;
+    const osc = audioCtx.createOscillator(), gain = audioCtx.createGain();
+    osc.type = type;
+    osc.frequency.setValueAtTime(freq, t);
+    if (slide) osc.frequency.exponentialRampToValueAtTime(Math.max(20, freq + slide), t + dur);
+    gain.gain.setValueAtTime(vol, t);
+    gain.gain.exponentialRampToValueAtTime(0.0001, t + dur);
+    osc.connect(gain).connect(audioCtx.destination);
+    osc.start(t); osc.stop(t + dur + 0.02);
+  }
+  function noise(dur, vol, freq, q = 1, delay = 0, slide = 0) {
+    if (!audioCtx) return;
+    if (!noiseBuf) {
+      noiseBuf = audioCtx.createBuffer(1, audioCtx.sampleRate, audioCtx.sampleRate);
+      const d = noiseBuf.getChannelData(0);
+      for (let i = 0; i < d.length; i++) d[i] = Math.random() * 2 - 1;
+    }
+    const t = audioCtx.currentTime + delay;
+    const src = audioCtx.createBufferSource(), f = audioCtx.createBiquadFilter(), g = audioCtx.createGain();
+    src.buffer = noiseBuf; f.type = "bandpass"; f.frequency.setValueAtTime(freq, t); f.Q.value = q;
+    if (slide) f.frequency.exponentialRampToValueAtTime(Math.max(30, freq + slide), t + dur);
+    g.gain.setValueAtTime(vol, t); g.gain.exponentialRampToValueAtTime(0.0001, t + dur);
+    src.connect(f).connect(g).connect(audioCtx.destination);
+    src.start(t, Math.random() * 0.5, dur + 0.05);
+  }
+  const arp = (notes, gap, d, type = "square", vol = 0.04) => notes.forEach((f, i) => beep(f, d, type, vol, 0, i * gap));
+  const sfx = {
+    // the ball leaving the hand and rolling on the gravel
+    throw: () => { noise(0.5, 0.05, 500, 0.6, 0, -250); beep(120, 0.1, "sine", 0.05, -40); },
+    clack: (v) => { const k = clamp(v / 200, 0.2, 1); beep(1500, 0.05, "square", 0.05 * k, -600); beep(700, 0.07, "triangle", 0.06 * k, -200); noise(0.03, 0.06 * k, 3000, 2); },
+    tick: (v) => { beep(2300, 0.04, "sine", 0.04 * clamp(v / 150, 0.2, 1), -500); },
+    board: (v) => { noise(0.06, 0.07 * clamp(v / 200, 0.2, 1), 260, 1); beep(100, 0.06, "sine", 0.05); },
+    point: () => arp([659, 784, 988], 0.07, 0.14, "triangle", 0.05),
+    lose: () => arp([440, 370, 294], 0.1, 0.18, "triangle", 0.045),
+    kiss: () => arp([988, 1319, 1568], 0.05, 0.12, "sine", 0.05),
+    win: () => arp([523, 659, 784, 1047, 1319, 1568], 0.09, 0.26, "triangle", 0.06),
+    out: () => arp([523, 466, 415, 392, 330, 262], 0.15, 0.24, "triangle", 0.05),
+    pick: () => beep(900, 0.03, "square", 0.02),
+  };
+
+  // ---------- State ----------
+  let difficulty = DIFFICULTIES[load(DIFF_KEY)] ? load(DIFF_KEY) : "normale";
+  let diff = DIFFICULTIES[difficulty];
+  let state = "menu", menu = null, pausedFrom = null, clock = 0;
+  let score = 0, bestCache = 0, rival = 0, wins = 0, lives = 0;
+  let balls = [], jack = null, left = [EACH, EACH], pts = [0, 0], starter = 0, thrower = 0, phase = "idle", roundN = 0, wait = 0, result = null;
+  let aim = 0, power = 0, charging = false, chargeT = 0, plan = null, banner = null, popups = [], parts = [], fast = false, kissed = false, lastThrown = null;
+  const keys = { up: false, down: false };
+  const isPlaying = () => state === "play";
+  const who = () => RIVALS[Math.min(rival, RIVALS.length - 1)];
+  const rivalSkill = () => clamp(who().skill + diff.skill + (rival >= RIVALS.length ? 0.08 : 0), 0, 1);
+  const dist = (b) => Math.hypot(b.x - jack.x, b.y - jack.y);
+  const tri = (t) => { const f = t % 2; return f < 1 ? f : 2 - f; };
+
+  // ---------- Physics ----------
+  // everything rolls, slows down on the gravel, bounces off the boards and off each other
+  function roll(list, dt, quiet) {
+    let moving = false;
+    for (const b of list) {
+      const v = Math.hypot(b.vx, b.vy);
+      if (v <= 0) continue;
+      const nv = Math.max(0, v - FR * dt);
+      b.vx *= nv / v; b.vy *= nv / v;
+      b.x += b.vx * dt; b.y += b.vy * dt; b.spin += nv * dt / b.r;
+      if (nv > 0) moving = true;
+      for (const [axis, lo, hi] of [["x", X0 + b.r, X1 - b.r], ["y", Y0 + b.r, Y1 - b.r]]) {
+        const vk = axis === "x" ? "vx" : "vy";
+        if (b[axis] < lo) { b[axis] = lo; if (b[vk] < 0) { if (!quiet) sfx.board(-b[vk]); b[vk] *= -0.45; } }
+        else if (b[axis] > hi) { b[axis] = hi; if (b[vk] > 0) { if (!quiet) sfx.board(b[vk]); b[vk] *= -0.45; } }
+      }
+    }
+    for (let i = 0; i < list.length; i++) for (let j = i + 1; j < list.length; j++) {
+      const a = list[i], b = list[j], dx = b.x - a.x, dy = b.y - a.y, min = a.r + b.r, d2 = dx * dx + dy * dy;
+      if (d2 >= min * min || d2 === 0) continue;
+      const d = Math.sqrt(d2), nx = dx / d, ny = dy / d, ov = min - d, ma = a.m, mb = b.m;
+      a.x -= nx * ov * mb / (ma + mb); a.y -= ny * ov * mb / (ma + mb); b.x += nx * ov * ma / (ma + mb); b.y += ny * ov * ma / (ma + mb);
+      const rel = (b.vx - a.vx) * nx + (b.vy - a.vy) * ny;
+      if (rel >= 0) continue;
+      const imp = -(1 + 0.88) * rel / (1 / ma + 1 / mb);
+      a.vx -= imp / ma * nx; a.vy -= imp / ma * ny; b.vx += imp / mb * nx; b.vy += imp / mb * ny;
+      moving = true;
+      if (!quiet) { if (a.jack || b.jack) { sfx.tick(-rel); if (a === lastThrown || b === lastThrown) kissed = true; } else sfx.clack(-rel); burst((a.x + b.x) / 2, (a.y + b.y) / 2, 4, "#fff4d8", 50); }
+    }
+    return moving;
+  }
+  const mkBall = (team, ang, pw) => { const v = speedFor(reach(pw)); return { team, x: LX, y: LY, vx: Math.cos(ang) * v, vy: Math.sin(ang) * v, r: RB, m: 1, spin: 0, id: Math.random() }; };
+  // what a throw would lead to: the court after everything has stopped
+  function foresee(team, ang, pw) {
+    const copy = [jack, ...balls].map((b) => ({ ...b })), nb = mkBall(team, ang, pw);
+    copy.push(nb);
+    for (let i = 0; i < 1400 && roll(copy, 1 / 100, true); i++);
+    const j = copy[0], d = (b) => Math.hypot(b.x - j.x, b.y - j.y);
+    const mine = copy.slice(1).filter((b) => b.team === team).map(d).sort((a, b) => a - b), theirs = copy.slice(1).filter((b) => b.team !== team).map(d).sort((a, b) => a - b);
+    const other = theirs.length ? theirs[0] : 400;
+    return mine.filter((x) => x < other).length * 60 + (other - mine[0]) * 0.5 - (theirs.length ? theirs.filter((x) => x < mine[0]).length * 60 : 0);
+  }
+  // the opponent tries a handful of throws in its head and takes the best: the better the player, the more it tries and the steadier the hand
+  function think(team, skill) {
+    const n = Math.round(6 + skill * 30), dj = Math.hypot(jack.x - LX, jack.y - LY), aj = Math.atan2(jack.y - LY, jack.x - LX), pj = clamp((dj - 70) / 500, 0, 1);
+    let best = null;
+    for (let i = 0; i < n; i++) {
+      const hard = i % 4 === 3 && skill > 0.4;   // now and then, a hard throw to knock something away
+      const ang = clamp(aj + rnd(-0.09, 0.09), -MAXA, MAXA), pw = clamp(hard ? pj + rnd(0.15, 0.45) : pj + rnd(-0.1, 0.05), 0.02, 1);
+      const v = foresee(team, ang, pw);
+      if (!best || v > best.v) best = { ang, pw, v };
+    }
+    return { ang: clamp(best.ang + gauss() * (0.006 + 0.034 * (1 - skill)), -MAXA, MAXA), pw: clamp(best.pw * (1 + gauss() * (0.012 + 0.09 * (1 - skill))), 0.02, 1) };
+  }
+
+  // ---------- The game ----------
+  function newMatch() { pts = [0, 0]; roundN = 0; starter = 0; newRound(); }
+  function newRound() {
+    roundN++; balls = []; left = [EACH, EACH]; result = null; plan = null; charging = false;
+    jack = { jack: true, x: rnd(330, 540), y: rnd(Y0 + 40, Y1 - 40), vx: 0, vy: 0, r: RP, m: 0.25, spin: 0 };
+    thrower = starter;
+    ready(0.9);
+  }
+  function ready(t) { phase = "wait"; wait = fast ? 0 : t; if (fast) turn(); }
+  function turn() {
+    if (!left[0] && !left[1]) { endRound(); return; }
+    if (balls.length) {
+      const near = balls.reduce((a, b) => (dist(b) < dist(a) ? b : a));
+      thrower = left[1 - near.team] ? 1 - near.team : near.team;   // whoever is not holding the point throws
+    }
+    if (thrower === 0) { phase = "aim"; power = 0; chargeT = 0; charging = false; }
+    else { phase = "ai"; plan = think(1, rivalSkill()); wait = fast ? 0 : rnd(0.7, 1.2); if (fast) launch(1, plan.ang, plan.pw); }
+  }
+  function launch(team, ang, pw) {
+    const b = mkBall(team, ang, pw);
+    balls.push(b); left[team]--; lastThrown = b; kissed = false;
+    phase = "roll"; plan = null; charging = false;
+    sfx.throw();
+    if (fast) { const all = [jack, ...balls]; for (let i = 0; i < 3000 && roll(all, 1 / 100, true); i++); settled(); }
+  }
+  function settled() {
+    if (lastThrown && lastThrown.team === 0) {
+      const near = balls.reduce((a, b) => (dist(b) < dist(a) ? b : a));
+      if (dist(lastThrown) < RB + RP + 1.2) { sfx.kiss(); score += 100; popups.push({ text: "A BACIO! +100", t: 0, x: jack.x, y: jack.y - 18, col: "#ffd23a" }); impresa("bacio"); }
+      else if (near === lastThrown) { sfx.point(); popups.push({ text: "PUNTO TUO", t: 0, x: lastThrown.x, y: lastThrown.y - 16, col: "#ff8a7a" }); }
+    }
+    ready(0.6);
+  }
+  function endRound() {
+    const d0 = balls.filter((b) => b.team === 0).map(dist).sort((a, b) => a - b), d1 = balls.filter((b) => b.team === 1).map(dist).sort((a, b) => a - b);
+    const w = d0[0] <= d1[0] ? 0 : 1, mine = w === 0 ? d0 : d1, other = (w === 0 ? d1 : d0)[0], n = mine.filter((x) => x < other).length;
+    pts[w] += n; starter = w;
+    for (const b of balls) b.scores = b.team === w && dist(b) < other;
+    if (w === 0) { score += n * 100; if (n === EACH) { score += 500; impresa("poker"); } }
+    const over = pts[0] >= GOAL || pts[1] >= GOAL, win = over && pts[0] > pts[1];
+    let bonus = 0;
+    if (win) { bonus = 1000 + 100 * (pts[0] - pts[1]); score += bonus; wins++; if (rival === RIVALS.length - 1) impresa("maestro"); }
+    result = { w, n, over, win, bonus, t: 0 };
+    phase = "score"; wait = fast ? 0 : 2.6;
+    if (over) (win ? sfx.win : sfx.out)(); else (w === 0 ? sfx.point : sfx.lose)();
+  }
+  function proceed() {
+    if (phase !== "score") return;
+    if (!result.over) { newRound(); return; }
+    if (!result.win) {
+      if (lives <= 0) { gameOver(); return; }
+      lives--; banner = { text: "RIVINCITA", sub: `ancora contro ${who().name}`, t: 0, col: who().col };
+      newMatch(); return;
+    }
+    rival++;
+    banner = { text: who().name.toUpperCase(), sub: rival >= RIVALS.length ? "la rivincita del Maestro" : `avversario ${rival + 1} di ${RIVALS.length}`, t: 0, col: who().col };
+    newMatch();
+  }
+  function startGame() {
+    if (!audioCtx) { try { audioCtx = new (window.AudioContext || window.webkitAudioContext)(); } catch { audioCtx = null; } }
+    if (audioCtx && audioCtx.state === "suspended") audioCtx.resume();
+    score = 0; rival = 0; wins = 0; lives = diff.lives; popups = []; parts = []; aim = 0; keys.up = keys.down = false;
+    bestCache = parseInt(load(bestKey(difficulty)), 10) || 0;
+    banner = { text: who().name.toUpperCase(), sub: `avversario 1 di ${RIVALS.length} · si vince a ${GOAL} punti`, t: 0, col: who().col };
+    state = "play";
+    menu = null;
+    overlay.classList.add("hidden");
+    newMatch();
+    syncControls();
+    last = performance.now();
+  }
+  function burst(x, y, n, col, sp = 80) {
+    for (let i = 0; i < n; i++) { const a = rnd(0, TAU), v = rnd(0.3, 1) * sp; parts.push({ x, y, vx: Math.cos(a) * v, vy: Math.sin(a) * v, t: 0, life: rnd(0.2, 0.5), col, s: rnd(1, 2.2) }); }
+  }
+  // the player's throw: hold to let the strength swing up and down, let go to throw
+  function press() { if (isPlaying() && phase === "aim" && !charging) { charging = true; chargeT = 0; sfx.pick(); } }
+  function release() { if (isPlaying() && phase === "aim" && charging) { charging = false; if (chargeT > 0.08) launch(0, aim, power); } }
+
+  // ---------- Update ----------
+  function update(dt) {
+    clock += dt;
+    for (const p of parts) { p.t += dt; p.x += p.vx * dt; p.y += p.vy * dt; }
+    parts = parts.filter((p) => p.t < p.life);
+    for (const p of popups) p.t += dt;
+    popups = popups.filter((p) => p.t < 1.5);
+    if (!isPlaying()) return;
+    if (banner) { banner.t += dt; if (banner.t > 2) banner = null; }
+    if (result) result.t += dt;
+    if (phase === "wait") { wait -= dt; if (wait <= 0) turn(); }
+    else if (phase === "aim") {
+      const d = (keys.down ? 1 : 0) - (keys.up ? 1 : 0);
+      if (d) aim = clamp(aim + d * 0.7 * dt, -MAXA, MAXA);
+      if (charging) { chargeT += dt; power = tri(chargeT * diff.rate * 2); }
+    } else if (phase === "ai") {
+      aim += (plan.ang - aim) * Math.min(1, dt * 6); power = plan.pw * clamp(1 - wait / 0.6, 0, 1);
+      wait -= dt; if (wait <= 0) launch(1, plan.ang, plan.pw);
+    } else if (phase === "roll") {
+      let moving = false;
+      for (let i = 0; i < 2; i++) moving = roll([jack, ...balls], dt / 2, false) || moving;
+      if (!moving) settled();
+    } else if (phase === "score") { wait -= dt; if (wait <= 0 && !result.over) proceed(); }
+  }
+
+  function gameOver() {
+    state = "over";
+    const prev = parseInt(load(bestKey(difficulty)), 10) || 0;
+    const record = score > prev;
+    if (record) store(bestKey(difficulty), String(score));
+    const lost = result && result.over && !result.win;
+    menu = () => showOverlay(
+      `<h2 class="lose">${lost ? "PARTITA PERSA" : "FINE DEL TORNEO"}</h2>
+       <p>Punteggio: <b>${score.toLocaleString("it-IT")}</b> · ${wins} ${wins === 1 ? "avversario battuto" : "avversari battuti"}${lost ? ` · fermato da ${who().name} (${pts[0]} a ${pts[1]})` : ""} · ${diff.label}</p>
+       ${record ? "<p style='color:var(--pink)'>★ NUOVO RECORD! ★</p>" : ""}
+       ${difficultyHTML()}
+       <button class="start" data-start>NUOVO TORNEO</button>`
+    );
+    menu();
+    syncControls();
+  }
+  function togglePause() {
+    if (isPlaying()) {
+      pausedFrom = state; state = "paused";
+      showOverlay(`<h2>PAUSA</h2><button class="start" data-resume>CONTINUA</button><p class="muted">Premi P per continuare</p>`);
+    } else if (state === "paused") {
+      state = pausedFrom; overlay.classList.add("hidden"); last = performance.now();
+    }
+    syncControls();
+  }
+  // the pause menu can end the game (shared/iniziali.js): it ends here the usual way, saving the record
+  window.addEventListener("sala:termina", () => { if (state !== "paused") return; state = pausedFrom; overlay.classList.add("hidden"); gameOver(); syncControls(); });
+  function syncControls() {
+    pauseBtn.style.display = isPlaying() && touchMode ? "block" : "none";
+    resize();
+  }
+  pauseBtn.addEventListener("click", () => togglePause());
+  function showOverlay(html) { overlay.innerHTML = html; overlay.classList.remove("hidden"); }
+  function difficultyHTML() {
+    const buttons = DIFF_IDS.map((id) => {
+      const d = DIFFICULTIES[id];
+      return `<button type="button" data-diff="${id}" class="${id === difficulty ? "on" : ""}" style="--c:${d.color}">${d.label}</button>`;
+    }).join("");
+    const best = parseInt(load(bestKey(difficulty)), 10);
+    return `<div class="diff">${buttons}</div><p class="muted">${diff.desc}${best ? ` · Record: ${best.toLocaleString("it-IT")}` : ""}</p>`;
+  }
+  function setDifficulty(id) { if (!DIFFICULTIES[id]) return; difficulty = id; diff = DIFFICULTIES[id]; store(DIFF_KEY, id); if (menu) menu(); }
+  function showTitle() {
+    menu = showTitle;
+    showOverlay(
+      `<h1>BOCCE</h1>
+       <p>Il bocciodromo del paese, visto dall'alto. In fondo al campo c'è il pallino: vince la giocata chi ci lascia più vicino una boccia, e segna un punto per ogni sua boccia più vicina della migliore dell'avversario. Quattro bocce a testa; tira sempre chi in quel momento è più lontano dal pallino. Le bocce si urtano: puoi accostare piano, oppure tirare forte per scacciare quella dell'altro. Sei avversari, a chi arriva prima a ${GOAL}.</p>
+       <div class="pts">
+         <span><b>Il tiro</b></span><span>scegli la direzione, poi tieni premuto: il segno sul campo va avanti e indietro e mostra dove si fermerebbe la boccia. Lascia quando è dove vuoi</span>
+         <span><b>Punti</b></span><span>100 per ogni punto fatto · boccia a bacio sul pallino 100 · quattro punti in una giocata 500 · partita vinta 1.000 e più</span>
+       </div>
+       <p class="muted help">${touchMode ? "Tocca e trascina per mirare, tieni premuto per la forza, alza il dito per tirare · ❚❚ pausa" : "Muovi il mouse per mirare, tieni premuto per la forza e lascia per tirare · oppure ↑ ↓ e Spazio · P pausa"}</p>
+       ${difficultyHTML()}
+       <button class="start" data-start>IN CAMPO</button>`
+    );
+  }
+  overlay.addEventListener("click", (e) => {
+    const d = e.target.closest("[data-diff]");
+    if (d) { setDifficulty(d.dataset.diff); return; }
+    if (e.target.closest("[data-start]")) startGame();
+    if (e.target.closest("[data-resume]")) togglePause();
+  });
+
+  // ---------- Input ----------
+  window.addEventListener("keydown", (e) => {
+    const k = e.key.toLowerCase();
+    if (state === "menu" || state === "over") {
+      if (e.key === "Enter") startGame();
+      else if (["1", "2", "3"].includes(k)) setDifficulty(DIFF_IDS[+k - 1]);
+      return;
+    }
+    if (k === "p" || k === "escape") { if (!e.repeat) togglePause(); return; }
+    if (state === "paused") { if (e.key === "Enter") togglePause(); return; }
+    if (["arrowup", "arrowdown", " ", "enter"].includes(k)) e.preventDefault();
+    if (k === "arrowup" || k === "w") keys.up = true;
+    else if (k === "arrowdown" || k === "s") keys.down = true;
+    else if ((k === " " || k === "enter") && !e.repeat) { if (phase === "score" && result.over) proceed(); else press(); }
+  });
+  window.addEventListener("keyup", (e) => {
+    const k = e.key.toLowerCase();
+    if (k === "arrowup" || k === "w") keys.up = false;
+    else if (k === "arrowdown" || k === "s") keys.down = false;
+    else if (k === " " || k === "enter") release();
+  });
+  window.addEventListener("blur", () => { keys.up = keys.down = false; charging = false; if (isPlaying()) togglePause(); });
+  const toGame = (e) => { const r = canvas.getBoundingClientRect(); return [(e.clientX - r.left) * W / r.width, (e.clientY - r.top) * H / r.height]; };
+  const aimAt = (e) => { const [x, y] = toGame(e); if (x > LX + 12) aim = clamp(Math.atan2(y - LY, x - LX), -MAXA, MAXA); };
+  canvas.addEventListener("pointerdown", (e) => {
+    e.preventDefault();
+    if (!isPlaying()) return;
+    if (phase === "score" && result.over) { proceed(); return; }
+    if (phase !== "aim") return;
+    aimAt(e); press();
+    try { canvas.setPointerCapture(e.pointerId); } catch { /* ignore */ }
+  });
+  canvas.addEventListener("pointermove", (e) => { if (isPlaying() && phase === "aim" && (e.pointerType !== "touch" || charging)) aimAt(e); });
+  canvas.addEventListener("pointerup", () => release());
+  canvas.addEventListener("pointercancel", () => { charging = false; });
+  window.addEventListener("pointerdown", (e) => { if (e.pointerType === "touch" && !touchMode) { touchMode = true; syncControls(); if (menu) menu(); } }, true);
+
+  // ---------- Drawing ----------
+  function outlined(text, x, y, font, fill, lw = 5) {
+    ctx.font = font; ctx.lineWidth = lw; ctx.lineJoin = "round"; ctx.strokeStyle = "#0a1a10"; ctx.strokeText(text, x, y); ctx.fillStyle = fill; ctx.fillText(text, x, y);
+  }
+  const TEAM = [["#e8483a", "#a8281e", "#ffb0a0"], ["#3a7ae8", "#1e4aa8", "#a8c8ff"]];
+  function drawBall(b, s = 1) {
+    const r = b.r * s;
+    ctx.fillStyle = "rgba(0,0,0,0.28)"; ctx.beginPath(); ctx.ellipse(b.x + 2, b.y + 3, r, r * 0.85, 0, 0, TAU); ctx.fill();
+    if (b.jack) {
+      const g = ctx.createRadialGradient(b.x - 1.5, b.y - 1.5, 0.5, b.x, b.y, r); g.addColorStop(0, "#ffffff"); g.addColorStop(1, "#ffd23a");
+      ctx.fillStyle = g; ctx.beginPath(); ctx.arc(b.x, b.y, r, 0, TAU); ctx.fill();
+      ctx.strokeStyle = "#a8801a"; ctx.lineWidth = 1; ctx.stroke(); return;
+    }
+    const [main, dark, light] = TEAM[b.team];
+    const g = ctx.createRadialGradient(b.x - r * 0.4, b.y - r * 0.4, 1, b.x, b.y, r); g.addColorStop(0, light); g.addColorStop(0.45, main); g.addColorStop(1, dark);
+    ctx.fillStyle = g; ctx.beginPath(); ctx.arc(b.x, b.y, r, 0, TAU); ctx.fill();
+    // the grooves turn as it rolls
+    ctx.save(); ctx.beginPath(); ctx.arc(b.x, b.y, r, 0, TAU); ctx.clip();
+    ctx.strokeStyle = "rgba(0,0,0,0.3)"; ctx.lineWidth = 1;
+    const dir = Math.atan2(b.vy || 0, b.vx || 1), off = (b.spin * r) % (r * 2);
+    ctx.translate(b.x, b.y); ctx.rotate(dir);
+    for (const k of [-1, 0, 1]) { const x = ((off + k * r * 0.9 + r * 3) % (r * 2.7)) - r * 1.35; ctx.beginPath(); ctx.ellipse(x, 0, r * 0.25, r, 0, 0, TAU); ctx.stroke(); }
+    ctx.restore();
+    if (b.scores) { ctx.strokeStyle = "#ffd23a"; ctx.lineWidth = 2; ctx.beginPath(); ctx.arc(b.x, b.y, r + 3 + Math.sin(clock * 8) * 1, 0, TAU); ctx.stroke(); }
+  }
+  function drawCourt() {
+    ctx.fillStyle = "#3a7a3a"; ctx.fillRect(0, 0, W, H);
+    for (let i = 0; i < 60; i++) { const x = (i * 97) % W, y = TOP + (i * 53) % (H - TOP); ctx.fillStyle = i % 2 ? "#448a44" : "#347034"; ctx.fillRect(x, y, 14, 3); }
+    // trees' shade, a bench, the scoreboard post
+    for (const [x, y, r] of [[60, 60, 34], [590, 316, 40], [320, 330, 26]]) { ctx.fillStyle = "rgba(20,60,24,0.5)"; ctx.beginPath(); ctx.arc(x, y, r, 0, TAU); ctx.fill(); ctx.fillStyle = "#2a6a2e"; ctx.beginPath(); ctx.arc(x - 4, y - 4, r * 0.8, 0, TAU); ctx.fill(); ctx.fillStyle = "#3a8a3e"; ctx.beginPath(); ctx.arc(x - 9, y - 9, r * 0.45, 0, TAU); ctx.fill(); }
+    ctx.fillStyle = "#8a5a32"; ctx.fillRect(420, 296, 90, 14); ctx.fillStyle = "#6a4222"; ctx.fillRect(420, 308, 90, 4); ctx.fillRect(426, 296, 3, 22); ctx.fillRect(501, 296, 3, 22);
+    // the boards and the gravel
+    ctx.fillStyle = "#6a4a2a"; ctx.beginPath(); ctx.roundRect(X0 - 8, Y0 - 8, X1 - X0 + 16, Y1 - Y0 + 16, 5); ctx.fill();
+    ctx.fillStyle = "#8a6238"; ctx.beginPath(); ctx.roundRect(X0 - 6, Y0 - 6, X1 - X0 + 12, Y1 - Y0 + 12, 4); ctx.fill();
+    ctx.fillStyle = "#d8c49a"; ctx.fillRect(X0, Y0, X1 - X0, Y1 - Y0);
+    for (let i = 0; i < 260; i++) { const x = X0 + ((i * 131) % (X1 - X0)), y = Y0 + ((i * 71) % (Y1 - Y0)); ctx.fillStyle = i % 3 ? "rgba(150,120,80,0.35)" : "rgba(255,250,230,0.5)"; ctx.fillRect(x, y, 2, 2); }
+    ctx.strokeStyle = "rgba(255,255,255,0.7)"; ctx.lineWidth = 1.5;
+    for (const x of [LX + 22, (X0 + X1) / 2, X1 - 70]) { ctx.beginPath(); ctx.moveTo(x, Y0); ctx.lineTo(x, Y1); ctx.stroke(); }
+    ctx.fillStyle = "rgba(0,0,0,0.12)"; ctx.fillRect(X0, Y0, X1 - X0, 5);
+  }
+  function drawRacks() {
+    // the bocce still to throw, at the two sides of the throwing end
+    for (const t of [0, 1]) for (let i = 0; i < left[t] - (phase === "aim" && thrower === t ? 1 : 0) - (phase === "ai" && thrower === t ? 1 : 0); i++) drawBall({ x: 14 + (i % 2) * 17, y: (t === 0 ? Y1 - 10 : Y0 + 10) + (t === 0 ? -1 : 1) * Math.floor(i / 2) * 18, r: RB, team: t, spin: 0 }, 0.9);
+    ctx.textAlign = "center"; ctx.fillStyle = "#ffffff"; ctx.font = "800 8px system-ui"; ctx.fillText("TU", 22, Y1 + 22); ctx.fillText(who().name.split(" ").pop().toUpperCase(), 22, Y0 - 14);
+  }
+  function drawAim() {
+    const t = thrower, ang = aim, d = reach(power);
+    ctx.save(); ctx.translate(LX, LY); ctx.rotate(ang);
+    ctx.strokeStyle = "rgba(255,255,255,0.6)"; ctx.lineWidth = 1.5; ctx.setLineDash([5, 6]); ctx.beginPath(); ctx.moveTo(12, 0); ctx.lineTo(Math.min(560, (X1 - LX) / Math.cos(ang) - 10), 0); ctx.stroke(); ctx.setLineDash([]);
+    if (charging || phase === "ai") {   // where it would stop
+      ctx.fillStyle = TEAM[t][0]; ctx.globalAlpha = 0.35; ctx.beginPath(); ctx.arc(d, 0, RB, 0, TAU); ctx.fill(); ctx.globalAlpha = 1;
+      ctx.strokeStyle = "#ffffff"; ctx.lineWidth = 2; ctx.beginPath(); ctx.arc(d, 0, RB + 2, 0, TAU); ctx.stroke();
+    }
+    ctx.restore();
+    drawBall({ x: LX, y: LY, r: RB, team: t, spin: 0 });
+    if (t === 0) {
+      // the strength, in a bar under the court
+      ctx.fillStyle = "rgba(0,0,0,0.45)"; ctx.beginPath(); ctx.roundRect(200, 284, 240, 14, 7); ctx.fill();
+      const g = ctx.createLinearGradient(200, 0, 440, 0); g.addColorStop(0, "#7ed87a"); g.addColorStop(0.6, "#ffd23a"); g.addColorStop(1, "#ff5a4a");
+      ctx.fillStyle = g; ctx.beginPath(); ctx.roundRect(202, 286, Math.max(4, 236 * power), 10, 5); ctx.fill();
+      ctx.fillStyle = "#ffffff"; ctx.font = "700 10px system-ui"; ctx.textAlign = "center";
+      ctx.fillText(charging ? "lascia per tirare" : touchMode ? "tocca e trascina per mirare, tieni premuto per la forza" : "mira col mouse (o ↑ ↓), poi tieni premuto", 320, 314);
+    }
+  }
+  function drawHud() {
+    ctx.fillStyle = "rgba(10,26,16,0.94)"; ctx.fillRect(0, 0, W, TOP);
+    ctx.textBaseline = "middle"; ctx.textAlign = "left";
+    ctx.fillStyle = "#ffffff"; ctx.font = "900 15px system-ui"; ctx.fillText(score.toLocaleString("it-IT"), 10, 14);
+    ctx.fillStyle = "#d0f0c8"; ctx.font = "700 9px system-ui"; ctx.fillText(`REC ${Math.max(bestCache, score).toLocaleString("it-IT")}`, 90, 9);
+    ctx.fillStyle = "#ffd23a"; ctx.font = "900 9px system-ui"; ctx.fillText(diff.label, 90, 20);
+    ctx.textAlign = "center"; ctx.fillStyle = "#ffffff"; ctx.font = "800 12px system-ui";
+    ctx.fillText(`Tu ${pts[0]}  ·  ${pts[1]} ${who().name}`, 330, 10);
+    ctx.fillStyle = "#d0f0c8"; ctx.font = "700 8px system-ui"; ctx.fillText(`giocata ${roundN} · si vince a ${GOAL}${lives ? ` · ${lives} ${lives === 1 ? "rivincita" : "rivincite"}` : ""}`, 330, 22);
+    ctx.textBaseline = "alphabetic";
+  }
+  function draw() {
+    ctx.setTransform(pxRatio, 0, 0, pxRatio, 0, 0);
+    drawCourt();
+    if (state === "menu") { for (const [x, y, t] of [[430, 170, 0], [470, 200, 1], [455, 150, 1], [500, 185, 0]]) drawBall({ x, y, r: RB, team: t, spin: 0 }); drawBall({ jack: true, x: 462, y: 178, r: RP }); return; }
+    drawRacks();
+    // who holds the point: a line from the pallino to the nearest boccia
+    if (balls.length && jack) {
+      const near = balls.reduce((a, b) => (dist(b) < dist(a) ? b : a));
+      ctx.strokeStyle = TEAM[near.team][0]; ctx.lineWidth = 1.5; ctx.setLineDash([3, 3]); ctx.beginPath(); ctx.moveTo(jack.x, jack.y); ctx.lineTo(near.x, near.y); ctx.stroke(); ctx.setLineDash([]);
+      ctx.globalAlpha = 0.25; ctx.beginPath(); ctx.arc(jack.x, jack.y, dist(near), 0, TAU); ctx.stroke(); ctx.globalAlpha = 1;
+    }
+    if (jack) drawBall(jack);
+    for (const b of balls) drawBall(b);
+    if (phase === "aim" || phase === "ai") drawAim();
+    for (const p of parts) { ctx.globalAlpha = 1 - p.t / p.life; ctx.fillStyle = p.col; ctx.beginPath(); ctx.arc(p.x, p.y, p.s, 0, TAU); ctx.fill(); }
+    ctx.globalAlpha = 1;
+    drawHud();
+    ctx.textAlign = "center";
+    // whose turn
+    if (phase === "ai" || (phase === "roll" && lastThrown && lastThrown.team === 1)) { ctx.fillStyle = "#ffffff"; ctx.font = "700 10px system-ui"; ctx.fillText(`tira ${who().name}`, 320, 314); }
+    for (const p of popups) { ctx.globalAlpha = clamp((1.5 - p.t) * 3, 0, 1); outlined(p.text, clamp(p.x, 70, 570), p.y - p.t * 14, "900 12px system-ui", p.col, 4); }
+    ctx.globalAlpha = 1;
+    if (phase === "score" && result) {
+      const r = result, a = clamp(r.t * 4, 0, 1);
+      ctx.globalAlpha = a;
+      ctx.fillStyle = "rgba(6,20,12,0.9)"; ctx.strokeStyle = "#ffd23a"; ctx.lineWidth = 2; ctx.beginPath(); ctx.roundRect(170, 36, 300, r.over ? 70 : 46, 10); ctx.fill(); ctx.stroke();
+      ctx.fillStyle = r.w === 0 ? "#ff8a7a" : "#8ab8ff"; ctx.font = "italic 900 16px system-ui";
+      ctx.fillText(r.w === 0 ? `${r.n === EACH ? "QUATTRO PUNTI!" : r.n === 1 ? "UN PUNTO A TE" : `${r.n} PUNTI A TE`}` : `${r.n === 1 ? "UN PUNTO" : `${r.n} PUNTI`} A ${who().name.toUpperCase()}`, 320, 56);
+      ctx.fillStyle = "#ffffff"; ctx.font = "800 11px system-ui"; ctx.fillText(`Tu ${pts[0]} · ${pts[1]} ${who().name}`, 320, 72);
+      if (r.over) { ctx.fillStyle = r.win ? "#7ed87a" : "#ff6a5a"; ctx.font = "900 11px system-ui"; ctx.fillText(r.win ? `PARTITA VINTA! +${r.bonus.toLocaleString("it-IT")}` : `PARTITA PERSA${lives ? " · hai una rivincita" : ""}`, 320, 88); ctx.fillStyle = `rgba(255,255,255,${0.6 + 0.4 * Math.sin(clock * 5)})`; ctx.font = "700 9px system-ui"; ctx.fillText(touchMode ? "tocca per continuare" : "clicca o premi Invio", 320, 100); }
+      ctx.globalAlpha = 1;
+    }
+    if (banner) {
+      ctx.globalAlpha = clamp(Math.min(banner.t * 8, (2 - banner.t) * 3), 0, 1);
+      outlined(banner.text, 320, 172, "italic 900 32px system-ui", banner.col, 8);
+      outlined(banner.sub, 320, 194, "800 12px system-ui", "#ffffff", 4);
+      ctx.globalAlpha = 1;
+    }
+  }
+
+  // ---------- Loop ----------
+  let last = performance.now();
+  function frame(now) {
+    const dt = Math.min(0.05, (now - last) / 1000);
+    last = now;
+    update(dt);
+    draw();
+    requestAnimationFrame(frame);
+  }
+  syncControls();
+  showTitle();
+  requestAnimationFrame(frame);
+})();
+</script>
+<script src="../../shared/iniziali.js" data-record="bocce-best-" data-kind="score"></script>
+</body>
+</html>

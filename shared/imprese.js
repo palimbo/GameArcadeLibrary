@@ -9,6 +9,11 @@
   "use strict";
   // record key prefix of the game (as in trofei.js) → its feats
   const LIST = {
+    "bocce-best-": [   // bocce
+      { id: "bacio", name: "A bacio", desc: "ferma una boccia attaccata al pallino" },
+      { id: "poker", name: "Quattro su quattro", desc: "segna 4 punti in una sola giocata" },
+      { id: "maestro", name: "Il Maestro", desc: "batti il Maestro, il sesto avversario" },
+    ],
     "coltelli-best-": [   // lanciatore-di-coltelli
       { id: "anguria", name: "L'anguria", desc: "spacca l'anguria, il primo numero speciale" },
       { id: "dieci", name: "Dieci bersagli", desc: "spacca il decimo bersaglio" },
