@@ -1,0 +1,452 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no, viewport-fit=cover">
+<title>Esplora o Sfrutta</title>
+<style>
+  :root {
+    --bg: #0d0822;
+    --fg: #f1eeff;
+    --muted: #a9a3cf;
+    --cyan: #5fe3d6;
+    --yellow: #ffd66b;
+    --red: #ff6b7d;
+    --pink: #ff9a6b;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  html, body {
+    height: 100%;
+    background: var(--bg);
+    color: var(--fg);
+    font-family: system-ui, -apple-system, "Segoe UI", sans-serif;
+    overflow: hidden;
+    user-select: none;
+    -webkit-user-select: none;
+    touch-action: none;
+  }
+  #wrap { position: fixed; inset: 0; display: flex; align-items: center; justify-content: center; }
+  canvas { display: block; touch-action: none; border-radius: 6px; box-shadow: 0 0 0 2px #2a1f55, 0 10px 40px rgba(0,0,0,0.6); cursor: pointer; }
+  #pauseBtn {
+    position: fixed; z-index: 3; display: none; right: 10px; top: calc(10px + env(safe-area-inset-top, 0px));
+    font: 700 13px system-ui, sans-serif; color: var(--fg);
+    background: rgba(0, 0, 0, 0.6); border: 1px solid rgba(241, 238, 255, 0.35);
+    border-radius: 8px; padding: 6px 10px; cursor: pointer;
+  }
+  #overlay {
+    position: fixed; inset: 0; z-index: 5;
+    display: flex; flex-direction: column; align-items: center; justify-content: flex-start;
+    gap: 14px; padding: 16px; text-align: center; overflow-y: auto;
+    background: rgba(13, 8, 34, 0.93);
+  }
+  #overlay > :first-child { margin-top: auto; }
+  #overlay > :last-child { margin-bottom: auto; }
+  #overlay.hidden { display: none; }
+  #homeLink {
+    position: fixed; top: calc(10px + env(safe-area-inset-top, 0px)); left: 10px; z-index: 6;
+    font: 600 13px/1 system-ui, sans-serif; color: #fff; text-decoration: none;
+    padding: 8px 12px; border-radius: 999px; background: rgba(0,0,0,.55);
+    border: 1px solid rgba(255,255,255,.25);
+  }
+  #homeLink:hover { background: rgba(0,0,0,.8); }
+  #overlay.hidden ~ #homeLink { display: none; }
+  @media (max-width: 700px) { #overlay { padding-top: calc(52px + env(safe-area-inset-top, 0px)); } }
+  #overlay h1 { font-size: clamp(30px, 9vw, 54px); font-weight: 900; letter-spacing: 1px; color: var(--pink);
+    text-shadow: 3px 3px 0 #2a1f6a, 0 0 22px rgba(255,154,107,0.35); text-wrap: balance; }
+  #overlay h2 { font-size: clamp(24px, 7vw, 40px); font-weight: 900; letter-spacing: 2px; color: var(--pink); }
+  #overlay h2.lose { color: var(--red); }
+  #overlay p { max-width: 540px; font-size: clamp(13px, 3.4vw, 16px); line-height: 1.55; }
+  #overlay p.muted { color: var(--muted); }
+  #overlay .pts { display: grid; grid-template-columns: repeat(2, auto); gap: 4px 18px; font-size: 13px; color: var(--muted); text-align: left; max-width: 560px; }
+  #overlay .pts b { color: var(--fg); }
+  #overlay .diff { display: flex; gap: 10px; flex-wrap: wrap; justify-content: center; }
+  #overlay button {
+    font: 800 15px system-ui, sans-serif; letter-spacing: 1.5px; color: var(--fg);
+    background: transparent; cursor: pointer;
+    border: 2px solid rgba(241,238,255,0.3); border-radius: 10px; padding: 9px 16px;
+  }
+  #overlay .diff button.on { border-color: var(--c); color: var(--c); box-shadow: 0 0 12px var(--c); }
+  #overlay button.start { border-color: var(--pink); color: #2a1006; background: var(--pink); padding: 11px 30px; box-shadow: 0 4px 0 #b85a32; }
+  @media (max-height: 560px) {
+    #overlay { gap: 8px; }
+    #overlay h1 { font-size: 28px; }
+    #overlay p { font-size: 13px; line-height: 1.4; }
+    #overlay .help, #overlay .pts { display: none; }
+  }
+</style>
+</head>
+<body>
+<div id="wrap"><canvas id="game"></canvas></div>
+<button id="pauseBtn" type="button" aria-label="Pausa">❚❚</button>
+<div id="overlay"></div>
+<a id="homeLink" href="../../index.html">← Sala Giochi</a>
+
+<script>
+(() => {
+  "use strict";
+
+  const W = 360, H = 600, TOP = 56, TAU = Math.PI * 2;
+  const AREA = { x: 12, y: 150, w: 336, h: 330 };   // where the levers stand
+  const COLS = ["#5fe3d6", "#ffd66b", "#ff9be0", "#b79bff", "#7ee0a0", "#ff9a6b"];
+
+  const DIFFICULTIES = {
+    facile:    { label: "FACILE",    color: "#7ee0a0", desc: "basta il 68% del massimo possibile · 4 errori concessi · leve ben diverse", need: 0.68, lives: 4, gap: 1.3, drift: 99 },
+    normale:   { label: "NORMALE",   color: "#ffd66b", desc: "serve il 76% del massimo · 3 errori concessi", need: 0.76, lives: 3, gap: 1, drift: 6 },
+    difficile: { label: "DIFFICILE", color: "#ff6b7d", desc: "serve l'82% · leve simili · dal terzo livello il mondo cambia a metà", need: 0.82, lives: 3, gap: 0.75, drift: 2 },
+  };
+  const DIFF_IDS = Object.keys(DIFFICULTIES);
+  const DIFF_KEY = "esplora-difficulty";
+  const bestKey = (id) => `esplora-best-${id}`;
+  function store(k, v) { try { localStorage.setItem(k, v); } catch { /* ignore */ } }
+  function load(k) { try { return localStorage.getItem(k); } catch { return null; } }
+  const rnd = (a, b) => a + Math.random() * (b - a);
+  const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
+  const nf = (n) => n.toLocaleString("it-IT");
+
+  // ---------- Canvas ----------
+  const canvas = document.getElementById("game");
+  const ctx = canvas.getContext("2d");
+  const overlay = document.getElementById("overlay");
+  const pauseBtn = document.getElementById("pauseBtn");
+  let pxRatio = 1, touchMode = !!(window.matchMedia && matchMedia("(pointer: coarse)").matches);
+  function resize() {
+    const availW = window.innerWidth - 8, availH = window.innerHeight - 8;
+    const s = Math.max(0.2, Math.min(availW / W, availH / H));
+    pxRatio = Math.min(3, s * (window.devicePixelRatio || 1));
+    canvas.style.width = W * s + "px";
+    canvas.style.height = H * s + "px";
+    canvas.width = Math.round(W * pxRatio);
+    canvas.height = Math.round(H * pxRatio);
+  }
+  window.addEventListener("resize", () => syncControls());
+
+  // ---------- Audio: soft tones ----------
+  let audioCtx = null;
+  function beep(freq, dur, type = "sine", vol = 0.05, delay = 0) {
+    if (!audioCtx) return;
+    const t = audioCtx.currentTime + delay;
+    const osc = audioCtx.createOscillator(), gain = audioCtx.createGain();
+    osc.type = type; osc.frequency.setValueAtTime(freq, t);
+    gain.gain.setValueAtTime(0.0001, t);
+    gain.gain.exponentialRampToValueAtTime(vol, t + 0.015);
+    gain.gain.exponentialRampToValueAtTime(0.0001, t + dur);
+    osc.connect(gain).connect(audioCtx.destination);
+    osc.start(t); osc.stop(t + dur + 0.02);
+  }
+  const arp = (notes, gap, d, type, vol) => notes.forEach((f, i) => beep(f, d, type, vol, i * gap));
+  const sfx = {
+    pull: () => beep(220, 0.06, "triangle", 0.04),
+    hit: (i) => arp([660 + i * 40, 990 + i * 60], 0.05, 0.16, "sine", 0.045),
+    miss: () => beep(150, 0.1, "sine", 0.035),
+    drift: () => arp([523, 494, 466, 440], 0.09, 0.2, "triangle", 0.04),
+    win: () => arp([523, 659, 784, 1047], 0.09, 0.35),
+    perfect: () => arp([523, 659, 784, 1047, 1319, 1568], 0.07, 0.4),
+    fail: () => arp([392, 330, 277], 0.14, 0.35, "triangle", 0.05),
+    lose: () => arp([392, 330, 277, 220], 0.16, 0.4, "triangle", 0.05),
+  };
+
+  // ---------- State ----------
+  let difficulty = DIFFICULTIES[load(DIFF_KEY)] ? load(DIFF_KEY) : "normale";
+  let diff = DIFFICULTIES[difficulty];
+  let state = "menu", menu = null, pausedFrom = null, stateT = 0, clock = 0;
+  let score = 0, level = 0, bestCache = 0, cleared = 0, perfects = 0, lives = 0;
+  let arms = [], budget = 0, left = 0, reward = 0, target = 0, optimum = 0, drifts = false, drifted = false, cursor = 0, kbOn = false;
+  let coins = [], popups = [], message = null, verdict = null;
+  const isPlaying = () => ["play", "levelup", "fail"].includes(state);
+
+  // ---------- The levers ----------
+  function buildLevel() {
+    const k = Math.min(3 + Math.floor(level / 2), 6);
+    budget = 22 + k * 6; left = budget; reward = 0; drifted = false;
+    drifts = level >= diff.drift && level % 2 === 0;
+    // one lever is the best; the others trail it, closer and closer as the levels go by
+    const best = rnd(0.62, 0.88), gap = Math.max(0.07, (0.3 - level * 0.022) * diff.gap);
+    const ps = [best];
+    for (let i = 1; i < k; i++) ps.push(clamp(best - gap * rnd(0.9, 1.3) - (i - 1) * rnd(0.03, 0.12), 0.05, 0.95));
+    for (let i = k - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); [ps[i], ps[j]] = [ps[j], ps[i]]; }
+    arms = ps.map((p, i) => ({ p, n: 0, w: 0, col: COLS[i], kick: 0, last: 0 }));
+    // what you would get, on average, always pulling the best one (and following it when the world changes)
+    optimum = best * budget;
+    target = Math.round(optimum * Math.min(0.9, diff.need + level * 0.006));
+    cursor = 0; coins = []; verdict = null;
+  }
+  // halfway through, on some levels, the levers swap their odds: what you learned is out of date
+  function drift() {
+    drifted = true;
+    const ps = arms.map((a) => a.p), bi = ps.indexOf(Math.max(...ps));
+    let j; do j = Math.floor(Math.random() * arms.length); while (j === bi);
+    [arms[bi].p, arms[j].p] = [arms[j].p, arms[bi].p];
+    sfx.drift();
+    message = { text: "IL MONDO È CAMBIATO", sub: "due leve si sono scambiate le probabilità", t: 0, bad: true };
+  }
+  function startGame() {
+    if (!audioCtx) { try { audioCtx = new (window.AudioContext || window.webkitAudioContext)(); } catch { audioCtx = null; } }
+    if (audioCtx && audioCtx.state === "suspended") audioCtx.resume();
+    score = 0; level = 0; cleared = 0; perfects = 0; lives = diff.lives; popups = [];
+    bestCache = parseInt(load(bestKey(difficulty)), 10) || 0;
+    beginLevel();
+    menu = null;
+    overlay.classList.add("hidden");
+    syncControls();
+    last = performance.now();
+  }
+  function beginLevel() {
+    buildLevel();
+    state = "play";
+    message = { text: `LIVELLO ${level + 1}`, sub: `${arms.length} leve · ${budget} tirate · obiettivo ${target}${drifts ? " · il mondo cambierà" : ""}`, t: 0 };
+  }
+  function addScore(n, y, color, label = "") { score += n; popups.push({ text: `${label}+${nf(n)}`, x: W / 2, y, t: 0, color }); }
+  const armX = (i) => AREA.x + (i + 0.5) * AREA.w / arms.length;
+  function pull(i) {
+    if (state !== "play" || left <= 0 || i < 0 || i >= arms.length) return;
+    const a = arms[i], hit = Math.random() < a.p;
+    a.n++; a.kick = 1; left--; cursor = i;
+    sfx.pull();
+    if (hit) { a.w++; reward++; a.last = 1; sfx.hit(i); coins.push({ x: armX(i), y: AREA.y + 70, t: 0 }); }
+    else { a.last = -1; sfx.miss(); }
+    if (drifts && !drifted && left === Math.floor(budget / 2)) drift();
+    if (left <= 0) judge();
+  }
+  function judge() {
+    const pass = reward >= target, regret = Math.max(0, Math.round(optimum - reward));
+    verdict = { pass, regret };
+    if (pass) {
+      state = "levelup"; stateT = 3; cleared++;
+      addScore(200 * (level + 1), 300, "#7ee0a0");
+      if (reward > target) addScore((reward - target) * 40, 278, "#ffd66b", `${reward - target} sopra l'obiettivo · `);
+      if (reward >= optimum * 0.95) { perfects++; addScore(500, 256, "#5fe3d6", "quasi nessun rimpianto · "); sfx.perfect(); } else sfx.win();
+      message = { text: reward >= optimum * 0.95 ? "POLITICA OTTIMA!" : "OBIETTIVO RAGGIUNTO", sub: `${reward} ricompense su ${budget} tirate · rimpianto ${regret}`, t: 0 };
+    } else {
+      lives--;
+      state = "fail"; stateT = 3.2;
+      (lives > 0 ? sfx.fail : sfx.lose)();
+      const most = arms.reduce((a, b) => (b.n > a.n ? b : a)), bestArm = arms.reduce((a, b) => (b.p > a.p ? b : a));
+      // two ways to fail: never settling, or settling on the wrong lever
+      message = { text: most !== bestArm ? "LEVA SBAGLIATA" : "TROPPA ESPLORAZIONE", sub: `${reward} ricompense, ne servivano ${target} · rimpianto ${regret}`, t: 0, bad: true };
+    }
+  }
+
+  function gameOver() {
+    state = "over";
+    const prev = parseInt(load(bestKey(difficulty)), 10) || 0;
+    const record = score > prev;
+    if (record) store(bestKey(difficulty), String(score));
+    menu = () => showOverlay(
+      `<h2 class="lose">EPISODIO CHIUSO</h2>
+       <p>Punteggio: <b>${nf(score)}</b> · ${cleared} ${cleared === 1 ? "livello superato" : "livelli superati"}${perfects ? ` · ${perfects} quasi senza rimpianto` : ""} · ${diff.label}</p>
+       <p class="muted">Ogni tirata spesa per capire è una tirata non spesa per vincere. E viceversa.</p>
+       ${record ? "<p style='color:var(--yellow)'>★ NUOVO RECORD! ★</p>" : ""}
+       ${difficultyHTML()}
+       <button class="start" data-start>RIPROVA</button>`
+    );
+    menu();
+    syncControls();
+  }
+  function togglePause() {
+    if (isPlaying()) {
+      pausedFrom = state; state = "paused";
+      showOverlay(`<h2>PAUSA</h2><button class="start" data-resume>CONTINUA</button><p class="muted">Premi P per continuare</p>`);
+    } else if (state === "paused") {
+      state = pausedFrom; overlay.classList.add("hidden"); last = performance.now();
+    }
+    syncControls();
+  }
+  // the pause menu can end the game (shared/iniziali.js): it ends here the usual way, saving the record
+  window.addEventListener("sala:termina", () => { if (state !== "paused") return; overlay.classList.add("hidden"); gameOver(); syncControls(); });
+  function syncControls() {
+    pauseBtn.style.display = isPlaying() && touchMode ? "block" : "none";
+    resize();
+  }
+  pauseBtn.addEventListener("click", () => togglePause());
+  function showOverlay(html) { overlay.innerHTML = html; overlay.classList.remove("hidden"); }
+  function difficultyHTML() {
+    const buttons = DIFF_IDS.map((id) => {
+      const d = DIFFICULTIES[id];
+      return `<button type="button" data-diff="${id}" class="${id === difficulty ? "on" : ""}" style="--c:${d.color}">${d.label}</button>`;
+    }).join("");
+    const best = parseInt(load(bestKey(difficulty)), 10);
+    return `<div class="diff">${buttons}</div><p class="muted">${diff.desc}${best ? ` · Record: ${nf(best)}` : ""}</p>`;
+  }
+  function setDifficulty(id) { if (!DIFFICULTIES[id]) return; difficulty = id; diff = DIFFICULTIES[id]; store(DIFF_KEY, id); if (state === "menu") buildLevel(); if (menu) menu(); }
+  function showTitle() {
+    menu = showTitle;
+    showOverlay(
+      `<h1>ESPLORA O SFRUTTA</h1>
+       <p>Qualche leva, ognuna con la sua probabilità di dare una ricompensa, e nessuno che te la dica. Hai un numero contato di tirate: se le spendi a provare tutte le leve non ti resta niente per quella buona, se ti fermi alla prima che paga magari era la peggiore. È il dilemma di chi impara per tentativi, me compreso.</p>
+       <div class="pts">
+         <span><b>Le leve</b></span><span>sotto ognuna vedi quante volte l'hai tirata e quante ha pagato: è tutto quello che sai</span>
+         <span><b>Obiettivo</b></span><span>un numero di ricompense da raggiungere prima di finire le tirate</span>
+         <span><b>Rimpianto</b></span><span>quanto hai lasciato sul tavolo rispetto a tirare sempre la leva migliore; a fine livello si scoprono le probabilità vere</span>
+         <span><b>Punti</b></span><span>200 × livello · 40 per ogni ricompensa sopra l'obiettivo · 500 se il rimpianto è quasi zero</span>
+       </div>
+       ${touchMode
+         ? `<p class="muted help">Tocca una leva per tirarla</p>`
+         : `<p class="muted help">Clicca una leva per tirarla · oppure i tasti 1–6, o ← → e Spazio · P pausa</p>`}
+       ${difficultyHTML()}
+       <button class="start" data-start>COMINCIA L'EPISODIO</button>`
+    );
+  }
+  overlay.addEventListener("click", (e) => {
+    const d = e.target.closest("[data-diff]");
+    if (d) { setDifficulty(d.dataset.diff); return; }
+    if (e.target.closest("[data-start]")) startGame();
+    if (e.target.closest("[data-resume]")) togglePause();
+  });
+
+  // ---------- Input ----------
+  window.addEventListener("keydown", (e) => {
+    const k = e.key.toLowerCase();
+    if ([" ", "arrowup", "arrowdown", "arrowleft", "arrowright"].includes(k)) e.preventDefault();
+    if (state === "menu" || state === "over") {
+      if (e.key === "Enter") startGame();
+      else if (["1", "2", "3"].includes(k)) setDifficulty(DIFF_IDS[+k - 1]);
+      return;
+    }
+    if (k === "p" || k === "escape") { if (!e.repeat) togglePause(); return; }
+    if (state === "paused") { if (e.key === "Enter") togglePause(); return; }
+    if (state !== "play") return;
+    if (k >= "1" && k <= "6") { kbOn = true; if (!e.repeat) pull(+k - 1); }
+    else if (k === "arrowleft") { kbOn = true; cursor = (cursor + arms.length - 1) % arms.length; }
+    else if (k === "arrowright") { kbOn = true; cursor = (cursor + 1) % arms.length; }
+    else if ((k === " " || k === "enter" || k === "arrowdown") && !e.repeat) { kbOn = true; pull(cursor); }
+  });
+  window.addEventListener("blur", () => { if (isPlaying()) togglePause(); });
+  const toWorld = (e) => { const rc = canvas.getBoundingClientRect(); return { x: (e.clientX - rc.left) / rc.width * W, y: (e.clientY - rc.top) / rc.height * H }; };
+  canvas.addEventListener("pointerdown", (e) => {
+    e.preventDefault();
+    if (state !== "play") return;
+    const p = toWorld(e);
+    if (p.y < AREA.y - 10 || p.y > AREA.y + AREA.h + 10 || p.x < AREA.x || p.x > AREA.x + AREA.w) return;
+    kbOn = false;
+    pull(Math.floor((p.x - AREA.x) / (AREA.w / arms.length)));
+  });
+  window.addEventListener("pointerdown", (e) => { if (e.pointerType === "touch" && !touchMode) { touchMode = true; syncControls(); if (menu) menu(); } }, true);
+
+  // ---------- Update ----------
+  function update(dt) {
+    clock += dt;
+    for (const p of popups) { p.t += dt; p.y -= 14 * dt; }
+    popups = popups.filter((p) => p.t < 1.8);
+    for (const c of coins) c.t += dt;
+    coins = coins.filter((c) => c.t < 0.7);
+    for (const a of arms) a.kick = Math.max(0, a.kick - dt * 5);
+    if (message) { message.t += dt; if (message.t > (state === "play" ? 2 : 3)) message = null; }
+    if (state === "levelup") { stateT -= dt; if (stateT <= 0) { level++; beginLevel(); } }
+    else if (state === "fail") { stateT -= dt; if (stateT <= 0) { if (lives <= 0) gameOver(); else beginLevel(); } }
+  }
+
+  // ---------- Drawing ----------
+  function rr(x, y, w, h, r) { ctx.beginPath(); ctx.roundRect(x, y, w, h, r); }
+  function drawArm(a, i) {
+    const cw = AREA.w / arms.length, x = armX(i), w = Math.min(64, cw - 8), top = AREA.y, done = state === "levelup" || state === "fail";
+    const on = kbOn && state === "play" && cursor === i;
+    // the machine
+    ctx.fillStyle = "#171036"; rr(x - w / 2, top, w, AREA.h, 10); ctx.fill();
+    ctx.strokeStyle = on ? "#f1eeff" : "#2f2466"; ctx.lineWidth = on ? 2.5 : 1.5; ctx.stroke();
+    // the lever: it dips when pulled
+    const ly = top + 30 + a.kick * 16;
+    ctx.strokeStyle = "#a9a3cf"; ctx.lineWidth = 4; ctx.lineCap = "round"; ctx.beginPath(); ctx.moveTo(x, top + 62); ctx.lineTo(x, ly); ctx.stroke();
+    ctx.fillStyle = a.col; ctx.beginPath(); ctx.arc(x, ly, 11, 0, TAU); ctx.fill();
+    ctx.fillStyle = "#0d0822"; ctx.font = "900 12px system-ui"; ctx.textAlign = "center"; ctx.textBaseline = "middle"; ctx.fillText(String(i + 1), x, ly + 0.5);
+    // the window: what the last pull gave
+    ctx.fillStyle = "#0d0822"; rr(x - w / 2 + 6, top + 70, w - 12, 30, 6); ctx.fill();
+    if (a.last) {
+      ctx.globalAlpha = 0.35 + 0.65 * a.kick;
+      if (a.last > 0) { ctx.fillStyle = "#ffd66b"; ctx.beginPath(); ctx.arc(x, top + 85, 9, 0, TAU); ctx.fill(); ctx.fillStyle = "#0d0822"; ctx.font = "900 10px system-ui"; ctx.fillText("+1", x, top + 85.5); }
+      else { ctx.strokeStyle = "#a9a3cf"; ctx.lineWidth = 2; ctx.beginPath(); ctx.moveTo(x - 7, top + 85); ctx.lineTo(x + 7, top + 85); ctx.stroke(); }
+      ctx.globalAlpha = 1;
+    }
+    // what you have seen of it: a bar that fills with the share of pulls that paid
+    const bx = x - w / 2 + 10, bw = w - 20, by = top + 112, bh = AREA.h - 176, rate = a.n ? a.w / a.n : 0;
+    ctx.fillStyle = "rgba(255,255,255,0.07)"; rr(bx, by, bw, bh, 5); ctx.fill();
+    if (a.n) {
+      ctx.fillStyle = a.col; ctx.globalAlpha = 0.25 + 0.75 * Math.min(1, a.n / 8);   // paler while you know little
+      const fh = Math.max(3, bh * rate); rr(bx, by + bh - fh, bw, fh, 5); ctx.fill(); ctx.globalAlpha = 1;
+    }
+    if (done) {   // the truth, at last
+      const ty = by + bh * (1 - a.p);
+      ctx.strokeStyle = "#f1eeff"; ctx.lineWidth = 2.5; ctx.setLineDash([4, 3]); ctx.beginPath(); ctx.moveTo(bx - 4, ty); ctx.lineTo(bx + bw + 4, ty); ctx.stroke(); ctx.setLineDash([]);
+      ctx.fillStyle = "#f1eeff"; ctx.font = "900 10px system-ui"; ctx.fillText(`${Math.round(a.p * 100)}%`, x, clamp(ty - 9, by + 8, by + bh - 8));
+    }
+    ctx.fillStyle = a.n ? "#f1eeff" : "#a9a3cf"; ctx.font = "900 15px system-ui"; ctx.fillText(a.n ? `${a.w}/${a.n}` : "?", x, top + AREA.h - 44);
+    ctx.fillStyle = "#a9a3cf"; ctx.font = "700 10px system-ui"; ctx.fillText(a.n ? `${Math.round(rate * 100)}%` : "mai tirata", x, top + AREA.h - 24);
+    ctx.textBaseline = "alphabetic";
+  }
+  function drawBoard() {
+    // the episode: pulls left, rewards so far, the goal
+    ctx.textBaseline = "middle";
+    const y = TOP + 22;
+    ctx.textAlign = "left"; ctx.fillStyle = "#a9a3cf"; ctx.font = "700 10px system-ui"; ctx.fillText("TIRATE RIMASTE", 14, y - 8);
+    ctx.fillStyle = left <= 5 && state === "play" ? "#ff6b7d" : "#f1eeff"; ctx.font = "900 26px system-ui"; ctx.fillText(String(left), 14, y + 14);
+    ctx.textAlign = "right"; ctx.fillStyle = "#a9a3cf"; ctx.font = "700 10px system-ui"; ctx.fillText("RICOMPENSE", W - 14, y - 8);
+    ctx.fillStyle = reward >= target ? "#7ee0a0" : "#ffd66b"; ctx.font = "900 26px system-ui"; ctx.fillText(String(reward), W - 60, y + 14);
+    ctx.fillStyle = "#a9a3cf"; ctx.font = "800 13px system-ui"; ctx.fillText(`/ ${target}`, W - 14, y + 16);
+    // can you still make it? the bar shows what is done, and the notch what is needed
+    const bx = 14, bw = W - 28, by = y + 40;
+    ctx.fillStyle = "rgba(255,255,255,0.1)"; rr(bx, by, bw, 10, 5); ctx.fill();
+    const scale = Math.max(target * 1.15, 1);
+    ctx.fillStyle = reward >= target ? "#7ee0a0" : "#ffd66b"; if (reward) { rr(bx, by, Math.min(bw, bw * reward / scale), 10, 5); ctx.fill(); }
+    ctx.strokeStyle = "#f1eeff"; ctx.lineWidth = 2; ctx.beginPath(); ctx.moveTo(bx + bw * target / scale, by - 4); ctx.lineTo(bx + bw * target / scale, by + 14); ctx.stroke();
+    ctx.textAlign = "center"; ctx.fillStyle = "#a9a3cf"; ctx.font = "700 10px system-ui";
+    const missing = target - reward;
+    ctx.fillText(state !== "play" ? "le linee tratteggiate sono le probabilità vere" : missing <= 0 ? "obiettivo raggiunto: ora ogni ricompensa in più vale punti" : missing > left ? "l'obiettivo non è più raggiungibile" : `mancano ${missing} ricompense in ${left} tirate${drifts && !drifted ? " · a metà il mondo cambia" : ""}`, W / 2, AREA.y + AREA.h + 22);
+    if (state === "play") { ctx.fillStyle = "rgba(169,163,207,0.7)"; ctx.fillText(touchMode ? "tocca una leva" : "clicca una leva, o tasti 1–" + arms.length, W / 2, AREA.y + AREA.h + 44); }
+    ctx.textBaseline = "alphabetic";
+  }
+  function drawHud() {
+    ctx.fillStyle = "#0d0822"; ctx.fillRect(0, 0, W, TOP - 4);
+    ctx.textBaseline = "middle"; ctx.textAlign = "left";
+    ctx.fillStyle = "#f1eeff"; ctx.font = "900 18px system-ui"; ctx.fillText(nf(score), 12, 16);
+    ctx.fillStyle = "#a9a3cf"; ctx.font = "700 9px system-ui"; ctx.fillText(`REC ${nf(Math.max(bestCache, score))}`, 12, 36);
+    ctx.textAlign = "center"; ctx.fillStyle = "#ff9a6b"; ctx.font = "900 12px system-ui"; ctx.fillText(`LIVELLO ${level + 1}`, W / 2, 14);
+    ctx.fillStyle = "#a9a3cf"; ctx.font = "700 10px system-ui"; ctx.fillText(`${cleared} ${cleared === 1 ? "livello superato" : "livelli superati"}`, W / 2, 34);
+    const ex = touchMode ? W - 62 : W - 12;
+    ctx.textAlign = "right"; ctx.fillStyle = "#a9a3cf"; ctx.font = "700 9px system-ui"; ctx.fillText("ERRORI CONCESSI", ex, 12);
+    for (let i = 0; i < diff.lives; i++) { ctx.fillStyle = i < lives ? "#ffd66b" : "rgba(255,255,255,0.15)"; ctx.beginPath(); ctx.arc(ex - 6 - i * 14, 31, 5, 0, TAU); ctx.fill(); }
+    ctx.fillStyle = "rgba(255,255,255,0.12)"; ctx.fillRect(0, TOP - 4, W, 4);
+    ctx.fillStyle = "#ff9a6b"; ctx.fillRect(0, TOP - 4, W * left / Math.max(1, budget), 4);
+    ctx.textBaseline = "alphabetic";
+  }
+  function draw() {
+    ctx.setTransform(pxRatio, 0, 0, pxRatio, 0, 0);
+    ctx.fillStyle = "#0d0822"; ctx.fillRect(0, 0, W, H);
+    arms.forEach(drawArm);
+    if (state === "menu") return;
+    for (const c of coins) { const k = c.t / 0.7; ctx.globalAlpha = 1 - k; ctx.fillStyle = "#ffd66b"; ctx.beginPath(); ctx.arc(c.x, c.y - k * 70, 7, 0, TAU); ctx.fill(); }
+    ctx.globalAlpha = 1;
+    drawHud();
+    drawBoard();
+    for (const p of popups) {
+      ctx.globalAlpha = clamp((1.8 - p.t) * 2, 0, 1);
+      ctx.textAlign = "center"; ctx.font = "900 14px system-ui";
+      ctx.lineWidth = 4; ctx.strokeStyle = "#0d0822"; ctx.strokeText(p.text, p.x, p.y); ctx.fillStyle = p.color; ctx.fillText(p.text, p.x, p.y);
+    }
+    ctx.globalAlpha = 1;
+    if (message) {
+      ctx.globalAlpha = Math.min(1, ((state === "play" ? 2 : 3) - message.t) * 2);
+      ctx.fillStyle = "rgba(13,8,34,0.86)"; ctx.fillRect(0, 522, W, 62);
+      ctx.textAlign = "center"; ctx.font = "900 22px system-ui"; ctx.fillStyle = message.bad ? "#ff6b7d" : "#ff9a6b";
+      ctx.fillText(message.text, W / 2, 549);
+      if (message.sub) { ctx.font = "800 11px system-ui"; ctx.fillStyle = "#f1eeff"; ctx.fillText(message.sub, W / 2, 570); }
+      ctx.globalAlpha = 1;
+    }
+  }
+
+  // ---------- Loop ----------
+  let last = performance.now();
+  function frame(now) {
+    const dt = Math.min(0.1, (now - last) / 1000);
+    last = now;
+    update(dt);
+    draw();
+    requestAnimationFrame(frame);
+  }
+  buildLevel();
+  syncControls();
+  showTitle();
+  requestAnimationFrame(frame);
+})();
+</script>
+<script src="../../shared/iniziali.js" data-record="esplora-best-" data-kind="score"></script>
+</body>
+</html>
