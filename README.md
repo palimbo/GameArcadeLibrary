@@ -4,7 +4,7 @@ Raccolta di giochi arcade per il browser. Ogni gioco è un singolo file HTML sen
 
 ## 🕹️ Sala Giochi — `index.html`
 
-Apri `index.html` nella cartella principale per la pagina di raccolta: mostra tutti i 190 giochi con copertina, genere, comandi e i tuoi record per ogni difficoltà (Facile, Normale, Difficile). Tocca «Gioca» per avviare un gioco; in ogni gioco il pulsante «← Sala Giochi» in alto a sinistra (visibile nei menu) riporta alla raccolta.
+Apri `index.html` nella cartella principale per la pagina di raccolta: mostra tutti i 191 giochi con copertina, genere, comandi e i tuoi record per ogni difficoltà (Facile, Normale, Difficile). Tocca «Gioca» per avviare un gioco; in ogni gioco il pulsante «← Sala Giochi» in alto a sinistra (visibile nei menu) riporta alla raccolta.
 
 **Iniziali del record:** quando batti un record compare la schermata da sala giochi per inserire le tue tre iniziali (frecce ↑ ↓ per cambiare lettera, ← → per spostarti, oppure scrivile direttamente; su telefono i tasti ▲ ▼ e OK). Le iniziali vengono salvate insieme al record e compaiono nei menu del gioco e nella Sala Giochi. Il codice è condiviso da tutti i giochi in `shared/iniziali.js`.
 
@@ -12,7 +12,7 @@ Apri `index.html` nella cartella principale per la pagina di raccolta: mostra tu
 
 **Comandi touch: levetta o frecce:** in cima alla Sala Giochi e nel menu di pausa di ogni gioco con la levetta si sceglie se usare la levetta analogica o una croce di frecce. Con le frecce il tocco viene agganciato a una delle otto direzioni (le quattro principali hanno la zona più larga, così le diagonali si prendono solo di proposito) e spinto fino in fondo; la scelta vale per tutti i giochi e resta memorizzata. Funziona anche nei giochi con due levette (la sfida a due di *Pugni di Fuoco*, muovi e spara di *Assalto Robotico*).
 
-**Trofei:** ogni gioco ha tre trofei a punteggio: 🥉 **Bronzo** (la soglia in qualsiasi difficoltà), 🥈 **Argento** (a Normale o Difficile) e 🥇 **Oro** (a Difficile); nei giochi a tempo (*Corsa al Tramonto*, *Crystal Wars*) conta finire entro un certo tempo. I trofei si calcolano dai record salvati, quindi quelli già fatti si sbloccano da soli; quando un record nuovo ne conquista uno compare un avviso in alto. Le soglie sono nella schermata iniziale, in pausa e a fine partita di ogni gioco; in Sala Giochi ogni cabinato mostra i suoi trofei, in cima c'è il totale (su 570) con il numero di giochi giocati e il filtro **Già giocati** mostra solo i giochi con almeno un record. Le soglie vengono dalle partite di prova di un bot per circa un terzo dei giochi e sono stimate sulle regole di punteggio per gli altri (`shared/trofei.js`).
+**Trofei:** ogni gioco ha tre trofei a punteggio: 🥉 **Bronzo** (la soglia in qualsiasi difficoltà), 🥈 **Argento** (a Normale o Difficile) e 🥇 **Oro** (a Difficile); nei giochi a tempo (*Corsa al Tramonto*, *Crystal Wars*) conta finire entro un certo tempo. I trofei si calcolano dai record salvati, quindi quelli già fatti si sbloccano da soli; quando un record nuovo ne conquista uno compare un avviso in alto. Le soglie sono nella schermata iniziale, in pausa e a fine partita di ogni gioco; in Sala Giochi ogni cabinato mostra i suoi trofei, in cima c'è il totale (su 573) con il numero di giochi giocati e il filtro **Già giocati** mostra solo i giochi con almeno un record. Le soglie vengono dalle partite di prova di un bot per circa un terzo dei giochi e sono stimate sulle regole di punteggio per gli altri (`shared/trofei.js`).
 
 **Imprese:** i traguardi della sala sono pensati in tre livelli. Il **livello 1** sono i trofei di punteggio qui sopra, per tutti i giochi. Il **livello 2** (traguardi di progresso come «arriva al livello 5») abbiamo scelto di non farlo: lo coprono già in parte i trofei e, dove conta, le imprese. Il **livello 3** sono le **imprese** 🏅: due o tre prodezze caratteristiche di ogni gioco, come atterrare sulla piazzola più piccola in *Soccorso Lunare* o seppellire il capo rosso in *Trappola Aliena*. Le imprese di un gioco sono elencate nella sua schermata iniziale, in pausa e a fine partita (tocca un nome per leggere cosa chiede); quando ne fai una compare un avviso azzurro in alto. In Sala Giochi ogni cabinato mostra le sue (🏅 1/3 imprese) e in cima c'è il totale. Si aggiungono a gruppi di giochi: per ora ci sono le 150 imprese dei 50 giochi più recenti (da *Re della Giungla* a *Bocce*): i giochi nuovi nascono con le loro. Come i record, restano salvate in questo browser (`shared/imprese.js`).
 
@@ -2972,3 +2972,17 @@ Un gioco del genere **IA** sul mattone di cui sono fatte le reti neurali. Un neu
 - **Comandi:** clicca o tocca un peso o un neurone per sceglierlo, poi `−` e `+` · tastiera: `←` `→` per scegliere, `↑` `↓` per regolare · `P` pausa
 
 Per giocare apri `games/pesi-e-soglie/index.html` nel browser.
+
+### 🤖 La Domanda Giusta — `games/la-domanda-giusta/index.html`
+
+Un gioco del genere **IA** sugli alberi di decisione e sull'informazione. Tra le figure sullo schermo ce n'è una segreta, e per trovarla hai un numero contato di domande da sì o no.
+
+- **Le domande:** sul colore (gialla, rossa, azzurra, verde), sulla forma (cerchio, quadrato, triangolo, stella) e, più avanti, su altre caratteristiche: grande, piena, col puntino, con l'anello. A ogni risposta le figure che non corrispondono si spengono
+- **I bit:** una domanda che divide esattamente a metà le figure rimaste vale un bit; una che ne riguarda poche quasi sempre ne vale molto meno. Dopo ogni risposta il gioco dice quanti bit ha dato, e una barra mostra l'informazione raccolta su quella che serve (3 bit per 8 figure, 4,6 per 24). I colori e le forme non sono distribuiti in modo uniforme: la domanda buona va cercata contando
+- **Tentare:** toccando due volte una figura si chiede «è questa?». Costa una domanda come le altre
+- **I livelli:** 8 figure all'inizio, poi 12, 16, 20 e 24, con una caratteristica in più a ogni salto. Le domande a disposizione sono quelle che servono al giocatore perfetto nel caso peggiore più qualcuna di scorta, e la scorta cala ogni tre livelli. Finite le domande si perde uno degli errori concessi e il livello riparte con figure nuove
+- **Punti:** 250 × livello · 100 per ogni domanda avanzata · 400 se la trovi nel minimo possibile
+- **Difficoltà:** Facile (tre domande di scorta, 4 errori concessi), Normale (due di scorta, 3 errori), Difficile (una di scorta, poi nessuna); record separati per ogni difficoltà
+- **Comandi:** clicca o tocca una domanda · due tocchi su una figura per tentare · tastiera: frecce per scegliere la domanda, `Invio` per farla · `P` pausa
+
+Per giocare apri `games/la-domanda-giusta/index.html` nel browser.

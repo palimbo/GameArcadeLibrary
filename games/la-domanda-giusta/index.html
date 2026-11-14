@@ -1,0 +1,489 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no, viewport-fit=cover">
+<title>La Domanda Giusta</title>
+<style>
+  :root {
+    --bg: #0d0822;
+    --fg: #f1eeff;
+    --muted: #a9a3cf;
+    --cyan: #5fe3d6;
+    --yellow: #ffd66b;
+    --red: #ff6b7d;
+    --pink: #c8f56b;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  html, body {
+    height: 100%;
+    background: var(--bg);
+    color: var(--fg);
+    font-family: system-ui, -apple-system, "Segoe UI", sans-serif;
+    overflow: hidden;
+    user-select: none;
+    -webkit-user-select: none;
+    touch-action: none;
+  }
+  #wrap { position: fixed; inset: 0; display: flex; align-items: center; justify-content: center; }
+  canvas { display: block; touch-action: none; border-radius: 6px; box-shadow: 0 0 0 2px #2a1f55, 0 10px 40px rgba(0,0,0,0.6); cursor: pointer; }
+  #pauseBtn {
+    position: fixed; z-index: 3; display: none; right: 10px; top: calc(10px + env(safe-area-inset-top, 0px));
+    font: 700 13px system-ui, sans-serif; color: var(--fg);
+    background: rgba(0, 0, 0, 0.6); border: 1px solid rgba(241, 238, 255, 0.35);
+    border-radius: 8px; padding: 6px 10px; cursor: pointer;
+  }
+  #overlay {
+    position: fixed; inset: 0; z-index: 5;
+    display: flex; flex-direction: column; align-items: center; justify-content: flex-start;
+    gap: 14px; padding: 16px; text-align: center; overflow-y: auto;
+    background: rgba(13, 8, 34, 0.93);
+  }
+  #overlay > :first-child { margin-top: auto; }
+  #overlay > :last-child { margin-bottom: auto; }
+  #overlay.hidden { display: none; }
+  #homeLink {
+    position: fixed; top: calc(10px + env(safe-area-inset-top, 0px)); left: 10px; z-index: 6;
+    font: 600 13px/1 system-ui, sans-serif; color: #fff; text-decoration: none;
+    padding: 8px 12px; border-radius: 999px; background: rgba(0,0,0,.55);
+    border: 1px solid rgba(255,255,255,.25);
+  }
+  #homeLink:hover { background: rgba(0,0,0,.8); }
+  #overlay.hidden ~ #homeLink { display: none; }
+  @media (max-width: 700px) { #overlay { padding-top: calc(52px + env(safe-area-inset-top, 0px)); } }
+  #overlay h1 { font-size: clamp(30px, 9vw, 54px); font-weight: 900; letter-spacing: 1px; color: var(--pink);
+    text-shadow: 3px 3px 0 #2a1f6a, 0 0 22px rgba(200,245,107,0.35); text-wrap: balance; }
+  #overlay h2 { font-size: clamp(24px, 7vw, 40px); font-weight: 900; letter-spacing: 2px; color: var(--pink); }
+  #overlay h2.lose { color: var(--red); }
+  #overlay p { max-width: 540px; font-size: clamp(13px, 3.4vw, 16px); line-height: 1.55; }
+  #overlay p.muted { color: var(--muted); }
+  #overlay .pts { display: grid; grid-template-columns: repeat(2, auto); gap: 4px 18px; font-size: 13px; color: var(--muted); text-align: left; max-width: 560px; }
+  #overlay .pts b { color: var(--fg); }
+  #overlay .diff { display: flex; gap: 10px; flex-wrap: wrap; justify-content: center; }
+  #overlay button {
+    font: 800 15px system-ui, sans-serif; letter-spacing: 1.5px; color: var(--fg);
+    background: transparent; cursor: pointer;
+    border: 2px solid rgba(241,238,255,0.3); border-radius: 10px; padding: 9px 16px;
+  }
+  #overlay .diff button.on { border-color: var(--c); color: var(--c); box-shadow: 0 0 12px var(--c); }
+  #overlay button.start { border-color: var(--pink); color: #1a2406; background: var(--pink); padding: 11px 30px; box-shadow: 0 4px 0 #7fa332; }
+  @media (max-height: 560px) {
+    #overlay { gap: 8px; }
+    #overlay h1 { font-size: 28px; }
+    #overlay p { font-size: 13px; line-height: 1.4; }
+    #overlay .help, #overlay .pts { display: none; }
+  }
+</style>
+</head>
+<body>
+<div id="wrap"><canvas id="game"></canvas></div>
+<button id="pauseBtn" type="button" aria-label="Pausa">❚❚</button>
+<div id="overlay"></div>
+<a id="homeLink" href="../../index.html">← Sala Giochi</a>
+
+<script>
+(() => {
+  "use strict";
+
+  const W = 360, H = 600, TOP = 56, TAU = Math.PI * 2;
+  const ACC = "#c8f56b";
+  const COLORS = [["Gialla", "#ffd66b"], ["Rossa", "#ff6b7d"], ["Azzurra", "#6bb8ff"], ["Verde", "#7ee0a0"]];
+  const SHAPES = ["Cerchio", "Quadrato", "Triangolo", "Stella"];
+  const FLAGS = [["big", "Grande"], ["full", "Piena"], ["dot", "Puntino"], ["ring", "Anello"]];
+  // lesson after lesson: more figures, and more things that tell them apart
+  const stage = (lv) => (lv < 2 ? { n: 8, flags: 0 } : lv < 4 ? { n: 12, flags: 1 } : lv < 6 ? { n: 16, flags: 2 } : lv < 9 ? { n: 20, flags: 3 } : { n: 24, flags: 4 });
+
+  const DIFFICULTIES = {
+    facile:    { label: "FACILE",    color: "#7ee0a0", desc: "tre domande di scorta · 4 errori concessi", extra: 3, min: 1, lives: 4 },
+    normale:   { label: "NORMALE",   color: "#ffd66b", desc: "due domande di scorta · 3 errori concessi", extra: 2, min: 0, lives: 3 },
+    difficile: { label: "DIFFICILE", color: "#ff6b7d", desc: "una domanda di scorta, poi nessuna · 3 errori concessi", extra: 1, min: 0, lives: 3 },
+  };
+  const DIFF_IDS = Object.keys(DIFFICULTIES);
+  const DIFF_KEY = "domanda-difficulty";
+  const bestKey = (id) => `domanda-best-${id}`;
+  function store(k, v) { try { localStorage.setItem(k, v); } catch { /* ignore */ } }
+  function load(k) { try { return localStorage.getItem(k); } catch { return null; } }
+  const rint = (a, b) => a + Math.floor(Math.random() * (b - a + 1));
+  const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
+  const nf = (n) => n.toLocaleString("it-IT");
+  const bitf = (b) => b.toFixed(1).replace(".", ",");
+
+  // ---------- Canvas ----------
+  const canvas = document.getElementById("game");
+  const ctx = canvas.getContext("2d");
+  const overlay = document.getElementById("overlay");
+  const pauseBtn = document.getElementById("pauseBtn");
+  let pxRatio = 1, touchMode = !!(window.matchMedia && matchMedia("(pointer: coarse)").matches);
+  function resize() {
+    const availW = window.innerWidth - 8, availH = window.innerHeight - 8;
+    const s = Math.max(0.2, Math.min(availW / W, availH / H));
+    pxRatio = Math.min(3, s * (window.devicePixelRatio || 1));
+    canvas.style.width = W * s + "px";
+    canvas.style.height = H * s + "px";
+    canvas.width = Math.round(W * pxRatio);
+    canvas.height = Math.round(H * pxRatio);
+  }
+  window.addEventListener("resize", () => syncControls());
+
+  // ---------- Audio: soft tones ----------
+  let audioCtx = null;
+  function beep(freq, dur, type = "sine", vol = 0.05, delay = 0) {
+    if (!audioCtx) return;
+    const t = audioCtx.currentTime + delay;
+    const osc = audioCtx.createOscillator(), gain = audioCtx.createGain();
+    osc.type = type; osc.frequency.setValueAtTime(freq, t);
+    gain.gain.setValueAtTime(0.0001, t);
+    gain.gain.exponentialRampToValueAtTime(vol, t + 0.015);
+    gain.gain.exponentialRampToValueAtTime(0.0001, t + dur);
+    osc.connect(gain).connect(audioCtx.destination);
+    osc.start(t); osc.stop(t + dur + 0.02);
+  }
+  const arp = (notes, gap, d, type, vol) => notes.forEach((f, i) => beep(f, d, type, vol, i * gap));
+  const sfx = {
+    pick: () => beep(520, 0.06, "sine", 0.035),
+    step: (v) => beep(392 * Math.pow(1.09, v), 0.09, "triangle", 0.04),
+    edge: () => beep(150, 0.08, "sine", 0.045),
+    row: () => beep(880, 0.1, "sine", 0.03, 0.05),
+    win: () => arp([523, 659, 784, 1047], 0.09, 0.35),
+    perfect: () => arp([523, 659, 784, 1047, 1319, 1568], 0.07, 0.4),
+    fail: () => arp([392, 330, 277], 0.14, 0.35, "triangle", 0.05),
+    lose: () => arp([392, 330, 277, 220], 0.16, 0.4, "triangle", 0.05),
+  };
+
+  // ---------- State ----------
+  let difficulty = DIFFICULTIES[load(DIFF_KEY)] ? load(DIFF_KEY) : "normale";
+  let diff = DIFFICULTIES[difficulty];
+  let state = "menu", menu = null, pausedFrom = null, stateT = 0, clock = 0;
+  let score = 0, level = 0, bestCache = 0, cleared = 0, perfects = 0, lives = 0;
+  let figs = [], qs = [], secret = 0, par = 0, budget = 0, used = 0, sel = 0, kbd = false, armed = -1, lastBits = null, cols = 4, cw = 85, ch = 64;
+  let popups = [], message = null;
+  const isPlaying = () => ["play", "levelup", "fail"].includes(state);
+  const alive = () => figs.filter((f) => f.on).length;
+
+  // ---------- Figures and questions ----------
+  function buildLevel() {
+    const st = stage(level), n = st.n;
+    qs = [
+      ...COLORS.map(([label, col], i) => ({ label, col, test: (f) => f.c === i })),
+      ...SHAPES.map((label, i) => ({ label, shape: i, test: (f) => f.s === i })),
+      ...FLAGS.slice(0, st.flags).map(([k, label]) => ({ label, flag: k, test: (f) => f[k] })),
+    ];
+    for (let tries = 0; tries < 200; tries++) {
+      // an uneven crowd: some colours and shapes are common, some rare, so the good question has to be looked for
+      const wc = COLORS.map(() => 0.4 + Math.random() * 1.6), ws = SHAPES.map(() => 0.4 + Math.random() * 1.6), pf = FLAGS.map(() => 0.25 + Math.random() * 0.5);
+      const pick = (w) => { let r = Math.random() * w.reduce((a, b) => a + b, 0); for (let i = 0; i < w.length; i++) { r -= w[i]; if (r < 0) return i; } return w.length - 1; };
+      const seen = new Set(); figs = [];
+      for (let g = 0; figs.length < n && g < 4000; g++) {
+        const f = { c: pick(wc), s: pick(ws), on: true, t: 0 };
+        FLAGS.forEach(([k], i) => { f[k] = i < st.flags ? Math.random() < pf[i] : k === "full" || (k === "big"); });
+        const key = `${f.c}${f.s}${+f.big}${+f.full}${+f.dot}${+f.ring}`;
+        if (!seen.has(key)) { seen.add(key); figs.push(f); }
+      }
+      if (figs.length < n) continue;
+      par = worst();
+      if (par <= Math.ceil(Math.log2(n)) + 1) break;   // no crowd that even perfect play needs ages for
+    }
+    for (let i = n - 1; i > 0; i--) { const j = rint(0, i); [figs[i], figs[j]] = [figs[j], figs[i]]; }
+    secret = rint(0, n - 1);
+    cols = n <= 16 ? 4 : n <= 20 ? 5 : 6;
+    cw = 340 / cols; ch = Math.min(64, 258 / Math.ceil(n / cols));
+    budget = par + Math.max(level >= 12 ? 0 : diff.min, diff.extra - Math.floor(level / 3));
+    used = 0; sel = 0; armed = -1; lastBits = null;
+  }
+  // how many questions the best possible player needs when luck is against them
+  function worst() {
+    const masks = qs.map((q) => figs.reduce((m, f, i) => (q.test(f) ? m | (1 << i) : m), 0));
+    const pop = (x) => { let k = 0; while (x) { x &= x - 1; k++; } return k; };
+    const memo = new Map();
+    const can = (set, d) => {
+      const k = pop(set);
+      if (k <= 1) return true;
+      if (d === 0 || k > 1 << d) return false;
+      const key = set * 8 + d; if (memo.has(key)) return memo.get(key);
+      let ok = false;
+      for (const m of masks) { const a = set & m, b = set & ~m; if (a && b && can(a, d - 1) && can(b, d - 1)) { ok = true; break; } }
+      memo.set(key, ok); return ok;
+    };
+    const all = figs.length === 32 ? -1 : (1 << figs.length) - 1;
+    for (let d = 1; d < 8; d++) if (can(all, d)) return d;
+    return 8;
+  }
+  function startGame() {
+    if (!audioCtx) { try { audioCtx = new (window.AudioContext || window.webkitAudioContext)(); } catch { audioCtx = null; } }
+    if (audioCtx && audioCtx.state === "suspended") audioCtx.resume();
+    score = 0; level = 0; cleared = 0; perfects = 0; lives = diff.lives; popups = [];
+    bestCache = parseInt(load(bestKey(difficulty)), 10) || 0;
+    beginLevel();
+    menu = null;
+    overlay.classList.add("hidden");
+    syncControls();
+    last = performance.now();
+  }
+  function beginLevel() {
+    buildLevel();
+    state = "play";
+    message = { text: `${figs.length} FIGURE, UNA È QUELLA GIUSTA`, sub: `hai ${budget} domande`, t: 0 };
+  }
+  function addScore(k, y, color, label = "") { score += k; popups.push({ text: `${label}+${nf(k)}`, x: W / 2, y, t: 0, color }); }
+  function after(before) {
+    const now = alive();
+    lastBits = Math.log2(before / now);
+    if (now === 1) win();
+    else if (used >= budget) lose();
+  }
+  function ask(i) {
+    if (state !== "play" || !qs[i] || qs[i].ans !== undefined) return;
+    const q = qs[i], yes = q.test(figs[secret]), before = alive();
+    q.ans = yes; used++; armed = -1;
+    for (const f of figs) if (f.on && q.test(f) !== yes) f.on = false;
+    (yes ? sfx.row : sfx.edge)();
+    after(before);
+  }
+  // pointing at a figure is a question too: "is it this one?"
+  function guess(i) {
+    if (state !== "play" || !figs[i] || !figs[i].on) return;
+    const before = alive();
+    used++; armed = -1;
+    if (i === secret) { for (const f of figs) f.on = f === figs[i]; sfx.row(); }
+    else { figs[i].on = false; sfx.edge(); }
+    after(before);
+  }
+  function win() {
+    const left = budget - used, perfect = used <= Math.ceil(Math.log2(figs.length));
+    state = "levelup"; stateT = 2.6; cleared++;
+    addScore(250 * (level + 1), 404, ACC);
+    if (left > 0) addScore(100 * left, 382, "#ffd66b", `${left} ${left === 1 ? "domanda avanzata" : "domande avanzate"} · `);
+    if (perfect) { perfects++; addScore(400, 360, "#5fe3d6", "il minimo possibile · "); sfx.perfect(); } else sfx.win();
+    message = { text: "TROVATA!", sub: `${used} ${used === 1 ? "domanda" : "domande"} per ${figs.length} figure`, t: 0 };
+  }
+  function lose() {
+    lives--;
+    state = "fail"; stateT = 3;
+    (lives > 0 ? sfx.fail : sfx.lose)();
+    message = { text: "DOMANDE FINITE", sub: `ne restavano ${alive()}: era quella cerchiata`, t: 0, bad: true };
+  }
+  function gameOver() {
+    state = "over";
+    const prev = parseInt(load(bestKey(difficulty)), 10) || 0;
+    const record = score > prev;
+    if (record) store(bestKey(difficulty), String(score));
+    menu = () => showOverlay(
+      `<h2 class="lose">DOMANDE FINITE</h2>
+       <p>Punteggio: <b>${nf(score)}</b> · ${cleared} ${cleared === 1 ? "figura trovata" : "figure trovate"}${perfects ? ` · ${perfects} nel minimo possibile` : ""} · ${diff.label}</p>
+       <p class="muted">Un albero di decisione si costruisce così: a ogni passo si sceglie la domanda che divide meglio quello che resta. Io ne ho viste fare tante.</p>
+       ${record ? "<p style='color:var(--yellow)'>★ NUOVO RECORD! ★</p>" : ""}
+       ${difficultyHTML()}
+       <button class="start" data-start>RIPROVA</button>`
+    );
+    menu();
+    syncControls();
+  }
+  function togglePause() {
+    if (isPlaying()) {
+      pausedFrom = state; state = "paused";
+      showOverlay(`<h2>PAUSA</h2><button class="start" data-resume>CONTINUA</button><p class="muted">Premi P per continuare</p>`);
+    } else if (state === "paused") {
+      state = pausedFrom; overlay.classList.add("hidden"); last = performance.now();
+    }
+    syncControls();
+  }
+  // the pause menu can end the game (shared/iniziali.js): it ends here the usual way, saving the record
+  window.addEventListener("sala:termina", () => { if (state !== "paused") return; overlay.classList.add("hidden"); gameOver(); syncControls(); });
+  function syncControls() {
+    pauseBtn.style.display = isPlaying() && touchMode ? "block" : "none";
+    resize();
+  }
+  pauseBtn.addEventListener("click", () => togglePause());
+  function showOverlay(html) { overlay.innerHTML = html; overlay.classList.remove("hidden"); }
+  function difficultyHTML() {
+    const buttons = DIFF_IDS.map((id) => {
+      const d = DIFFICULTIES[id];
+      return `<button type="button" data-diff="${id}" class="${id === difficulty ? "on" : ""}" style="--c:${d.color}">${d.label}</button>`;
+    }).join("");
+    const best = parseInt(load(bestKey(difficulty)), 10);
+    return `<div class="diff">${buttons}</div><p class="muted">${diff.desc}${best ? ` · Record: ${nf(best)}` : ""}</p>`;
+  }
+  function setDifficulty(id) { if (!DIFFICULTIES[id]) return; difficulty = id; diff = DIFFICULTIES[id]; store(DIFF_KEY, id); if (state === "menu") buildLevel(); if (menu) menu(); }
+  function showTitle() {
+    menu = showTitle;
+    showOverlay(
+      `<h1>LA DOMANDA GIUSTA</h1>
+       <p>Tra queste figure ce n'è una segreta, e hai poche domande da sì o no per trovarla. «È rossa?» può andarti bene, ma se le rosse sono due su sedici quasi sempre scopri pochissimo. La domanda giusta è quella che divide a metà quello che resta: vale un bit intero.</p>
+       <div class="pts">
+         <span><b>Domande</b></span><span>scegline una: le figure che non corrispondono alla risposta si spengono</span>
+         <span><b>Tentare</b></span><span>tocca due volte una figura per chiedere «è questa?»: costa una domanda anche quello</span>
+         <span><b>Bit</b></span><span>dopo ogni risposta vedi quanta informazione ti ha dato</span>
+         <span><b>Punti</b></span><span>250 × livello · 100 per ogni domanda avanzata · 400 se la trovi nel minimo possibile (3 domande per 8 figure, 5 per 24)</span>
+       </div>
+       ${touchMode
+         ? `<p class="muted help">Tocca una domanda per farla · tocca due volte una figura per tentare</p>`
+         : `<p class="muted help">Clicca una domanda, o frecce e Invio · clicca due volte una figura per tentare · P pausa</p>`}
+       ${difficultyHTML()}
+       <button class="start" data-start>PRIMA FIGURA</button>`
+    );
+  }
+  overlay.addEventListener("click", (e) => {
+    const d = e.target.closest("[data-diff]");
+    if (d) { setDifficulty(d.dataset.diff); return; }
+    if (e.target.closest("[data-start]")) startGame();
+    if (e.target.closest("[data-resume]")) togglePause();
+  });
+
+  // ---------- Input ----------
+  const QX = 10, QY = 372, QW = 82, QH = 46, QG = 4, QR = 52;
+  const qRect = (i) => ({ x: QX + (i % 4) * (QW + QG), y: QY + Math.floor(i / 4) * QR, w: QW, h: QH });
+  const fPos = (i) => { const rows = Math.ceil(figs.length / cols), r = Math.floor(i / cols), inRow = r === rows - 1 ? figs.length - r * cols : cols; return { x: 10 + (340 - inRow * cw) / 2 + (i % cols + 0.5) * cw, y: 66 + (258 - rows * ch) / 2 + (r + 0.5) * ch }; };
+  window.addEventListener("keydown", (e) => {
+    const k = e.key.toLowerCase();
+    if ([" ", "arrowup", "arrowdown", "arrowleft", "arrowright"].includes(k)) e.preventDefault();
+    if (state === "menu" || state === "over") {
+      if (e.key === "Enter") startGame();
+      else if (["1", "2", "3"].includes(k)) setDifficulty(DIFF_IDS[+k - 1]);
+      return;
+    }
+    if (k === "p" || k === "escape") { if (!e.repeat) togglePause(); return; }
+    if (state === "paused") { if (e.key === "Enter") togglePause(); return; }
+    if (state !== "play") return;
+    const n = qs.length, mv = { arrowright: 1, arrowleft: -1, arrowdown: 4, arrowup: -4 }[k];
+    if (mv) { kbd = true; const t = sel + mv; if (t >= 0 && t < n) sel = t; sfx.pick(); }
+    else if ((k === "enter" || k === " ") && !e.repeat) { kbd = true; ask(sel); }
+  });
+  window.addEventListener("blur", () => { if (isPlaying()) togglePause(); });
+  const toWorld = (e) => { const rc = canvas.getBoundingClientRect(); return { x: (e.clientX - rc.left) / rc.width * W, y: (e.clientY - rc.top) / rc.height * H }; };
+  canvas.addEventListener("pointerdown", (e) => {
+    e.preventDefault();
+    if (state !== "play") return;
+    const p = toWorld(e); kbd = false;
+    for (let i = 0; i < qs.length; i++) { const r = qRect(i); if (p.x >= r.x && p.x <= r.x + r.w && p.y >= r.y && p.y <= r.y + r.h) { ask(i); return; } }
+    let hit = -1;
+    figs.forEach((f, i) => { const q = fPos(i); if (f.on && Math.abs(p.x - q.x) < cw / 2 && Math.abs(p.y - q.y) < ch / 2) hit = i; });
+    if (hit < 0) { armed = -1; return; }
+    if (armed === hit) guess(hit); else { armed = hit; sfx.pick(); }
+  });
+  window.addEventListener("pointerdown", (e) => { if (e.pointerType === "touch" && !touchMode) { touchMode = true; syncControls(); if (menu) menu(); } }, true);
+
+  // ---------- Update ----------
+  function update(dt) {
+    clock += dt;
+    for (const p of popups) { p.t += dt; p.y -= 14 * dt; }
+    popups = popups.filter((p) => p.t < 1.8);
+    for (const f of figs) f.t = clamp(f.t + (f.on ? -1 : 1) * dt * 4, 0, 1);
+    if (message) { message.t += dt; if (message.t > (state === "play" ? 2.2 : 2.6)) message = null; }
+    if (state === "levelup") { stateT -= dt; if (stateT <= 0) { level++; beginLevel(); } }
+    else if (state === "fail") { stateT -= dt; if (stateT <= 0) { if (lives <= 0) gameOver(); else beginLevel(); } }
+  }
+
+  // ---------- Drawing ----------
+  function shapePath(s, x, y, r) {
+    ctx.beginPath();
+    if (s === 0) ctx.arc(x, y, r, 0, TAU);
+    else if (s === 1) ctx.rect(x - r * 0.86, y - r * 0.86, r * 1.72, r * 1.72);
+    else if (s === 2) { ctx.moveTo(x, y - r * 1.05); ctx.lineTo(x + r, y + r * 0.8); ctx.lineTo(x - r, y + r * 0.8); ctx.closePath(); }
+    else { for (let i = 0; i < 10; i++) { const a = -Math.PI / 2 + i * Math.PI / 5, q = i % 2 ? r * 0.48 : r * 1.1; ctx.lineTo(x + Math.cos(a) * q, y + Math.sin(a) * q); } ctx.closePath(); }
+  }
+  function drawFig(f, x, y, k) {
+    const col = COLORS[f.c][1], r = (f.big ? 17 : 10.5) * k;
+    ctx.lineJoin = "round";
+    shapePath(f.s, x, y, r);
+    if (f.full) { ctx.fillStyle = col; ctx.fill(); } else { ctx.fillStyle = "#120b2c"; ctx.fill(); ctx.strokeStyle = col; ctx.lineWidth = 2.6 * k; ctx.stroke(); }
+    if (f.dot) { ctx.fillStyle = f.full ? "#0d0822" : col; ctx.beginPath(); ctx.arc(x, y + (f.s === 2 ? r * 0.15 : 0), Math.max(2.4, r * 0.26), 0, TAU); ctx.fill(); }
+    if (f.ring) { ctx.strokeStyle = col; ctx.lineWidth = 1.4; ctx.setLineDash([3, 3]); ctx.beginPath(); ctx.arc(x, y, r + 7 * k, 0, TAU); ctx.stroke(); ctx.setLineDash([]); }
+  }
+  function drawGrid() {
+    const k = Math.min(1, cw / 60, ch / 56);
+    figs.forEach((f, i) => {
+      const p = fPos(i), reveal = (state === "fail" || state === "levelup") && i === secret;
+      ctx.globalAlpha = reveal ? 1 : 1 - f.t * 0.88;
+      if (armed === i && state === "play") { ctx.fillStyle = "rgba(200,245,107,0.14)"; ctx.strokeStyle = ACC; ctx.lineWidth = 1.5; ctx.beginPath(); ctx.roundRect(p.x - cw / 2 + 2, p.y - ch / 2 + 2, cw - 4, ch - 4, 8); ctx.fill(); ctx.stroke(); }
+      drawFig(f, p.x, p.y, k);
+      if (reveal) { ctx.strokeStyle = state === "fail" ? "#ff6b7d" : ACC; ctx.lineWidth = 2.5; ctx.beginPath(); ctx.arc(p.x, p.y, 27 * k + Math.sin(clock * 6) * 2, 0, TAU); ctx.stroke(); }
+      ctx.globalAlpha = 1;
+    });
+  }
+  function drawInfo() {
+    const n = figs.length, tot = Math.log2(n), got = Math.log2(n / alive());
+    ctx.fillStyle = "rgba(255,255,255,0.1)"; ctx.fillRect(14, 362, W - 28, 3);
+    ctx.fillStyle = "#5fe3d6"; ctx.fillRect(14, 362, (W - 28) * got / tot, 3);
+    ctx.textBaseline = "middle"; ctx.font = "700 10px system-ui";
+    ctx.textAlign = "left"; ctx.fillStyle = "#a9a3cf"; ctx.fillText(`informazione: ${bitf(got)} di ${bitf(tot)} bit`, 14, 350);
+    ctx.textAlign = "right";
+    if (armed >= 0 && state === "play") { ctx.fillStyle = ACC; ctx.fillText("tocca ancora per tentare: è questa?", W - 14, 350); }
+    else if (lastBits !== null) { ctx.fillStyle = lastBits >= 0.95 ? "#5fe3d6" : lastBits < 0.5 ? "#ff9be0" : "#f1eeff"; ctx.fillText(`l'ultima risposta: ${bitf(lastBits)} bit`, W - 14, 350); }
+    ctx.textBaseline = "alphabetic";
+  }
+  function drawQuestions() {
+    ctx.textBaseline = "middle";
+    qs.forEach((q, i) => {
+      const r = qRect(i), done = q.ans !== undefined, on = kbd && sel === i && state === "play";
+      ctx.globalAlpha = done ? 0.55 : 1;
+      ctx.fillStyle = "#1a1240"; ctx.strokeStyle = on ? "#f1eeff" : done ? (q.ans ? "#7ee0a0" : "#ff6b7d") : "#4a3f88"; ctx.lineWidth = on ? 2.5 : 1.5;
+      ctx.beginPath(); ctx.roundRect(r.x, r.y, r.w, r.h, 9); ctx.fill(); ctx.stroke();
+      const cx = r.x + r.w / 2;
+      if (q.col) { ctx.fillStyle = q.col; ctx.beginPath(); ctx.arc(cx, r.y + 14, 6, 0, TAU); ctx.fill(); }
+      else if (q.shape !== undefined) { shapePath(q.shape, cx, r.y + 14, 6.5); ctx.strokeStyle = "#f1eeff"; ctx.lineWidth = 1.6; ctx.stroke(); }
+      else drawFig({ c: 0, s: 0, big: q.flag === "big", full: q.flag === "full" || q.flag === "big", dot: q.flag === "dot", ring: q.flag === "ring" }, cx, r.y + 14, q.flag === "big" ? 0.6 : 0.62);
+      ctx.textAlign = "center"; ctx.fillStyle = "#f1eeff"; ctx.font = "800 11px system-ui"; ctx.fillText(`${q.label}?`, cx, r.y + 34);
+      if (done) { ctx.globalAlpha = 1; ctx.fillStyle = q.ans ? "#7ee0a0" : "#ff6b7d"; ctx.font = "900 9px system-ui"; ctx.textAlign = "right"; ctx.fillText(q.ans ? "SÌ" : "NO", r.x + r.w - 6, r.y + 10); }
+      ctx.globalAlpha = 1;
+    });
+    ctx.textAlign = "center"; ctx.fillStyle = "#a9a3cf"; ctx.font = "700 10px system-ui";
+    ctx.fillText("oppure tocca due volte una figura: «è questa?»", W / 2, QY + Math.ceil(qs.length / 4) * QR + 14);
+    ctx.textBaseline = "alphabetic";
+  }
+  function drawHud() {
+    ctx.fillStyle = "#0d0822"; ctx.fillRect(0, 0, W, TOP - 4);
+    ctx.textBaseline = "middle"; ctx.textAlign = "left";
+    ctx.fillStyle = "#f1eeff"; ctx.font = "900 18px system-ui"; ctx.fillText(nf(score), 12, 16);
+    ctx.fillStyle = "#a9a3cf"; ctx.font = "700 9px system-ui"; ctx.fillText(`REC ${nf(Math.max(bestCache, score))}`, 12, 36);
+    ctx.textAlign = "center"; ctx.fillStyle = ACC; ctx.font = "900 12px system-ui"; ctx.fillText(`LIVELLO ${level + 1}`, W / 2, 14);
+    const leftN = budget - used, a = alive();
+    ctx.fillStyle = leftN <= 1 ? "#ff6b7d" : "#ffd66b"; ctx.font = "800 11px system-ui"; ctx.fillText(`${leftN} ${leftN === 1 ? "domanda" : "domande"} · ${a === 1 ? "ne resta 1" : `ne restano ${a}`}`, W / 2, 34);
+    const ex = touchMode ? W - 62 : W - 12;
+    for (let i = 0; i < diff.lives; i++) { ctx.fillStyle = i < lives ? "#ffd66b" : "rgba(255,255,255,0.15)"; ctx.beginPath(); ctx.arc(ex - 6 - i * 13, 16, 4.5, 0, TAU); ctx.fill(); }
+    ctx.fillStyle = "rgba(255,255,255,0.12)"; ctx.fillRect(0, TOP - 4, W, 4);
+    ctx.fillStyle = leftN <= 1 ? "#ff6b7d" : "#ffd66b"; ctx.fillRect(0, TOP - 4, W * leftN / Math.max(1, budget), 4);
+    ctx.textBaseline = "alphabetic";
+  }
+  function draw() {
+    ctx.setTransform(pxRatio, 0, 0, pxRatio, 0, 0);
+    ctx.fillStyle = "#0d0822"; ctx.fillRect(0, 0, W, H);
+    ctx.fillStyle = "#120b2c"; ctx.beginPath(); ctx.roundRect(8, 62, W - 16, 270, 12); ctx.fill();
+    drawGrid();
+    if (state === "menu") return;
+    drawInfo();
+    drawQuestions();
+    drawHud();
+    for (const p of popups) {
+      ctx.globalAlpha = clamp((1.8 - p.t) * 2, 0, 1);
+      ctx.textAlign = "center"; ctx.font = "900 14px system-ui";
+      ctx.lineWidth = 4; ctx.strokeStyle = "#0d0822"; ctx.strokeText(p.text, p.x, p.y); ctx.fillStyle = p.color; ctx.fillText(p.text, p.x, p.y);
+    }
+    ctx.globalAlpha = 1;
+    if (message) {
+      ctx.globalAlpha = Math.min(1, ((state === "play" ? 2.2 : 2.6) - message.t) * 2);
+      ctx.fillStyle = "rgba(13,8,34,0.9)"; ctx.fillRect(0, 262, W, 58);
+      ctx.textAlign = "center"; ctx.font = "900 19px system-ui"; ctx.fillStyle = message.bad ? "#ff6b7d" : ACC;
+      ctx.fillText(message.text, W / 2, 287);
+      if (message.sub) { ctx.font = "800 11px system-ui"; ctx.fillStyle = "#f1eeff"; ctx.fillText(message.sub, W / 2, 307); }
+      ctx.globalAlpha = 1;
+    }
+  }
+
+  // ---------- Loop ----------
+  let last = performance.now();
+  function frame(now) {
+    const dt = Math.min(0.1, (now - last) / 1000);
+    last = now;
+    update(dt);
+    draw();
+    requestAnimationFrame(frame);
+  }
+  buildLevel();
+  syncControls();
+  showTitle();
+  requestAnimationFrame(frame);
+})();
+</script>
+<script src="../../shared/iniziali.js" data-record="domanda-best-" data-kind="score"></script>
+</body>
+</html>
