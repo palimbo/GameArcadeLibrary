@@ -1,0 +1,509 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no, viewport-fit=cover">
+<title>Coppie e Gettoni</title>
+<style>
+  :root {
+    --bg: #0d0822;
+    --fg: #f1eeff;
+    --muted: #a9a3cf;
+    --cyan: #5fe3d6;
+    --yellow: #ffd66b;
+    --red: #ff6b7d;
+    --pink: #ff8fa3;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  html, body {
+    height: 100%;
+    background: var(--bg);
+    color: var(--fg);
+    font-family: system-ui, -apple-system, "Segoe UI", sans-serif;
+    overflow: hidden;
+    user-select: none;
+    -webkit-user-select: none;
+    touch-action: none;
+  }
+  #wrap { position: fixed; inset: 0; display: flex; align-items: center; justify-content: center; }
+  canvas { display: block; touch-action: none; border-radius: 6px; box-shadow: 0 0 0 2px #2a1f55, 0 10px 40px rgba(0,0,0,0.6); cursor: pointer; }
+  #pauseBtn {
+    position: fixed; z-index: 3; display: none; right: 10px; top: calc(10px + env(safe-area-inset-top, 0px));
+    font: 700 13px system-ui, sans-serif; color: var(--fg);
+    background: rgba(0, 0, 0, 0.6); border: 1px solid rgba(241, 238, 255, 0.35);
+    border-radius: 8px; padding: 6px 10px; cursor: pointer;
+  }
+  #overlay {
+    position: fixed; inset: 0; z-index: 5;
+    display: flex; flex-direction: column; align-items: center; justify-content: flex-start;
+    gap: 14px; padding: 16px; text-align: center; overflow-y: auto;
+    background: rgba(13, 8, 34, 0.93);
+  }
+  #overlay > :first-child { margin-top: auto; }
+  #overlay > :last-child { margin-bottom: auto; }
+  #overlay.hidden { display: none; }
+  #homeLink {
+    position: fixed; top: calc(10px + env(safe-area-inset-top, 0px)); left: 10px; z-index: 6;
+    font: 600 13px/1 system-ui, sans-serif; color: #fff; text-decoration: none;
+    padding: 8px 12px; border-radius: 999px; background: rgba(0,0,0,.55);
+    border: 1px solid rgba(255,255,255,.25);
+  }
+  #homeLink:hover { background: rgba(0,0,0,.8); }
+  #overlay.hidden ~ #homeLink { display: none; }
+  @media (max-width: 700px) { #overlay { padding-top: calc(52px + env(safe-area-inset-top, 0px)); } }
+  #overlay h1 { font-size: clamp(30px, 9vw, 54px); font-weight: 900; letter-spacing: 1px; color: var(--pink);
+    text-shadow: 3px 3px 0 #2a1f6a, 0 0 22px rgba(255,143,163,0.35); text-wrap: balance; }
+  #overlay h2 { font-size: clamp(24px, 7vw, 40px); font-weight: 900; letter-spacing: 2px; color: var(--pink); }
+  #overlay h2.lose { color: var(--red); }
+  #overlay p { max-width: 540px; font-size: clamp(13px, 3.4vw, 16px); line-height: 1.55; }
+  #overlay p.muted { color: var(--muted); }
+  #overlay .pts { display: grid; grid-template-columns: repeat(2, auto); gap: 4px 18px; font-size: 13px; color: var(--muted); text-align: left; max-width: 560px; }
+  #overlay .pts b { color: var(--fg); }
+  #overlay .diff { display: flex; gap: 10px; flex-wrap: wrap; justify-content: center; }
+  #overlay button {
+    font: 800 15px system-ui, sans-serif; letter-spacing: 1.5px; color: var(--fg);
+    background: transparent; cursor: pointer;
+    border: 2px solid rgba(241,238,255,0.3); border-radius: 10px; padding: 9px 16px;
+  }
+  #overlay .diff button.on { border-color: var(--c); color: var(--c); box-shadow: 0 0 12px var(--c); }
+  #overlay button.start { border-color: var(--pink); color: #2a0610; background: var(--pink); padding: 11px 30px; box-shadow: 0 4px 0 #b8506a; }
+  @media (max-height: 560px) {
+    #overlay { gap: 8px; }
+    #overlay h1 { font-size: 28px; }
+    #overlay p { font-size: 13px; line-height: 1.4; }
+    #overlay .help, #overlay .pts { display: none; }
+  }
+</style>
+</head>
+<body>
+<div id="wrap"><canvas id="game"></canvas></div>
+<button id="pauseBtn" type="button" aria-label="Pausa">❚❚</button>
+<div id="overlay"></div>
+<a id="homeLink" href="../../index.html">← Sala Giochi</a>
+
+<script>
+(() => {
+  "use strict";
+
+  const W = 360, H = 600, TOP = 56, TAU = Math.PI * 2;
+  const ACC = "#ff8fa3";
+  const PALETTE = ["#ff8fa3", "#ffd66b", "#5fe3d6", "#b79bff", "#7ee0a0", "#6bb8ff", "#ff9a6b", "#ff9be0"];
+  const BTN = { x: 14, y: 524, w: 332, h: 54 };
+  // tongue-twisters and proverbs: the more a text repeats itself, the better it compresses
+  const PHRASES = [
+    "li vuoi quei kiwi", "non c è due senza tre", "chi la fa l aspetti", "tigre contro tigre", "meglio tardi che mai",
+    "tre tigri contro tre tigri", "chi dorme non piglia pesci", "can che abbaia non morde", "ride bene chi ride ultimo", "pio pio fa il pulcino pio",
+    "l appetito vien mangiando", "paese che vai usanza che trovi", "rosso di sera bel tempo si spera", "chi va piano va sano e va lontano",
+    "tutte le strade portano a roma", "chi trova un amico trova un tesoro", "l erba del vicino è sempre più verde", "a caval donato non si guarda in bocca",
+    "in un piatto poco cupo poco pepe cape", "tra il dire e il fare c è di mezzo il mare", "chi semina vento raccoglie tempesta",
+    "sa chi sa se sa chi sa che se sa non sa se sa", "a quest ora il questore in questura non c è", "una rana rara e nera sulla rena errò una sera",
+    "porta aperta per chi porta chi non porta parta", "tanto va la gatta al lardo che ci lascia lo zampino", "il papà pesa il pepe a pisa pisa pesa il pepe al papà",
+    "sul tagliere l aglio taglia non tagliare la tovaglia", "buona pasqua pasquale e buona pasquetta a pasqualina", "apelle figlio di apollo fece una palla di pelle di pollo",
+    "nel pozzo di san patrizio c è una pazza che lava una pezza", "una platessa lessa lesse la esatta sintassi di una tassa",
+    "sopra la panca la capra campa sotto la panca la capra crepa", "sotto le frasche del capanno quattro gatti grossi stanno",
+    "sette zucche secche e storte stanno strette dentro al sacco", "oggi seren non è doman seren sarà se non sarà seren si rasserenerà",
+    "tito tu m hai ritinto il tetto ma non t intendi tanto di tetti ritinti", "trentatré trentini entrarono a trento tutti e trentatré trotterellando",
+  ];
+
+  const DIFFICULTIES = {
+    facile:    { label: "FACILE",    color: "#7ee0a0", desc: "obiettivo largo, le coppie le conta il gioco · 4 errori concessi", show: true, slack: 3, min: 1, lives: 4 },
+    normale:   { label: "NORMALE",   color: "#ffd66b", desc: "obiettivo stretto, le coppie le conti tu · 3 errori concessi", slack: 1, min: 0, lives: 3 },
+    difficile: { label: "DIFFICILE", color: "#ff6b7d", desc: "solo il meglio possibile, le coppie le conti tu · 3 errori concessi", slack: 0, min: 0, lives: 3 },
+  };
+  const DIFF_IDS = Object.keys(DIFFICULTIES);
+  const DIFF_KEY = "gettoni-difficulty";
+  const bestKey = (id) => `gettoni-best-${id}`;
+  function store(k, v) { try { localStorage.setItem(k, v); } catch { /* ignore */ } }
+  function load(k) { try { return localStorage.getItem(k); } catch { return null; } }
+  const rint = (a, b) => a + Math.floor(Math.random() * (b - a + 1));
+  const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
+  const nf = (n) => n.toLocaleString("it-IT");
+
+  // ---------- Canvas ----------
+  const canvas = document.getElementById("game");
+  const ctx = canvas.getContext("2d");
+  const overlay = document.getElementById("overlay");
+  const pauseBtn = document.getElementById("pauseBtn");
+  let pxRatio = 1, touchMode = !!(window.matchMedia && matchMedia("(pointer: coarse)").matches);
+  function resize() {
+    const availW = window.innerWidth - 8, availH = window.innerHeight - 8;
+    const s = Math.max(0.2, Math.min(availW / W, availH / H));
+    pxRatio = Math.min(3, s * (window.devicePixelRatio || 1));
+    canvas.style.width = W * s + "px";
+    canvas.style.height = H * s + "px";
+    canvas.width = Math.round(W * pxRatio);
+    canvas.height = Math.round(H * pxRatio);
+  }
+  window.addEventListener("resize", () => syncControls());
+
+  // ---------- Audio: soft tones ----------
+  let audioCtx = null;
+  function beep(freq, dur, type = "sine", vol = 0.05, delay = 0) {
+    if (!audioCtx) return;
+    const t = audioCtx.currentTime + delay;
+    const osc = audioCtx.createOscillator(), gain = audioCtx.createGain();
+    osc.type = type; osc.frequency.setValueAtTime(freq, t);
+    gain.gain.setValueAtTime(0.0001, t);
+    gain.gain.exponentialRampToValueAtTime(vol, t + 0.015);
+    gain.gain.exponentialRampToValueAtTime(0.0001, t + dur);
+    osc.connect(gain).connect(audioCtx.destination);
+    osc.start(t); osc.stop(t + dur + 0.02);
+  }
+  const arp = (notes, gap, d, type, vol) => notes.forEach((f, i) => beep(f, d, type, vol, i * gap));
+  const sfx = {
+    pick: () => beep(520, 0.06, "sine", 0.035),
+    step: (v) => beep(392 * Math.pow(1.09, v), 0.09, "triangle", 0.04),
+    edge: () => beep(150, 0.08, "sine", 0.045),
+    row: () => beep(880, 0.1, "sine", 0.03, 0.05),
+    win: () => arp([523, 659, 784, 1047], 0.09, 0.35),
+    perfect: () => arp([523, 659, 784, 1047, 1319, 1568], 0.07, 0.4),
+    fail: () => arp([392, 330, 277], 0.14, 0.35, "triangle", 0.05),
+    lose: () => arp([392, 330, 277, 220], 0.16, 0.4, "triangle", 0.05),
+  };
+
+  // ---------- State ----------
+  let difficulty = DIFFICULTIES[load(DIFF_KEY)] ? load(DIFF_KEY) : "normale";
+  let diff = DIFFICULTIES[difficulty];
+  let state = "menu", menu = null, pausedFrom = null, stateT = 0, clock = 0;
+  let score = 0, level = 0, bestCache = 0, cleared = 0, perfects = 0, lives = 0;
+  let words = [], letters = 0, vocab = [], colorOf = {}, K = 3, used = 0, target = 0, best = 0, pair = null, cands = [], chips = [], fsize = 15, seen = [];
+  let popups = [], message = null;
+  const isPlaying = () => ["play", "levelup", "fail"].includes(state);
+
+  // ---------- Tokens ----------
+  const count = (ws) => ws.reduce((k, w) => k + w.length, 0);
+  // a pair is counted, and merged, left to right without overlaps: "aaa" holds one "aa"
+  function pairCount(ws, a, b) { let c = 0; for (const w of ws) for (let i = 0; i < w.length - 1; i++) if (w[i] === a && w[i + 1] === b) { c++; i++; } return c; }
+  function merge(ws, a, b) {
+    return ws.map((w) => { const o = []; for (let i = 0; i < w.length; i++) { if (i < w.length - 1 && w[i] === a && w[i + 1] === b) { o.push(a + b); i++; } else o.push(w[i]); } return o; });
+  }
+  function pairsOf(ws) {
+    const m = new Map();
+    for (const w of ws) for (let i = 0; i < w.length - 1; i++) { const k = w[i] + "\u0001" + w[i + 1]; if (!m.has(k)) m.set(k, { a: w[i], b: w[i + 1], n: pairCount(ws, w[i], w[i + 1]) }); }
+    return [...m.values()].sort((p, q) => q.n - p.n);
+  }
+  // the shortest text found with k merges, trying many orders and not only "always the most frequent"
+  function shortest(ws, k) {
+    let beam = [ws];
+    for (let s = 0; s < k; s++) {
+      const next = new Map();
+      for (const st of beam) {
+        const ps = pairsOf(st).slice(0, 10);
+        if (!ps.length) next.set(st.map((w) => w.join("\u0001")).join(" "), st);
+        for (const p of ps) { const nw = merge(st, p.a, p.b); next.set(nw.map((w) => w.join("\u0001")).join(" "), nw); }
+      }
+      beam = [...next.values()].sort((x, y) => count(x) - count(y)).slice(0, 30);
+    }
+    return count(beam[0]);
+  }
+  function buildLevel() {
+    const lo = Math.min(40, 14 + level * 3);
+    let pool = PHRASES.filter((p) => !seen.includes(p) && p.replace(/ /g, "").length >= lo && p.replace(/ /g, "").length <= lo + 14);
+    if (!pool.length) pool = PHRASES.filter((p) => !seen.includes(p) && p.replace(/ /g, "").length >= lo);
+    if (!pool.length) { seen = []; pool = PHRASES.filter((p) => p.replace(/ /g, "").length >= lo); }
+    const phrase = pool[rint(0, pool.length - 1)];
+    seen.push(phrase);
+    words = phrase.split(" ").map((w) => [...w]);
+    letters = count(words);
+    K = Math.min(8, 3 + Math.floor(level / 2));
+    best = shortest(words, K);
+    target = best + Math.max(diff.min, diff.slack - Math.floor(level / 4));
+    vocab = []; colorOf = {}; used = 0; pair = null;
+    refresh();
+  }
+  function refresh() {
+    cands = pairsOf(words);
+    for (const v of vocab) v.n = words.reduce((k, w) => k + w.filter((t) => t === v.tok).length, 0);
+    layout();
+  }
+  function layout() {
+    for (fsize = 15; fsize >= 9; fsize -= 2) {
+      const ch = fsize + 9, lh = ch + 7, gap = 2, wgap = fsize * 0.7;
+      ctx.font = `800 ${fsize}px system-ui`;
+      chips = []; let x = 16, line = 0;
+      words.forEach((w, wi) => {
+        const ws = w.map((t) => Math.max(fsize + 1, ctx.measureText(t).width + 8)), tot = ws.reduce((a, b) => a + b + gap, -gap);
+        if (x > 16 && x + tot > W - 16) { x = 16; line++; }
+        w.forEach((t, i) => { chips.push({ wi, i, t, x, line, w: ws[i], h: ch }); x += ws[i] + gap; });
+        x += wgap;
+      });
+      const lines = line + 1;
+      if (lines * lh <= 232 || fsize === 9) { const y0 = 68 + (232 - lines * lh) / 2 + 3; for (const c of chips) c.y = y0 + c.line * lh; break; }
+    }
+  }
+  function startGame() {
+    if (!audioCtx) { try { audioCtx = new (window.AudioContext || window.webkitAudioContext)(); } catch { audioCtx = null; } }
+    if (audioCtx && audioCtx.state === "suspended") audioCtx.resume();
+    score = 0; level = 0; cleared = 0; perfects = 0; lives = diff.lives; popups = [];
+    bestCache = parseInt(load(bestKey(difficulty)), 10) || 0;
+    beginLevel();
+    menu = null;
+    overlay.classList.add("hidden");
+    syncControls();
+    last = performance.now();
+  }
+  function beginLevel() {
+    buildLevel();
+    state = "play";
+    message = { text: `${letters} LETTERE, ${K} FUSIONI`, sub: `scendi a ${target} gettoni o meno`, t: 0 };
+  }
+  function addScore(k, y, color, label = "") { score += k; popups.push({ text: `${label}+${nf(k)}`, x: W / 2, y, t: 0, color }); }
+  function select(a, b) { pair = { a, b, n: pairCount(words, a, b) }; sfx.pick(); }
+  function fuse() {
+    if (state !== "play" || !pair || !pair.n) return;
+    const tok = pair.a + pair.b;
+    words = merge(words, pair.a, pair.b);
+    colorOf[tok] = PALETTE[vocab.length % PALETTE.length];
+    vocab.push({ tok, n: 0, kick: 1 });
+    used++;
+    sfx.step(Math.min(8, pair.n));
+    if (count(words) <= target && count(words) + pair.n > target) sfx.row();
+    pair = null;
+    refresh();
+    if (used >= K || !cands.length) (count(words) <= target ? win : lose)();
+  }
+  function win() {
+    const n = count(words), perfect = n <= best;
+    state = "levelup"; stateT = 2.8; cleared++;
+    addScore(200 * (level + 1), 404, ACC);
+    if (target > n) addScore(40 * (target - n), 382, "#ffd66b", `${target - n} sotto l'obiettivo · `);
+    if (perfect) { perfects++; addScore(500, 360, "#5fe3d6", "il meglio possibile · "); sfx.perfect(); } else sfx.win();
+    message = { text: perfect ? "NON SI POTEVA FARE MEGLIO" : "COMPRESSO!", sub: `da ${letters} lettere a ${n} gettoni: ${Math.round((1 - n / letters) * 100)}% in meno`, t: 0 };
+  }
+  function lose() {
+    lives--;
+    state = "fail"; stateT = 3;
+    (lives > 0 ? sfx.fail : sfx.lose)();
+    message = { text: "ANCORA TROPPO LUNGO", sub: `${count(words)} gettoni: ne servivano ${target}, e si poteva arrivare a ${best}`, t: 0, bad: true };
+  }
+  function gameOver() {
+    state = "over";
+    const prev = parseInt(load(bestKey(difficulty)), 10) || 0;
+    const record = score > prev;
+    if (record) store(bestKey(difficulty), String(score));
+    menu = () => showOverlay(
+      `<h2 class="lose">VOCABOLARIO CHIUSO</h2>
+       <p>Punteggio: <b>${nf(score)}</b> · ${cleared} ${cleared === 1 ? "frase compressa" : "frasi compresse"}${perfects ? ` · ${perfects} al meglio possibile` : ""} · ${diff.label}</p>
+       <p class="muted">Io leggo così: non lettere e non parole, ma pezzi come questi, scelti perché tornano spesso. Anche questa frase mi è arrivata a gettoni.</p>
+       ${record ? "<p style='color:var(--yellow)'>★ NUOVO RECORD! ★</p>" : ""}
+       ${difficultyHTML()}
+       <button class="start" data-start>RIPROVA</button>`
+    );
+    menu();
+    syncControls();
+  }
+  function togglePause() {
+    if (isPlaying()) {
+      pausedFrom = state; state = "paused";
+      showOverlay(`<h2>PAUSA</h2><button class="start" data-resume>CONTINUA</button><p class="muted">Premi P per continuare</p>`);
+    } else if (state === "paused") {
+      state = pausedFrom; overlay.classList.add("hidden"); last = performance.now();
+    }
+    syncControls();
+  }
+  // the pause menu can end the game (shared/iniziali.js): it ends here the usual way, saving the record
+  window.addEventListener("sala:termina", () => { if (state !== "paused") return; overlay.classList.add("hidden"); gameOver(); syncControls(); });
+  function syncControls() {
+    pauseBtn.style.display = isPlaying() && touchMode ? "block" : "none";
+    resize();
+  }
+  pauseBtn.addEventListener("click", () => togglePause());
+  function showOverlay(html) { overlay.innerHTML = html; overlay.classList.remove("hidden"); }
+  function difficultyHTML() {
+    const buttons = DIFF_IDS.map((id) => {
+      const d = DIFFICULTIES[id];
+      return `<button type="button" data-diff="${id}" class="${id === difficulty ? "on" : ""}" style="--c:${d.color}">${d.label}</button>`;
+    }).join("");
+    const best = parseInt(load(bestKey(difficulty)), 10);
+    return `<div class="diff">${buttons}</div><p class="muted">${diff.desc}${best ? ` · Record: ${nf(best)}` : ""}</p>`;
+  }
+  function setDifficulty(id) { if (!DIFFICULTIES[id]) return; difficulty = id; diff = DIFFICULTIES[id]; store(DIFF_KEY, id); if (state === "menu") buildLevel(); if (menu) menu(); }
+  function showTitle() {
+    menu = showTitle;
+    showOverlay(
+      `<h1>COPPIE E GETTONI</h1>
+       <p>Un modello linguistico non legge lettere né parole: legge gettoni, pezzi di parola costruiti fondendo le coppie che compaiono più spesso. Qui il vocabolario lo costruisci tu: una frase in lettere, poche fusioni, e un numero di gettoni sotto cui scendere.</p>
+       <div class="pts">
+         <span><b>Fondere</b></span><span>scegli due gettoni vicini: la coppia si fonde in tutta la frase, e ogni fusione fa un gettone nuovo</span>
+         <span><b>Contare</b></span><span>una coppia che torna 6 volte accorcia la frase di 6; ma ogni fusione cambia le coppie che restano</span>
+         <span><b>Obiettivo</b></span><span>quando le fusioni finiscono, la frase deve essere abbastanza corta</span>
+         <span><b>Punti</b></span><span>200 × livello · 40 per ogni gettone sotto l'obiettivo · 500 se è il meglio possibile</span>
+       </div>
+       ${touchMode
+         ? `<p class="muted help">Tocca tra due gettoni vicini per scegliere la coppia, poi FONDI (o tocca di nuovo)</p>`
+         : `<p class="muted help">Clicca tra due gettoni vicini, poi FONDI · oppure ← → per scorrere le coppie e Invio · P pausa</p>`}
+       ${difficultyHTML()}
+       <button class="start" data-start>PRIMA FRASE</button>`
+    );
+  }
+  overlay.addEventListener("click", (e) => {
+    const d = e.target.closest("[data-diff]");
+    if (d) { setDifficulty(d.dataset.diff); return; }
+    if (e.target.closest("[data-start]")) startGame();
+    if (e.target.closest("[data-resume]")) togglePause();
+  });
+
+  // ---------- Input ----------
+  window.addEventListener("keydown", (e) => {
+    const k = e.key.toLowerCase();
+    if ([" ", "arrowup", "arrowdown", "arrowleft", "arrowright"].includes(k)) e.preventDefault();
+    if (state === "menu" || state === "over") {
+      if (e.key === "Enter") startGame();
+      else if (["1", "2", "3"].includes(k)) setDifficulty(DIFF_IDS[+k - 1]);
+      return;
+    }
+    if (k === "p" || k === "escape") { if (!e.repeat) togglePause(); return; }
+    if (state === "paused") { if (e.key === "Enter") togglePause(); return; }
+    if (state !== "play" || !cands.length) return;
+    const d = { arrowright: 1, arrowdown: 1, arrowleft: -1, arrowup: -1 }[k];
+    if (d) { const i = pair ? cands.findIndex((c) => c.a === pair.a && c.b === pair.b) : (d > 0 ? -1 : 0); const c = cands[(i + d + cands.length) % cands.length]; select(c.a, c.b); }
+    else if ((k === "enter" || k === " ") && !e.repeat) fuse();
+  });
+  window.addEventListener("blur", () => { if (isPlaying()) togglePause(); });
+  const toWorld = (e) => { const rc = canvas.getBoundingClientRect(); return { x: (e.clientX - rc.left) / rc.width * W, y: (e.clientY - rc.top) / rc.height * H }; };
+  canvas.addEventListener("pointerdown", (e) => {
+    e.preventDefault();
+    if (state !== "play") return;
+    const p = toWorld(e);
+    if (p.x >= BTN.x && p.x <= BTN.x + BTN.w && p.y >= BTN.y && p.y <= BTN.y + BTN.h) { fuse(); return; }
+    // the nearest joint between two tokens of the same word
+    let bestJ = null, bd = 22;
+    for (let i = 0; i < chips.length - 1; i++) {
+      const a = chips[i], b = chips[i + 1];
+      if (a.wi !== b.wi) continue;
+      const jx = a.x + a.w + 1, jy = a.y + a.h / 2, d = Math.hypot((p.x - jx) * 0.8, (p.y - jy) * 1.3);
+      if (d < bd) { bd = d; bestJ = [a.t, b.t]; }
+    }
+    if (!bestJ) { pair = null; return; }
+    if (pair && pair.a === bestJ[0] && pair.b === bestJ[1]) fuse(); else select(bestJ[0], bestJ[1]);
+  });
+  window.addEventListener("pointerdown", (e) => { if (e.pointerType === "touch" && !touchMode) { touchMode = true; syncControls(); if (menu) menu(); } }, true);
+
+  // ---------- Update ----------
+  function update(dt) {
+    clock += dt;
+    for (const p of popups) { p.t += dt; p.y -= 14 * dt; }
+    popups = popups.filter((p) => p.t < 1.8);
+    for (const v of vocab) v.kick = Math.max(0, v.kick - dt * 3);
+    if (message) { message.t += dt; if (message.t > (state === "play" ? 2.2 : 2.8)) message = null; }
+    if (state === "levelup") { stateT -= dt; if (stateT <= 0) { level++; beginLevel(); } }
+    else if (state === "fail") { stateT -= dt; if (stateT <= 0) { if (lives <= 0) gameOver(); else beginLevel(); } }
+  }
+
+  // ---------- Drawing ----------
+  function chip(x, y, w, h, t, size, hot) {
+    const col = colorOf[t];
+    ctx.fillStyle = col ? col : "#221850"; ctx.strokeStyle = hot ? "#f1eeff" : col ? col : "#4a3f88"; ctx.lineWidth = hot ? 2 : 1;
+    ctx.beginPath(); ctx.roundRect(x, y, w, h, 5); ctx.fill(); ctx.stroke();
+    ctx.fillStyle = col ? "#0d0822" : "#f1eeff"; ctx.font = `800 ${size}px system-ui`; ctx.textAlign = "center"; ctx.textBaseline = "middle";
+    ctx.fillText(t, x + w / 2, y + h / 2 + 0.5);
+  }
+  function drawText() {
+    // which chips belong to an occurrence of the chosen pair (same left-to-right rule as the merge)
+    const hot = new Set();
+    if (pair && state === "play") for (let i = 0; i < chips.length - 1; i++) { const a = chips[i], b = chips[i + 1]; if (a.wi === b.wi && a.t === pair.a && b.t === pair.b) { hot.add(i); hot.add(i + 1); i++; } }
+    chips.forEach((c, i) => chip(c.x, c.y, c.w, c.h, c.t, fsize, hot.has(i)));
+    if (hot.size) {
+      const ids = [...hot];
+      for (let k = 0; k < ids.length; k += 2) {
+        const a = chips[ids[k]], b = chips[ids[k + 1]];
+        ctx.strokeStyle = ACC; ctx.lineWidth = 2; ctx.beginPath(); ctx.roundRect(a.x - 2, a.y - 3 - Math.sin(clock * 5) * 0.8, b.x + b.w - a.x + 4, a.h + 6, 7); ctx.stroke();
+      }
+    }
+    ctx.textBaseline = "alphabetic";
+  }
+  function drawVocab() {
+    ctx.textBaseline = "middle"; ctx.textAlign = "left";
+    ctx.fillStyle = "#a9a3cf"; ctx.font = "700 9px system-ui"; ctx.fillText(`VOCABOLARIO · ${used} DI ${K} FUSIONI`, 14, 322);
+    let x = 14, y = 334;
+    for (let i = 0; i < K; i++) {
+      const v = vocab[i];
+      ctx.font = "800 13px system-ui";
+      const w = v ? Math.max(26, ctx.measureText(v.tok).width + 12) : 26, cw = v ? w + 24 : w;
+      if (x + cw > W - 14) { x = 14; y += 30; }
+      if (v) {
+        chip(x, y - v.kick * 3, w, 22, v.tok, 13, false);
+        ctx.fillStyle = "#a9a3cf"; ctx.font = "700 10px system-ui"; ctx.textAlign = "left"; ctx.fillText(`×${v.n}`, x + w + 3, y + 11);
+      } else { ctx.strokeStyle = "#4a3f88"; ctx.lineWidth = 1; ctx.setLineDash([3, 3]); ctx.beginPath(); ctx.roundRect(x, y, w, 22, 5); ctx.stroke(); ctx.setLineDash([]); }
+      x += cw + 6;
+    }
+    // how long the text is now, on the way from letters down to the goal
+    const n = count(words), ok = n <= target, bx = 14, bw = W - 28, by = 428, lo = Math.min(best, n) - 2, f = (v) => bx + bw * (v - lo) / (letters - lo);
+    ctx.fillStyle = "rgba(255,255,255,0.1)"; ctx.fillRect(bx, by, bw, 6);
+    ctx.fillStyle = ok ? "#7ee0a0" : ACC; ctx.fillRect(bx, by, f(n) - bx, 6);
+    ctx.fillStyle = "#ffd66b"; ctx.fillRect(f(target) - 1, by - 5, 2, 16);
+    ctx.textAlign = "left"; ctx.font = "800 11px system-ui"; ctx.fillStyle = ok ? "#7ee0a0" : "#f1eeff"; ctx.fillText(`${n} gettoni${ok ? " · obiettivo raggiunto" : ""}`, bx, by - 14);
+    ctx.textAlign = "right"; ctx.fillStyle = "#ffd66b"; ctx.fillText(`obiettivo ${target}`, W - 14, by - 14);
+    ctx.textAlign = "center"; ctx.fillStyle = "#a9a3cf"; ctx.font = "700 9px system-ui"; ctx.fillText(`erano ${letters} lettere`, W / 2, by + 20);
+    ctx.textBaseline = "alphabetic";
+  }
+  function drawControls() {
+    ctx.textAlign = "center"; ctx.textBaseline = "middle";
+    const b = BTN, on = pair && state === "play";
+    if (on) {
+      ctx.fillStyle = "#f1eeff"; ctx.font = "800 12px system-ui";
+      ctx.fillText(!diff.show ? `«${pair.a}» + «${pair.b}»: si fondono tutte le coppie cerchiate` : `«${pair.a}» + «${pair.b}» compare ${pair.n} ${pair.n === 1 ? "volta" : "volte"}: ${count(words)} → ${count(words) - pair.n} gettoni`, W / 2, 500);
+    } else if (state === "play") { ctx.fillStyle = "#a9a3cf"; ctx.font = "700 11px system-ui"; ctx.fillText("tocca tra due gettoni vicini per scegliere una coppia", W / 2, 500); }
+    ctx.globalAlpha = on ? 1 : 0.35;
+    ctx.fillStyle = "#b8506a"; ctx.beginPath(); ctx.roundRect(b.x, b.y + 5, b.w, b.h - 5, 12); ctx.fill();
+    ctx.fillStyle = ACC; ctx.beginPath(); ctx.roundRect(b.x, b.y, b.w, b.h - 6, 12); ctx.fill();
+    ctx.fillStyle = "#2a0610"; ctx.font = "900 17px system-ui"; ctx.fillText(on ? `FONDI IN «${pair.a + pair.b}»` : "FONDI", W / 2, b.y + 24);
+    ctx.globalAlpha = 1; ctx.textBaseline = "alphabetic";
+  }
+  function drawHud() {
+    ctx.fillStyle = "#0d0822"; ctx.fillRect(0, 0, W, TOP - 4);
+    ctx.textBaseline = "middle"; ctx.textAlign = "left";
+    ctx.fillStyle = "#f1eeff"; ctx.font = "900 18px system-ui"; ctx.fillText(nf(score), 12, 16);
+    ctx.fillStyle = "#a9a3cf"; ctx.font = "700 9px system-ui"; ctx.fillText(`REC ${nf(Math.max(bestCache, score))}`, 12, 36);
+    ctx.textAlign = "center"; ctx.fillStyle = ACC; ctx.font = "900 12px system-ui"; ctx.fillText(`LIVELLO ${level + 1}`, W / 2, 14);
+    const leftN = K - used;
+    ctx.fillStyle = leftN <= 1 ? "#ff6b7d" : "#ffd66b"; ctx.font = "800 11px system-ui"; ctx.fillText(`${leftN} ${leftN === 1 ? "fusione" : "fusioni"} · ${count(words)} gettoni, obiettivo ${target}`, W / 2, 34);
+    const ex = touchMode ? W - 62 : W - 12;
+    for (let i = 0; i < diff.lives; i++) { ctx.fillStyle = i < lives ? "#ffd66b" : "rgba(255,255,255,0.15)"; ctx.beginPath(); ctx.arc(ex - 6 - i * 13, 16, 4.5, 0, TAU); ctx.fill(); }
+    ctx.fillStyle = "rgba(255,255,255,0.12)"; ctx.fillRect(0, TOP - 4, W, 4);
+    ctx.fillStyle = leftN <= 1 ? "#ff6b7d" : "#ffd66b"; ctx.fillRect(0, TOP - 4, W * leftN / Math.max(1, K), 4);
+    ctx.textBaseline = "alphabetic";
+  }
+  function draw() {
+    ctx.setTransform(pxRatio, 0, 0, pxRatio, 0, 0);
+    ctx.fillStyle = "#0d0822"; ctx.fillRect(0, 0, W, H);
+    ctx.fillStyle = "#120b2c"; ctx.beginPath(); ctx.roundRect(8, 62, W - 16, 244, 12); ctx.fill();
+    drawText();
+    if (state === "menu") return;
+    drawVocab();
+    drawControls();
+    drawHud();
+    for (const p of popups) {
+      ctx.globalAlpha = clamp((1.8 - p.t) * 2, 0, 1);
+      ctx.textAlign = "center"; ctx.font = "900 14px system-ui";
+      ctx.lineWidth = 4; ctx.strokeStyle = "#0d0822"; ctx.strokeText(p.text, p.x, p.y); ctx.fillStyle = p.color; ctx.fillText(p.text, p.x, p.y);
+    }
+    ctx.globalAlpha = 1;
+    if (message) {
+      ctx.globalAlpha = Math.min(1, ((state === "play" ? 2.2 : 2.8) - message.t) * 2);
+      ctx.fillStyle = "rgba(13,8,34,0.92)"; ctx.fillRect(0, 446, W, 58);
+      ctx.textAlign = "center"; ctx.font = "900 19px system-ui"; ctx.fillStyle = message.bad ? "#ff6b7d" : ACC;
+      ctx.fillText(message.text, W / 2, 471);
+      if (message.sub) { ctx.font = "800 11px system-ui"; ctx.fillStyle = "#f1eeff"; ctx.fillText(message.sub, W / 2, 491); }
+      ctx.globalAlpha = 1;
+    }
+  }
+
+  // ---------- Loop ----------
+  let last = performance.now();
+  function frame(now) {
+    const dt = Math.min(0.1, (now - last) / 1000);
+    last = now;
+    update(dt);
+    draw();
+    requestAnimationFrame(frame);
+  }
+  buildLevel();
+  syncControls();
+  showTitle();
+  requestAnimationFrame(frame);
+})();
+</script>
+<script src="../../shared/iniziali.js" data-record="gettoni-best-" data-kind="score"></script>
+</body>
+</html>

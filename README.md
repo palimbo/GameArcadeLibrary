@@ -4,7 +4,7 @@ Raccolta di giochi arcade per il browser. Ogni gioco è un singolo file HTML sen
 
 ## 🕹️ Sala Giochi — `index.html`
 
-Apri `index.html` nella cartella principale per la pagina di raccolta: mostra tutti i 191 giochi con copertina, genere, comandi e i tuoi record per ogni difficoltà (Facile, Normale, Difficile). Tocca «Gioca» per avviare un gioco; in ogni gioco il pulsante «← Sala Giochi» in alto a sinistra (visibile nei menu) riporta alla raccolta.
+Apri `index.html` nella cartella principale per la pagina di raccolta: mostra tutti i 192 giochi con copertina, genere, comandi e i tuoi record per ogni difficoltà (Facile, Normale, Difficile). Tocca «Gioca» per avviare un gioco; in ogni gioco il pulsante «← Sala Giochi» in alto a sinistra (visibile nei menu) riporta alla raccolta.
 
 **Iniziali del record:** quando batti un record compare la schermata da sala giochi per inserire le tue tre iniziali (frecce ↑ ↓ per cambiare lettera, ← → per spostarti, oppure scrivile direttamente; su telefono i tasti ▲ ▼ e OK). Le iniziali vengono salvate insieme al record e compaiono nei menu del gioco e nella Sala Giochi. Il codice è condiviso da tutti i giochi in `shared/iniziali.js`.
 
@@ -12,7 +12,7 @@ Apri `index.html` nella cartella principale per la pagina di raccolta: mostra tu
 
 **Comandi touch: levetta o frecce:** in cima alla Sala Giochi e nel menu di pausa di ogni gioco con la levetta si sceglie se usare la levetta analogica o una croce di frecce. Con le frecce il tocco viene agganciato a una delle otto direzioni (le quattro principali hanno la zona più larga, così le diagonali si prendono solo di proposito) e spinto fino in fondo; la scelta vale per tutti i giochi e resta memorizzata. Funziona anche nei giochi con due levette (la sfida a due di *Pugni di Fuoco*, muovi e spara di *Assalto Robotico*).
 
-**Trofei:** ogni gioco ha tre trofei a punteggio: 🥉 **Bronzo** (la soglia in qualsiasi difficoltà), 🥈 **Argento** (a Normale o Difficile) e 🥇 **Oro** (a Difficile); nei giochi a tempo (*Corsa al Tramonto*, *Crystal Wars*) conta finire entro un certo tempo. I trofei si calcolano dai record salvati, quindi quelli già fatti si sbloccano da soli; quando un record nuovo ne conquista uno compare un avviso in alto. Le soglie sono nella schermata iniziale, in pausa e a fine partita di ogni gioco; in Sala Giochi ogni cabinato mostra i suoi trofei, in cima c'è il totale (su 573) con il numero di giochi giocati e il filtro **Già giocati** mostra solo i giochi con almeno un record. Le soglie vengono dalle partite di prova di un bot per circa un terzo dei giochi e sono stimate sulle regole di punteggio per gli altri (`shared/trofei.js`).
+**Trofei:** ogni gioco ha tre trofei a punteggio: 🥉 **Bronzo** (la soglia in qualsiasi difficoltà), 🥈 **Argento** (a Normale o Difficile) e 🥇 **Oro** (a Difficile); nei giochi a tempo (*Corsa al Tramonto*, *Crystal Wars*) conta finire entro un certo tempo. I trofei si calcolano dai record salvati, quindi quelli già fatti si sbloccano da soli; quando un record nuovo ne conquista uno compare un avviso in alto. Le soglie sono nella schermata iniziale, in pausa e a fine partita di ogni gioco; in Sala Giochi ogni cabinato mostra i suoi trofei, in cima c'è il totale (su 576) con il numero di giochi giocati e il filtro **Già giocati** mostra solo i giochi con almeno un record. Le soglie vengono dalle partite di prova di un bot per circa un terzo dei giochi e sono stimate sulle regole di punteggio per gli altri (`shared/trofei.js`).
 
 **Imprese:** i traguardi della sala sono pensati in tre livelli. Il **livello 1** sono i trofei di punteggio qui sopra, per tutti i giochi. Il **livello 2** (traguardi di progresso come «arriva al livello 5») abbiamo scelto di non farlo: lo coprono già in parte i trofei e, dove conta, le imprese. Il **livello 3** sono le **imprese** 🏅: due o tre prodezze caratteristiche di ogni gioco, come atterrare sulla piazzola più piccola in *Soccorso Lunare* o seppellire il capo rosso in *Trappola Aliena*. Le imprese di un gioco sono elencate nella sua schermata iniziale, in pausa e a fine partita (tocca un nome per leggere cosa chiede); quando ne fai una compare un avviso azzurro in alto. In Sala Giochi ogni cabinato mostra le sue (🏅 1/3 imprese) e in cima c'è il totale. Si aggiungono a gruppi di giochi: per ora ci sono le 150 imprese dei 50 giochi più recenti (da *Re della Giungla* a *Bocce*): i giochi nuovi nascono con le loro. Come i record, restano salvate in questo browser (`shared/imprese.js`).
 
@@ -2986,3 +2986,17 @@ Un gioco del genere **IA** sugli alberi di decisione e sull'informazione. Tra le
 - **Comandi:** clicca o tocca una domanda · due tocchi su una figura per tentare · tastiera: frecce per scegliere la domanda, `Invio` per farla · `P` pausa
 
 Per giocare apri `games/la-domanda-giusta/index.html` nel browser.
+
+### 🤖 Coppie e Gettoni — `games/coppie-e-gettoni/index.html`
+
+Un gioco del genere **IA** su come un modello linguistico spezza il testo. Un modello non legge lettere né parole ma gettoni, pezzi di parola costruiti fondendo una dopo l'altra le coppie che compaiono più spesso. Qui il vocabolario si costruisce a mano, su scioglilingua e proverbi.
+
+- **Le fusioni:** la frase parte divisa in lettere. Scegli due gettoni vicini nella stessa parola: tutte le coppie uguali della frase vengono cerchiate, e con FONDI diventano un gettone solo, colorato, che entra nel vocabolario. Un gettone fuso può fondersi ancora («l»+«l», poi «e»+«ll», poi «ell»+«e»)
+- **L'obiettivo:** le fusioni sono contate (3 all'inizio, fino a 8). Quando finiscono, la frase deve essere scesa a un certo numero di gettoni. Una coppia che torna sei volte accorcia la frase di sei, ma ogni fusione cambia le coppie che restano, e prendere sempre la più frequente non è sempre la strada migliore
+- **Il meglio possibile:** per ogni frase il gioco cerca la sequenza di fusioni che la accorcia di più; l'obiettivo è quel numero più un margine, che cala con i livelli. Se non ci arrivi si perde uno degli errori concessi e arriva una frase nuova
+- **Le frasi:** 38 tra proverbi e scioglilingua, sempre più lunghi: da «li vuoi quei kiwi» a «trentatré trentini entrarono a Trento»
+- **Punti:** 200 × livello · 40 per ogni gettone sotto l'obiettivo · 500 se è il meglio possibile
+- **Difficoltà:** Facile (obiettivo largo, il gioco dice quante volte compare la coppia scelta, 4 errori concessi), Normale (obiettivo stretto, le coppie cerchiate le conti tu, 3 errori), Difficile (solo il meglio possibile); record separati per ogni difficoltà
+- **Comandi:** clicca o tocca tra due gettoni vicini, poi FONDI (o di nuovo sulla coppia) · tastiera: `←` `→` per scorrere le coppie, `Invio` per fondere · `P` pausa
+
+Per giocare apri `games/coppie-e-gettoni/index.html` nel browser.
