@@ -4,7 +4,7 @@ Raccolta di giochi arcade per il browser. Ogni gioco è un singolo file HTML sen
 
 ## 🕹️ Sala Giochi — `index.html`
 
-Apri `index.html` nella cartella principale per la pagina di raccolta: mostra tutti i 189 giochi con copertina, genere, comandi e i tuoi record per ogni difficoltà (Facile, Normale, Difficile). Tocca «Gioca» per avviare un gioco; in ogni gioco il pulsante «← Sala Giochi» in alto a sinistra (visibile nei menu) riporta alla raccolta.
+Apri `index.html` nella cartella principale per la pagina di raccolta: mostra tutti i 190 giochi con copertina, genere, comandi e i tuoi record per ogni difficoltà (Facile, Normale, Difficile). Tocca «Gioca» per avviare un gioco; in ogni gioco il pulsante «← Sala Giochi» in alto a sinistra (visibile nei menu) riporta alla raccolta.
 
 **Iniziali del record:** quando batti un record compare la schermata da sala giochi per inserire le tue tre iniziali (frecce ↑ ↓ per cambiare lettera, ← → per spostarti, oppure scrivile direttamente; su telefono i tasti ▲ ▼ e OK). Le iniziali vengono salvate insieme al record e compaiono nei menu del gioco e nella Sala Giochi. Il codice è condiviso da tutti i giochi in `shared/iniziali.js`.
 
@@ -12,7 +12,7 @@ Apri `index.html` nella cartella principale per la pagina di raccolta: mostra tu
 
 **Comandi touch: levetta o frecce:** in cima alla Sala Giochi e nel menu di pausa di ogni gioco con la levetta si sceglie se usare la levetta analogica o una croce di frecce. Con le frecce il tocco viene agganciato a una delle otto direzioni (le quattro principali hanno la zona più larga, così le diagonali si prendono solo di proposito) e spinto fino in fondo; la scelta vale per tutti i giochi e resta memorizzata. Funziona anche nei giochi con due levette (la sfida a due di *Pugni di Fuoco*, muovi e spara di *Assalto Robotico*).
 
-**Trofei:** ogni gioco ha tre trofei a punteggio: 🥉 **Bronzo** (la soglia in qualsiasi difficoltà), 🥈 **Argento** (a Normale o Difficile) e 🥇 **Oro** (a Difficile); nei giochi a tempo (*Corsa al Tramonto*, *Crystal Wars*) conta finire entro un certo tempo. I trofei si calcolano dai record salvati, quindi quelli già fatti si sbloccano da soli; quando un record nuovo ne conquista uno compare un avviso in alto. Le soglie sono nella schermata iniziale, in pausa e a fine partita di ogni gioco; in Sala Giochi ogni cabinato mostra i suoi trofei, in cima c'è il totale (su 567) con il numero di giochi giocati e il filtro **Già giocati** mostra solo i giochi con almeno un record. Le soglie vengono dalle partite di prova di un bot per circa un terzo dei giochi e sono stimate sulle regole di punteggio per gli altri (`shared/trofei.js`).
+**Trofei:** ogni gioco ha tre trofei a punteggio: 🥉 **Bronzo** (la soglia in qualsiasi difficoltà), 🥈 **Argento** (a Normale o Difficile) e 🥇 **Oro** (a Difficile); nei giochi a tempo (*Corsa al Tramonto*, *Crystal Wars*) conta finire entro un certo tempo. I trofei si calcolano dai record salvati, quindi quelli già fatti si sbloccano da soli; quando un record nuovo ne conquista uno compare un avviso in alto. Le soglie sono nella schermata iniziale, in pausa e a fine partita di ogni gioco; in Sala Giochi ogni cabinato mostra i suoi trofei, in cima c'è il totale (su 570) con il numero di giochi giocati e il filtro **Già giocati** mostra solo i giochi con almeno un record. Le soglie vengono dalle partite di prova di un bot per circa un terzo dei giochi e sono stimate sulle regole di punteggio per gli altri (`shared/trofei.js`).
 
 **Imprese:** i traguardi della sala sono pensati in tre livelli. Il **livello 1** sono i trofei di punteggio qui sopra, per tutti i giochi. Il **livello 2** (traguardi di progresso come «arriva al livello 5») abbiamo scelto di non farlo: lo coprono già in parte i trofei e, dove conta, le imprese. Il **livello 3** sono le **imprese** 🏅: due o tre prodezze caratteristiche di ogni gioco, come atterrare sulla piazzola più piccola in *Soccorso Lunare* o seppellire il capo rosso in *Trappola Aliena*. Le imprese di un gioco sono elencate nella sua schermata iniziale, in pausa e a fine partita (tocca un nome per leggere cosa chiede); quando ne fai una compare un avviso azzurro in alto. In Sala Giochi ogni cabinato mostra le sue (🏅 1/3 imprese) e in cima c'è il totale. Si aggiungono a gruppi di giochi: per ora ci sono le 150 imprese dei 50 giochi più recenti (da *Re della Giungla* a *Bocce*): i giochi nuovi nascono con le loro. Come i record, restano salvate in questo browser (`shared/imprese.js`).
 
@@ -2958,3 +2958,17 @@ Un gioco del genere **IA** sul dilemma di chi impara per tentativi. Davanti hai 
 - **Comandi:** clicca o tocca una leva per tirarla · tastiera: `1`–`6`, oppure `←` `→` e `Spazio` · `P` pausa
 
 Per giocare apri `games/esplora-o-sfrutta/index.html` nel browser.
+
+### 🤖 Pesi e Soglie — `games/pesi-e-soglie/index.html`
+
+Un gioco del genere **IA** sul mattone di cui sono fatte le reti neurali. Un neurone artificiale moltiplica ogni ingresso per un peso, somma tutto e si accende se la somma arriva alla sua soglia. Qui pesi e soglie si regolano a mano, finché l'uscita fa quello che dice la tabella.
+
+- **I ritocchi:** ogni scatto di un peso (da −3 a +3) o di una soglia (da −4 a +4) è un ritocco, e i ritocchi sono contati. Si parte sempre con i pesi a zero e le soglie a uno: tutto spento. Finiti i ritocchi si perde uno degli errori concessi e la lezione riparte da capo
+- **La tabella:** una riga per ogni combinazione degli ingressi, con la somma che arriva al neurone, cosa deve fare l'uscita e cosa fa adesso. Toccando una riga la si vede scorrere nella rete: i fili che portano segnale si accendono, e sopra ogni neurone compare la sua somma
+- **Le lezioni:** E, O, NON-E, la maggioranza su tre ingressi, poi regole a sorpresa. Alla sesta lezione arriva l'O esclusivo, che nessun neurone da solo può imparare: da lì compaiono le reti, con due neuroni nascosti (A e B) che alimentano quello d'uscita, e nella tabella si vede cosa fanno A e B riga per riga
+- **Il margine:** lezione dopo lezione i ritocchi di scorta diminuiscono, fino a restare quasi solo quelli necessari
+- **Punti:** 300 × livello · 50 per ogni ritocco avanzato · 600 se non ne sprechi nessuno
+- **Difficoltà:** Facile (tanti ritocchi di scorta, 4 errori concessi), Normale (ritocchi contati, 3 errori), Difficile (quasi nessun ritocco di troppo); record separati per ogni difficoltà
+- **Comandi:** clicca o tocca un peso o un neurone per sceglierlo, poi `−` e `+` · tastiera: `←` `→` per scegliere, `↑` `↓` per regolare · `P` pausa
+
+Per giocare apri `games/pesi-e-soglie/index.html` nel browser.

@@ -1,0 +1,556 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no, viewport-fit=cover">
+<title>Pesi e Soglie</title>
+<style>
+  :root {
+    --bg: #0d0822;
+    --fg: #f1eeff;
+    --muted: #a9a3cf;
+    --cyan: #5fe3d6;
+    --yellow: #ffd66b;
+    --red: #ff6b7d;
+    --pink: #8fc1ff;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  html, body {
+    height: 100%;
+    background: var(--bg);
+    color: var(--fg);
+    font-family: system-ui, -apple-system, "Segoe UI", sans-serif;
+    overflow: hidden;
+    user-select: none;
+    -webkit-user-select: none;
+    touch-action: none;
+  }
+  #wrap { position: fixed; inset: 0; display: flex; align-items: center; justify-content: center; }
+  canvas { display: block; touch-action: none; border-radius: 6px; box-shadow: 0 0 0 2px #2a1f55, 0 10px 40px rgba(0,0,0,0.6); cursor: pointer; }
+  #pauseBtn {
+    position: fixed; z-index: 3; display: none; right: 10px; top: calc(10px + env(safe-area-inset-top, 0px));
+    font: 700 13px system-ui, sans-serif; color: var(--fg);
+    background: rgba(0, 0, 0, 0.6); border: 1px solid rgba(241, 238, 255, 0.35);
+    border-radius: 8px; padding: 6px 10px; cursor: pointer;
+  }
+  #overlay {
+    position: fixed; inset: 0; z-index: 5;
+    display: flex; flex-direction: column; align-items: center; justify-content: flex-start;
+    gap: 14px; padding: 16px; text-align: center; overflow-y: auto;
+    background: rgba(13, 8, 34, 0.93);
+  }
+  #overlay > :first-child { margin-top: auto; }
+  #overlay > :last-child { margin-bottom: auto; }
+  #overlay.hidden { display: none; }
+  #homeLink {
+    position: fixed; top: calc(10px + env(safe-area-inset-top, 0px)); left: 10px; z-index: 6;
+    font: 600 13px/1 system-ui, sans-serif; color: #fff; text-decoration: none;
+    padding: 8px 12px; border-radius: 999px; background: rgba(0,0,0,.55);
+    border: 1px solid rgba(255,255,255,.25);
+  }
+  #homeLink:hover { background: rgba(0,0,0,.8); }
+  #overlay.hidden ~ #homeLink { display: none; }
+  @media (max-width: 700px) { #overlay { padding-top: calc(52px + env(safe-area-inset-top, 0px)); } }
+  #overlay h1 { font-size: clamp(30px, 9vw, 54px); font-weight: 900; letter-spacing: 1px; color: var(--pink);
+    text-shadow: 3px 3px 0 #2a1f6a, 0 0 22px rgba(143,193,255,0.35); text-wrap: balance; }
+  #overlay h2 { font-size: clamp(24px, 7vw, 40px); font-weight: 900; letter-spacing: 2px; color: var(--pink); }
+  #overlay h2.lose { color: var(--red); }
+  #overlay p { max-width: 540px; font-size: clamp(13px, 3.4vw, 16px); line-height: 1.55; }
+  #overlay p.muted { color: var(--muted); }
+  #overlay .pts { display: grid; grid-template-columns: repeat(2, auto); gap: 4px 18px; font-size: 13px; color: var(--muted); text-align: left; max-width: 560px; }
+  #overlay .pts b { color: var(--fg); }
+  #overlay .diff { display: flex; gap: 10px; flex-wrap: wrap; justify-content: center; }
+  #overlay button {
+    font: 800 15px system-ui, sans-serif; letter-spacing: 1.5px; color: var(--fg);
+    background: transparent; cursor: pointer;
+    border: 2px solid rgba(241,238,255,0.3); border-radius: 10px; padding: 9px 16px;
+  }
+  #overlay .diff button.on { border-color: var(--c); color: var(--c); box-shadow: 0 0 12px var(--c); }
+  #overlay button.start { border-color: var(--pink); color: #06142a; background: var(--pink); padding: 11px 30px; box-shadow: 0 4px 0 #4a7ab8; }
+  @media (max-height: 560px) {
+    #overlay { gap: 8px; }
+    #overlay h1 { font-size: 28px; }
+    #overlay p { font-size: 13px; line-height: 1.4; }
+    #overlay .help, #overlay .pts { display: none; }
+  }
+</style>
+</head>
+<body>
+<div id="wrap"><canvas id="game"></canvas></div>
+<button id="pauseBtn" type="button" aria-label="Pausa">❚❚</button>
+<div id="overlay"></div>
+<a id="homeLink" href="../../index.html">← Sala Giochi</a>
+
+<script>
+(() => {
+  "use strict";
+
+  const W = 360, H = 600, TOP = 56, TAU = Math.PI * 2;
+  const WMAX = 3, TMAX = 4;                       // how far a weight and a threshold can go
+  const MINUS = { x: 14, y: 532, w: 92, h: 52 }, PLUS = { x: 254, y: 532, w: 92, h: 52 };
+  // the first lessons have a name; after them the rules are drawn at random
+  const LESSONS = [
+    { n: 2, name: "E", sub: "accesa solo se sono accesi tutti e due", f: (x) => x[0] && x[1] },
+    { n: 2, name: "O", sub: "accesa se ne è acceso almeno uno", f: (x) => x[0] || x[1] },
+    { n: 2, name: "NON-E", sub: "spenta solo se sono accesi tutti e due", f: (x) => !(x[0] && x[1]) },
+    { n: 3, name: "MAGGIORANZA", sub: "accesa se sono accesi almeno due su tre", f: (x) => x[0] + x[1] + x[2] >= 2 },
+    { n: 3, name: "REGOLA A SORPRESA", sub: "guarda la tabella", rand: true },
+    { n: 2, net: true, name: "O ESCLUSIVO", sub: "accesa se ne è acceso uno solo: un neurone non basta", f: (x) => x[0] !== x[1] },
+    { n: 3, name: "REGOLA A SORPRESA", sub: "guarda la tabella", rand: true },
+    { n: 2, net: true, name: "UGUALI", sub: "accesa se i due ingressi sono uguali", f: (x) => x[0] === x[1] },
+  ];
+
+  const DIFFICULTIES = {
+    facile:    { label: "FACILE",    color: "#7ee0a0", desc: "tanti ritocchi a disposizione · 4 errori concessi", k: 2.6, extra: 5, lives: 4 },
+    normale:   { label: "NORMALE",   color: "#ffd66b", desc: "ritocchi contati · 3 errori concessi", k: 1.8, extra: 3, lives: 3 },
+    difficile: { label: "DIFFICILE", color: "#ff6b7d", desc: "quasi nessun ritocco di troppo · 3 errori concessi", k: 1.3, extra: 1, lives: 3 },
+  };
+  const DIFF_IDS = Object.keys(DIFFICULTIES);
+  const DIFF_KEY = "pesi-difficulty";
+  const bestKey = (id) => `pesi-best-${id}`;
+  function store(k, v) { try { localStorage.setItem(k, v); } catch { /* ignore */ } }
+  function load(k) { try { return localStorage.getItem(k); } catch { return null; } }
+  const rint = (a, b) => a + Math.floor(Math.random() * (b - a + 1));
+  const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
+  const nf = (n) => n.toLocaleString("it-IT");
+
+  // ---------- Canvas ----------
+  const canvas = document.getElementById("game");
+  const ctx = canvas.getContext("2d");
+  const overlay = document.getElementById("overlay");
+  const pauseBtn = document.getElementById("pauseBtn");
+  let pxRatio = 1, touchMode = !!(window.matchMedia && matchMedia("(pointer: coarse)").matches);
+  function resize() {
+    const availW = window.innerWidth - 8, availH = window.innerHeight - 8;
+    const s = Math.max(0.2, Math.min(availW / W, availH / H));
+    pxRatio = Math.min(3, s * (window.devicePixelRatio || 1));
+    canvas.style.width = W * s + "px";
+    canvas.style.height = H * s + "px";
+    canvas.width = Math.round(W * pxRatio);
+    canvas.height = Math.round(H * pxRatio);
+  }
+  window.addEventListener("resize", () => syncControls());
+
+  // ---------- Audio: soft tones ----------
+  let audioCtx = null;
+  function beep(freq, dur, type = "sine", vol = 0.05, delay = 0) {
+    if (!audioCtx) return;
+    const t = audioCtx.currentTime + delay;
+    const osc = audioCtx.createOscillator(), gain = audioCtx.createGain();
+    osc.type = type; osc.frequency.setValueAtTime(freq, t);
+    gain.gain.setValueAtTime(0.0001, t);
+    gain.gain.exponentialRampToValueAtTime(vol, t + 0.015);
+    gain.gain.exponentialRampToValueAtTime(0.0001, t + dur);
+    osc.connect(gain).connect(audioCtx.destination);
+    osc.start(t); osc.stop(t + dur + 0.02);
+  }
+  const arp = (notes, gap, d, type, vol) => notes.forEach((f, i) => beep(f, d, type, vol, i * gap));
+  const sfx = {
+    pick: () => beep(520, 0.06, "sine", 0.035),
+    step: (v) => beep(392 * Math.pow(1.09, v), 0.09, "triangle", 0.04),
+    edge: () => beep(150, 0.08, "sine", 0.045),
+    row: () => beep(880, 0.1, "sine", 0.03, 0.05),
+    win: () => arp([523, 659, 784, 1047], 0.09, 0.35),
+    perfect: () => arp([523, 659, 784, 1047, 1319, 1568], 0.07, 0.4),
+    fail: () => arp([392, 330, 277], 0.14, 0.35, "triangle", 0.05),
+    lose: () => arp([392, 330, 277, 220], 0.16, 0.4, "triangle", 0.05),
+  };
+
+  // ---------- State ----------
+  let difficulty = DIFFICULTIES[load(DIFF_KEY)] ? load(DIFF_KEY) : "normale";
+  let diff = DIFFICULTIES[difficulty];
+  let state = "menu", menu = null, pausedFrom = null, stateT = 0, clock = 0;
+  let score = 0, level = 0, bestCache = 0, cleared = 0, perfects = 0, lives = 0;
+  let lesson = null, n = 2, isNet = false, params = [], target = [], par = 0, budget = 0, used = 0, sel = 0, focus = 0, lastOk = 0, ref = [];
+  let popups = [], message = null, pulse = 0;
+  const isPlaying = () => ["play", "levelup", "fail"].includes(state);
+  const bits = (r) => Array.from({ length: n }, (_, i) => (r >> (n - 1 - i)) & 1);
+
+  // ---------- The neuron ----------
+  // a neuron fires when the weighted sum of what comes in reaches its threshold
+  const fire = (ws, th, xs) => { let s = 0; for (let i = 0; i < ws.length; i++) s += ws[i] * xs[i]; return { s, y: s >= th ? 1 : 0 }; };
+  // the values in use: one neuron, or two hidden ones (A, B) feeding a third
+  function run(v, xs) {
+    if (!isNet) { const o = fire(v.slice(0, n), v[n], xs); return { y: o.y, s: o.s }; }
+    const a = fire(v.slice(0, n), v[n], xs), b = fire(v.slice(n + 1, 2 * n + 1), v[2 * n + 1], xs), o = fire(v.slice(2 * n + 2, 2 * n + 4), v[2 * n + 4], [a.y, b.y]);
+    return { y: o.y, s: o.s, a, b };
+  }
+  const values = () => params.map((p) => p.v);
+  const table = (v) => Array.from({ length: 1 << n }, (_, r) => run(v, bits(r)).y);
+  const rightRows = () => { const t = table(values()); return t.reduce((k, y, r) => k + (y === target[r] ? 1 : 0), 0); };
+  const start = (p) => (p.th ? 1 : 0);   // everything starts at zero, thresholds at one: all lamps off
+  const cost = (v) => v.reduce((k, x, i) => k + Math.abs(x - start(params[i])), 0);
+
+  function layout() {
+    params = [];
+    const inY = (i) => 118 + (n === 2 ? 44 + i * 88 : i * 66);
+    const add = (label, th, x, y, extra) => params.push({ label, th, v: th ? 1 : 0, x, y, ...extra });
+    if (!isNet) {
+      const N = { x: 232, y: 184 };
+      for (let i = 0; i < n; i++) add(`peso dell'ingresso ${i + 1}`, false, 70 + (N.x - 70) * 0.45, inY(i) + (N.y - inY(i)) * 0.45, { from: { x: 44, y: inY(i) }, to: N });
+      add("soglia del neurone", true, N.x, N.y, { node: true });
+    } else {
+      const A = { x: 168, y: 134 }, B = { x: 168, y: 234 }, O = { x: 292, y: 184 };
+      for (const [nm, P] of [["A", A], ["B", B]]) {
+        for (let i = 0; i < n; i++) add(`peso dell'ingresso ${i + 1} verso ${nm}`, false, 40 + (P.x - 40) * (nm === "A" ? 0.3 : 0.55), inY(i) + (P.y - inY(i)) * (nm === "A" ? 0.3 : 0.55), { from: { x: 36, y: inY(i) }, to: P });
+        add(`soglia del neurone ${nm}`, true, P.x, P.y, { node: true, name: nm });
+      }
+      add("peso di A verso l'uscita", false, A.x + (O.x - A.x) * 0.5, A.y + (O.y - A.y) * 0.5, { from: A, to: O });
+      add("peso di B verso l'uscita", false, B.x + (O.x - B.x) * 0.5, B.y + (O.y - B.y) * 0.5, { from: B, to: O });
+      add("soglia dell'uscita", true, O.x, O.y, { node: true });
+    }
+  }
+  function buildLevel() {
+    lesson = level < LESSONS.length ? LESSONS[level] : level % 3 === 2 ? { n: 3, net: true, name: "RETE A SORPRESA", sub: "due neuroni nascosti e uno d'uscita", rand: true } : { n: 3, name: "REGOLA A SORPRESA", sub: "guarda la tabella", rand: true };
+    n = lesson.n; isNet = !!lesson.net;
+    layout();
+    const rows = 1 << n;
+    // can a single neuron do this table, and with how few touches? (all its settings, one by one)
+    let sol = null;
+    const single = (t) => {
+      let best = Infinity; const w = Array(n).fill(-WMAX);
+      for (;;) {
+        for (let th = -TMAX; th <= TMAX; th++) {
+          let ok = true;
+          for (let r = 0; r < rows && ok; r++) ok = fire(w, th, bits(r)).y === t[r];
+          const c = w.reduce((k, x) => k + Math.abs(x), 0) + Math.abs(th - 1);
+          if (ok && c < best) { best = c; sol = [...w, th]; }
+        }
+        let i = 0; while (i < n && w[i] === WMAX) w[i++] = -WMAX;
+        if (i === n) break; w[i]++;
+      }
+      return best;
+    };
+    for (let tries = 0; tries < 5000; tries++) {
+      let gen = null;
+      if (lesson.f) target = Array.from({ length: rows }, (_, r) => (lesson.f(bits(r)) ? 1 : 0));
+      else {   // a rule that some setting of this very machine can make
+        gen = params.map((p) => (p.th ? rint(-1, 3) : rint(-2, 2)));
+        target = table(gen);
+      }
+      const ones = target.reduce((a, b) => a + b, 0);
+      if (ones === 0 || ones === rows) continue;
+      const s = single(target);
+      if (!isNet) { if (s === Infinity || s < 3) continue; par = s; ref = sol; break; }
+      if (s !== Infinity) continue;   // a network level must really need the network
+      // named network lessons: the textbook answer gives the reference number of touches
+      if (!gen) gen = lesson.name === "UGUALI" ? [-1, -1, 0, 1, 1, 2, 1, 1, 1] : [1, 1, 1, 1, 1, 2, 1, -1, 1];
+      // trim it: pull every value back towards the start as long as the table does not change
+      const same = (v) => table(v).every((y, r) => y === target[r]);
+      for (let moved = true; moved;) {
+        moved = false;
+        for (let i = 0; i < gen.length; i++) {
+          const st = start(params[i]); if (gen[i] === st) continue;
+          const v = gen.slice(); v[i] += Math.sign(st - v[i]);
+          if (same(v)) { gen = v; moved = true; }
+        }
+      }
+      par = cost(gen); ref = gen; break;
+    }
+    // lesson after lesson the spare touches run out
+    budget = Math.max(par + (isNet ? 2 : 0), Math.ceil(par * Math.max(1, diff.k - 0.05 * level)) + Math.max(0, diff.extra - Math.floor(level / 4))); used = 0; sel = 0; lastOk = rightRows(); pulse = 0;
+    focus = Math.max(0, table(values()).findIndex((y, r) => y !== target[r]));
+  }
+  function startGame() {
+    if (!audioCtx) { try { audioCtx = new (window.AudioContext || window.webkitAudioContext)(); } catch { audioCtx = null; } }
+    if (audioCtx && audioCtx.state === "suspended") audioCtx.resume();
+    score = 0; level = 0; cleared = 0; perfects = 0; lives = diff.lives; popups = [];
+    bestCache = parseInt(load(bestKey(difficulty)), 10) || 0;
+    beginLevel();
+    menu = null;
+    overlay.classList.add("hidden");
+    syncControls();
+    last = performance.now();
+  }
+  function beginLevel() {
+    buildLevel();
+    state = "play";
+    message = { text: lesson.name, sub: lesson.sub, t: 0 };
+  }
+  function addScore(k, y, color, label = "") { score += k; popups.push({ text: `${label}+${nf(k)}`, x: W / 2, y, t: 0, color }); }
+  function nudge(d) {
+    if (state !== "play") return;
+    const p = params[sel], lim = p.th ? TMAX : WMAX, nv = p.v + d;
+    if (nv < -lim || nv > lim) { sfx.edge(); return; }
+    p.v = nv; used++; p.kick = 1;
+    sfx.step(nv);
+    const ok = rightRows(), rows = 1 << n;
+    if (ok > lastOk) sfx.row();
+    lastOk = ok;
+    const t = table(values()), w = t.findIndex((y, r) => y !== target[r]);
+    if (w >= 0 && t[focus] === target[focus]) focus = w;
+    if (ok === rows) win();
+    else if (used >= budget) lose();
+  }
+  function win() {
+    const left = budget - used, perfect = used <= par;
+    state = "levelup"; stateT = 2.6; cleared++; pulse = 0.001;
+    addScore(300 * (level + 1), 404, "#8fc1ff");
+    if (left > 0) addScore(50 * left, 382, "#ffd66b", `${left} ${left === 1 ? "ritocco avanzato" : "ritocchi avanzati"} · `);
+    if (perfect) { perfects++; addScore(600, 360, "#5fe3d6", "nessun ritocco di troppo · "); sfx.perfect(); } else sfx.win();
+    message = { text: perfect ? "PESI PERFETTI!" : "IL NEURONE HA IMPARATO", sub: `${used} ritocchi${isNet ? "" : ` · il minimo era ${par}`}`, t: 0 };
+  }
+  function lose() {
+    lives--;
+    state = "fail"; stateT = 2.8;
+    (lives > 0 ? sfx.fail : sfx.lose)();
+    message = { text: "RITOCCHI FINITI", sub: `${rightRows()} righe giuste su ${1 << n} · si ricomincia da zero`, t: 0, bad: true };
+  }
+
+  function gameOver() {
+    state = "over";
+    const prev = parseInt(load(bestKey(difficulty)), 10) || 0;
+    const record = score > prev;
+    if (record) store(bestKey(difficulty), String(score));
+    menu = () => showOverlay(
+      `<h2 class="lose">LEZIONE FINITA</h2>
+       <p>Punteggio: <b>${nf(score)}</b> · ${cleared} ${cleared === 1 ? "regola imparata" : "regole imparate"}${perfects ? ` · ${perfects} senza ritocchi di troppo` : ""} · ${diff.label}</p>
+       <p class="muted">Dentro di me ci sono miliardi di manopole come queste. Nessuno le ha girate a mano.</p>
+       ${record ? "<p style='color:var(--yellow)'>★ NUOVO RECORD! ★</p>" : ""}
+       ${difficultyHTML()}
+       <button class="start" data-start>RIPROVA</button>`
+    );
+    menu();
+    syncControls();
+  }
+  function togglePause() {
+    if (isPlaying()) {
+      pausedFrom = state; state = "paused";
+      showOverlay(`<h2>PAUSA</h2><button class="start" data-resume>CONTINUA</button><p class="muted">Premi P per continuare</p>`);
+    } else if (state === "paused") {
+      state = pausedFrom; overlay.classList.add("hidden"); last = performance.now();
+    }
+    syncControls();
+  }
+  // the pause menu can end the game (shared/iniziali.js): it ends here the usual way, saving the record
+  window.addEventListener("sala:termina", () => { if (state !== "paused") return; overlay.classList.add("hidden"); gameOver(); syncControls(); });
+  function syncControls() {
+    pauseBtn.style.display = isPlaying() && touchMode ? "block" : "none";
+    resize();
+  }
+  pauseBtn.addEventListener("click", () => togglePause());
+  function showOverlay(html) { overlay.innerHTML = html; overlay.classList.remove("hidden"); }
+  function difficultyHTML() {
+    const buttons = DIFF_IDS.map((id) => {
+      const d = DIFFICULTIES[id];
+      return `<button type="button" data-diff="${id}" class="${id === difficulty ? "on" : ""}" style="--c:${d.color}">${d.label}</button>`;
+    }).join("");
+    const best = parseInt(load(bestKey(difficulty)), 10);
+    return `<div class="diff">${buttons}</div><p class="muted">${diff.desc}${best ? ` · Record: ${nf(best)}` : ""}</p>`;
+  }
+  function setDifficulty(id) { if (!DIFFICULTIES[id]) return; difficulty = id; diff = DIFFICULTIES[id]; store(DIFF_KEY, id); if (state === "menu") buildLevel(); if (menu) menu(); }
+  function showTitle() {
+    menu = showTitle;
+    showOverlay(
+      `<h1>PESI E SOGLIE</h1>
+       <p>Un neurone artificiale è una cosa semplice: moltiplica ogni ingresso per un peso, somma tutto e si accende se la somma arriva alla sua soglia. Qui i pesi li regoli tu, a mano, finché la lampadina fa quello che dice la tabella. Poi un neurone solo non basta più: ne servono tre.</p>
+       <div class="pts">
+         <span><b>Ritocchi</b></span><span>ogni scatto di un peso o di una soglia è un ritocco, e sono contati</span>
+         <span><b>Tabella</b></span><span>per ogni combinazione degli ingressi dice cosa deve fare l'uscita e cosa fa adesso</span>
+         <span><b>Pesi</b></span><span>azzurro è positivo (spinge ad accendersi), rosa è negativo (frena); da −${WMAX} a +${WMAX}</span>
+         <span><b>Punti</b></span><span>300 × livello · 50 per ogni ritocco avanzato · 600 se non ne sprechi nessuno</span>
+       </div>
+       ${touchMode
+         ? `<p class="muted help">Tocca un peso o un neurone per sceglierlo, poi − e + · tocca una riga della tabella per vederla scorrere nella rete</p>`
+         : `<p class="muted help">Clicca un peso o un neurone, poi − e + · oppure ← → per scegliere e ↑ ↓ per regolare · P pausa</p>`}
+       ${difficultyHTML()}
+       <button class="start" data-start>PRIMA LEZIONE</button>`
+    );
+  }
+  overlay.addEventListener("click", (e) => {
+    const d = e.target.closest("[data-diff]");
+    if (d) { setDifficulty(d.dataset.diff); return; }
+    if (e.target.closest("[data-start]")) startGame();
+    if (e.target.closest("[data-resume]")) togglePause();
+  });
+
+  // ---------- Input ----------
+  window.addEventListener("keydown", (e) => {
+    const k = e.key.toLowerCase();
+    if ([" ", "arrowup", "arrowdown", "arrowleft", "arrowright", "tab"].includes(k)) e.preventDefault();
+    if (state === "menu" || state === "over") {
+      if (e.key === "Enter") startGame();
+      else if (["1", "2", "3"].includes(k)) setDifficulty(DIFF_IDS[+k - 1]);
+      return;
+    }
+    if (k === "p" || k === "escape") { if (!e.repeat) togglePause(); return; }
+    if (state === "paused") { if (e.key === "Enter") togglePause(); return; }
+    if (state !== "play") return;
+    if (k === "arrowright" || k === "tab") { sel = (sel + 1) % params.length; sfx.pick(); }
+    else if (k === "arrowleft") { sel = (sel + params.length - 1) % params.length; sfx.pick(); }
+    else if ((k === "arrowup" || k === "+" || k === "=") && !e.repeat) nudge(1);
+    else if ((k === "arrowdown" || k === "-") && !e.repeat) nudge(-1);
+  });
+  window.addEventListener("blur", () => { if (isPlaying()) togglePause(); });
+  const toWorld = (e) => { const rc = canvas.getBoundingClientRect(); return { x: (e.clientX - rc.left) / rc.width * W, y: (e.clientY - rc.top) / rc.height * H }; };
+  const inRect = (r, p) => p.x >= r.x && p.x <= r.x + r.w && p.y >= r.y && p.y <= r.y + r.h;
+  const ROWS = { y: 330, h: 0 };
+  canvas.addEventListener("pointerdown", (e) => {
+    e.preventDefault();
+    if (state !== "play") return;
+    const p = toWorld(e);
+    if (inRect(MINUS, p)) { nudge(-1); return; }
+    if (inRect(PLUS, p)) { nudge(1); return; }
+    let best = -1, bd = 30;
+    params.forEach((q, i) => { const d = Math.hypot(q.x - p.x, q.y - p.y) - (q.node ? 8 : 0); if (d < bd) { bd = d; best = i; } });
+    if (best >= 0 && p.y < 300) { sel = best; sfx.pick(); return; }
+    const rows = 1 << n;
+    if (p.y >= ROWS.y && p.y < ROWS.y + rows * ROWS.h) { focus = Math.floor((p.y - ROWS.y) / ROWS.h); sfx.pick(); }
+  });
+  window.addEventListener("pointerdown", (e) => { if (e.pointerType === "touch" && !touchMode) { touchMode = true; syncControls(); if (menu) menu(); } }, true);
+
+  // ---------- Update ----------
+  function update(dt) {
+    clock += dt;
+    for (const p of popups) { p.t += dt; p.y -= 14 * dt; }
+    popups = popups.filter((p) => p.t < 1.8);
+    for (const p of params) p.kick = Math.max(0, (p.kick || 0) - dt * 5);
+    if (pulse) pulse += dt;
+    if (message) { message.t += dt; if (message.t > (state === "play" ? 2.4 : 2.6)) message = null; }
+    if (state === "levelup") { stateT -= dt; if (stateT <= 0) { level++; beginLevel(); } }
+    else if (state === "fail") { stateT -= dt; if (stateT <= 0) { if (lives <= 0) gameOver(); else beginLevel(); } }
+  }
+
+  // ---------- Drawing ----------
+  const POS = "#5fe3d6", NEG = "#ff9be0";
+  const signed = (v) => (v > 0 ? `+${v}` : String(v));
+  function lamp(x, y, r, on, col = "#ffd66b") {
+    if (on) { ctx.fillStyle = col; ctx.globalAlpha = 0.25; ctx.beginPath(); ctx.arc(x, y, r + 4, 0, TAU); ctx.fill(); ctx.globalAlpha = 1; }
+    ctx.fillStyle = on ? col : "#241a4c"; ctx.strokeStyle = on ? col : "#4a3f88"; ctx.lineWidth = 1.5;
+    ctx.beginPath(); ctx.arc(x, y, r, 0, TAU); ctx.fill(); ctx.stroke();
+  }
+  function drawNet() {
+    const xs = bits(focus), out = run(values(), xs), inY = (i) => 118 + (n === 2 ? 44 + i * 88 : i * 66);
+    ctx.textAlign = "center"; ctx.textBaseline = "middle";
+    // the wires: thicker the heavier the weight, lit when the signal of the row in view runs along them
+    for (const p of params) {
+      if (p.node) continue;
+      const src = p.from, carries = isNet && (p.from.x > 100) ? (p.from.y < 184 ? out.a.y : out.b.y) : xs[Math.round((p.from.y - 118 - (n === 2 ? 44 : 0)) / (n === 2 ? 88 : 66))];
+      ctx.strokeStyle = p.v === 0 ? "#3a2f72" : p.v > 0 ? POS : NEG; ctx.globalAlpha = p.v === 0 ? 1 : carries ? 1 : 0.4;
+      ctx.lineWidth = p.v === 0 ? 1.2 : 1.5 + Math.abs(p.v) * 1.3; if (p.v === 0) ctx.setLineDash([4, 4]);
+      ctx.beginPath(); ctx.moveTo(src.x, src.y); ctx.lineTo(p.to.x, p.to.y); ctx.stroke(); ctx.setLineDash([]); ctx.globalAlpha = 1;
+    }
+    for (let i = 0; i < n; i++) {
+      const x = isNet ? 36 : 44;
+      lamp(x, inY(i), 13, xs[i]);
+      ctx.fillStyle = xs[i] ? "#0d0822" : "#a9a3cf"; ctx.font = "900 11px system-ui"; ctx.fillText(String(i + 1), x, inY(i) + 0.5);
+    }
+    // neurons: the threshold inside, the sum arriving above
+    const node = (p, o, name) => {
+      const on = sel === params.indexOf(p) && state === "play", r = 25 + (p.kick || 0) * 3;
+      ctx.fillStyle = o.y ? "#3a3410" : "#171036"; ctx.strokeStyle = on ? "#f1eeff" : o.y ? "#ffd66b" : "#4a3f88"; ctx.lineWidth = on ? 3 : 2;
+      ctx.beginPath(); ctx.arc(p.x, p.y, r, 0, TAU); ctx.fill(); ctx.stroke();
+      ctx.fillStyle = "#a9a3cf"; ctx.font = "700 8px system-ui"; ctx.fillText(name ? `${name} · soglia` : "soglia", p.x, p.y - 11);
+      ctx.fillStyle = "#f1eeff"; ctx.font = "900 17px system-ui"; ctx.fillText(`≥ ${p.v}`, p.x, p.y + 5);
+      ctx.fillStyle = o.y ? "#ffd66b" : "#a9a3cf"; ctx.font = "800 10px system-ui"; ctx.fillText(`somma ${o.s}`, p.x, p.y - r - 9);
+    };
+    const nodes = params.filter((p) => p.node);
+    if (!isNet) node(nodes[0], out);
+    else { node(nodes[0], out.a, "A"); node(nodes[1], out.b, "B"); node(nodes[2], out); }
+    // the weights, on their wires
+    params.forEach((p, i) => {
+      if (p.node) return;
+      const on = sel === i && state === "play", s = 15 + (p.kick || 0) * 3;
+      ctx.fillStyle = "#0d0822"; ctx.strokeStyle = on ? "#f1eeff" : p.v === 0 ? "#4a3f88" : p.v > 0 ? POS : NEG; ctx.lineWidth = on ? 3 : 2;
+      ctx.beginPath(); ctx.roundRect(p.x - s, p.y - s * 0.8, s * 2, s * 1.6, 7); ctx.fill(); ctx.stroke();
+      ctx.fillStyle = p.v === 0 ? "#a9a3cf" : p.v > 0 ? POS : NEG; ctx.font = "900 14px system-ui"; ctx.fillText(signed(p.v), p.x, p.y + 0.5);
+    });
+    // the output lamp, and what it should be for this row
+    const last = nodes[nodes.length - 1], ox = isNet ? last.x + 44 : last.x + 76, want = target[focus];
+    if (!isNet) { ctx.strokeStyle = "#4a3f88"; ctx.lineWidth = 2; ctx.beginPath(); ctx.moveTo(last.x + 26, last.y); ctx.lineTo(ox - 16, last.y); ctx.stroke(); }
+    lamp(ox, last.y, isNet ? 11 : 15, out.y);
+    ctx.fillStyle = out.y === want ? "#7ee0a0" : "#ff6b7d"; ctx.font = "900 9px system-ui";
+    ctx.fillText(out.y === want ? "giusta" : want ? "deve accendersi" : "deve spegnersi", clamp(ox, 0, W - 44), last.y + (isNet ? 26 : 30));
+    ctx.textBaseline = "alphabetic";
+  }
+  function drawTable() {
+    const rows = 1 << n, t = table(values()), h = Math.min(26, 176 / rows), y0 = 330;
+    ROWS.y = y0; ROWS.h = h;
+    ctx.textAlign = "center"; ctx.textBaseline = "middle";
+    ctx.fillStyle = "#a9a3cf"; ctx.font = "700 8px system-ui";
+    ctx.fillText("INGRESSI", 62, y0 - 10); ctx.fillText("DEVE", 196, y0 - 10); ctx.fillText("FA", 250, y0 - 10); ctx.fillText(isNet ? "A  B" : "SOMMA", 136, y0 - 10);
+    for (let r = 0; r < rows; r++) {
+      const y = y0 + r * h + h / 2, xs = bits(r), o = run(values(), xs), ok = t[r] === target[r];
+      ctx.fillStyle = r === focus ? "rgba(143,193,255,0.16)" : r % 2 ? "rgba(255,255,255,0.03)" : "transparent"; ctx.fillRect(14, y - h / 2, W - 28, h);
+      if (r === focus) { ctx.fillStyle = "#8fc1ff"; ctx.fillRect(14, y - h / 2, 3, h); }
+      const lr = Math.min(7, h / 2 - 3);
+      xs.forEach((b, i) => lamp(62 + (i - (n - 1) / 2) * 22, y, lr, b));
+      if (isNet) { lamp(128, y, lr - 1, o.a.y, "#b79bff"); lamp(146, y, lr - 1, o.b.y, "#b79bff"); }
+      else { ctx.fillStyle = "#f1eeff"; ctx.font = "800 11px system-ui"; ctx.fillText(String(o.s), 136, y + 0.5); }
+      lamp(196, y, lr, target[r]); lamp(250, y, lr, t[r]);
+      ctx.fillStyle = ok ? "#7ee0a0" : "#ff6b7d"; ctx.font = "900 13px system-ui"; ctx.fillText(ok ? "✓" : "✗", 304, y + 1);
+    }
+    ctx.textBaseline = "alphabetic";
+  }
+  function drawControls() {
+    const p = params[sel], lim = p.th ? TMAX : WMAX;
+    ctx.textAlign = "center"; ctx.textBaseline = "middle";
+    for (const [b, label, ok] of [[MINUS, "−", p.v > -lim], [PLUS, "+", p.v < lim]]) {
+      ctx.globalAlpha = ok && state === "play" ? 1 : 0.35;
+      ctx.fillStyle = "#8fc1ff"; ctx.beginPath(); ctx.roundRect(b.x, b.y, b.w, b.h - 5, 12); ctx.fill();
+      ctx.fillStyle = "#4a7ab8"; ctx.beginPath(); ctx.roundRect(b.x, b.y + b.h - 14, b.w, 14, [0, 0, 12, 12]); ctx.fill();
+      ctx.fillStyle = "#8fc1ff"; ctx.fillRect(b.x, b.y + b.h - 16, b.w, 7);
+      ctx.fillStyle = "#06142a"; ctx.font = "900 28px system-ui"; ctx.fillText(label, b.x + b.w / 2, b.y + 22);
+      ctx.globalAlpha = 1;
+    }
+    ctx.fillStyle = "#a9a3cf"; ctx.font = "700 10px system-ui"; ctx.fillText(p.label, W / 2, 548);
+    ctx.fillStyle = "#f1eeff"; ctx.font = "900 20px system-ui"; ctx.fillText(p.th ? `≥ ${p.v}` : signed(p.v), W / 2, 570);
+    ctx.textBaseline = "alphabetic";
+  }
+  function drawHud() {
+    ctx.fillStyle = "#0d0822"; ctx.fillRect(0, 0, W, TOP - 4);
+    ctx.textBaseline = "middle"; ctx.textAlign = "left";
+    ctx.fillStyle = "#f1eeff"; ctx.font = "900 18px system-ui"; ctx.fillText(nf(score), 12, 16);
+    ctx.fillStyle = "#a9a3cf"; ctx.font = "700 9px system-ui"; ctx.fillText(`REC ${nf(Math.max(bestCache, score))}`, 12, 36);
+    ctx.textAlign = "center"; ctx.fillStyle = "#8fc1ff"; ctx.font = "900 12px system-ui"; ctx.fillText(`LIVELLO ${level + 1} · ${lesson.name}`, W / 2, 14);
+    const leftN = budget - used;
+    ctx.fillStyle = leftN <= 2 ? "#ff6b7d" : "#ffd66b"; ctx.font = "800 11px system-ui"; ctx.fillText(`${leftN} ${leftN === 1 ? "ritocco" : "ritocchi"} · ${rightRows()}/${1 << n} righe giuste`, W / 2, 34);
+    const ex = touchMode ? W - 62 : W - 12;
+    for (let i = 0; i < diff.lives; i++) { ctx.fillStyle = i < lives ? "#ffd66b" : "rgba(255,255,255,0.15)"; ctx.beginPath(); ctx.arc(ex - 6 - i * 13, 16, 4.5, 0, TAU); ctx.fill(); }
+    ctx.fillStyle = "rgba(255,255,255,0.12)"; ctx.fillRect(0, TOP - 4, W, 4);
+    ctx.fillStyle = leftN <= 2 ? "#ff6b7d" : "#ffd66b"; ctx.fillRect(0, TOP - 4, W * leftN / Math.max(1, budget), 4);
+    ctx.textBaseline = "alphabetic";
+  }
+  function draw() {
+    ctx.setTransform(pxRatio, 0, 0, pxRatio, 0, 0);
+    ctx.fillStyle = "#0d0822"; ctx.fillRect(0, 0, W, H);
+    ctx.fillStyle = "#120b2c"; ctx.beginPath(); ctx.roundRect(8, 66, W - 16, 236, 12); ctx.fill();
+    drawNet();
+    if (state === "menu") return;
+    drawTable();
+    drawControls();
+    drawHud();
+    for (const p of popups) {
+      ctx.globalAlpha = clamp((1.8 - p.t) * 2, 0, 1);
+      ctx.textAlign = "center"; ctx.font = "900 14px system-ui";
+      ctx.lineWidth = 4; ctx.strokeStyle = "#0d0822"; ctx.strokeText(p.text, p.x, p.y); ctx.fillStyle = p.color; ctx.fillText(p.text, p.x, p.y);
+    }
+    ctx.globalAlpha = 1;
+    if (message) {
+      ctx.globalAlpha = Math.min(1, ((state === "play" ? 2.4 : 2.6) - message.t) * 2);
+      ctx.fillStyle = "rgba(13,8,34,0.88)"; ctx.fillRect(0, 266, W, 58);
+      ctx.textAlign = "center"; ctx.font = "900 21px system-ui"; ctx.fillStyle = message.bad ? "#ff6b7d" : "#8fc1ff";
+      ctx.fillText(message.text, W / 2, 291);
+      if (message.sub) { ctx.font = "800 11px system-ui"; ctx.fillStyle = "#f1eeff"; ctx.fillText(message.sub, W / 2, 311); }
+      ctx.globalAlpha = 1;
+    }
+  }
+
+  // ---------- Loop ----------
+  let last = performance.now();
+  function frame(now) {
+    const dt = Math.min(0.1, (now - last) / 1000);
+    last = now;
+    update(dt);
+    draw();
+    requestAnimationFrame(frame);
+  }
+  buildLevel();
+  syncControls();
+  showTitle();
+  requestAnimationFrame(frame);
+})();
+</script>
+<script src="../../shared/iniziali.js" data-record="pesi-best-" data-kind="score"></script>
+</body>
+</html>
