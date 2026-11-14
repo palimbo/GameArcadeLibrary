@@ -1,0 +1,517 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no, viewport-fit=cover">
+<title>Confine di Decisione</title>
+<style>
+  :root {
+    --bg: #0d0822;
+    --fg: #f1eeff;
+    --muted: #a9a3cf;
+    --cyan: #5fe3d6;
+    --yellow: #ffd66b;
+    --red: #ff6b7d;
+    --pink: #7ee0a0;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  html, body {
+    height: 100%;
+    background: var(--bg);
+    color: var(--fg);
+    font-family: system-ui, -apple-system, "Segoe UI", sans-serif;
+    overflow: hidden;
+    user-select: none;
+    -webkit-user-select: none;
+    touch-action: none;
+  }
+  #wrap { position: fixed; inset: 0; display: flex; align-items: center; justify-content: center; }
+  canvas { display: block; touch-action: none; border-radius: 6px; box-shadow: 0 0 0 2px #2a1f55, 0 10px 40px rgba(0,0,0,0.6); cursor: pointer; }
+  #pauseBtn {
+    position: fixed; z-index: 3; display: none; right: 10px; top: calc(10px + env(safe-area-inset-top, 0px));
+    font: 700 13px system-ui, sans-serif; color: var(--fg);
+    background: rgba(0, 0, 0, 0.6); border: 1px solid rgba(241, 238, 255, 0.35);
+    border-radius: 8px; padding: 6px 10px; cursor: pointer;
+  }
+  #overlay {
+    position: fixed; inset: 0; z-index: 5;
+    display: flex; flex-direction: column; align-items: center; justify-content: flex-start;
+    gap: 14px; padding: 16px; text-align: center; overflow-y: auto;
+    background: rgba(13, 8, 34, 0.93);
+  }
+  #overlay > :first-child { margin-top: auto; }
+  #overlay > :last-child { margin-bottom: auto; }
+  #overlay.hidden { display: none; }
+  #homeLink {
+    position: fixed; top: calc(10px + env(safe-area-inset-top, 0px)); left: 10px; z-index: 6;
+    font: 600 13px/1 system-ui, sans-serif; color: #fff; text-decoration: none;
+    padding: 8px 12px; border-radius: 999px; background: rgba(0,0,0,.55);
+    border: 1px solid rgba(255,255,255,.25);
+  }
+  #homeLink:hover { background: rgba(0,0,0,.8); }
+  #overlay.hidden ~ #homeLink { display: none; }
+  @media (max-width: 700px) { #overlay { padding-top: calc(52px + env(safe-area-inset-top, 0px)); } }
+  #overlay h1 { font-size: clamp(30px, 9vw, 54px); font-weight: 900; letter-spacing: 1px; color: var(--pink);
+    text-shadow: 3px 3px 0 #2a1f6a, 0 0 22px rgba(126,224,160,0.35); text-wrap: balance; }
+  #overlay h2 { font-size: clamp(24px, 7vw, 40px); font-weight: 900; letter-spacing: 2px; color: var(--pink); }
+  #overlay h2.lose { color: var(--red); }
+  #overlay p { max-width: 540px; font-size: clamp(13px, 3.4vw, 16px); line-height: 1.55; }
+  #overlay p.muted { color: var(--muted); }
+  #overlay .pts { display: grid; grid-template-columns: repeat(2, auto); gap: 4px 18px; font-size: 13px; color: var(--muted); text-align: left; max-width: 560px; }
+  #overlay .pts b { color: var(--fg); }
+  #overlay .diff { display: flex; gap: 10px; flex-wrap: wrap; justify-content: center; }
+  #overlay button {
+    font: 800 15px system-ui, sans-serif; letter-spacing: 1.5px; color: var(--fg);
+    background: transparent; cursor: pointer;
+    border: 2px solid rgba(241,238,255,0.3); border-radius: 10px; padding: 9px 16px;
+  }
+  #overlay .diff button.on { border-color: var(--c); color: var(--c); box-shadow: 0 0 12px var(--c); }
+  #overlay button.start { border-color: var(--pink); color: #062414; background: var(--pink); padding: 11px 30px; box-shadow: 0 4px 0 #3f9a62; }
+  @media (max-height: 560px) {
+    #overlay { gap: 8px; }
+    #overlay h1 { font-size: 28px; }
+    #overlay p { font-size: 13px; line-height: 1.4; }
+    #overlay .help, #overlay .pts { display: none; }
+  }
+</style>
+</head>
+<body>
+<div id="wrap"><canvas id="game"></canvas></div>
+<button id="pauseBtn" type="button" aria-label="Pausa">❚❚</button>
+<div id="overlay"></div>
+<a id="homeLink" href="../../index.html">← Sala Giochi</a>
+
+<script>
+(() => {
+  "use strict";
+
+  const W = 360, H = 600, TOP = 56, TAU = Math.PI * 2;
+  const AREA = { x: 14, y: TOP + 34, w: 332, h: 384 };   // where the data lives
+  const BTN = { x: 14, y: 536, w: 332, h: 48 };
+  const TEST = 60;
+  // the shape of the hidden rule, level after level: a straight line, a line with a bend, an island
+  const KINDS = ["retta", "retta", "gomito", "retta", "isola", "gomito", "isola"];
+  const KIND_NAME = { retta: "una retta", gomito: "una retta piegata", isola: "un cerchio" };
+
+  const DIFFICULTIES = {
+    facile:    { label: "FACILE",    color: "#7ee0a0", desc: "dati quasi puliti · si parte dall'80% sui dati nuovi · 4 errori concessi", pass: 80, noise: 0, lives: 4, n: 4 },
+    normale:   { label: "NORMALE",   color: "#ffd66b", desc: "qualche etichetta sbagliata · si parte dall'85% · 3 errori concessi", pass: 85, noise: 0.08, lives: 3, n: 0 },
+    difficile: { label: "DIFFICILE", color: "#ff6b7d", desc: "pochi dati e rumorosi · si parte dall'88% · 3 errori concessi", pass: 88, noise: 0.13, lives: 3, n: -5 },
+  };
+  const DIFF_IDS = Object.keys(DIFFICULTIES);
+  const DIFF_KEY = "confine-difficulty";
+  const bestKey = (id) => `confine-best-${id}`;
+  function store(k, v) { try { localStorage.setItem(k, v); } catch { /* ignore */ } }
+  function load(k) { try { return localStorage.getItem(k); } catch { return null; } }
+  const rnd = (a, b) => a + Math.random() * (b - a);
+  const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
+  const nf = (n) => n.toLocaleString("it-IT");
+
+  // ---------- Canvas ----------
+  const canvas = document.getElementById("game");
+  const ctx = canvas.getContext("2d");
+  const overlay = document.getElementById("overlay");
+  const pauseBtn = document.getElementById("pauseBtn");
+  let pxRatio = 1, touchMode = !!(window.matchMedia && matchMedia("(pointer: coarse)").matches);
+  function resize() {
+    const availW = window.innerWidth - 8, availH = window.innerHeight - 8;
+    const s = Math.max(0.2, Math.min(availW / W, availH / H));
+    pxRatio = Math.min(3, s * (window.devicePixelRatio || 1));
+    canvas.style.width = W * s + "px";
+    canvas.style.height = H * s + "px";
+    canvas.width = Math.round(W * pxRatio);
+    canvas.height = Math.round(H * pxRatio);
+  }
+  window.addEventListener("resize", () => syncControls());
+
+  // ---------- Audio: soft tones ----------
+  let audioCtx = null;
+  function beep(freq, dur, type = "sine", vol = 0.05, delay = 0) {
+    if (!audioCtx) return;
+    const t = audioCtx.currentTime + delay;
+    const osc = audioCtx.createOscillator(), gain = audioCtx.createGain();
+    osc.type = type; osc.frequency.setValueAtTime(freq, t);
+    gain.gain.setValueAtTime(0.0001, t);
+    gain.gain.exponentialRampToValueAtTime(vol, t + 0.015);
+    gain.gain.exponentialRampToValueAtTime(0.0001, t + dur);
+    osc.connect(gain).connect(audioCtx.destination);
+    osc.start(t); osc.stop(t + dur + 0.02);
+  }
+  const arp = (notes, gap, d, type, vol) => notes.forEach((f, i) => beep(f, d, type, vol, i * gap));
+  const sfx = {
+    grab: () => beep(440, 0.07, "sine", 0.035),
+    drop: () => beep(330, 0.09, "triangle", 0.035),
+    better: () => beep(784, 0.08, "sine", 0.03),
+    ok: (i) => beep(660 + (i % 8) * 30, 0.05, "sine", 0.022),
+    ko: () => beep(196, 0.07, "triangle", 0.04),
+    win: () => arp([523, 659, 784, 1047], 0.09, 0.35),
+    perfect: () => arp([523, 659, 784, 1047, 1319, 1568], 0.07, 0.4),
+    fail: () => arp([392, 330, 277], 0.14, 0.35, "triangle", 0.05),
+    lose: () => arp([392, 330, 277, 220], 0.16, 0.4, "triangle", 0.05),
+  };
+
+  // ---------- State ----------
+  let difficulty = DIFFICULTIES[load(DIFF_KEY)] ? load(DIFF_KEY) : "normale";
+  let diff = DIFFICULTIES[difficulty];
+  let state = "menu", menu = null, pausedFrom = null, stateT = 0, clock = 0;
+  let score = 0, level = 0, bestCache = 0, cleared = 0, perfects = 0, lives = 0;
+  let kind = "retta", truth = null, flip = false, train = [], test = [], handles = [], drag = -1, cursor = 0, kbOn = false;
+  let shown = 0, testOk = 0, lastTrain = 0, popups = [], message = null, verdict = null;
+  const isPlaying = () => ["play", "test", "levelup", "fail"].includes(state);
+  // the bar rises as you go: one point more every two levels
+  const need = () => Math.min(96, diff.pass + Math.floor(level / 2));
+
+  // ---------- The rule and the model ----------
+  // which side of a boundary a point is on; the same code serves the hidden rule and the one you draw
+  function side(k, h, x, y) {
+    if (k === "isola") return Math.hypot(x - h[0].x, y - h[0].y) < Math.hypot(h[1].x - h[0].x, h[1].y - h[0].y);
+    const cr = (a, b) => (b.x - a.x) * (y - a.y) - (b.y - a.y) * (x - a.x);
+    if (k === "retta") return cr(h[0], h[1]) > 0;
+    const s1 = cr(h[0], h[1]) > 0, s2 = cr(h[1], h[2]) > 0;
+    const turn = (h[1].x - h[0].x) * (h[2].y - h[1].y) - (h[1].y - h[0].y) * (h[2].x - h[1].x);
+    return turn > 0 ? s1 && s2 : s1 || s2;   // the inside of the bend, or everything but
+  }
+  const guess = (pt) => side(kind, handles, pt.x, pt.y) !== flip;
+  const countRight = (pts) => pts.reduce((n, pt) => n + (guess(pt) === pt.c ? 1 : 0), 0);
+  // the model colours its two sides the way that fits the training data best
+  function orient() { flip = false; if (countRight(train) * 2 < train.length) flip = true; }
+  const inArea = () => ({ x: rnd(AREA.x + 8, AREA.x + AREA.w - 8), y: rnd(AREA.y + 8, AREA.y + AREA.h - 8) });
+
+  function buildLevel() {
+    kind = KINDS[level % KINDS.length];
+    const cx = AREA.x + AREA.w / 2, cy = AREA.y + AREA.h / 2;
+    let tries = 0, pts;
+    do {   // a rule that leaves a fair share of both colours
+      if (kind === "retta") { const a = rnd(0, TAU), o = { x: cx + rnd(-50, 50), y: cy + rnd(-60, 60) }; truth = [{ x: o.x - Math.cos(a) * 100, y: o.y - Math.sin(a) * 100 }, { x: o.x + Math.cos(a) * 100, y: o.y + Math.sin(a) * 100 }]; }
+      else if (kind === "gomito") { const a = rnd(0, TAU), b = a + rnd(0.7, 1.9) * (Math.random() < 0.5 ? 1 : -1), o = { x: cx + rnd(-60, 60), y: cy + rnd(-70, 70) }; truth = [{ x: o.x - Math.cos(a) * 100, y: o.y - Math.sin(a) * 100 }, o, { x: o.x + Math.cos(b) * 100, y: o.y + Math.sin(b) * 100 }]; }
+      else { const o = { x: cx + rnd(-60, 60), y: cy + rnd(-70, 70) }, r = rnd(78, 118); truth = [o, { x: o.x + r, y: o.y }]; }
+      pts = Array.from({ length: 200 }, inArea);
+      const share = pts.filter((pt) => side(kind, truth, pt.x, pt.y)).length / 200;
+      if (share > 0.3 && share < 0.7) break;
+    } while (tries++ < 200);
+    const n = clamp(18 + level * 2 + diff.n, 10, 36), noise = diff.noise * Math.min(1, 0.6 + level * 0.1) + Math.min(0.1, level * 0.006);
+    const label = (pt) => ({ ...pt, c: side(kind, truth, pt.x, pt.y) });
+    train = Array.from({ length: n }, inArea).map(label);
+    for (const pt of train) if (Math.random() < noise) { pt.c = !pt.c; pt.wrong = true; }
+    if (train.every((pt) => pt.c === train[0].c)) train[0].c = !train[0].c;
+    test = Array.from({ length: TEST }, inArea).map(label);
+    // your model starts flat, in the middle
+    handles = kind === "retta" ? [{ x: AREA.x + 50, y: cy }, { x: AREA.x + AREA.w - 50, y: cy }]
+      : kind === "gomito" ? [{ x: AREA.x + 50, y: cy }, { x: cx, y: cy }, { x: AREA.x + AREA.w - 50, y: cy }]
+      : [{ x: cx, y: cy }, { x: cx + 70, y: cy }];
+    drag = -1; cursor = 0; shown = 0; testOk = 0; verdict = null;
+    orient(); lastTrain = countRight(train);
+  }
+  function startGame() {
+    if (!audioCtx) { try { audioCtx = new (window.AudioContext || window.webkitAudioContext)(); } catch { audioCtx = null; } }
+    if (audioCtx && audioCtx.state === "suspended") audioCtx.resume();
+    score = 0; level = 0; cleared = 0; perfects = 0; lives = diff.lives; popups = [];
+    bestCache = parseInt(load(bestKey(difficulty)), 10) || 0;
+    beginLevel();
+    menu = null;
+    overlay.classList.add("hidden");
+    syncControls();
+    last = performance.now();
+  }
+  function beginLevel() {
+    buildLevel();
+    state = "play";
+    message = { text: `LIVELLO ${level + 1}`, sub: `la regola è ${KIND_NAME[kind]} · ${train.length} esempi`, t: 0 };
+  }
+  function addScore(n, y, color, label = "") { score += n; popups.push({ text: `${label}+${nf(n)}`, x: W / 2, y, t: 0, color }); }
+  function moveHandle(i, x, y) {
+    const h = handles[i];
+    h.x = clamp(x, AREA.x + 4, AREA.x + AREA.w - 4); h.y = clamp(y, AREA.y + 4, AREA.y + AREA.h - 4);
+    if (kind === "isola" && i === 0) { const o = handles[1]; o.x = clamp(o.x, AREA.x + 4, AREA.x + AREA.w - 4); }
+    orient();
+    const now = countRight(train);
+    if (now > lastTrain) sfx.better();
+    lastTrain = now;
+  }
+  function verify() {
+    if (state !== "play") return;
+    state = "test"; stateT = 0; shown = 0; testOk = 0; drag = -1; message = null;
+  }
+  function judge() {
+    const acc = Math.round(testOk / TEST * 100), pass = acc >= need(), tr = Math.round(countRight(train) / train.length * 100);
+    verdict = { acc, pass, tr };
+    if (pass) {
+      state = "levelup"; stateT = 2.6; cleared++;
+      addScore(200 * (level + 1), 300, "#7ee0a0");
+      if (acc > need()) addScore((acc - need()) * 30, 278, "#ffd66b", `${acc - need()} punti sopra la soglia · `);
+      if (acc >= 97) { perfects++; addScore(500, 256, "#5fe3d6", "quasi perfetto · "); sfx.perfect(); } else sfx.win();
+      message = { text: acc >= 97 ? "GENERALIZZA!" : "MODELLO PROMOSSO", sub: `${acc}% sui dati nuovi · ${tr}% su quelli di addestramento`, t: 0 };
+    } else {
+      lives--;
+      state = "fail"; stateT = 2.8;
+      (lives > 0 ? sfx.fail : sfx.lose)();
+      // the most common way to fail: a model that knows its examples by heart
+      message = { text: tr - acc >= 12 ? "SOVRADATTATO" : "NON BASTA", sub: `${acc}% sui dati nuovi (serve ${need()}%) · ${tr}% sull'addestramento`, t: 0, bad: true };
+    }
+  }
+
+  function gameOver() {
+    state = "over";
+    const prev = parseInt(load(bestKey(difficulty)), 10) || 0;
+    const record = score > prev;
+    if (record) store(bestKey(difficulty), String(score));
+    menu = () => showOverlay(
+      `<h2 class="lose">ADDESTRAMENTO FINITO</h2>
+       <p>Punteggio: <b>${nf(score)}</b> · ${cleared} ${cleared === 1 ? "modello promosso" : "modelli promossi"}${perfects ? ` · ${perfects} quasi ${perfects === 1 ? "perfetto" : "perfetti"}` : ""} · ${diff.label}</p>
+       <p class="muted">Sui dati che conosci è facile avere ragione. Quelli che contano sono gli altri.</p>
+       ${record ? "<p style='color:var(--yellow)'>★ NUOVO RECORD! ★</p>" : ""}
+       ${difficultyHTML()}
+       <button class="start" data-start>RIPROVA</button>`
+    );
+    menu();
+    syncControls();
+  }
+  function togglePause() {
+    if (isPlaying()) {
+      pausedFrom = state; state = "paused"; drag = -1;
+      showOverlay(`<h2>PAUSA</h2><button class="start" data-resume>CONTINUA</button><p class="muted">Premi P per continuare</p>`);
+    } else if (state === "paused") {
+      state = pausedFrom; overlay.classList.add("hidden"); last = performance.now();
+    }
+    syncControls();
+  }
+  // the pause menu can end the game (shared/iniziali.js): it ends here the usual way, saving the record
+  window.addEventListener("sala:termina", () => { if (state !== "paused") return; overlay.classList.add("hidden"); gameOver(); syncControls(); });
+  function syncControls() {
+    pauseBtn.style.display = isPlaying() && touchMode ? "block" : "none";
+    resize();
+  }
+  pauseBtn.addEventListener("click", () => togglePause());
+  function showOverlay(html) { overlay.innerHTML = html; overlay.classList.remove("hidden"); }
+  function difficultyHTML() {
+    const buttons = DIFF_IDS.map((id) => {
+      const d = DIFFICULTIES[id];
+      return `<button type="button" data-diff="${id}" class="${id === difficulty ? "on" : ""}" style="--c:${d.color}">${d.label}</button>`;
+    }).join("");
+    const best = parseInt(load(bestKey(difficulty)), 10);
+    return `<div class="diff">${buttons}</div><p class="muted">${diff.desc}${best ? ` · Record: ${nf(best)}` : ""}</p>`;
+  }
+  function setDifficulty(id) { if (!DIFFICULTIES[id]) return; difficulty = id; diff = DIFFICULTIES[id]; store(DIFF_KEY, id); if (state === "menu") buildLevel(); if (menu) menu(); }
+  function showTitle() {
+    menu = showTitle;
+    showOverlay(
+      `<h1>CONFINE DI DECISIONE</h1>
+       <p>Qui il classificatore sei tu. Sul piano ci sono dei punti di due colori, divisi da una regola che non vedi: sposta il confine finché separa i gialli dai viola. Poi arriva la prova vera: sessanta punti nuovi, mai visti, e conta solo quanti di quelli finiscono dalla parte giusta. È quello che succede a me ogni volta che imparo qualcosa.</p>
+       <div class="pts">
+         <span><b>Il confine</b></span><span>trascina i pallini bianchi: una retta, poi una retta piegata, poi un cerchio</span>
+         <span><b>Addestramento</b></span><span>in alto vedi quanti esempi il tuo confine mette dalla parte giusta</span>
+         <span><b>Rumore</b></span><span>qualche esempio ha il colore sbagliato: inseguirli tutti peggiora il risultato sui dati nuovi</span>
+         <span><b>Soglia</b></span><span>la percentuale da raggiungere sui dati nuovi sale di un punto ogni due livelli</span>
+         <span><b>Punti</b></span><span>200 × livello · 30 per ogni punto percentuale sopra la soglia · 500 dal 97% in su</span>
+       </div>
+       ${touchMode
+         ? `<p class="muted help">Trascina i pallini bianchi, poi tocca VERIFICA</p>`
+         : `<p class="muted help">Trascina i pallini bianchi, poi VERIFICA · oppure Tab per scegliere il pallino, frecce per spostarlo, Spazio per verificare · P pausa</p>`}
+       ${difficultyHTML()}
+       <button class="start" data-start>ADDESTRA</button>`
+    );
+  }
+  overlay.addEventListener("click", (e) => {
+    const d = e.target.closest("[data-diff]");
+    if (d) { setDifficulty(d.dataset.diff); return; }
+    if (e.target.closest("[data-start]")) startGame();
+    if (e.target.closest("[data-resume]")) togglePause();
+  });
+
+  // ---------- Input ----------
+  window.addEventListener("keydown", (e) => {
+    const k = e.key.toLowerCase();
+    if ([" ", "arrowup", "arrowdown", "arrowleft", "arrowright", "tab"].includes(k)) e.preventDefault();
+    if (state === "menu" || state === "over") {
+      if (e.key === "Enter") startGame();
+      else if (["1", "2", "3"].includes(k)) setDifficulty(DIFF_IDS[+k - 1]);
+      return;
+    }
+    if (k === "p" || k === "escape") { if (!e.repeat) togglePause(); return; }
+    if (state === "paused") { if (e.key === "Enter") togglePause(); return; }
+    if (state !== "play") return;
+    if (k === "tab") { kbOn = true; cursor = (cursor + (e.shiftKey ? handles.length - 1 : 1)) % handles.length; sfx.grab(); }
+    else if (k.startsWith("arrow")) {
+      kbOn = true;
+      const st = e.shiftKey ? 1 : 5, h = handles[cursor];
+      moveHandle(cursor, h.x + (k === "arrowright" ? st : k === "arrowleft" ? -st : 0), h.y + (k === "arrowdown" ? st : k === "arrowup" ? -st : 0));
+    } else if ((k === " " || k === "enter") && !e.repeat) verify();
+  });
+  window.addEventListener("blur", () => { if (isPlaying()) togglePause(); });
+  const toWorld = (e) => { const rc = canvas.getBoundingClientRect(); return { x: (e.clientX - rc.left) / rc.width * W, y: (e.clientY - rc.top) / rc.height * H }; };
+  let grabOff = { x: 0, y: 0 };
+  canvas.addEventListener("pointerdown", (e) => {
+    e.preventDefault();
+    if (state !== "play") return;
+    const p = toWorld(e);
+    if (p.x >= BTN.x && p.x <= BTN.x + BTN.w && p.y >= BTN.y && p.y <= BTN.y + BTN.h) { verify(); return; }
+    let best = -1, bd = touchMode ? 34 : 24;
+    handles.forEach((h, i) => { const d = Math.hypot(h.x - p.x, h.y - p.y); if (d < bd) { bd = d; best = i; } });
+    if (best < 0) return;
+    drag = best; cursor = best; kbOn = false; grabOff = { x: handles[best].x - p.x, y: handles[best].y - p.y };
+    sfx.grab();
+    try { canvas.setPointerCapture(e.pointerId); } catch { /* ignore */ }
+  });
+  canvas.addEventListener("pointermove", (e) => { if (drag < 0 || state !== "play") return; const p = toWorld(e); moveHandle(drag, p.x + grabOff.x, p.y + grabOff.y); });
+  for (const ev of ["pointerup", "pointercancel"]) canvas.addEventListener(ev, () => { if (drag >= 0) { drag = -1; sfx.drop(); } });
+  window.addEventListener("pointerdown", (e) => { if (e.pointerType === "touch" && !touchMode) { touchMode = true; syncControls(); if (menu) menu(); } }, true);
+
+  // ---------- Update ----------
+  function update(dt) {
+    clock += dt;
+    for (const p of popups) { p.t += dt; p.y -= 14 * dt; }
+    popups = popups.filter((p) => p.t < 1.8);
+    if (message) { message.t += dt; if (message.t > (state === "play" ? 2 : 2.6)) message = null; }
+    if (state === "test") {
+      // the new data arrives a few points at a time
+      stateT += dt;
+      const upTo = Math.min(TEST, Math.floor(stateT / 0.028));
+      while (shown < upTo) { const pt = test[shown++]; pt.ok = guess(pt) === pt.c; if (pt.ok) { testOk++; if (shown % 3 === 0) sfx.ok(shown); } else sfx.ko(); }
+      if (shown >= TEST && stateT > TEST * 0.028 + 0.5) judge();
+    } else if (state === "levelup") { stateT -= dt; if (stateT <= 0) { level++; beginLevel(); } }
+    else if (state === "fail") { stateT -= dt; if (stateT <= 0) { if (lives <= 0) gameOver(); else beginLevel(); } }
+  }
+
+  // ---------- Drawing ----------
+  const YEL = "#ffd66b", VIO = "#b79bff";
+  function drawPoint(pt, r, alpha) {
+    ctx.globalAlpha = alpha;
+    ctx.fillStyle = pt.c ? YEL : VIO;
+    ctx.beginPath();
+    if (pt.c) ctx.arc(pt.x, pt.y, r, 0, TAU); else { ctx.moveTo(pt.x, pt.y - r * 1.25); ctx.lineTo(pt.x + r * 1.25, pt.y); ctx.lineTo(pt.x, pt.y + r * 1.25); ctx.lineTo(pt.x - r * 1.25, pt.y); ctx.closePath(); }
+    ctx.fill();
+    ctx.globalAlpha = 1;
+  }
+  // the two sides of your model, tinted with the colour it would answer there
+  function drawRegions() {
+    const step = 8;
+    for (let y = AREA.y; y < AREA.y + AREA.h; y += step) for (let x = AREA.x; x < AREA.x + AREA.w; x += step) {
+      const g = side(kind, handles, x + step / 2, y + step / 2) !== flip;
+      ctx.fillStyle = g ? "rgba(255,214,107,0.13)" : "rgba(183,155,255,0.13)";
+      ctx.fillRect(x, y, Math.min(step, AREA.x + AREA.w - x), Math.min(step, AREA.y + AREA.h - y));
+    }
+  }
+  function drawBoundary(k, h, col, lw, dash) {
+    ctx.save(); ctx.beginPath(); ctx.rect(AREA.x, AREA.y, AREA.w, AREA.h); ctx.clip();
+    ctx.strokeStyle = col; ctx.lineWidth = lw; ctx.lineJoin = "round"; ctx.setLineDash(dash || []);
+    ctx.beginPath();
+    if (k === "isola") ctx.arc(h[0].x, h[0].y, Math.hypot(h[1].x - h[0].x, h[1].y - h[0].y), 0, TAU);
+    else {
+      const ext = (a, b) => { const d = Math.hypot(b.x - a.x, b.y - a.y) || 1; return { x: a.x - (b.x - a.x) / d * 900, y: a.y - (b.y - a.y) / d * 900 }; };
+      const first = ext(h[0], h[1]), lastP = ext(h[h.length - 1], h[h.length - 2]);
+      ctx.moveTo(first.x, first.y);
+      for (let i = k === "retta" ? 1 : 1; i < h.length - 1; i++) ctx.lineTo(h[i].x, h[i].y);
+      ctx.lineTo(lastP.x, lastP.y);
+    }
+    ctx.stroke(); ctx.restore();
+  }
+  function drawField() {
+    ctx.fillStyle = "#171036"; ctx.fillRect(AREA.x, AREA.y, AREA.w, AREA.h);
+    drawRegions();
+    ctx.strokeStyle = "rgba(255,255,255,0.05)"; ctx.lineWidth = 1;
+    for (let x = AREA.x + 41.5; x < AREA.x + AREA.w; x += 41.5) { ctx.beginPath(); ctx.moveTo(x, AREA.y); ctx.lineTo(x, AREA.y + AREA.h); ctx.stroke(); }
+    for (let y = AREA.y + 48; y < AREA.y + AREA.h; y += 48) { ctx.beginPath(); ctx.moveTo(AREA.x, y); ctx.lineTo(AREA.x + AREA.w, y); ctx.stroke(); }
+    const testing = state === "test" || state === "levelup" || state === "fail";
+    // after the test, the rule that was hidden all along
+    if (state === "levelup" || state === "fail") drawBoundary(kind, truth, "rgba(95,227,214,0.9)", 2, [6, 5]);
+    for (const pt of train) {
+      drawPoint(pt, 5, testing ? 0.35 : 1);
+      if (!testing && guess(pt) !== pt.c) { ctx.strokeStyle = "#ff6b7d"; ctx.lineWidth = 1.6; ctx.beginPath(); ctx.arc(pt.x, pt.y, 9.5, 0, TAU); ctx.stroke(); }
+    }
+    for (let i = 0; i < shown; i++) {
+      const pt = test[i];
+      drawPoint(pt, 3.6, 1);
+      if (!pt.ok) { ctx.strokeStyle = "#ff6b7d"; ctx.lineWidth = 1.6; ctx.beginPath(); ctx.moveTo(pt.x - 6, pt.y - 6); ctx.lineTo(pt.x + 6, pt.y + 6); ctx.moveTo(pt.x + 6, pt.y - 6); ctx.lineTo(pt.x - 6, pt.y + 6); ctx.stroke(); }
+    }
+    drawBoundary(kind, handles, "#f1eeff", 2.5);
+    if (!testing) handles.forEach((h, i) => {
+      const on = i === drag || (kbOn && i === cursor);
+      ctx.fillStyle = on ? "#7ee0a0" : "#f1eeff"; ctx.strokeStyle = "#0d0822"; ctx.lineWidth = 2.5;
+      ctx.beginPath(); ctx.arc(h.x, h.y, on ? 11 : 9, 0, TAU); ctx.fill(); ctx.stroke();
+      ctx.fillStyle = "#0d0822"; ctx.beginPath(); ctx.arc(h.x, h.y, 2.5, 0, TAU); ctx.fill();
+    });
+    ctx.strokeStyle = "#2f2466"; ctx.lineWidth = 2; ctx.strokeRect(AREA.x, AREA.y, AREA.w, AREA.h);
+  }
+  function drawReadout() {
+    // above the field: how the model does on what it has seen
+    const ok = countRight(train), n = train.length;
+    ctx.textBaseline = "middle"; ctx.textAlign = "left";
+    ctx.fillStyle = "#a9a3cf"; ctx.font = "700 10px system-ui"; ctx.fillText("ADDESTRAMENTO", AREA.x, TOP + 12);
+    ctx.fillStyle = ok === n ? "#7ee0a0" : "#f1eeff"; ctx.font = "900 15px system-ui"; ctx.fillText(`${ok}/${n}`, AREA.x + 96, TOP + 12);
+    ctx.fillStyle = "rgba(255,255,255,0.1)"; ctx.fillRect(AREA.x + 142, TOP + 8, 80, 8); ctx.fillStyle = "#7ee0a0"; ctx.fillRect(AREA.x + 142, TOP + 8, 80 * ok / n, 8);
+    ctx.textAlign = "right"; ctx.fillStyle = "#a9a3cf"; ctx.font = "700 10px system-ui"; ctx.fillText(`regola: ${KIND_NAME[kind]}`, AREA.x + AREA.w, TOP + 12);
+    // below: the test, or what to do
+    const y = AREA.y + AREA.h + 24;
+    ctx.textAlign = "center";
+    if (state === "play") {
+      ctx.fillStyle = "#a9a3cf"; ctx.font = "700 11px system-ui";
+      ctx.fillText(`cerchiati di rosso: gli esempi dalla parte sbagliata · soglia ${need()}%`, W / 2, y);
+      ctx.fillStyle = "#7ee0a0"; ctx.beginPath(); ctx.roundRect(BTN.x, BTN.y, BTN.w, BTN.h - 5, 12); ctx.fill();
+      ctx.fillStyle = "#3f9a62"; ctx.beginPath(); ctx.roundRect(BTN.x, BTN.y + BTN.h - 12, BTN.w, 12, [0, 0, 12, 12]); ctx.fill();
+      ctx.fillStyle = "#7ee0a0"; ctx.fillRect(BTN.x, BTN.y + BTN.h - 14, BTN.w, 6);
+      ctx.fillStyle = "#062414"; ctx.font = "900 15px system-ui"; ctx.fillText("VERIFICA SUI DATI NUOVI", W / 2, BTN.y + 21);
+    } else {
+      const acc = shown ? Math.round(testOk / shown * 100) : 0, good = acc >= need();
+      ctx.fillStyle = "#a9a3cf"; ctx.font = "700 10px system-ui"; ctx.fillText(`DATI NUOVI  ${shown}/${TEST}`, W / 2, y - 4);
+      const bx = 40, bw = W - 80, by = BTN.y + 4;
+      ctx.fillStyle = "rgba(255,255,255,0.1)"; ctx.beginPath(); ctx.roundRect(bx, by, bw, 14, 7); ctx.fill();
+      ctx.fillStyle = good ? "#7ee0a0" : "#ff6b7d"; ctx.beginPath(); ctx.roundRect(bx, by, Math.max(8, bw * acc / 100), 14, 7); ctx.fill();
+      ctx.strokeStyle = "#f1eeff"; ctx.lineWidth = 2; ctx.beginPath(); ctx.moveTo(bx + bw * need() / 100, by - 5); ctx.lineTo(bx + bw * need() / 100, by + 19); ctx.stroke();
+      ctx.fillStyle = good ? "#7ee0a0" : "#ff6b7d"; ctx.font = "900 20px system-ui"; ctx.fillText(`${acc}%`, W / 2, by + 34);
+    }
+    ctx.textBaseline = "alphabetic";
+  }
+  function drawHud() {
+    ctx.fillStyle = "#0d0822"; ctx.fillRect(0, 0, W, TOP - 4);
+    ctx.textBaseline = "middle"; ctx.textAlign = "left";
+    ctx.fillStyle = "#f1eeff"; ctx.font = "900 18px system-ui"; ctx.fillText(nf(score), 12, 16);
+    ctx.fillStyle = "#a9a3cf"; ctx.font = "700 9px system-ui"; ctx.fillText(`REC ${nf(Math.max(bestCache, score))}`, 12, 36);
+    ctx.textAlign = "center"; ctx.fillStyle = "#7ee0a0"; ctx.font = "900 12px system-ui"; ctx.fillText(`LIVELLO ${level + 1}`, W / 2, 14);
+    ctx.fillStyle = "#a9a3cf"; ctx.font = "700 10px system-ui"; ctx.fillText(`${cleared} ${cleared === 1 ? "modello promosso" : "modelli promossi"}`, W / 2, 34);
+    const ex = touchMode ? W - 62 : W - 12;
+    ctx.textAlign = "right"; ctx.fillStyle = "#a9a3cf"; ctx.font = "700 9px system-ui"; ctx.fillText("ERRORI CONCESSI", ex, 12);
+    for (let i = 0; i < diff.lives; i++) { ctx.fillStyle = i < lives ? "#ffd66b" : "rgba(255,255,255,0.15)"; ctx.beginPath(); ctx.arc(ex - 6 - i * 14, 31, 5, 0, TAU); ctx.fill(); }
+    ctx.fillStyle = "rgba(255,255,255,0.12)"; ctx.fillRect(0, TOP - 4, W, 4);
+    ctx.textBaseline = "alphabetic";
+  }
+  function draw() {
+    ctx.setTransform(pxRatio, 0, 0, pxRatio, 0, 0);
+    ctx.fillStyle = "#0d0822"; ctx.fillRect(0, 0, W, H);
+    drawField();
+    if (state === "menu") return;
+    drawHud();
+    drawReadout();
+    for (const p of popups) {
+      ctx.globalAlpha = clamp((1.8 - p.t) * 2, 0, 1);
+      ctx.textAlign = "center"; ctx.font = "900 14px system-ui";
+      ctx.lineWidth = 4; ctx.strokeStyle = "#0d0822"; ctx.strokeText(p.text, p.x, p.y); ctx.fillStyle = p.color; ctx.fillText(p.text, p.x, p.y);
+    }
+    ctx.globalAlpha = 1;
+    if (message) {
+      ctx.globalAlpha = Math.min(1, ((state === "play" ? 2 : 2.6) - message.t) * 2);
+      ctx.fillStyle = "rgba(13,8,34,0.82)"; ctx.fillRect(0, 330, W, 62);
+      ctx.textAlign = "center"; ctx.font = "900 24px system-ui"; ctx.fillStyle = message.bad ? "#ff6b7d" : "#7ee0a0";
+      ctx.fillText(message.text, W / 2, 358);
+      if (message.sub) { ctx.font = "800 11px system-ui"; ctx.fillStyle = "#f1eeff"; ctx.fillText(message.sub, W / 2, 380); }
+      ctx.globalAlpha = 1;
+    }
+  }
+
+  // ---------- Loop ----------
+  let last = performance.now();
+  function frame(now) {
+    const dt = Math.min(0.1, (now - last) / 1000);
+    last = now;
+    update(dt);
+    draw();
+    requestAnimationFrame(frame);
+  }
+  buildLevel();
+  syncControls();
+  showTitle();
+  requestAnimationFrame(frame);
+})();
+</script>
+<script src="../../shared/iniziali.js" data-record="confine-best-" data-kind="score"></script>
+</body>
+</html>
