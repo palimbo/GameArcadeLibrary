@@ -1,0 +1,596 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no, viewport-fit=cover">
+<title>Discesa del Gradiente</title>
+<style>
+  :root {
+    --bg: #0d0822;
+    --fg: #f1eeff;
+    --muted: #a9a3cf;
+    --cyan: #5fe3d6;
+    --yellow: #ffd66b;
+    --red: #ff6b7d;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  html, body {
+    height: 100%;
+    background: var(--bg);
+    color: var(--fg);
+    font-family: system-ui, -apple-system, "Segoe UI", sans-serif;
+    overflow: hidden;
+    user-select: none;
+    -webkit-user-select: none;
+    touch-action: none;
+  }
+  #wrap { position: fixed; inset: 0; display: flex; align-items: center; justify-content: center; }
+  canvas { display: block; touch-action: none; border-radius: 6px; box-shadow: 0 0 0 2px #2a1f55, 0 10px 40px rgba(0,0,0,0.6); cursor: crosshair; }
+  #pauseBtn {
+    position: fixed; z-index: 3; display: none; right: 10px; top: calc(10px + env(safe-area-inset-top, 0px));
+    font: 700 13px system-ui, sans-serif; color: var(--fg);
+    background: rgba(0, 0, 0, 0.6); border: 1px solid rgba(241, 238, 255, 0.35);
+    border-radius: 8px; padding: 6px 10px; cursor: pointer;
+  }
+  #overlay {
+    position: fixed; inset: 0; z-index: 5;
+    display: flex; flex-direction: column; align-items: center; justify-content: flex-start;
+    gap: 14px; padding: 16px; text-align: center; overflow-y: auto;
+    background: rgba(13, 8, 34, 0.93);
+  }
+  #overlay > :first-child { margin-top: auto; }
+  #overlay > :last-child { margin-bottom: auto; }
+  #overlay.hidden { display: none; }
+  #homeLink {
+    position: fixed; top: calc(10px + env(safe-area-inset-top, 0px)); left: 10px; z-index: 6;
+    font: 600 13px/1 system-ui, sans-serif; color: #fff; text-decoration: none;
+    padding: 8px 12px; border-radius: 999px; background: rgba(0,0,0,.55);
+    border: 1px solid rgba(255,255,255,.25);
+  }
+  #homeLink:hover { background: rgba(0,0,0,.8); }
+  #overlay.hidden ~ #homeLink { display: none; }
+  @media (max-width: 700px) { #overlay { padding-top: calc(52px + env(safe-area-inset-top, 0px)); } }
+  #overlay h1 { font-size: clamp(28px, 8.5vw, 52px); font-weight: 900; letter-spacing: 1px; color: var(--cyan);
+    text-shadow: 3px 3px 0 #2a1f6a, 0 0 22px rgba(95,227,214,0.35); text-wrap: balance; }
+  #overlay h2 { font-size: clamp(24px, 7vw, 40px); font-weight: 900; letter-spacing: 2px; color: var(--cyan); }
+  #overlay h2.lose { color: var(--red); }
+  #overlay p { max-width: 540px; font-size: clamp(13px, 3.4vw, 16px); line-height: 1.55; }
+  #overlay p.muted { color: var(--muted); }
+  #overlay .pts { display: grid; grid-template-columns: repeat(2, auto); gap: 4px 18px; font-size: 13px; color: var(--muted); text-align: left; max-width: 560px; }
+  #overlay .pts b { color: var(--fg); }
+  #overlay .diff { display: flex; gap: 10px; flex-wrap: wrap; justify-content: center; }
+  #overlay button {
+    font: 800 15px system-ui, sans-serif; letter-spacing: 1.5px; color: var(--fg);
+    background: transparent; cursor: pointer;
+    border: 2px solid rgba(241,238,255,0.3); border-radius: 10px; padding: 9px 16px;
+  }
+  #overlay .diff button.on { border-color: var(--c); color: var(--c); box-shadow: 0 0 12px var(--c); }
+  #overlay button.start { border-color: var(--cyan); color: #06231f; background: var(--cyan); padding: 11px 30px; box-shadow: 0 4px 0 #2a8f86; }
+  @media (max-height: 560px) {
+    #overlay { gap: 8px; }
+    #overlay h1 { font-size: 28px; }
+    #overlay p { font-size: 13px; line-height: 1.4; }
+    #overlay .help, #overlay .pts { display: none; }
+  }
+</style>
+</head>
+<body>
+<div id="wrap"><canvas id="game"></canvas></div>
+<button id="pauseBtn" type="button" aria-label="Pausa">❚❚</button>
+<div id="overlay"></div>
+<a id="homeLink" href="../../index.html">← Sala Giochi</a>
+
+<script>
+(() => {
+  "use strict";
+
+  const W = 360, H = 600, TOP = 50, TAU = Math.PI * 2;
+  const BALL_R = 7;
+  // physics: the slope pulls the ball (G), the ground slows it (linear + constant friction)
+  const G = 40000, FR_LIN = 1.0, FR_C = 40, V_MIN = 120, V_MAX = 560, DRAG_MAX = 130;
+  const SINK_R = 16, SINK_V = 160;
+
+  const DIFFICULTIES = {
+    facile:    { label: "FACILE",    color: "#7ee0a0", desc: "7 epoche · anteprima lunga della traiettoria", epochs: 7, preview: 1.0, traps: 0, fog: false },
+    normale:   { label: "NORMALE",   color: "#ffd66b", desc: "5 epoche · anteprima corta · un minimo locale in più", epochs: 5, preview: 0.45, traps: 1, fog: false },
+    difficile: { label: "DIFFICILE", color: "#ff6b7d", desc: "6 epoche · nebbia: vedi solo dove sei passato", epochs: 6, preview: 0.2, traps: 2, fog: true },
+  };
+  const DIFF_IDS = Object.keys(DIFFICULTIES);
+  const DIFF_KEY = "gradiente-difficulty";
+  const bestKey = (id) => `gradiente-best-${id}`;
+  function store(k, v) { try { localStorage.setItem(k, v); } catch { /* ignore */ } }
+  function load(k) { try { return localStorage.getItem(k); } catch { return null; } }
+  const rnd = (a, b) => a + Math.random() * (b - a);
+  const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
+
+  // ---------- Canvas ----------
+  const canvas = document.getElementById("game");
+  const ctx = canvas.getContext("2d");
+  const overlay = document.getElementById("overlay");
+  const pauseBtn = document.getElementById("pauseBtn");
+  let pxRatio = 1, touchMode = !!(window.matchMedia && matchMedia("(pointer: coarse)").matches);
+  function resize() {
+    const availW = window.innerWidth - 8, availH = window.innerHeight - 8;
+    const s = Math.max(0.2, Math.min(availW / W, availH / H));
+    pxRatio = Math.min(3, s * (window.devicePixelRatio || 1));
+    canvas.style.width = W * s + "px";
+    canvas.style.height = H * s + "px";
+    canvas.width = Math.round(W * pxRatio);
+    canvas.height = Math.round(H * pxRatio);
+  }
+  window.addEventListener("resize", () => syncControls());
+
+  // ---------- Audio: soft sine tones, nothing harsh ----------
+  let audioCtx = null;
+  function beep(freq, dur, type = "sine", vol = 0.05, slide = 0, delay = 0) {
+    if (!audioCtx) return;
+    const t = audioCtx.currentTime + delay;
+    const osc = audioCtx.createOscillator(), gain = audioCtx.createGain();
+    osc.type = type;
+    osc.frequency.setValueAtTime(freq, t);
+    if (slide) osc.frequency.exponentialRampToValueAtTime(Math.max(20, freq + slide), t + dur);
+    gain.gain.setValueAtTime(0.0001, t);
+    gain.gain.exponentialRampToValueAtTime(vol, t + 0.015);
+    gain.gain.exponentialRampToValueAtTime(0.0001, t + dur);
+    osc.connect(gain).connect(audioCtx.destination);
+    osc.start(t); osc.stop(t + dur + 0.02);
+  }
+  const arp = (notes, gap, d, type = "sine", vol = 0.05) => notes.forEach((f, i) => beep(f, d, type, vol, 0, i * gap));
+  const sfx = {
+    shoot: (p) => beep(300 + p * 260, 0.22, "triangle", 0.05, 120),
+    wall: () => beep(180, 0.08, "sine", 0.04, -40),
+    trap: () => arp([330, 277], 0.12, 0.3, "sine", 0.05),
+    over: () => beep(880, 0.25, "sine", 0.03, -300),
+    win: () => arp([523, 659, 784, 1047], 0.09, 0.35),
+    ace: () => arp([523, 659, 784, 1047, 1319, 1568], 0.07, 0.4),
+    lose: () => arp([392, 330, 277, 220], 0.16, 0.4, "triangle", 0.05),
+  };
+
+  // ---------- Landscape: a sum of gaussian wells (negative) and hills (positive) ----------
+  let feats = [], target = null, traps = [], startPos = { x: W / 2, y: 540 };
+  let lossLo = -1, lossHi = 0.5;
+  function field(x, y) {
+    let h = 0, gx = 0, gy = 0;
+    for (const f of feats) {
+      const dx = x - f.x, dy = y - f.y, e = f.a * Math.exp(-(dx * dx + dy * dy) / (2 * f.s2));
+      h += e; gx -= e * dx / f.s2; gy -= e * dy / f.s2;
+    }
+    return { h, gx, gy };
+  }
+  const far = (p, list, d) => list.every((q) => Math.hypot(p.x - q.x, p.y - q.y) >= d);
+  function buildLandscape() {
+    startPos = { x: rnd(60, W - 60), y: rnd(505, 560) };
+    let t;
+    do { t = { x: rnd(55, W - 55), y: rnd(TOP + 60, 290) }; } while (Math.hypot(t.x - startPos.x, t.y - startPos.y) < 260);
+    target = { x: t.x, y: t.y, a: -1, s: rnd(50, 58) };
+    traps = [];
+    const nTraps = Math.min(5, 1 + Math.floor(level / 2) + diff.traps), nHills = Math.min(4, 1 + Math.floor((level + 1) / 2));
+    const placed = [startPos, target];
+    for (let i = 0, tries = 0; i < nTraps && tries < 200; tries++) {
+      const p = { x: rnd(45, W - 45), y: rnd(TOP + 50, H - 45) };
+      if (!far(p, [startPos], 85) || !far(p, [target], 105) || !far(p, traps, 80)) continue;
+      traps.push({ x: p.x, y: p.y, a: -rnd(0.48, 0.7), s: rnd(34, 46) }); placed.push(p); i++;
+    }
+    const hills = [];
+    for (let i = 0, tries = 0; i < nHills && tries < 200; tries++) {
+      const p = { x: rnd(30, W - 30), y: rnd(TOP + 40, H - 80) };
+      if (!far(p, [startPos], 95) || !far(p, [target], 100) || !far(p, traps, 70) || !far(p, hills, 90)) continue;
+      hills.push({ x: p.x, y: p.y, a: rnd(0.4, 0.7), s: rnd(42, 62) }); i++;
+    }
+    feats = [target, ...traps, ...hills].map((f) => ({ ...f, s2: f.s * f.s }));
+    renderMap();
+    trail = [{ x: startPos.x, y: startPos.y, stop: true }];
+    ball = { x: startPos.x, y: startPos.y, vx: 0, vy: 0 };
+    resetFog();
+  }
+
+  // the height map drawn once per level: dark valleys, bright hills, contour lines
+  const MAP_S = 1, MW = W / MAP_S, MH = (H - TOP) / MAP_S;
+  const map = document.createElement("canvas"); map.width = MW; map.height = MH;
+  const mctx = map.getContext("2d");
+  const STOPS = [[0, 18, 6, 46], [0.28, 58, 30, 128], [0.52, 44, 104, 184], [0.76, 64, 204, 190], [1, 244, 240, 196]];
+  function colorAt(t) {
+    let i = 1; while (i < STOPS.length - 1 && t > STOPS[i][0]) i++;
+    const a = STOPS[i - 1], b = STOPS[i], u = clamp((t - a[0]) / (b[0] - a[0]), 0, 1);
+    return [a[1] + (b[1] - a[1]) * u, a[2] + (b[2] - a[2]) * u, a[3] + (b[3] - a[3]) * u];
+  }
+  function renderMap() {
+    const hs = new Float32Array(MW * MH);
+    let lo = 1e9, hi = -1e9;
+    for (let j = 0; j < MH; j++) for (let i = 0; i < MW; i++) {
+      const h = field((i + 0.5) * MAP_S, TOP + (j + 0.5) * MAP_S).h;
+      hs[j * MW + i] = h; if (h < lo) lo = h; if (h > hi) hi = h;
+    }
+    lossLo = lo; lossHi = hi;
+    const img = mctx.createImageData(MW, MH), d = img.data, BANDS = 15;
+    for (let k = 0; k < hs.length; k++) {
+      const t = (hs[k] - lo) / (hi - lo), v = t * BANDS, fr = v - Math.floor(v);
+      const c = colorAt(t), m = fr < 0.09 ? 0.74 : 1;
+      d[k * 4] = c[0] * m; d[k * 4 + 1] = c[1] * m; d[k * 4 + 2] = c[2] * m; d[k * 4 + 3] = 255;
+    }
+    mctx.putImageData(img, 0, 0);
+  }
+  const lossAt = (x, y) => clamp((field(x, y).h - lossLo) / (lossHi - lossLo), 0, 1);
+
+  // fog (Difficile): everything is hidden until the ball has passed nearby
+  const fog = document.createElement("canvas"); fog.width = W / 2; fog.height = H / 2;
+  const fctx = fog.getContext("2d");
+  function resetFog() {
+    fctx.globalCompositeOperation = "source-over";
+    fctx.clearRect(0, 0, fog.width, fog.height);
+    fctx.fillStyle = "rgb(9, 5, 26)"; fctx.fillRect(0, 0, fog.width, fog.height);
+    reveal(startPos.x, startPos.y, 120);
+  }
+  function reveal(x, y, r = 92) {
+    fctx.globalCompositeOperation = "destination-out";
+    const g = fctx.createRadialGradient(x / 2, y / 2, r * 0.15, x / 2, y / 2, r / 2);
+    g.addColorStop(0, "rgba(0,0,0,0.9)"); g.addColorStop(1, "rgba(0,0,0,0)");
+    fctx.fillStyle = g; fctx.beginPath(); fctx.arc(x / 2, y / 2, r / 2, 0, TAU); fctx.fill();
+  }
+
+  // ---------- State ----------
+  let difficulty = DIFFICULTIES[load(DIFF_KEY)] ? load(DIFF_KEY) : "normale";
+  let diff = DIFFICULTIES[difficulty];
+  let state = "menu", menu = null, pausedFrom = null, stateT = 0, clock = 0;
+  let score = 0, level = 0, bestCache = 0, epochs = 0, cleared = 0, aces = 0;
+  let ball = { x: W / 2, y: 540, vx: 0, vy: 0 }, trail = [], popups = [], rings = [], message = null;
+  let rollT = 0, stillT = 0, overshot = false, sunk = 0;
+  let drag = null, aimA = -Math.PI / 2, aimP = 0.55, kbAim = false;
+  const keys = {};
+
+  // one physics step; used for the real ball and for the dotted preview
+  function stepBall(b, dt, quiet) {
+    const f = field(b.x, b.y);
+    b.vx -= G * f.gx * dt; b.vy -= G * f.gy * dt;
+    const sp = Math.hypot(b.vx, b.vy);
+    if (sp > 0) { const ns = Math.max(0, sp - (FR_LIN * sp + FR_C) * dt) / sp; b.vx *= ns; b.vy *= ns; }
+    b.x += b.vx * dt; b.y += b.vy * dt;
+    let hit = false;
+    if (b.x < BALL_R) { b.x = BALL_R; b.vx = Math.abs(b.vx) * 0.6; hit = true; }
+    if (b.x > W - BALL_R) { b.x = W - BALL_R; b.vx = -Math.abs(b.vx) * 0.6; hit = true; }
+    if (b.y < TOP + BALL_R) { b.y = TOP + BALL_R; b.vy = Math.abs(b.vy) * 0.6; hit = true; }
+    if (b.y > H - BALL_R) { b.y = H - BALL_R; b.vy = -Math.abs(b.vy) * 0.6; hit = true; }
+    if (hit && !quiet && sp > 60) sfx.wall();
+    return G * Math.hypot(f.gx, f.gy);
+  }
+
+  // ---------- Flow ----------
+  const isPlaying = () => ["intro", "aim", "roll", "levelup"].includes(state);
+  function startGame() {
+    if (!audioCtx) { try { audioCtx = new (window.AudioContext || window.webkitAudioContext)(); } catch { audioCtx = null; } }
+    if (audioCtx && audioCtx.state === "suspended") audioCtx.resume();
+    score = 0; level = 0; cleared = 0; aces = 0; popups = []; rings = [];
+    bestCache = parseInt(load(bestKey(difficulty)), 10) || 0;
+    beginLevel();
+    menu = null;
+    overlay.classList.add("hidden");
+    syncControls();
+    last = performance.now();
+  }
+  function beginLevel() {
+    epochs = 0; drag = null; sunk = 0;
+    buildLandscape();
+    aimA = -Math.PI / 2;
+    message = { text: `LIVELLO ${level + 1}`, sub: `${diff.epochs} epoche · ${traps.length} ${traps.length === 1 ? "minimo locale" : "minimi locali"}${diff.fog ? " · nebbia" : ""}`, t: 0 };
+    state = "intro"; stateT = 1.3;
+  }
+  function addScore(n, x, y, color = "#f1eeff", label = "") {
+    score += n;
+    popups.push({ x: clamp(x, 60, W - 60), y, text: `${label}+${n.toLocaleString("it-IT")}`, color, t: 0 });
+  }
+  function say(text, color = "#f1eeff") { popups.push({ x: clamp(ball.x, 80, W - 80), y: Math.max(TOP + 30, ball.y - 22), text, color, t: 0 }); }
+  function shoot(dx, dy, power) {
+    if (state !== "aim") return;
+    const v = V_MIN + clamp(power, 0, 1) * (V_MAX - V_MIN);
+    ball.vx = dx * v; ball.vy = dy * v;
+    epochs++; rollT = 0; stillT = 0; overshot = false;
+    state = "roll"; drag = null;
+    sfx.shoot(power);
+  }
+  function win() {
+    const left = diff.epochs - epochs, ace = epochs === 1;
+    state = "levelup"; stateT = 1.9; sunk = 0.0001; cleared++;
+    ball.vx = ball.vy = 0;
+    addScore(500 * (level + 1), target.x, target.y - 26, "#5fe3d6");
+    if (left > 0) addScore(200 * left, target.x, target.y - 46, "#ffd66b", `${left} ${left === 1 ? "epoca" : "epoche"} · `);
+    if (ace) { aces++; addScore(1000, target.x, target.y - 66, "#ff9be0", "one-shot · "); sfx.ace(); } else sfx.win();
+    for (let k = 0; k < 3; k++) rings.push({ x: target.x, y: target.y, t: -k * 0.18 });
+    message = { text: ace ? "ONE-SHOT LEARNING!" : "CONVERGENZA!", sub: `loss 0.000 in ${epochs} ${epochs === 1 ? "epoca" : "epoche"}`, t: 0 };
+  }
+  function settle() {
+    // the ball has stopped: in the global minimum, in a local one, or just on flat ground
+    trail.push({ x: ball.x, y: ball.y, stop: true });
+    ball.vx = ball.vy = 0;
+    if (Math.hypot(ball.x - target.x, ball.y - target.y) < 30) { win(); return; }
+    if (epochs >= diff.epochs) { gameOver(); return; }
+    const tr = traps.find((q) => Math.hypot(ball.x - q.x, ball.y - q.y) < q.s * 0.8);
+    if (tr) { say("minimo locale: serve più spinta", "#ffb0a0"); sfx.trap(); }
+    else if (overshot) say("learning rate troppo alto", "#ffd66b");
+    state = "aim";
+  }
+  function gameOver() {
+    state = "over";
+    const prev = parseInt(load(bestKey(difficulty)), 10) || 0;
+    const record = score > prev;
+    if (record) store(bestKey(difficulty), String(score));
+    sfx.lose();
+    const loss = lossAt(ball.x, ball.y).toFixed(3).replace(".", ",");
+    menu = () => showOverlay(
+      `<h2 class="lose">EPOCHE FINITE</h2>
+       <p>Punteggio: <b>${score.toLocaleString("it-IT")}</b> · ${cleared} ${cleared === 1 ? "valle trovata" : "valli trovate"}${aces ? ` · ${aces} one-shot` : ""} · ${diff.label}</p>
+       <p class="muted">Ti sei fermato a loss ${loss}. Capita anche ai modelli migliori.</p>
+       ${record ? "<p style='color:var(--yellow)'>★ NUOVO RECORD! ★</p>" : ""}
+       ${difficultyHTML()}
+       <button class="start" data-start>RIPROVA</button>`
+    );
+    menu();
+    syncControls();
+  }
+  function togglePause() {
+    if (isPlaying()) {
+      pausedFrom = state; state = "paused"; drag = null;
+      showOverlay(`<h2>PAUSA</h2><button class="start" data-resume>CONTINUA</button><p class="muted">Premi P per continuare</p>`);
+    } else if (state === "paused") {
+      state = pausedFrom; overlay.classList.add("hidden"); last = performance.now();
+    }
+    syncControls();
+  }
+  // the pause menu can end the game (shared/iniziali.js): it ends here the usual way, saving the record
+  window.addEventListener("sala:termina", () => { if (state !== "paused") return; state = pausedFrom; overlay.classList.add("hidden"); gameOver(); syncControls(); });
+  function syncControls() {
+    pauseBtn.style.display = isPlaying() && touchMode ? "block" : "none";
+    resize();
+  }
+  pauseBtn.addEventListener("click", () => togglePause());
+  function showOverlay(html) { overlay.innerHTML = html; overlay.classList.remove("hidden"); }
+  function difficultyHTML() {
+    const buttons = DIFF_IDS.map((id) => {
+      const d = DIFFICULTIES[id];
+      return `<button type="button" data-diff="${id}" class="${id === difficulty ? "on" : ""}" style="--c:${d.color}">${d.label}</button>`;
+    }).join("");
+    const best = parseInt(load(bestKey(difficulty)), 10);
+    return `<div class="diff">${buttons}</div><p class="muted">${diff.desc}${best ? ` · Record: ${best.toLocaleString("it-IT")}` : ""}</p>`;
+  }
+  function setDifficulty(id) { if (!DIFFICULTIES[id]) return; difficulty = id; diff = DIFFICULTIES[id]; store(DIFF_KEY, id); if (menu) menu(); }
+  function showTitle() {
+    menu = showTitle;
+    showOverlay(
+      `<h1>DISCESA DEL GRADIENTE</h1>
+       <p>Il primo cabinato del genere IA. Niente nemici e niente fretta: una pallina, una funzione di costo e la valle più profonda da trovare. Tu dai la spinta, la pendenza fa il resto.</p>
+       <div class="pts">
+         <span><b>Epoca</b></span><span>ogni spinta è un'epoca: trova il minimo globale (l'anello dorato) prima di finirle</span>
+         <span><b>Mappa</b></span><span>scuro è in basso, chiaro è in alto; le linee sono curve di livello</span>
+         <span><b>Minimi locali</b></span><span>le buche meno profonde ti fermano: per uscirne serve una spinta decisa</span>
+         <span><b>Learning rate</b></span><span>con troppa forza scavalchi la valle e finisci dall'altra parte</span>
+         <span><b>Punti</b></span><span>500 × livello · 200 per ogni epoca avanzata · 1.000 se arrivi al primo colpo</span>
+       </div>
+       ${touchMode
+         ? `<p class="muted help">Trascina il dito all'indietro e rilascia, come con una fionda: più tiri, più spingi</p>`
+         : `<p class="muted help">Trascina il mouse all'indietro e rilascia, come una fionda · oppure ← → per la direzione, ↑ ↓ per la forza, Spazio per spingere · P pausa</p>`}
+       ${difficultyHTML()}
+       <button class="start" data-start>INIZIA L'ADDESTRAMENTO</button>`
+    );
+  }
+  overlay.addEventListener("click", (e) => {
+    const d = e.target.closest("[data-diff]");
+    if (d) { setDifficulty(d.dataset.diff); return; }
+    if (e.target.closest("[data-start]")) startGame();
+    if (e.target.closest("[data-resume]")) togglePause();
+  });
+
+  // ---------- Input ----------
+  window.addEventListener("keydown", (e) => {
+    const k = e.key.toLowerCase();
+    if ([" ", "arrowup", "arrowdown", "arrowleft", "arrowright"].includes(k)) e.preventDefault();
+    if (state === "menu" || state === "over") {
+      if (e.key === "Enter") startGame();
+      else if (["1", "2", "3"].includes(k)) setDifficulty(DIFF_IDS[+k - 1]);
+      return;
+    }
+    if (k === "p" || k === "escape") { if (!e.repeat) togglePause(); return; }
+    if (state === "paused") { if (e.key === "Enter") togglePause(); return; }
+    if (k.startsWith("arrow")) { keys[k] = true; kbAim = true; drag = null; }
+    if ((k === " " || k === "enter") && !e.repeat && state === "aim") { kbAim = true; shoot(Math.cos(aimA), Math.sin(aimA), aimP); }
+  });
+  window.addEventListener("keyup", (e) => { keys[e.key.toLowerCase()] = false; });
+  window.addEventListener("blur", () => { for (const k in keys) keys[k] = false; if (isPlaying()) togglePause(); });
+  const toWorld = (e) => { const rc = canvas.getBoundingClientRect(); return { x: (e.clientX - rc.left) / rc.width * W, y: (e.clientY - rc.top) / rc.height * H }; };
+  // the slingshot: where you pressed, and where the finger is now
+  function dragShot() {
+    if (!drag) return null;
+    const dx = drag.x0 - drag.x, dy = drag.y0 - drag.y, len = Math.hypot(dx, dy);
+    if (len < 10) return null;
+    return { dx: dx / len, dy: dy / len, power: clamp((len - 10) / (DRAG_MAX - 10), 0, 1) };
+  }
+  canvas.addEventListener("pointerdown", (e) => {
+    e.preventDefault();
+    if (state !== "aim") return;
+    const p = toWorld(e);
+    drag = { id: e.pointerId, x0: p.x, y0: p.y, x: p.x, y: p.y }; kbAim = false;
+    try { canvas.setPointerCapture(e.pointerId); } catch { /* ignore */ }
+  });
+  canvas.addEventListener("pointermove", (e) => { if (!drag || drag.id !== e.pointerId) return; const p = toWorld(e); drag.x = p.x; drag.y = p.y; });
+  canvas.addEventListener("pointerup", (e) => {
+    if (!drag || drag.id !== e.pointerId) return;
+    const s = dragShot(); drag = null;
+    if (s) { aimA = Math.atan2(s.dy, s.dx); aimP = s.power; shoot(s.dx, s.dy, s.power); }
+  });
+  canvas.addEventListener("pointercancel", () => { drag = null; });
+  window.addEventListener("pointerdown", (e) => { if (e.pointerType === "touch" && !touchMode) { touchMode = true; syncControls(); if (menu) menu(); } }, true);
+
+  // ---------- Update ----------
+  function update(dt) {
+    clock += dt;
+    if (message) { message.t += dt; if (message.t > 2) message = null; }
+    for (const p of popups) { p.t += dt; p.y -= 18 * dt; }
+    popups = popups.filter((p) => p.t < 1.6);
+    for (const r of rings) r.t += dt;
+    rings = rings.filter((r) => r.t < 1);
+    if (sunk) sunk = Math.min(1, sunk + dt * 3);
+    if (!isPlaying()) return;
+    if (state === "intro") { stateT -= dt; if (stateT <= 0) state = "aim"; return; }
+    if (state === "levelup") { stateT -= dt; if (stateT <= 0) { level++; beginLevel(); } return; }
+    if (state === "aim") {
+      if (keys.arrowleft) aimA -= 1.9 * dt;
+      if (keys.arrowright) aimA += 1.9 * dt;
+      if (keys.arrowup) aimP = Math.min(1, aimP + 0.7 * dt);
+      if (keys.arrowdown) aimP = Math.max(0, aimP - 0.7 * dt);
+      return;
+    }
+    // rolling
+    rollT += dt;
+    const pull = stepBall(ball, dt, false);
+    const sp = Math.hypot(ball.vx, ball.vy), dT = Math.hypot(ball.x - target.x, ball.y - target.y);
+    const lastP = trail[trail.length - 1];
+    if (Math.hypot(ball.x - lastP.x, ball.y - lastP.y) > 5) trail.push({ x: ball.x, y: ball.y });
+    if (diff.fog) reveal(ball.x, ball.y);
+    if (dT < SINK_R && sp < SINK_V) { trail.push({ x: target.x, y: target.y, stop: true }); ball.x = target.x; ball.y = target.y; win(); return; }
+    if (dT < 22 && sp >= SINK_V && !overshot) { overshot = true; sfx.over(); }
+    stillT = sp < 5 && pull <= FR_C * 1.05 ? stillT + dt : 0;
+    if (stillT > 0.12 || rollT > 14) settle();
+  }
+
+  // ---------- Drawing ----------
+  function arrow(x, y, a, len, color, width) {
+    const ex = x + Math.cos(a) * len, ey = y + Math.sin(a) * len;
+    ctx.strokeStyle = color; ctx.fillStyle = color; ctx.lineWidth = width; ctx.lineCap = "round";
+    ctx.beginPath(); ctx.moveTo(x, y); ctx.lineTo(ex, ey); ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(ex + Math.cos(a) * 6, ey + Math.sin(a) * 6);
+    ctx.lineTo(ex + Math.cos(a + 2.4) * 6, ey + Math.sin(a + 2.4) * 6); ctx.lineTo(ex + Math.cos(a - 2.4) * 6, ey + Math.sin(a - 2.4) * 6); ctx.fill();
+  }
+  function drawTarget() {
+    const pulse = 0.5 + 0.5 * Math.sin(clock * 3);
+    ctx.strokeStyle = `rgba(255, 214, 107, ${0.55 + 0.4 * pulse})`; ctx.lineWidth = 2;
+    ctx.beginPath(); ctx.arc(target.x, target.y, SINK_R + 2 + pulse * 3, 0, TAU); ctx.stroke();
+    ctx.strokeStyle = "rgba(255, 214, 107, 0.35)"; ctx.lineWidth = 1;
+    ctx.beginPath(); ctx.arc(target.x, target.y, SINK_R + 12 + pulse * 5, 0, TAU); ctx.stroke();
+    ctx.fillStyle = "#ffd66b"; ctx.beginPath(); ctx.arc(target.x, target.y, 2.5, 0, TAU); ctx.fill();
+  }
+  function drawTrail() {
+    if (trail.length < 2) return;
+    ctx.strokeStyle = "rgba(255,255,255,0.5)"; ctx.lineWidth = 1.5; ctx.lineJoin = "round"; ctx.setLineDash([]);
+    ctx.beginPath(); ctx.moveTo(trail[0].x, trail[0].y);
+    for (const p of trail) ctx.lineTo(p.x, p.y);
+    ctx.stroke();
+    ctx.fillStyle = "rgba(255,255,255,0.8)";
+    for (const p of trail) if (p.stop) { ctx.beginPath(); ctx.arc(p.x, p.y, 2.5, 0, TAU); ctx.fill(); }
+  }
+  function drawAim() {
+    if (state !== "aim") {
+      return;
+    }
+    // the local gradient: a small compass pointing downhill
+    const f = field(ball.x, ball.y), gm = Math.hypot(f.gx, f.gy) * G;
+    if (gm > 2) arrow(ball.x, ball.y, Math.atan2(-f.gy, -f.gx), 13 + Math.min(12, gm / 20), `rgba(95, 227, 214, ${clamp(gm / 60, 0.35, 0.95)})`, 2);
+    const s = dragShot() || (kbAim ? { dx: Math.cos(aimA), dy: Math.sin(aimA), power: aimP } : null);
+    if (drag) {
+      ctx.strokeStyle = "rgba(255,255,255,0.35)"; ctx.lineWidth = 1.5; ctx.setLineDash([4, 5]);
+      ctx.beginPath(); ctx.moveTo(drag.x0, drag.y0); ctx.lineTo(drag.x, drag.y); ctx.stroke(); ctx.setLineDash([]);
+      ctx.fillStyle = "rgba(255,255,255,0.5)"; ctx.beginPath(); ctx.arc(drag.x0, drag.y0, 4, 0, TAU); ctx.fill();
+    }
+    if (!s) {
+      if (epochs === 0 && level === 0) {
+        ctx.globalAlpha = 0.6 + 0.3 * Math.sin(clock * 4);
+        ctx.textAlign = "center"; ctx.font = "800 12px system-ui"; ctx.lineWidth = 3; ctx.strokeStyle = "#0d0822";
+        const t = touchMode ? "trascina all'indietro e rilascia" : "trascina all'indietro, o usa le frecce";
+        const ty = ball.y > H - 60 ? ball.y - 26 : ball.y + 32;
+        ctx.strokeText(t, clamp(ball.x, 110, W - 110), ty); ctx.fillStyle = "#f1eeff"; ctx.fillText(t, clamp(ball.x, 110, W - 110), ty);
+        ctx.globalAlpha = 1;
+      }
+      return;
+    }
+    // dotted preview of the first part of the path, with the real physics
+    const v = V_MIN + s.power * (V_MAX - V_MIN), b = { x: ball.x, y: ball.y, vx: s.dx * v, vy: s.dy * v };
+    const steps = Math.round(diff.preview * 120);
+    ctx.fillStyle = "rgba(255,255,255,0.85)";
+    for (let i = 1; i <= steps; i++) {
+      stepBall(b, 1 / 120, true);
+      if (i % 6 === 0) { ctx.globalAlpha = 0.9 - 0.6 * (i / steps); ctx.beginPath(); ctx.arc(b.x, b.y, 1.8, 0, TAU); ctx.fill(); }
+    }
+    ctx.globalAlpha = 1;
+    const col = s.power > 0.8 ? "#ff6b7d" : s.power > 0.5 ? "#ffd66b" : "#f1eeff";
+    arrow(ball.x, ball.y, Math.atan2(s.dy, s.dx), 16 + s.power * 34, col, 3);
+    // learning rate (the power) next to the ball
+    ctx.textAlign = "center"; ctx.font = "800 10px system-ui"; ctx.lineWidth = 3; ctx.strokeStyle = "#0d0822";
+    const lr = `lr ${(0.1 + s.power * 0.9).toFixed(2).replace(".", ",")}`, ly = ball.y > H - 40 ? ball.y - 16 : ball.y + 24;
+    ctx.strokeText(lr, clamp(ball.x, 30, W - 30), ly); ctx.fillStyle = col; ctx.fillText(lr, clamp(ball.x, 30, W - 30), ly);
+  }
+  function drawBall() {
+    const r = BALL_R * (1 - 0.55 * sunk);
+    ctx.fillStyle = "rgba(0,0,0,0.35)"; ctx.beginPath(); ctx.arc(ball.x + 1.5, ball.y + 2.5, r, 0, TAU); ctx.fill();
+    const g = ctx.createRadialGradient(ball.x - 2, ball.y - 2, 1, ball.x, ball.y, r);
+    g.addColorStop(0, "#ffffff"); g.addColorStop(1, "#c9c2f5");
+    ctx.fillStyle = g; ctx.beginPath(); ctx.arc(ball.x, ball.y, r, 0, TAU); ctx.fill();
+    ctx.strokeStyle = "rgba(13,8,34,0.7)"; ctx.lineWidth = 1; ctx.stroke();
+  }
+  function drawHud() {
+    ctx.fillStyle = "#0d0822"; ctx.fillRect(0, 0, W, TOP - 4);
+    ctx.textBaseline = "middle"; ctx.textAlign = "left";
+    ctx.fillStyle = "#f1eeff"; ctx.font = "900 18px system-ui"; ctx.fillText(score.toLocaleString("it-IT"), 12, 15);
+    ctx.fillStyle = "#a9a3cf"; ctx.font = "700 9px system-ui"; ctx.fillText(`REC ${Math.max(bestCache, score).toLocaleString("it-IT")}`, 12, 34);
+    ctx.textAlign = "center"; ctx.fillStyle = "#5fe3d6"; ctx.font = "900 12px system-ui"; ctx.fillText(`LIVELLO ${level + 1}`, W / 2, 13);
+    ctx.fillStyle = "#a9a3cf"; ctx.font = "700 10px system-ui";
+    ctx.fillText(`loss ${(sunk ? 0 : lossAt(ball.x, ball.y)).toFixed(3).replace(".", ",")}`, W / 2, 32);
+    // epochs: one pip each, spent ones go dark
+    const ex = touchMode ? W - 62 : W - 12;
+    ctx.textAlign = "right"; ctx.fillStyle = "#a9a3cf"; ctx.font = "700 9px system-ui"; ctx.fillText("EPOCHE", ex, 12);
+    for (let i = 0; i < diff.epochs; i++) {
+      ctx.fillStyle = i < diff.epochs - epochs ? "#ffd66b" : "rgba(255,255,255,0.16)";
+      ctx.beginPath(); ctx.arc(ex - 5 - i * 13, 29, 4.5, 0, TAU); ctx.fill();
+    }
+    // the loss as a bar: empty when you are at the bottom
+    ctx.fillStyle = "rgba(255,255,255,0.12)"; ctx.fillRect(0, TOP - 4, W, 4);
+    ctx.fillStyle = "#5fe3d6"; ctx.fillRect(0, TOP - 4, W * (sunk ? 0 : lossAt(ball.x, ball.y)), 4);
+    ctx.textBaseline = "alphabetic";
+  }
+  function draw() {
+    ctx.setTransform(pxRatio, 0, 0, pxRatio, 0, 0);
+    ctx.imageSmoothingEnabled = true;
+    ctx.fillStyle = "#0d0822"; ctx.fillRect(0, 0, W, H);
+    ctx.drawImage(map, 0, TOP, W, H - TOP);
+    drawTarget();
+    drawTrail();
+    for (const r of rings) if (r.t > 0) { ctx.strokeStyle = `rgba(95, 227, 214, ${1 - r.t})`; ctx.lineWidth = 3; ctx.beginPath(); ctx.arc(r.x, r.y, 10 + r.t * 70, 0, TAU); ctx.stroke(); }
+    if (diff.fog) ctx.drawImage(fog, 0, 0, W, H);
+    drawBall();
+    drawAim();
+    for (const p of popups) {
+      ctx.globalAlpha = clamp((1.6 - p.t) * 2, 0, 1);
+      ctx.textAlign = "center"; ctx.font = "900 13px system-ui";
+      ctx.lineWidth = 3; ctx.strokeStyle = "#0d0822"; ctx.strokeText(p.text, p.x, p.y); ctx.fillStyle = p.color; ctx.fillText(p.text, p.x, p.y);
+    }
+    ctx.globalAlpha = 1;
+    if (state === "menu") return;
+    drawHud();
+    if (message) {
+      ctx.globalAlpha = Math.min(1, (2 - message.t) * 2);
+      ctx.fillStyle = "rgba(0,0,0,0.6)"; ctx.fillRect(0, 380, W, 62);
+      ctx.textAlign = "center"; ctx.font = "900 24px system-ui"; ctx.fillStyle = "#5fe3d6";
+      ctx.lineWidth = 5; ctx.strokeStyle = "#0d0822"; ctx.strokeText(message.text, W / 2, 408); ctx.fillText(message.text, W / 2, 408);
+      if (message.sub) { ctx.font = "800 12px system-ui"; ctx.fillStyle = "#f1eeff"; ctx.fillText(message.sub, W / 2, 430); }
+      ctx.globalAlpha = 1;
+    }
+  }
+
+  // ---------- Loop ----------
+  const STEP = 1 / 120;
+  let last = performance.now(), acc = 0;
+  function frame(now) {
+    const dt = Math.min(0.1, (now - last) / 1000);
+    last = now;
+    if (isPlaying()) {
+      acc += dt;
+      while (acc >= STEP && isPlaying()) { update(STEP); acc -= STEP; }
+    } else { acc = 0; update(dt); }
+    draw();
+    requestAnimationFrame(frame);
+  }
+  buildLandscape();
+  syncControls();
+  showTitle();
+  requestAnimationFrame(frame);
+})();
+</script>
+<script src="../../shared/iniziali.js" data-record="gradiente-best-" data-kind="score"></script>
+</body>
+</html>

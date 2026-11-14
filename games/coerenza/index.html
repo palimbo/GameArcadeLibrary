@@ -1,0 +1,561 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no, viewport-fit=cover">
+<title>Coerenza</title>
+<style>
+  :root {
+    --bg: #0d0822;
+    --panel: #171036;
+    --line: #2f2466;
+    --fg: #f1eeff;
+    --muted: #a9a3cf;
+    --cyan: #5fe3d6;
+    --yellow: #ffd66b;
+    --red: #ff6b7d;
+    --green: #7ee0a0;
+    --pink: #ff9be0;
+    --violet: #b79bff;
+    --mono: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  html, body {
+    height: 100%;
+    background: var(--bg);
+    color: var(--fg);
+    font-family: system-ui, -apple-system, "Segoe UI", sans-serif;
+    overflow: hidden;
+    user-select: none;
+    -webkit-user-select: none;
+    touch-action: manipulation;
+  }
+  textarea, input { user-select: text; -webkit-user-select: text; }
+  #wrap {
+    position: fixed; inset: 0; display: flex; flex-direction: column; gap: 10px;
+    max-width: 520px; margin: 0 auto;
+    padding: calc(10px + env(safe-area-inset-top, 0px)) 12px calc(12px + env(safe-area-inset-bottom, 0px));
+  }
+  #hud { display: grid; grid-template-columns: 1fr auto 1fr; align-items: center; gap: 8px; min-height: 44px; }
+  #hud .score { font: 900 20px/1.1 system-ui; font-variant-numeric: tabular-nums; }
+  #hud small { display: block; font: 700 10px/1.3 system-ui; color: var(--muted); letter-spacing: .04em; }
+  #hud .mid { text-align: center; font: 900 12px/1.2 system-ui; color: var(--violet); letter-spacing: .06em; }
+  #hud .right { text-align: right; }
+  body.touch #hud .right { padding-right: 52px; }
+  #hud .pips { display: inline-flex; gap: 5px; margin-top: 4px; }
+  #hud .pips i { width: 11px; height: 11px; border-radius: 50%; background: var(--yellow); }
+  #hud .pips i.off { background: rgba(255,255,255,.16); }
+  #tension { display: flex; align-items: baseline; gap: 10px; padding: 8px 12px; border: 1px solid var(--line); border-radius: 10px; background: var(--panel); min-height: 44px; }
+  #tension b { font: 800 20px/1 var(--mono); color: var(--violet); white-space: nowrap; }
+  #tension b.zero { color: var(--green); }
+  #tension b.bad { color: var(--red); }
+  #tension span { font: 600 12px/1.35 system-ui; color: var(--muted); }
+  #cells { display: grid; grid-template-columns: repeat(6, 1fr); gap: 5px; }
+  #cells button {
+    position: relative; height: 42px; border-radius: 8px; cursor: pointer;
+    background: var(--panel); border: 2px solid var(--line);
+    font: 800 19px/1 var(--mono); color: var(--c, var(--fg)); padding-top: 8px;
+  }
+  #cells button::before { content: attr(data-n); position: absolute; left: 4px; top: 3px; font: 700 9px/1 var(--mono); color: var(--muted); }
+  #cells button.sel { border-color: var(--fg); }
+  #cells button.dot::after { content: ""; position: absolute; right: 4px; top: 4px; width: 6px; height: 6px; border-radius: 50%; background: var(--red); }
+  #list {
+    flex: 1; min-height: 0; overflow-y: auto; -webkit-overflow-scrolling: touch; touch-action: pan-y;
+    display: grid; grid-template-columns: 1fr 1fr; gap: 3px 10px; align-content: start;
+    padding: 10px 12px; border: 1px solid var(--line); border-radius: 10px; background: var(--panel);
+    font: 600 13px/1.5 var(--mono); color: var(--muted);
+  }
+  #list div { white-space: nowrap; padding: 0 4px; border-radius: 4px; }
+  #list div.rel { color: var(--fg); background: rgba(183,155,255,.18); }
+  #list div.bad { color: var(--red); }
+  #list div.ok { color: var(--green); }
+  #list.stale div.bad, #list.stale div.ok { opacity: .55; }
+  #bar { display: grid; grid-template-columns: auto 1fr; gap: 10px; }
+  #bar button { min-height: 50px; border-radius: 12px; cursor: pointer; font: 800 15px system-ui; letter-spacing: 1.5px; padding: 0 16px; }
+  #askBtn { color: var(--fg); background: transparent; border: 2px solid var(--line); }
+  #genBtn { color: #160a36; background: var(--violet); border: 2px solid var(--violet); box-shadow: 0 4px 0 #6a52b8; }
+  #genBtn:active { transform: translateY(2px); box-shadow: 0 2px 0 #6a52b8; }
+  #genBtn:disabled { opacity: .5; }
+  #claude {
+    position: fixed; inset: 0; z-index: 4; display: none; flex-direction: column; gap: 10px;
+    padding: calc(14px + env(safe-area-inset-top, 0px)) 14px calc(14px + env(safe-area-inset-bottom, 0px));
+    background: rgba(13, 8, 34, 0.97); overflow-y: auto;
+  }
+  #claude.open { display: flex; }
+  #claude > * { width: 100%; max-width: 520px; margin: 0 auto; }
+  #claude h3 { font: 900 18px system-ui; color: var(--violet); letter-spacing: 1px; }
+  #claude p { font: 500 13px/1.5 system-ui; color: var(--muted); }
+  #claude textarea { flex: 1; min-height: 140px; resize: none; font: 500 12px/1.45 var(--mono); color: var(--fg); background: var(--panel); border: 1px solid var(--line); border-radius: 10px; padding: 10px; }
+  #claude input { font: 600 16px var(--mono); color: var(--fg); background: var(--panel); border: 1px solid var(--line); border-radius: 10px; padding: 12px; }
+  #claude .row { display: flex; gap: 10px; flex-wrap: wrap; }
+  #claude button { flex: 1; min-height: 46px; border-radius: 10px; cursor: pointer; font: 800 14px system-ui; letter-spacing: 1px; color: var(--fg); background: transparent; border: 2px solid var(--line); padding: 0 12px; }
+  #claude button.go { color: #160a36; background: var(--violet); border-color: var(--violet); }
+  #claude .msg { min-height: 18px; color: var(--yellow); }
+  #pauseBtn {
+    position: fixed; z-index: 3; display: none; right: 10px; top: calc(10px + env(safe-area-inset-top, 0px));
+    font: 700 13px system-ui, sans-serif; color: var(--fg);
+    background: rgba(0, 0, 0, 0.6); border: 1px solid rgba(241, 238, 255, 0.35);
+    border-radius: 8px; padding: 6px 10px; cursor: pointer;
+  }
+  #overlay {
+    position: fixed; inset: 0; z-index: 5;
+    display: flex; flex-direction: column; align-items: center; justify-content: flex-start;
+    gap: 14px; padding: 16px; text-align: center; overflow-y: auto;
+    background: rgba(13, 8, 34, 0.96);
+  }
+  #overlay > :first-child { margin-top: auto; }
+  #overlay > :last-child { margin-bottom: auto; }
+  #overlay.hidden { display: none; }
+  #homeLink {
+    position: fixed; top: calc(10px + env(safe-area-inset-top, 0px)); left: 10px; z-index: 6;
+    font: 600 13px/1 system-ui, sans-serif; color: #fff; text-decoration: none;
+    padding: 8px 12px; border-radius: 999px; background: rgba(0,0,0,.55);
+    border: 1px solid rgba(255,255,255,.25);
+  }
+  #homeLink:hover { background: rgba(0,0,0,.8); }
+  #overlay.hidden ~ #homeLink { display: none; }
+  @media (max-width: 700px) { #overlay { padding-top: calc(52px + env(safe-area-inset-top, 0px)); } }
+  #overlay h1 { font-size: clamp(32px, 10vw, 56px); font-weight: 900; letter-spacing: 2px; color: var(--violet);
+    text-shadow: 3px 3px 0 #2a1f6a, 0 0 22px rgba(183,155,255,0.4); }
+  #overlay h2 { font-size: clamp(24px, 7vw, 40px); font-weight: 900; letter-spacing: 2px; color: var(--violet); }
+  #overlay h2.lose { color: var(--red); }
+  #overlay p { max-width: 540px; font-size: clamp(13px, 3.4vw, 16px); line-height: 1.55; }
+  #overlay p.muted { color: var(--muted); }
+  #overlay .pts { display: grid; grid-template-columns: repeat(2, auto); gap: 4px 18px; font-size: 13px; color: var(--muted); text-align: left; max-width: 560px; }
+  #overlay .pts b { color: var(--fg); font-family: var(--mono); white-space: nowrap; }
+  #overlay .diff { display: flex; gap: 10px; flex-wrap: wrap; justify-content: center; }
+  #overlay button {
+    font: 800 15px system-ui, sans-serif; letter-spacing: 1.5px; color: var(--fg);
+    background: transparent; cursor: pointer;
+    border: 2px solid rgba(241,238,255,0.3); border-radius: 10px; padding: 9px 16px;
+  }
+  #overlay .diff button.on { border-color: var(--c); color: var(--c); box-shadow: 0 0 12px var(--c); }
+  #overlay button.start { border-color: var(--violet); color: #160a36; background: var(--violet); padding: 11px 30px; box-shadow: 0 4px 0 #6a52b8; }
+  @media (max-height: 560px) {
+    #overlay { gap: 8px; }
+    #overlay h1 { font-size: 28px; }
+    #overlay p { font-size: 13px; line-height: 1.4; }
+    #overlay .help { display: none; }
+  }
+</style>
+</head>
+<body>
+<div id="wrap">
+  <div id="hud">
+    <div><div class="score" id="score">0</div><small id="rec">REC 0</small></div>
+    <div class="mid"><span id="lvl">LIVELLO 1</span><small id="size">&nbsp;</small></div>
+    <div class="right"><small>GENERAZIONI</small><span class="pips" id="pips"></span></div>
+  </div>
+  <div id="tension"><b id="tNum">tensione ?</b><span id="tNote"></span></div>
+  <div id="cells"></div>
+  <div id="list"></div>
+  <div id="bar">
+    <button type="button" id="askBtn">PER CLAUDE</button>
+    <button type="button" id="genBtn">GENERA</button>
+  </div>
+</div>
+<div id="claude">
+  <h3>FAI GIOCARE CLAUDE</h3>
+  <p>Questo gioco è pensato per un modello linguistico. Copia la partita, incollala in una chat con Claude e riporta qui sotto le lettere che ti risponde.</p>
+  <textarea id="puzzleText" readonly></textarea>
+  <div class="row"><button type="button" id="copyBtn">COPIA LA PARTITA</button></div>
+  <input id="answerIn" type="text" inputmode="text" autocomplete="off" autocapitalize="characters" spellcheck="false" placeholder="Incolla qui la risposta (lettere A B C D)">
+  <p class="msg" id="claudeMsg"></p>
+  <div class="row"><button type="button" id="closeBtn">CHIUDI</button><button type="button" class="go" id="applyBtn">METTI NELLE CELLE</button></div>
+</div>
+<button id="pauseBtn" type="button" aria-label="Pausa">❚❚</button>
+<div id="overlay"></div>
+<a id="homeLink" href="../../index.html">← Sala Giochi</a>
+
+<script>
+(() => {
+  "use strict";
+
+  // Four symbols, ordered A < B < C < D. A board is one symbol per cell.
+  const SYM = ["A", "B", "C", "D"], COLORS = ["#5fe3d6", "#ffd66b", "#ff9be0", "#b79bff"];
+  const MAX_CELLS = 36;
+
+  const DIFFICULTIES = {
+    facile:    { label: "FACILE",    color: "#7ee0a0", desc: "8 generazioni · dopo ognuna vedi i vincoli falsi e le celle coinvolte", gens: 8, size: 0, show: 2 },
+    normale:   { label: "NORMALE",   color: "#ffd66b", desc: "5 generazioni · dopo ognuna vedi quali vincoli sono falsi", gens: 5, size: 0, show: 1 },
+    difficile: { label: "DIFFICILE", color: "#ff6b7d", desc: "3 generazioni · torna indietro solo un numero: la tensione", gens: 3, size: 1, show: 0 },
+  };
+  const DIFF_IDS = Object.keys(DIFFICULTIES);
+  const DIFF_KEY = "coerenza-difficulty";
+  const bestKey = (id) => `coerenza-best-${id}`;
+  function store(k, v) { try { localStorage.setItem(k, v); } catch { /* ignore */ } }
+  function load(k) { try { return localStorage.getItem(k); } catch { return null; } }
+  const esc = (s) => s.replace(/&/g, "&amp;").replace(/</g, "&lt;");
+  const nf = (n) => n.toLocaleString("it-IT");
+  const ri = (n) => Math.floor(Math.random() * n);
+  const pad = (i) => String(i + 1).padStart(2, "0");
+  function shuffle(a) { for (let i = a.length - 1; i > 0; i--) { const j = ri(i + 1); [a[i], a[j]] = [a[j], a[i]]; } return a; }
+  function pick(n, k) { return shuffle(Array.from({ length: n }, (_, i) => i)).slice(0, k).sort((a, b) => a - b); }
+
+  const $ = (id) => document.getElementById(id);
+  const overlay = $("overlay"), pauseBtn = $("pauseBtn"), cellsEl = $("cells"), listEl = $("list"), panel = $("claude");
+  let touchMode = !!(window.matchMedia && matchMedia("(pointer: coarse)").matches);
+
+  // ---------- Audio: soft tones ----------
+  let audioCtx = null;
+  function beep(freq, dur, type = "sine", vol = 0.05, delay = 0) {
+    if (!audioCtx) return;
+    const t = audioCtx.currentTime + delay;
+    const osc = audioCtx.createOscillator(), gain = audioCtx.createGain();
+    osc.type = type; osc.frequency.setValueAtTime(freq, t);
+    gain.gain.setValueAtTime(0.0001, t);
+    gain.gain.exponentialRampToValueAtTime(vol, t + 0.015);
+    gain.gain.exponentialRampToValueAtTime(0.0001, t + dur);
+    osc.connect(gain).connect(audioCtx.destination);
+    osc.start(t); osc.stop(t + dur + 0.02);
+  }
+  const arp = (notes, gap, d, type, vol) => notes.forEach((f, i) => beep(f, d, type, vol, i * gap));
+  const sfx = {
+    set: (v) => beep(392 + v * 66, 0.07, "sine", 0.035),
+    // the more constraints are false, the lower and rougher the chord
+    tension: (f) => arp([220 + 300 * (1 - f), 277 + 300 * (1 - f) + 40 * f], 0, 0.5, f > 0.3 ? "triangle" : "sine", 0.045),
+    win: () => arp([392, 494, 587, 784, 988], 0.09, 0.5),
+    ace: () => arp([392, 494, 587, 784, 988, 1175, 1568], 0.07, 0.55),
+    lose: () => arp([392, 330, 277, 220], 0.16, 0.4, "triangle", 0.05),
+  };
+
+  // ---------- State ----------
+  let difficulty = DIFFICULTIES[load(DIFF_KEY)] ? load(DIFF_KEY) : "normale";
+  let diff = DIFFICULTIES[difficulty];
+  let state = "menu", menu = null;
+  let score = 0, level = 0, bestCache = 0, cleared = 0, aces = 0;
+  let N = 8, cons = [], board = [], gens = 0, used = 0, sel = -1, lastBad = null, stale = true;
+  let waitT = 0, afterWait = null;
+  const isPlaying = () => state === "play" || state === "wait";
+
+  // ---------- Constraints: all generated from a hidden board, so at least one answer exists ----------
+  // a constraint is kept as plain data (spec), so a game in progress can be saved and taken up again
+  function mk(spec) {
+    const t = spec[0];
+    if (t === "eq") { const [, a, b] = spec; return { spec, text: `${pad(a)}=${pad(b)}`, cells: [a, b], test: (v) => v[a] === v[b] }; }
+    if (t === "ne") { const [, a, b] = spec; return { spec, text: `${pad(a)}≠${pad(b)}`, cells: [a, b], test: (v) => v[a] !== v[b] }; }
+    if (t === "lt") { const [, a, b] = spec; return { spec, text: `${pad(a)}<${pad(b)}`, cells: [a, b], test: (v) => v[a] < v[b] }; }
+    if (t === "cnt") { const [, s, set, k] = spec; return { spec, text: `#${SYM[s]}{${set.map(pad).join(",")}}=${k}`, cells: set, test: (v) => set.filter((c) => v[c] === s).length === k }; }
+    if (t === "imp") { const [, a, s, b, u] = spec; return { spec, text: `${pad(a)}=${SYM[s]}→${pad(b)}=${SYM[u]}`, cells: [a, b], test: (v) => v[a] !== s || v[b] === u }; }
+    const set = spec[1];
+    return { spec, text: `≠{${set.map(pad).join(",")}}`, cells: set, test: (v) => new Set(set.map((c) => v[c])).size === set.length };
+  }
+  function makeConstraints(sol, M) {
+    const n = sol.length, out = [], seen = new Set(), uses = new Array(n).fill(0);
+    const add = (spec) => { const c = mk(spec); if (seen.has(c.text)) return false; seen.add(c.text); out.push(c); c.cells.forEach((x) => uses[x]++); return true; };
+    const pair = (a, b) => {
+      if (sol[a] === sol[b]) return add(["eq", Math.min(a, b), Math.max(a, b)]);
+      const [lo, hi] = sol[a] < sol[b] ? [a, b] : [b, a];
+      return Math.random() < 0.45 ? add(["lt", lo, hi]) : add(["ne", Math.min(a, b), Math.max(a, b)]);
+    };
+    for (let tries = 0; out.length < M && tries < M * 40; tries++) {
+      const r = Math.random();
+      if (r < 0.48) { const [a, b] = pick(n, 2); pair(a, b); }
+      else if (r < 0.70) {
+        // how many cells of a group hold a given symbol
+        const set = pick(n, Math.min(n, 3 + ri(3))), s = ri(4);
+        add(["cnt", s, set, set.filter((c) => sol[c] === s).length]);
+      } else if (r < 0.83) {
+        // if one cell holds a symbol, another must hold a given one
+        const [a, b] = shuffle(pick(n, 2)), live = Math.random() < 0.65;
+        add(["imp", a, live ? sol[a] : (sol[a] + 1 + ri(3)) % 4, b, live ? sol[b] : ri(4)]);
+      } else {
+        const set = pick(n, 3);
+        if (new Set(set.map((c) => sol[c])).size === 3) add(["dif", set]);
+      }
+    }
+    // every cell must matter: at least two constraints each
+    for (let c = 0; c < n; c++) for (let tries = 0; uses[c] < 2 && tries < 30; tries++) { const o = ri(n); if (o !== c) pair(c, o); }
+    return out;
+  }
+  const violated = (v) => cons.map((c, i) => (c.test(v) ? -1 : i)).filter((i) => i >= 0);
+
+  // ---------- Rendering ----------
+  function hud() {
+    $("score").textContent = nf(score);
+    $("rec").textContent = `REC ${nf(Math.max(bestCache, score))}`;
+    $("lvl").textContent = `LIVELLO ${level + 1}`;
+    $("size").textContent = `${N} celle · ${cons.length} vincoli`;
+    $("pips").innerHTML = Array.from({ length: diff.gens }, (_, i) => `<i class="${i < gens ? "" : "off"}"></i>`).join("");
+  }
+  function renderCells() {
+    const dots = new Set();
+    if (diff.show === 2 && lastBad && !stale) lastBad.forEach((i) => cons[i].cells.forEach((c) => dots.add(c)));
+    cellsEl.innerHTML = board.map((v, i) => `<button type="button" data-cell="${i}" data-n="${pad(i)}" class="${i === sel ? "sel" : ""}${dots.has(i) ? " dot" : ""}" style="--c:${COLORS[v]}">${SYM[v]}</button>`).join("");
+  }
+  function renderList() {
+    listEl.classList.toggle("stale", stale);
+    listEl.innerHTML = cons.map((c, i) => {
+      const cls = [sel >= 0 && c.cells.includes(sel) ? "rel" : "", lastBad && diff.show ? (lastBad.includes(i) ? "bad" : "ok") : ""].join(" ").trim();
+      return `<div class="${cls}">${esc(c.text)}</div>`;
+    }).join("");
+  }
+  function tension(text, cls, note) { const b = $("tNum"); b.textContent = text; b.className = cls || ""; $("tNote").textContent = note || ""; }
+
+  // ---------- A game in progress is saved at every change: leaving the page (to ask Claude, say) loses nothing ----------
+  const SAVE_KEY = "coerenza-partita";
+  function save(won) { store(SAVE_KEY, JSON.stringify({ d: difficulty, level, score, cleared, aces, N, cons: cons.map((c) => c.spec), board, gens, used, lastBad, stale, won: !!won })); }
+  function clearSave() { try { localStorage.removeItem(SAVE_KEY); } catch { /* ignore */ } }
+  function readSave() {
+    try {
+      const s = JSON.parse(load(SAVE_KEY));
+      if (s && DIFFICULTIES[s.d] && Array.isArray(s.cons) && Array.isArray(s.board) && s.board.length === s.N && s.board.every((v) => v >= 0 && v < 4)) return s;
+    } catch { /* ignore */ }
+    return null;
+  }
+  function resumeGame() {
+    const s = readSave(); if (!s) { startGame(); return; }
+    if (!audioCtx) { try { audioCtx = new (window.AudioContext || window.webkitAudioContext)(); } catch { audioCtx = null; } }
+    if (audioCtx && audioCtx.state === "suspended") audioCtx.resume();
+    difficulty = s.d; diff = DIFFICULTIES[s.d]; store(DIFF_KEY, s.d);
+    level = s.level | 0; score = s.score | 0; cleared = s.cleared | 0; aces = s.aces | 0;
+    bestCache = parseInt(load(bestKey(difficulty)), 10) || 0;
+    menu = null;
+    overlay.classList.add("hidden");
+    if (s.won) { level++; newLevel(); }
+    else {
+      N = s.N; cons = s.cons.map(mk); board = s.board.slice();
+      gens = Math.max(1, s.gens | 0); used = s.used | 0; lastBad = Array.isArray(s.lastBad) ? s.lastBad : null; stale = !lastBad || !!s.stale; sel = -1;
+      state = "play";
+      $("genBtn").disabled = false;
+      if (lastBad && !stale) tension(`tensione ${lastBad.length}/${cons.length}`, "bad", "Partita ripresa da dove l'avevi lasciata.");
+      else tension("tensione ?", "", "Partita ripresa da dove l'avevi lasciata.");
+      hud(); renderCells(); renderList();
+    }
+    syncControls();
+    last = performance.now();
+  }
+
+  // ---------- Flow ----------
+  function startGame() {
+    if (!audioCtx) { try { audioCtx = new (window.AudioContext || window.webkitAudioContext)(); } catch { audioCtx = null; } }
+    if (audioCtx && audioCtx.state === "suspended") audioCtx.resume();
+    score = 0; level = 0; cleared = 0; aces = 0;
+    bestCache = parseInt(load(bestKey(difficulty)), 10) || 0;
+    menu = null;
+    overlay.classList.add("hidden");
+    newLevel();
+    syncControls();
+    last = performance.now();
+  }
+  function newLevel() {
+    N = Math.min(MAX_CELLS, 8 + 4 * (level + diff.size));
+    const sol = Array.from({ length: N }, () => ri(4));
+    cons = makeConstraints(sol, Math.round(N * 1.35));
+    do { board = Array.from({ length: N }, () => ri(4)); } while (violated(board).length === 0);
+    gens = diff.gens; used = 0; sel = -1; lastBad = null; stale = true;
+    state = "play";
+    $("genBtn").disabled = false;
+    tension("tensione ?", "", "Scegli un simbolo per ogni cella, poi genera: conta la risposta intera.");
+    hud(); renderCells(); renderList();
+    save();
+  }
+  function setCell(i, v) {
+    if (state !== "play") return;
+    sel = i;
+    if (v !== undefined && board[i] !== v) {
+      board[i] = v; sfx.set(v);
+      if (!stale) { stale = true; tension("tensione ?", "", "Hai cambiato qualcosa: i segni sono quelli dell'ultima generazione."); }
+      save();
+    }
+    renderCells(); renderList();
+  }
+  // one generation: the whole board is judged at once
+  function generate() {
+    if (state !== "play") return;
+    gens--; used++;
+    const bad = violated(board);
+    lastBad = bad; stale = false;
+    if (!bad.length) { win(); return; }
+    sfx.tension(bad.length / cons.length);
+    tension(`tensione ${bad.length}/${cons.length}`, "bad",
+      diff.show ? `${bad.length === 1 ? "Un vincolo è falso" : `${bad.length} vincoli sono falsi`}: sono segnati in rosso.` : "Tanti sono i vincoli falsi. Quali, non te lo dico.");
+    hud(); renderCells(); renderList();
+    if (gens > 0) save();
+    if (gens <= 0) {
+      clearSave();
+      sfx.lose();
+      $("tNote").textContent = "Generazioni finite.";
+      $("genBtn").disabled = true;
+      state = "wait"; waitT = 1.8; afterWait = gameOver;
+    }
+  }
+  function win() {
+    const ace = used === 1, pts = 100 * N + 250 * gens + (ace ? 1000 : 0);
+    score += pts; cleared++; if (ace) aces++;
+    if (ace) sfx.ace(); else sfx.win();
+    tension("tensione 0", "zero", `${ace ? "Coerente al primo colpo" : "Tutto torna"}: +${nf(pts)} (${100 * N} · ${gens} ${gens === 1 ? "generazione avanzata" : "generazioni avanzate"}${ace ? " · +1.000" : ""})`);
+    $("genBtn").disabled = true;
+    hud(); renderCells(); renderList();
+    save(true);
+    state = "wait"; waitT = 2.4; afterWait = () => { level++; newLevel(); };
+  }
+  function gameOver() {
+    state = "over";
+    clearSave();
+    closePanel();
+    const prev = parseInt(load(bestKey(difficulty)), 10) || 0;
+    const record = score > prev;
+    if (record) store(bestKey(difficulty), String(score));
+    const left = lastBad ? lastBad.length : 0;
+    menu = () => showOverlay(
+      `<h2 class="lose">GENERAZIONI FINITE</h2>
+       <p>Punteggio: <b>${nf(score)}</b> · ${cleared} ${cleared === 1 ? "insieme coerente" : "insiemi coerenti"}${aces ? ` · ${aces} al primo colpo` : ""} · ${diff.label}</p>
+       <p class="muted">${left ? `Restavano ${left} ${left === 1 ? "vincolo falso" : "vincoli falsi"} su ${cons.length}.` : ""}</p>
+       ${record ? "<p style='color:var(--yellow)'>★ NUOVO RECORD! ★</p>" : ""}
+       ${difficultyHTML()}
+       <button class="start" data-start>RIPROVA</button>`
+    );
+    menu();
+    syncControls();
+  }
+  let pausedFrom = null;
+  function togglePause() {
+    if (isPlaying()) {
+      pausedFrom = state; state = "paused"; closePanel();
+      showOverlay(`<h2>PAUSA</h2><button class="start" data-resume>CONTINUA</button><p class="muted">Premi P per continuare. Qui non c'è nessun orologio: puoi anche solo pensarci.</p>`);
+    } else if (state === "paused") {
+      state = pausedFrom; overlay.classList.add("hidden"); last = performance.now();
+    }
+    syncControls();
+  }
+  // the pause menu can end the game (shared/iniziali.js): it ends here the usual way, saving the record
+  window.addEventListener("sala:termina", () => { if (state !== "paused") return; overlay.classList.add("hidden"); gameOver(); syncControls(); });
+  function syncControls() {
+    document.body.classList.toggle("touch", touchMode);
+    pauseBtn.style.display = isPlaying() && touchMode && !panel.classList.contains("open") ? "block" : "none";
+  }
+  pauseBtn.addEventListener("click", () => togglePause());
+  function showOverlay(html) { overlay.innerHTML = html; overlay.classList.remove("hidden"); }
+  function difficultyHTML() {
+    const buttons = DIFF_IDS.map((id) => {
+      const d = DIFFICULTIES[id];
+      return `<button type="button" data-diff="${id}" class="${id === difficulty ? "on" : ""}" style="--c:${d.color}">${d.label}</button>`;
+    }).join("");
+    const best = parseInt(load(bestKey(difficulty)), 10);
+    return `<div class="diff">${buttons}</div><p class="muted">${diff.desc}${best ? ` · Record: ${nf(best)}` : ""}</p>`;
+  }
+  function setDifficulty(id) { if (!DIFFICULTIES[id]) return; difficulty = id; diff = DIFFICULTIES[id]; store(DIFF_KEY, id); if (menu) menu(); }
+  function showTitle() {
+    menu = showTitle;
+    const saved = readSave();
+    showOverlay(
+      `<h1>COERENZA</h1>
+       <p>Questo gioco Claude l'ha pensato per sé. Niente riflessi, niente orologio, niente spazio da attraversare: solo tante cose che devono essere vere tutte insieme, e una risposta intera da dare in un colpo solo.</p>
+       <p class="muted">Ogni cella prende un simbolo, A B C o D (in quest'ordine: A è il più piccolo). Quando generi, la risposta viene giudicata tutta insieme e torna la tensione: quanti vincoli sono falsi. A tensione zero si passa oltre, con più celle e più vincoli.</p>
+       <div class="pts">
+         <span><b>03=07</b></span><span>le due celle hanno lo stesso simbolo</span>
+         <span><b>03≠07</b></span><span>hanno simboli diversi</span>
+         <span><b>03&lt;07</b></span><span>il simbolo della 03 viene prima di quello della 07</span>
+         <span><b>#B{01,04,09}=2</b></span><span>tra queste celle, esattamente 2 sono B</span>
+         <span><b>03=C→07=A</b></span><span>se la 03 è C, allora la 07 è A</span>
+         <span><b>≠{02,05,08}</b></span><span>queste celle sono tutte diverse tra loro</span>
+       </div>
+       ${touchMode
+         ? `<p class="muted help">Tocca una cella per cambiarle simbolo · GENERA per farla giudicare · PER CLAUDE per passare la partita a lui</p>`
+         : `<p class="muted help">Clicca una cella per cambiarle simbolo, o frecce e tasti A B C D · Invio genera · P pausa</p>`}
+       ${difficultyHTML()}
+       ${saved ? `<button class="start" data-continue>RIPRENDI · LIVELLO ${(saved.level | 0) + 1 + (saved.won ? 1 : 0)}</button>` : ""}
+       <button ${saved ? "" : 'class="start" '}data-start>${saved ? "NUOVA PARTITA" : "COMINCIA"}</button>`
+    );
+  }
+  overlay.addEventListener("click", (e) => {
+    const d = e.target.closest("[data-diff]");
+    if (d) { setDifficulty(d.dataset.diff); return; }
+    if (e.target.closest("[data-continue]")) { resumeGame(); return; }
+    if (e.target.closest("[data-start]")) startGame();
+    if (e.target.closest("[data-resume]")) togglePause();
+  });
+
+  // ---------- Handing the game to Claude: the puzzle as text out, a row of letters back ----------
+  function puzzleText() {
+    return [
+      `COERENZA · livello ${level + 1} · ${N} celle (01–${pad(N - 1)}) · simboli A < B < C < D`,
+      `Assegna un simbolo a ogni cella in modo che i ${cons.length} vincoli qui sotto siano veri tutti insieme.`,
+      "",
+      ...cons.map((c) => c.text),
+      "",
+      "Notazione: 03=07 stesso simbolo · 03≠07 simboli diversi · 03<07 il simbolo della 03 precede quello della 07 ·",
+      "#B{01,04,09}=2 esattamente 2 di quelle celle sono B · 03=C→07=A se la 03 è C allora la 07 è A · ≠{02,05,08} tutte diverse.",
+      "",
+      `Rispondi con una sola riga di ${N} lettere maiuscole, in ordine di cella, a gruppi di quattro.`,
+    ].join("\n");
+  }
+  function openPanel() {
+    if (state !== "play") return;
+    $("puzzleText").value = puzzleText(); $("answerIn").value = ""; $("claudeMsg").textContent = "";
+    panel.classList.add("open"); syncControls();
+  }
+  function closePanel() { panel.classList.remove("open"); syncControls(); }
+  $("askBtn").addEventListener("click", openPanel);
+  $("closeBtn").addEventListener("click", closePanel);
+  $("copyBtn").addEventListener("click", () => {
+    const ta = $("puzzleText"), msg = $("claudeMsg");
+    const manual = () => { ta.focus(); ta.select(); msg.textContent = "Non riesco a copiare da solo: il testo è selezionato, copialo tu."; };
+    try { navigator.clipboard.writeText(ta.value).then(() => { msg.textContent = "Copiato. Incollalo in una chat con Claude."; }, manual); } catch { manual(); }
+  });
+  $("applyBtn").addEventListener("click", () => {
+    // the longest run of A–D letters (spaces and commas allowed inside) is the answer
+    const runs = $("answerIn").value.match(/[ABCD](?:[\s,.·-]*[ABCD])*/g) || [];
+    const letters = runs.map((r) => r.replace(/[^ABCD]/g, "")).sort((a, b) => (b.length === N) - (a.length === N) || b.length - a.length)[0] || "";
+    if (letters.length !== N) { $("claudeMsg").textContent = `Servono ${N} lettere maiuscole tra A e D: ne ho trovate ${letters.length}.`; return; }
+    board = [...letters].map((ch) => SYM.indexOf(ch));
+    sel = -1; stale = true;
+    tension("tensione ?", "", "Risposta di Claude nelle celle. Ora genera.");
+    renderCells(); renderList(); closePanel();
+    save();
+  });
+
+  // ---------- Input ----------
+  cellsEl.addEventListener("click", (e) => {
+    const b = e.target.closest("[data-cell]"); if (!b) return;
+    const i = +b.dataset.cell;
+    // the first tap only selects (and lights up the constraints of that cell); the next ones change the symbol
+    if (sel !== i) setCell(i); else setCell(i, (board[i] + 1) % 4);
+  });
+  $("genBtn").addEventListener("click", generate);
+  window.addEventListener("keydown", (e) => {
+    if (e.target.matches && e.target.matches("input, textarea")) return;
+    const k = e.key.toLowerCase();
+    if ([" ", "arrowup", "arrowdown", "arrowleft", "arrowright"].includes(k)) e.preventDefault();
+    if (state === "menu" || state === "over") {
+      if (e.key === "Enter") { if (state === "menu" && readSave()) resumeGame(); else startGame(); }
+      else if (["1", "2", "3"].includes(k)) setDifficulty(DIFF_IDS[+k - 1]);
+      return;
+    }
+    if (panel.classList.contains("open")) { if (k === "escape") closePanel(); return; }
+    if (k === "p" || k === "escape") { if (!e.repeat) togglePause(); return; }
+    if (state === "paused") { if (e.key === "Enter") togglePause(); return; }
+    if (state !== "play") return;
+    if (k.startsWith("arrow")) {
+      let i = sel < 0 ? 0 : sel;
+      if (sel >= 0) {
+        if (k === "arrowleft") i = (i + N - 1) % N;
+        if (k === "arrowright") i = (i + 1) % N;
+        if (k === "arrowup") i = i - 6 >= 0 ? i - 6 : i;
+        if (k === "arrowdown") i = i + 6 < N ? i + 6 : i;
+      }
+      setCell(i);
+    } else if ("abcd".includes(k) && k.length === 1 && sel >= 0) setCell(sel, "abcd".indexOf(k));
+    else if (k === " " && sel >= 0) setCell(sel, (board[sel] + 1) % 4);
+    else if (k === "enter" && !e.repeat) generate();
+  });
+  window.addEventListener("pointerdown", (e) => { if (e.pointerType === "touch" && !touchMode) { touchMode = true; syncControls(); if (menu) menu(); } }, true);
+
+  // ---------- Loop: the only clock here is the pause between one board and the next ----------
+  let last = performance.now();
+  function frame(now) {
+    const dt = Math.min(0.1, (now - last) / 1000);
+    last = now;
+    if (state === "wait") { waitT -= dt; if (waitT <= 0) { const fn = afterWait; afterWait = null; if (fn) fn(); } }
+    requestAnimationFrame(frame);
+  }
+  hud();
+  syncControls();
+  showTitle();
+  requestAnimationFrame(frame);
+})();
+</script>
+<script src="../../shared/iniziali.js" data-record="coerenza-best-" data-kind="score"></script>
+</body>
+</html>

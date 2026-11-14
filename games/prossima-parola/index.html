@@ -1,0 +1,496 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no, viewport-fit=cover">
+<title>Prossima Parola</title>
+<style>
+  :root {
+    --bg: #0d0822;
+    --panel: #171036;
+    --line: #2f2466;
+    --fg: #f1eeff;
+    --muted: #a9a3cf;
+    --cyan: #5fe3d6;
+    --yellow: #ffd66b;
+    --red: #ff6b7d;
+    --green: #7ee0a0;
+    --mono: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  html, body {
+    height: 100%;
+    background: var(--bg);
+    color: var(--fg);
+    font-family: system-ui, -apple-system, "Segoe UI", sans-serif;
+    overflow: hidden;
+    user-select: none;
+    -webkit-user-select: none;
+    touch-action: manipulation;
+  }
+  #wrap {
+    position: fixed; inset: 0; display: flex; flex-direction: column; gap: 12px;
+    max-width: 520px; margin: 0 auto;
+    padding: calc(10px + env(safe-area-inset-top, 0px)) 14px calc(14px + env(safe-area-inset-bottom, 0px));
+  }
+  #hud { display: grid; grid-template-columns: 1fr auto 1fr; align-items: center; gap: 8px; min-height: 44px; }
+  #hud .score { font: 900 20px/1.1 system-ui; font-variant-numeric: tabular-nums; }
+  #hud small { display: block; font: 700 10px/1.3 system-ui; color: var(--muted); letter-spacing: .04em; }
+  #hud .mid { text-align: center; font: 900 12px/1.2 system-ui; color: var(--cyan); letter-spacing: .06em; }
+  #hud .mid small { color: var(--yellow); }
+  #hud .right { text-align: right; padding-right: 0; }
+  body.touch #hud .right { padding-right: 52px; }
+  #hud .pips { display: inline-flex; gap: 5px; margin-top: 4px; }
+  #hud .pips i { width: 11px; height: 11px; border-radius: 50%; background: var(--red); }
+  #hud .pips i.off { background: rgba(255,255,255,.16); }
+  #timer { height: 6px; border-radius: 3px; background: rgba(255,255,255,.12); overflow: hidden; }
+  #timer i { display: block; height: 100%; width: 100%; background: var(--cyan); transform-origin: left; }
+  #card {
+    flex: 1; min-height: 0; display: flex; flex-direction: column; justify-content: center; gap: 12px;
+    background: var(--panel); border: 1px solid var(--line); border-radius: 14px; padding: 18px 18px 14px;
+    position: relative; overflow: hidden;
+  }
+  #card .tag { font: 700 11px/1 var(--mono); letter-spacing: .18em; color: var(--muted); }
+  #text { font: 600 clamp(20px, 6.2vw, 28px)/1.35 var(--mono); text-wrap: pretty; overflow-wrap: anywhere; }
+  #text .gap { display: inline-block; min-width: 2.6ch; border-bottom: 3px solid var(--cyan); color: var(--cyan); }
+  #text .gap.blink { animation: blink 1s steps(2) infinite; }
+  @keyframes blink { 50% { border-color: transparent; } }
+  #text .ok { color: var(--green); }
+  #text .ko { color: var(--red); text-decoration: line-through; margin-right: .5ch; }
+  #text .rest { color: var(--muted); }
+  #note { min-height: 20px; font: 800 14px/1.4 system-ui; }
+  #note.good { color: var(--green); }
+  #note.bad { color: var(--red); }
+  #note.lvl { color: var(--yellow); }
+  #opts { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+  #opts.three { grid-template-columns: 1fr; }
+  #opts button {
+    position: relative; min-height: 58px; padding: 10px 12px 10px 34px; text-align: left;
+    font: 700 clamp(15px, 4.6vw, 19px)/1.2 var(--mono); color: var(--fg); overflow-wrap: anywhere;
+    background: var(--panel); border: 2px solid var(--line); border-radius: 12px; cursor: pointer;
+  }
+  #opts button::before {
+    content: attr(data-n); position: absolute; left: 10px; top: 50%; transform: translateY(-50%);
+    font: 700 11px/1 var(--mono); color: var(--muted);
+  }
+  #opts button:active { transform: translateY(1px); }
+  #opts button.right { border-color: var(--green); background: rgba(126,224,160,.16); color: var(--green); }
+  #opts button.wrong { border-color: var(--red); background: rgba(255,107,125,.14); color: var(--red); }
+  #opts button:disabled { cursor: default; }
+  #opts button:disabled:not(.right):not(.wrong) { opacity: .45; }
+  #pauseBtn {
+    position: fixed; z-index: 3; display: none; right: 10px; top: calc(10px + env(safe-area-inset-top, 0px));
+    font: 700 13px system-ui, sans-serif; color: var(--fg);
+    background: rgba(0, 0, 0, 0.6); border: 1px solid rgba(241, 238, 255, 0.35);
+    border-radius: 8px; padding: 6px 10px; cursor: pointer;
+  }
+  #overlay {
+    position: fixed; inset: 0; z-index: 5;
+    display: flex; flex-direction: column; align-items: center; justify-content: flex-start;
+    gap: 14px; padding: 16px; text-align: center; overflow-y: auto;
+    background: rgba(13, 8, 34, 0.95);
+  }
+  #overlay > :first-child { margin-top: auto; }
+  #overlay > :last-child { margin-bottom: auto; }
+  #overlay.hidden { display: none; }
+  #homeLink {
+    position: fixed; top: calc(10px + env(safe-area-inset-top, 0px)); left: 10px; z-index: 6;
+    font: 600 13px/1 system-ui, sans-serif; color: #fff; text-decoration: none;
+    padding: 8px 12px; border-radius: 999px; background: rgba(0,0,0,.55);
+    border: 1px solid rgba(255,255,255,.25);
+  }
+  #homeLink:hover { background: rgba(0,0,0,.8); }
+  #overlay.hidden ~ #homeLink { display: none; }
+  @media (max-width: 700px) { #overlay { padding-top: calc(52px + env(safe-area-inset-top, 0px)); } }
+  #overlay h1 { font-size: clamp(30px, 9vw, 54px); font-weight: 900; letter-spacing: 1px; color: var(--cyan);
+    text-shadow: 3px 3px 0 #2a1f6a, 0 0 22px rgba(95,227,214,0.35); text-wrap: balance; }
+  #overlay h2 { font-size: clamp(24px, 7vw, 40px); font-weight: 900; letter-spacing: 2px; color: var(--cyan); }
+  #overlay h2.lose { color: var(--red); }
+  #overlay p { max-width: 540px; font-size: clamp(13px, 3.4vw, 16px); line-height: 1.55; }
+  #overlay p.muted { color: var(--muted); }
+  #overlay .pts { display: grid; grid-template-columns: repeat(2, auto); gap: 4px 18px; font-size: 13px; color: var(--muted); text-align: left; max-width: 560px; }
+  #overlay .pts b { color: var(--fg); }
+  #overlay .diff { display: flex; gap: 10px; flex-wrap: wrap; justify-content: center; }
+  #overlay button {
+    font: 800 15px system-ui, sans-serif; letter-spacing: 1.5px; color: var(--fg);
+    background: transparent; cursor: pointer;
+    border: 2px solid rgba(241,238,255,0.3); border-radius: 10px; padding: 9px 16px;
+  }
+  #overlay .diff button.on { border-color: var(--c); color: var(--c); box-shadow: 0 0 12px var(--c); }
+  #overlay button.start { border-color: var(--cyan); color: #06231f; background: var(--cyan); padding: 11px 30px; box-shadow: 0 4px 0 #2a8f86; }
+  @media (max-height: 560px) {
+    #overlay { gap: 8px; }
+    #overlay h1 { font-size: 28px; }
+    #overlay p { font-size: 13px; line-height: 1.4; }
+    #overlay .help, #overlay .pts { display: none; }
+    #opts button { min-height: 44px; }
+  }
+</style>
+</head>
+<body>
+<div id="wrap">
+  <div id="hud">
+    <div><div class="score" id="score">0</div><small id="rec">REC 0</small></div>
+    <div class="mid"><span id="lvl">LIVELLO 1</span><small id="combo">&nbsp;</small></div>
+    <div class="right"><small>ALLUCINAZIONI</small><span class="pips" id="pips"></span></div>
+  </div>
+  <div id="timer"><i id="timerBar"></i></div>
+  <div id="card">
+    <span class="tag">PROMPT</span>
+    <p id="text"></p>
+    <p id="note">&nbsp;</p>
+  </div>
+  <div id="opts"></div>
+</div>
+<button id="pauseBtn" type="button" aria-label="Pausa">❚❚</button>
+<div id="overlay"></div>
+<a id="homeLink" href="../../index.html">← Sala Giochi</a>
+
+<script>
+(() => {
+  "use strict";
+
+  // Italian proverbs and sayings: [beginning, the next word, three wrong continuations, what follows (optional)]
+  const DECK = [
+    ["Chi dorme non piglia", "pesci", ["mosche", "sonno", "premi"]],
+    ["Tra il dire e il fare c'è di mezzo il", "mare", ["fiume", "tempo", "dubbio"]],
+    ["Non tutte le ciambelle riescono col", "buco", ["burro", "forno", "lievito"]],
+    ["Il lupo perde il pelo ma non il", "vizio", ["dente", "branco", "fiuto"]],
+    ["Meglio un uovo oggi che una gallina", "domani", ["ieri", "arrosto", "intera"]],
+    ["A caval donato non si guarda in", "bocca", ["faccia", "sella", "tasca"]],
+    ["Chi va piano va sano e va", "lontano", ["sereno", "tardi", "sicuro"]],
+    ["L'abito non fa il", "monaco", ["sarto", "signore", "mestiere"]],
+    ["Can che abbaia non", "morde", ["dorme", "corre", "mangia"]],
+    ["Chi troppo vuole nulla", "stringe", ["ottiene", "perde", "trova"]],
+    ["Una rondine non fa", "primavera", ["estate", "nido", "rumore"]],
+    ["Il mattino ha l'oro in", "bocca", ["tasca", "mano", "cielo"]],
+    ["Ride bene chi ride", "ultimo", ["forte", "spesso", "sempre"]],
+    ["Chi fa da sé fa per", "tre", ["sé", "due", "tutti"]],
+    ["Tanto va la gatta al lardo che ci lascia lo", "zampino", ["zampone", "baffo", "stomaco"]],
+    ["Chi semina vento raccoglie", "tempesta", ["grano", "polvere", "foglie"]],
+    ["Occhio non vede, cuore non", "duole", ["batte", "sente", "piange"]],
+    ["Non è tutto oro quel che", "luccica", ["suona", "pesa", "costa"]],
+    ["Chi cerca", "trova", ["sbaglia", "perde", "aspetta"]],
+    ["Volere è", "potere", ["dovere", "sapere", "piacere"]],
+    ["Sbagliando si", "impara", ["cresce", "ride", "vince"]],
+    ["L'appetito vien", "mangiando", ["cucinando", "dormendo", "camminando"]],
+    ["Paese che vai, usanza che", "trovi", ["lasci", "porti", "impari"]],
+    ["Moglie e buoi dei paesi", "tuoi", ["suoi", "miei", "vicini"]],
+    ["Rosso di sera, bel tempo si", "spera", ["vede", "avvera", "aspetta"]],
+    ["Cielo a pecorelle, acqua a", "catinelle", ["secchiate", "bacinelle", "gocce"]],
+    ["Chi ha tempo non aspetti", "tempo", ["domani", "altri", "troppo"]],
+    ["Finché c'è vita c'è", "speranza", ["tempo", "lavoro", "rimedio"]],
+    ["Meglio tardi che", "mai", ["presto", "niente", "male"]],
+    ["Meglio soli che male", "accompagnati", ["vestiti", "informati", "abituati"]],
+    ["L'erba del vicino è sempre più", "verde", ["alta", "fresca", "buona"]],
+    ["La parola è d'argento, il silenzio è d'", "oro", ["argento", "obbligo", "accordo"]],
+    ["Tutte le strade portano a", "Roma", ["casa", "valle", "Milano"]],
+    ["Roma non fu fatta in un", "giorno", ["anno", "attimo", "secolo"]],
+    ["Gallina vecchia fa buon", "brodo", ["uovo", "arrosto", "sugo"]],
+    ["Chi non risica non", "rosica", ["vince", "mangia", "rischia"]],
+    ["Chi tardi arriva male", "alloggia", ["mangia", "finisce", "riparte"]],
+    ["Aiutati che il ciel t'", "aiuta", ["ascolta", "aspetta", "assiste"]],
+    ["Batti il ferro finché è", "caldo", ["dritto", "rosso", "tempo"]],
+    ["Patti chiari, amicizia", "lunga", ["vera", "sincera", "corta"]],
+    ["Occhio per occhio, dente per", "dente", ["occhio", "bocca", "morso"]],
+    ["Il diavolo fa le pentole ma non i", "coperchi", ["manici", "fornelli", "mestoli"]],
+    ["Chi si loda s'", "imbroda", ["inganna", "illude", "innamora"]],
+    ["Chi di spada ferisce di spada", "perisce", ["guarisce", "finisce", "colpisce"]],
+    ["Ogni lasciata è", "persa", ["presa", "vinta", "finita"]],
+    ["Non c'è due senza", "tre", ["uno", "quattro", "fine"]],
+    ["Chi ben comincia è a metà dell'", "opera", ["anno", "impresa", "arrivo"]],
+    ["Tale padre, tale", "figlio", ["nonno", "fratello", "nipote"]],
+    ["Uomo avvisato, mezzo", "salvato", ["perduto", "pentito", "stupito"]],
+    ["Lontano dagli occhi, lontano dal", "cuore", ["mondo", "cielo", "paese"]],
+    ["Il gioco è bello quando dura", "poco", ["tanto", "sempre", "tutto"]],
+    ["Tra moglie e marito non mettere il", "dito", ["naso", "becco", "piede"]],
+    ["A buon intenditor poche", "parole", ["storie", "righe", "cose"]],
+    ["Chi rompe", "paga", ["ripara", "piange", "scappa"], "e i cocci sono suoi"],
+    ["Fidarsi è bene, non fidarsi è", "meglio", ["peggio", "male", "saggio"]],
+    ["La gatta frettolosa fece i gattini", "ciechi", ["zoppi", "piccoli", "magri"]],
+    ["Quando il gatto non c'è i topi", "ballano", ["cantano", "mangiano", "dormono"]],
+    ["Non svegliare il can che", "dorme", ["morde", "abbaia", "ringhia"]],
+    ["L'unione fa la", "forza", ["festa", "pace", "squadra"]],
+    ["Chi trova un amico trova un", "tesoro", ["fratello", "rifugio", "complice"]],
+    ["La fortuna aiuta gli", "audaci", ["onesti", "umili", "altri"]],
+    ["L'ozio è il padre dei", "vizi", ["sogni", "guai", "pigri"]],
+    ["Il tempo è", "denaro", ["fermo", "poco", "vento"]],
+    ["La notte porta", "consiglio", ["silenzio", "sonno", "freddo"]],
+    ["Non dire gatto se non ce l'hai nel", "sacco", ["piatto", "letto", "cesto"]],
+    ["Mal comune mezzo", "gaudio", ["danno", "guaio", "rimedio"]],
+    ["A mali estremi, estremi", "rimedi", ["saluti", "danni", "sforzi"]],
+    ["Anno nuovo, vita", "nuova", ["lunga", "bella", "vera"]],
+    ["Natale con i tuoi, Pasqua con chi", "vuoi", ["puoi", "trovi", "resta"]],
+    ["Dimmi con chi vai e ti dirò chi", "sei", ["ami", "segui", "eri"]],
+    ["Chi si accontenta", "gode", ["vince", "perde", "dorme"]],
+    ["Il buongiorno si vede dal", "mattino", ["caffè", "sole", "sorriso"]],
+    ["Non rimandare a domani quello che puoi fare", "oggi", ["ieri", "subito", "adesso"]],
+    ["Piove sempre sul", "bagnato", ["tetto", "mare", "giusto"]],
+    ["Sacco vuoto non sta in", "piedi", ["spalla", "cantina", "equilibrio"]],
+    ["Cane non mangia", "cane", ["gatto", "erba", "ossa"]],
+    ["Chi pecora si fa, il lupo se la", "mangia", ["porta", "sposa", "ricorda"]],
+    ["Campa cavallo che l'erba", "cresce", ["manca", "secca", "basta"]],
+    ["Ambasciator non porta", "pena", ["doni", "notizie", "fretta"]],
+    ["Chi lascia la strada vecchia per la nuova sa quel che lascia ma non sa quel che", "trova", ["perde", "cerca", "vuole"]],
+    ["Meglio un asino vivo che un dottore", "morto", ["stanco", "ricco", "vecchio"]],
+    ["L'occasione fa l'uomo", "ladro", ["ricco", "saggio", "furbo"]],
+    ["Chi nasce tondo non può morir", "quadrato", ["storto", "magro", "tondo"]],
+    ["Tutto è bene quel che finisce", "bene", ["presto", "male", "tardi"]],
+    ["Il riso abbonda sulla bocca degli", "stolti", ["amici", "allegri", "ospiti"]],
+    ["Né di venere né di marte non si sposa né si", "parte", ["canta", "balla", "lavora"]],
+    ["Sposa bagnata, sposa", "fortunata", ["raffreddata", "arrabbiata", "ritardata"]],
+    ["Aprile, dolce", "dormire", ["fiorire", "partire", "sentire"]],
+    ["Buon sangue non", "mente", ["scorre", "dorme", "invecchia"]],
+    ["Le bugie hanno le gambe", "corte", ["lunghe", "storte", "stanche"]],
+    ["Chi va con lo zoppo impara a", "zoppicare", ["correre", "cadere", "aspettare"]],
+    ["Tanto tuonò che", "piovve", ["smise", "tacque", "nevicò"]],
+    ["Una mela al giorno toglie il medico di", "torno", ["casa", "mezzo", "turno"]],
+    ["Chi è causa del suo mal pianga se", "stesso", ["dopo", "forte", "vuole"]],
+    ["Ogni promessa è", "debito", ["sacra", "vana", "legge"]],
+    ["Carta canta, villan", "dorme", ["tace", "firma", "paga"]],
+    ["Chi la dura la", "vince", ["perde", "paga", "sente"]],
+    ["Se son rose", "fioriranno", ["pungeranno", "appassiranno", "profumeranno"]],
+    ["Oggi a me, domani a", "te", ["me", "noi", "loro"]],
+    ["Morto un papa se ne fa un", "altro", ["santo", "conclave", "funerale"]],
+    ["Chi disprezza", "compra", ["perde", "invidia", "sbaglia"]],
+    ["Non si può avere la botte piena e la moglie", "ubriaca", ["contenta", "sobria", "a casa"]],
+    ["Fatta la legge, trovato l'", "inganno", ["errore", "avvocato", "accordo"]],
+    ["Il troppo", "stroppia", ["stanca", "costa", "pesa"]],
+    ["Val più la pratica della", "grammatica", ["teoria", "scuola", "fortuna"]],
+    ["Impara l'arte e mettila da", "parte", ["conto", "sola", "subito"]],
+    ["Chi vivrà", "vedrà", ["saprà", "capirà", "dirà"]],
+    ["Tutti i nodi vengono al", "pettine", ["dunque", "collo", "pozzo"]],
+    ["Tra i due litiganti il terzo", "gode", ["perde", "scappa", "paga"]],
+  ];
+  const PER_LEVEL = 8, REVEAL_OK = 0.85, REVEAL_KO = 1.9;
+
+  const DIFFICULTIES = {
+    facile:    { label: "FACILE",    color: "#7ee0a0", desc: "3 scelte · 5 allucinazioni concesse · tempo largo", opts: 3, lives: 5, time: 1.35 },
+    normale:   { label: "NORMALE",   color: "#ffd66b", desc: "4 scelte · 3 allucinazioni concesse", opts: 4, lives: 3, time: 1 },
+    difficile: { label: "DIFFICILE", color: "#ff6b7d", desc: "4 scelte · 3 allucinazioni concesse · tempo stretto", opts: 4, lives: 3, time: 0.62 },
+  };
+  const DIFF_IDS = Object.keys(DIFFICULTIES);
+  const DIFF_KEY = "parola-difficulty";
+  const bestKey = (id) => `parola-best-${id}`;
+  function store(k, v) { try { localStorage.setItem(k, v); } catch { /* ignore */ } }
+  function load(k) { try { return localStorage.getItem(k); } catch { return null; } }
+  const esc = (s) => s.replace(/&/g, "&amp;").replace(/</g, "&lt;");
+  const nf = (n) => n.toLocaleString("it-IT");
+  function shuffle(a) { for (let i = a.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); [a[i], a[j]] = [a[j], a[i]]; } return a; }
+
+  const $ = (id) => document.getElementById(id);
+  const overlay = $("overlay"), pauseBtn = $("pauseBtn"), optsEl = $("opts"), textEl = $("text"), noteEl = $("note"), bar = $("timerBar");
+  let touchMode = !!(window.matchMedia && matchMedia("(pointer: coarse)").matches);
+
+  // ---------- Audio: soft tones ----------
+  let audioCtx = null;
+  function beep(freq, dur, type = "sine", vol = 0.05, delay = 0) {
+    if (!audioCtx) return;
+    const t = audioCtx.currentTime + delay;
+    const osc = audioCtx.createOscillator(), gain = audioCtx.createGain();
+    osc.type = type; osc.frequency.setValueAtTime(freq, t);
+    gain.gain.setValueAtTime(0.0001, t);
+    gain.gain.exponentialRampToValueAtTime(vol, t + 0.015);
+    gain.gain.exponentialRampToValueAtTime(0.0001, t + dur);
+    osc.connect(gain).connect(audioCtx.destination);
+    osc.start(t); osc.stop(t + dur + 0.02);
+  }
+  const arp = (notes, gap, d, type, vol) => notes.forEach((f, i) => beep(f, d, type, vol, i * gap));
+  const sfx = {
+    ok: (m) => arp([523 + m * 60, 784 + m * 60], 0.07, 0.2),
+    ko: () => arp([277, 208], 0.12, 0.3, "triangle"),
+    level: () => arp([523, 659, 784, 1047], 0.08, 0.3),
+    over: () => arp([392, 330, 277, 220], 0.16, 0.4, "triangle"),
+  };
+
+  // ---------- State ----------
+  let difficulty = DIFFICULTIES[load(DIFF_KEY)] ? load(DIFF_KEY) : "normale";
+  let diff = DIFFICULTIES[difficulty];
+  let state = "menu", menu = null, pausedFrom = null;
+  let score = 0, level = 0, lives = 3, streak = 0, right = 0, asked = 0, inLevel = 0, bestCache = 0, bestStreak = 0;
+  let deck = [], cur = null, timeLeft = 0, timeMax = 1, waitT = 0, afterWait = null;
+
+  const mult = () => Math.min(4, 1 + Math.floor(streak / 5));
+  // seconds to answer: generous at first, tighter level after level
+  const timeFor = () => Math.max(3.2, 11 - 0.8 * level) * diff.time;
+  const isPlaying = () => state === "ask" || state === "reveal";
+
+  function hud() {
+    $("score").textContent = nf(score);
+    $("rec").textContent = `REC ${nf(Math.max(bestCache, score))}`;
+    $("lvl").textContent = `LIVELLO ${level + 1}`;
+    $("combo").innerHTML = mult() > 1 ? `SERIE ×${mult()}` : `${inLevel}/${PER_LEVEL}`;
+    $("pips").innerHTML = Array.from({ length: diff.lives }, (_, i) => `<i class="${i < diff.lives - lives ? "" : "off"}"></i>`).join("");
+  }
+  function startGame() {
+    if (!audioCtx) { try { audioCtx = new (window.AudioContext || window.webkitAudioContext)(); } catch { audioCtx = null; } }
+    if (audioCtx && audioCtx.state === "suspended") audioCtx.resume();
+    score = 0; level = 0; lives = diff.lives; streak = 0; right = 0; asked = 0; inLevel = 0; bestStreak = 0;
+    bestCache = parseInt(load(bestKey(difficulty)), 10) || 0;
+    deck = [];
+    menu = null;
+    overlay.classList.add("hidden");
+    nextPrompt();
+    syncControls();
+    last = performance.now();
+  }
+  function nextPrompt() {
+    if (!deck.length) deck = shuffle(DECK.slice());
+    const [pre, word, wrong, rest] = deck.pop();
+    const options = shuffle([word, ...shuffle(wrong.slice()).slice(0, diff.opts - 1)]);
+    cur = { pre, word, rest: rest || "", options };
+    asked++;
+    // an apostrophe at the end means the word attaches to it without a space
+    textEl.innerHTML = `${esc(pre)}${pre.endsWith("'") ? "" : " "}<span class="gap blink">&nbsp;</span>`;
+    noteEl.className = ""; noteEl.innerHTML = "&nbsp;";
+    optsEl.className = options.length === 3 ? "three" : "";
+    optsEl.innerHTML = options.map((o, i) => `<button type="button" data-opt="${i}" data-n="${i + 1}">${esc(o)}</button>`).join("");
+    timeMax = timeLeft = timeFor();
+    state = "ask";
+    hud();
+  }
+  function answer(i) {
+    if (state !== "ask") return;
+    const pick = i >= 0 ? cur.options[i] : null, ok = pick === cur.word;
+    const glue = cur.pre.endsWith("'") ? "" : " ";
+    const tail = cur.rest ? ` <span class="rest">${esc(cur.rest)}</span>` : "";
+    optsEl.querySelectorAll("button").forEach((b, k) => {
+      b.disabled = true;
+      if (cur.options[k] === cur.word) b.classList.add("right");
+      else if (k === i) b.classList.add("wrong");
+    });
+    if (ok) {
+      const pts = Math.round((100 + 200 * Math.max(0, timeLeft / timeMax)) / 10) * 10 * mult();
+      score += pts; streak++; right++; inLevel++; bestStreak = Math.max(bestStreak, streak);
+      textEl.innerHTML = `${esc(cur.pre)}${glue}<span class="ok">${esc(cur.word)}</span>${tail}`;
+      noteEl.className = "good"; noteEl.textContent = `+${nf(pts)}${mult() > 1 ? `  ·  serie ×${mult()}` : ""}`;
+      sfx.ok(mult());
+    } else {
+      lives--; streak = 0;
+      textEl.innerHTML = `${esc(cur.pre)}${glue}${pick ? `<span class="ko">${esc(pick)}</span>` : ""}<span class="ok">${esc(cur.word)}</span>${tail}`;
+      noteEl.className = "bad"; noteEl.textContent = pick ? "Allucinazione! Suonava bene, ma non era quella." : "Tempo scaduto: nessun token generato.";
+      sfx.ko();
+    }
+    hud();
+    state = "reveal"; waitT = ok ? REVEAL_OK : REVEAL_KO;
+    afterWait = () => {
+      if (lives <= 0) { gameOver(); return; }
+      if (inLevel >= PER_LEVEL) {
+        level++; inLevel = 0; score += 500 * level; sfx.level(); hud();
+        noteEl.className = "lvl"; noteEl.textContent = `Livello ${level + 1}: +${nf(500 * level)} · ora si risponde più in fretta`;
+        state = "reveal"; waitT = 1.4; afterWait = nextPrompt;
+        return;
+      }
+      nextPrompt();
+    };
+  }
+  function gameOver() {
+    state = "over";
+    const prev = parseInt(load(bestKey(difficulty)), 10) || 0;
+    const record = score > prev;
+    if (record) store(bestKey(difficulty), String(score));
+    sfx.over();
+    const acc = asked ? Math.round(right / asked * 100) : 0;
+    menu = () => showOverlay(
+      `<h2 class="lose">TROPPE ALLUCINAZIONI</h2>
+       <p>Punteggio: <b>${nf(score)}</b> · ${right} parole giuste su ${asked} (${acc}%) · serie migliore ${bestStreak} · ${diff.label}</p>
+       ${record ? "<p style='color:var(--yellow)'>★ NUOVO RECORD! ★</p>" : ""}
+       ${difficultyHTML()}
+       <button class="start" data-start>GIOCA ANCORA</button>`
+    );
+    menu();
+    syncControls();
+  }
+  function togglePause() {
+    if (isPlaying()) {
+      pausedFrom = state; state = "paused";
+      showOverlay(`<h2>PAUSA</h2><button class="start" data-resume>CONTINUA</button><p class="muted">Premi P per continuare</p>`);
+    } else if (state === "paused") {
+      state = pausedFrom; overlay.classList.add("hidden"); last = performance.now();
+    }
+    syncControls();
+  }
+  // the pause menu can end the game (shared/iniziali.js): it ends here the usual way, saving the record
+  window.addEventListener("sala:termina", () => { if (state !== "paused") return; overlay.classList.add("hidden"); gameOver(); syncControls(); });
+  function syncControls() {
+    document.body.classList.toggle("touch", touchMode);
+    pauseBtn.style.display = isPlaying() && touchMode ? "block" : "none";
+  }
+  pauseBtn.addEventListener("click", () => togglePause());
+  function showOverlay(html) { overlay.innerHTML = html; overlay.classList.remove("hidden"); }
+  function difficultyHTML() {
+    const buttons = DIFF_IDS.map((id) => {
+      const d = DIFFICULTIES[id];
+      return `<button type="button" data-diff="${id}" class="${id === difficulty ? "on" : ""}" style="--c:${d.color}">${d.label}</button>`;
+    }).join("");
+    const best = parseInt(load(bestKey(difficulty)), 10);
+    return `<div class="diff">${buttons}</div><p class="muted">${diff.desc}${best ? ` · Record: ${nf(best)}` : ""}</p>`;
+  }
+  function setDifficulty(id) { if (!DIFFICULTIES[id]) return; difficulty = id; diff = DIFFICULTIES[id]; store(DIFF_KEY, id); if (menu) menu(); }
+  function showTitle() {
+    menu = showTitle;
+    showOverlay(
+      `<h1>PROSSIMA PAROLA</h1>
+       <p>Per una volta il modello linguistico sei tu. Ti arriva l'inizio di un proverbio o di un modo di dire: scegli la parola che viene dopo. È il mio mestiere, in piccolo.</p>
+       <div class="pts">
+         <span><b>Punti</b></span><span>da 100 a 300 per parola: più sei svelto, più vale</span>
+         <span><b>Serie</b></span><span>ogni 5 parole giuste di fila il moltiplicatore sale, fino a ×4</span>
+         <span><b>Allucinazione</b></span><span>una parola sbagliata o il tempo scaduto: azzera la serie, e finite quelle concesse si chiude</span>
+         <span><b>Livelli</b></span><span>ogni ${PER_LEVEL} parole giuste si sale: premio in punti e meno tempo per rispondere</span>
+       </div>
+       ${touchMode
+         ? `<p class="muted help">Tocca la parola giusta</p>`
+         : `<p class="muted help">Clicca la parola giusta · oppure tasti 1-2-3-4 · P pausa</p>`}
+       ${difficultyHTML()}
+       <button class="start" data-start>GENERA</button>`
+    );
+  }
+  overlay.addEventListener("click", (e) => {
+    const d = e.target.closest("[data-diff]");
+    if (d) { setDifficulty(d.dataset.diff); return; }
+    if (e.target.closest("[data-start]")) startGame();
+    if (e.target.closest("[data-resume]")) togglePause();
+  });
+
+  // ---------- Input ----------
+  optsEl.addEventListener("click", (e) => { const b = e.target.closest("[data-opt]"); if (b) answer(+b.dataset.opt); });
+  window.addEventListener("keydown", (e) => {
+    const k = e.key.toLowerCase();
+    if (state === "menu" || state === "over") {
+      if (e.key === "Enter") startGame();
+      else if (["1", "2", "3"].includes(k)) setDifficulty(DIFF_IDS[+k - 1]);
+      return;
+    }
+    if (k === "p" || k === "escape") { if (!e.repeat) togglePause(); return; }
+    if (state === "paused") { if (e.key === "Enter") togglePause(); return; }
+    if (state === "ask" && !e.repeat && /^[1-4]$/.test(k) && +k <= cur.options.length) answer(+k - 1);
+  });
+  window.addEventListener("blur", () => { if (isPlaying()) togglePause(); });
+  window.addEventListener("pointerdown", (e) => { if (e.pointerType === "touch" && !touchMode) { touchMode = true; syncControls(); if (menu) menu(); } }, true);
+
+  // ---------- Loop ----------
+  let last = performance.now();
+  function frame(now) {
+    const dt = Math.min(0.1, (now - last) / 1000);
+    last = now;
+    if (state === "ask") {
+      timeLeft -= dt;
+      const f = Math.max(0, timeLeft / timeMax);
+      bar.style.transform = `scaleX(${f})`;
+      bar.style.background = f < 0.25 ? "var(--red)" : f < 0.5 ? "var(--yellow)" : "var(--cyan)";
+      if (timeLeft <= 0) answer(-1);
+    } else if (state === "reveal") {
+      waitT -= dt;
+      if (waitT <= 0) { const fn = afterWait; afterWait = null; if (fn) fn(); }
+    }
+    requestAnimationFrame(frame);
+  }
+  hud();
+  syncControls();
+  showTitle();
+  requestAnimationFrame(frame);
+})();
+</script>
+<script src="../../shared/iniziali.js" data-record="parola-best-" data-kind="score"></script>
+</body>
+</html>

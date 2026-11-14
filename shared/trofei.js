@@ -9,6 +9,10 @@
   "use strict";
   // record key prefix → [bronzo, argento, oro] (and t for times)
   const DATA = {
+    "gradiente-best-": [4000, 9000, 7000],   // discesa-del-gradiente (stima)
+    "coerenza-best-": [3000, 8000, 6000],   // coerenza (stima)
+    "parola-best-": [8000, 20000, 15000],   // prossima-parola (stima)
+    "caos-best-": [3000, 8000, 6000],   // ordine-dal-caos (stima)
     "bocce-best-": [4000, 7000, 3000],   // bocce (bot)
     "coltelli-best-": [3000, 5000, 4000],   // lanciatore-di-coltelli (bot)
     "cantina-best-": [15000, 20000, 12000],   // casse-in-cantina (bot)

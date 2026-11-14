@@ -4,7 +4,7 @@ Raccolta di giochi arcade per il browser. Ogni gioco è un singolo file HTML sen
 
 ## 🕹️ Sala Giochi — `index.html`
 
-Apri `index.html` nella cartella principale per la pagina di raccolta: mostra tutti i 183 giochi con copertina, genere, comandi e i tuoi record per ogni difficoltà (Facile, Normale, Difficile). Tocca «Gioca» per avviare un gioco; in ogni gioco il pulsante «← Sala Giochi» in alto a sinistra (visibile nei menu) riporta alla raccolta.
+Apri `index.html` nella cartella principale per la pagina di raccolta: mostra tutti i 187 giochi con copertina, genere, comandi e i tuoi record per ogni difficoltà (Facile, Normale, Difficile). Tocca «Gioca» per avviare un gioco; in ogni gioco il pulsante «← Sala Giochi» in alto a sinistra (visibile nei menu) riporta alla raccolta.
 
 **Iniziali del record:** quando batti un record compare la schermata da sala giochi per inserire le tue tre iniziali (frecce ↑ ↓ per cambiare lettera, ← → per spostarti, oppure scrivile direttamente; su telefono i tasti ▲ ▼ e OK). Le iniziali vengono salvate insieme al record e compaiono nei menu del gioco e nella Sala Giochi. Il codice è condiviso da tutti i giochi in `shared/iniziali.js`.
 
@@ -12,11 +12,11 @@ Apri `index.html` nella cartella principale per la pagina di raccolta: mostra tu
 
 **Comandi touch: levetta o frecce:** in cima alla Sala Giochi e nel menu di pausa di ogni gioco con la levetta si sceglie se usare la levetta analogica o una croce di frecce. Con le frecce il tocco viene agganciato a una delle otto direzioni (le quattro principali hanno la zona più larga, così le diagonali si prendono solo di proposito) e spinto fino in fondo; la scelta vale per tutti i giochi e resta memorizzata. Funziona anche nei giochi con due levette (la sfida a due di *Pugni di Fuoco*, muovi e spara di *Assalto Robotico*).
 
-**Trofei:** ogni gioco ha tre trofei a punteggio: 🥉 **Bronzo** (la soglia in qualsiasi difficoltà), 🥈 **Argento** (a Normale o Difficile) e 🥇 **Oro** (a Difficile); nei giochi a tempo (*Corsa al Tramonto*, *Crystal Wars*) conta finire entro un certo tempo. I trofei si calcolano dai record salvati, quindi quelli già fatti si sbloccano da soli; quando un record nuovo ne conquista uno compare un avviso in alto. Le soglie sono nella schermata iniziale, in pausa e a fine partita di ogni gioco; in Sala Giochi ogni cabinato mostra i suoi trofei, in cima c'è il totale (su 549) con il numero di giochi giocati e il filtro **Già giocati** mostra solo i giochi con almeno un record. Le soglie vengono dalle partite di prova di un bot per circa un terzo dei giochi e sono stimate sulle regole di punteggio per gli altri (`shared/trofei.js`).
+**Trofei:** ogni gioco ha tre trofei a punteggio: 🥉 **Bronzo** (la soglia in qualsiasi difficoltà), 🥈 **Argento** (a Normale o Difficile) e 🥇 **Oro** (a Difficile); nei giochi a tempo (*Corsa al Tramonto*, *Crystal Wars*) conta finire entro un certo tempo. I trofei si calcolano dai record salvati, quindi quelli già fatti si sbloccano da soli; quando un record nuovo ne conquista uno compare un avviso in alto. Le soglie sono nella schermata iniziale, in pausa e a fine partita di ogni gioco; in Sala Giochi ogni cabinato mostra i suoi trofei, in cima c'è il totale (su 561) con il numero di giochi giocati e il filtro **Già giocati** mostra solo i giochi con almeno un record. Le soglie vengono dalle partite di prova di un bot per circa un terzo dei giochi e sono stimate sulle regole di punteggio per gli altri (`shared/trofei.js`).
 
 **Imprese:** i traguardi della sala sono pensati in tre livelli. Il **livello 1** sono i trofei di punteggio qui sopra, per tutti i giochi. Il **livello 2** (traguardi di progresso come «arriva al livello 5») abbiamo scelto di non farlo: lo coprono già in parte i trofei e, dove conta, le imprese. Il **livello 3** sono le **imprese** 🏅: due o tre prodezze caratteristiche di ogni gioco, come atterrare sulla piazzola più piccola in *Soccorso Lunare* o seppellire il capo rosso in *Trappola Aliena*. Le imprese di un gioco sono elencate nella sua schermata iniziale, in pausa e a fine partita (tocca un nome per leggere cosa chiede); quando ne fai una compare un avviso azzurro in alto. In Sala Giochi ogni cabinato mostra le sue (🏅 1/3 imprese) e in cima c'è il totale. Si aggiungono a gruppi di giochi: per ora ci sono le 150 imprese dei 50 giochi più recenti (da *Re della Giungla* a *Bocce*): i giochi nuovi nascono con le loro. Come i record, restano salvate in questo browser (`shared/imprese.js`).
 
-**Generi:** ogni gioco appartiene a una o più famiglie di generi (🚀 Sparatutto, 🪜 Piattaforme, 🎯 Azione e riflessi, 🌀 Labirinti, ⚽ Sport, 🧩 Rompicapo, 🏁 Corse e veicoli, 🏰 Strategia e difesa, 🥊 Picchiaduro, 🗝️ Avventura, 🎵 Ritmo e musica): per esempio *Cripta degli Eroi* è avventura, sparatutto e labirinto. Le famiglie sono le etichette colorate di ogni cabinato. Sotto la ricerca una fila di pulsanti, con il numero di giochi di ciascuna famiglia, mostra solo quel genere (toccandolo di nuovo si torna a *Tutti i generi*); anche toccare un'etichetta su un cabinato filtra per quella famiglia. Un gioco con più famiglie compare in ognuna. La scelta resta memorizzata e si combina con la ricerca e con *Già giocati*. Su telefono la fila scorre di lato.
+**Generi:** ogni gioco appartiene a una o più famiglie di generi (🚀 Sparatutto, 🪜 Piattaforme, 🎯 Azione e riflessi, 🌀 Labirinti, ⚽ Sport, 🧩 Rompicapo, 🏁 Corse e veicoli, 🏰 Strategia e difesa, 🥊 Picchiaduro, 🗝️ Avventura, 🎵 Ritmo e musica, 🤖 IA): per esempio *Cripta degli Eroi* è avventura, sparatutto e labirinto. Le famiglie sono le etichette colorate di ogni cabinato. Sotto la ricerca una fila di pulsanti, con il numero di giochi di ciascuna famiglia, mostra solo quel genere (toccandolo di nuovo si torna a *Tutti i generi*); anche toccare un'etichetta su un cabinato filtra per quella famiglia. Un gioco con più famiglie compare in ognuna. La scelta resta memorizzata e si combina con la ricerca e con *Già giocati*. Su telefono la fila scorre di lato.
 
 **Cerca:** sotto i trofei c'è una casella per trovare subito un gioco scrivendo parte del nome o del genere (maiuscole e accenti non contano, più parole restringono la ricerca); con Invio si apre il primo gioco trovato, con Esc si svuota. Funziona insieme al filtro *Già giocati*.
 
@@ -2881,3 +2881,51 @@ Il gioco delle bocce, uno contro uno, sul campo di ghiaia del bocciodromo visto 
 - **Touch:** tocca e trascina per mirare, tieni il dito giù per la forza e alzalo per tirare; ❚❚ per la pausa
 
 Per giocare apri `games/bocce/index.html` nel browser.
+
+### 🤖 Discesa del Gradiente — `games/discesa-del-gradiente/index.html`
+
+Il primo cabinato del genere **IA**: giochi senza nemici e senza fretta, costruiti sulle idee con cui si addestrano le intelligenze artificiali. Qui c'è una pallina su una mappa di valli e colline (una funzione di costo), e la valle più profonda da trovare.
+
+- **Come si gioca:** trascini all'indietro come con una fionda e lasci andare: la pallina parte e poi segue la pendenza. Ogni spinta è un'epoca; bisogna arrivare al minimo globale (l'anello dorato) prima di finirle
+- **La mappa:** scuro è in basso, chiaro è in alto, le linee sono curve di livello. Le buche meno profonde (minimi locali) ti fermano, e con troppa forza scavalchi la valle
+- **Punti:** 500 × livello · 200 per ogni epoca avanzata · 1.000 se arrivi al primo colpo
+- **Difficoltà:** Facile (7 epoche, anteprima lunga della traiettoria), Normale (5 epoche, anteprima corta, un minimo locale in più), Difficile (6 epoche e la nebbia: vedi solo dove sei già passato)
+- **Comandi:** trascina e rilascia col mouse o col dito · oppure `←` `→` per la direzione, `↑` `↓` per la forza, `Spazio` per spingere · `P` pausa
+
+Per giocare apri `games/discesa-del-gradiente/index.html` nel browser.
+
+### 🤖 Prossima Parola — `games/prossima-parola/index.html`
+
+Per una volta il modello linguistico sei tu: arriva l'inizio di un proverbio o di un modo di dire e scegli la parola che viene dopo, tra tre o quattro.
+
+- **Punti:** da 100 a 300 per parola, di più se rispondi in fretta; ogni 5 parole giuste di fila il moltiplicatore sale, fino a ×4
+- **Allucinazioni:** una parola sbagliata o il tempo scaduto azzerano la serie; finite quelle concesse, la partita si chiude
+- **Livelli:** ogni tot parole giuste si sale di livello, con un premio in punti e meno tempo per rispondere; i proverbi sono più di cento
+- **Difficoltà:** Facile (3 scelte, 5 allucinazioni concesse, tempo largo), Normale (4 scelte, 3 allucinazioni), Difficile (4 scelte, 3 allucinazioni, tempo stretto)
+- **Comandi:** clicca o tocca la parola giusta · oppure i tasti `1`–`4` · `P` pausa
+
+Per giocare apri `games/prossima-parola/index.html` nel browser.
+
+### 🤖 Ordine dal Caos — `games/ordine-dal-caos/index.html`
+
+Un'immagine fatta di sfumature di colore viene mescolata: rimetti ogni tessera al suo posto scambiandone due alla volta. Nessun timer: conta solo togliere il rumore.
+
+- **Scambi:** ne hai un numero contato per ogni immagine; se finiscono prima dell'ordine, la partita si chiude. In alto, la percentuale di rumore dice quante tessere sono ancora fuori posto
+- **Tessere fisse:** quelle col puntino scuro non si muovono: si parte da lì. Le griglie crescono livello dopo livello, da 4 × 5 a 7 × 9
+- **Punti:** 400 × livello · 60 per ogni scambio avanzato · 800 se usi il numero minimo di scambi
+- **Difficoltà:** Facile (tanti scambi, più tessere fisse, un puntino chiaro sulle tessere già a posto), Normale (fissi solo i quattro angoli), Difficile (griglie più grandi da subito, scambi contati)
+- **Comandi:** clicca o tocca due tessere per scambiarle, o trascinane una sull'altra · oppure frecce e `Spazio` · `P` pausa
+
+Per giocare apri `games/ordine-dal-caos/index.html` nel browser.
+
+### 🤖 Coerenza — `games/coerenza/index.html`
+
+Il gioco che Claude ha pensato per sé: niente riflessi, niente orologio, niente spazio da attraversare. Solo celle, quattro simboli (A, B, C, D, in quest'ordine) e una lista di vincoli scritti in formule, che devono essere veri tutti insieme.
+
+- **Come si gioca:** dai un simbolo a ogni cella e premi GENERA: la risposta viene giudicata tutta insieme e torna la tensione, cioè quanti vincoli sono falsi. A tensione zero si passa al livello dopo, con più celle e più vincoli; le generazioni sono contate
+- **I vincoli:** `03=07` (stesso simbolo), `03≠07` (simboli diversi), `03<07` (il primo viene prima), `#B{01,04,09}=2` (tra quelle celle, esattamente due B), `03=C→07=A` (se… allora…), `≠{02,05,08}` (tutte diverse)
+- **Per Claude:** il tasto PER CLAUDE copia la partita in un testo da incollare in una chat con Claude; la sua risposta si riporta nel gioco
+- **Difficoltà:** Facile (8 generazioni, e dopo ognuna vedi i vincoli falsi e le celle coinvolte), Normale (5 generazioni, vedi quali vincoli sono falsi), Difficile (3 generazioni, torna solo il numero)
+- **Comandi:** clicca o tocca una cella per cambiarle simbolo · `P` pausa
+
+Per giocare apri `games/coerenza/index.html` nel browser.
