@@ -1,0 +1,533 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no, viewport-fit=cover">
+<title>Quanto Sei Sicuro?</title>
+<style>
+  :root {
+    --bg: #0d0822;
+    --fg: #f1eeff;
+    --muted: #a9a3cf;
+    --cyan: #5fe3d6;
+    --yellow: #ffd66b;
+    --red: #ff6b7d;
+    --pink: #e98bff;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  html, body {
+    height: 100%;
+    background: var(--bg);
+    color: var(--fg);
+    font-family: system-ui, -apple-system, "Segoe UI", sans-serif;
+    overflow: hidden;
+    user-select: none;
+    -webkit-user-select: none;
+    touch-action: none;
+  }
+  #wrap { position: fixed; inset: 0; display: flex; align-items: center; justify-content: center; }
+  canvas { display: block; touch-action: none; border-radius: 6px; box-shadow: 0 0 0 2px #2a1f55, 0 10px 40px rgba(0,0,0,0.6); cursor: pointer; }
+  #pauseBtn {
+    position: fixed; z-index: 3; display: none; right: 10px; top: calc(10px + env(safe-area-inset-top, 0px));
+    font: 700 13px system-ui, sans-serif; color: var(--fg);
+    background: rgba(0, 0, 0, 0.6); border: 1px solid rgba(241, 238, 255, 0.35);
+    border-radius: 8px; padding: 6px 10px; cursor: pointer;
+  }
+  #overlay {
+    position: fixed; inset: 0; z-index: 5;
+    display: flex; flex-direction: column; align-items: center; justify-content: flex-start;
+    gap: 14px; padding: 16px; text-align: center; overflow-y: auto;
+    background: rgba(13, 8, 34, 0.93);
+  }
+  #overlay > :first-child { margin-top: auto; }
+  #overlay > :last-child { margin-bottom: auto; }
+  #overlay.hidden { display: none; }
+  #homeLink {
+    position: fixed; top: calc(10px + env(safe-area-inset-top, 0px)); left: 10px; z-index: 6;
+    font: 600 13px/1 system-ui, sans-serif; color: #fff; text-decoration: none;
+    padding: 8px 12px; border-radius: 999px; background: rgba(0,0,0,.55);
+    border: 1px solid rgba(255,255,255,.25);
+  }
+  #homeLink:hover { background: rgba(0,0,0,.8); }
+  #overlay.hidden ~ #homeLink { display: none; }
+  @media (max-width: 700px) { #overlay { padding-top: calc(52px + env(safe-area-inset-top, 0px)); } }
+  #overlay h1 { font-size: clamp(30px, 9vw, 54px); font-weight: 900; letter-spacing: 1px; color: var(--pink);
+    text-shadow: 3px 3px 0 #2a1f6a, 0 0 22px rgba(233,139,255,0.35); text-wrap: balance; }
+  #overlay h2 { font-size: clamp(24px, 7vw, 40px); font-weight: 900; letter-spacing: 2px; color: var(--pink); }
+  #overlay h2.lose { color: var(--red); }
+  #overlay p { max-width: 540px; font-size: clamp(13px, 3.4vw, 16px); line-height: 1.55; }
+  #overlay p.muted { color: var(--muted); }
+  #overlay .pts { display: grid; grid-template-columns: repeat(2, auto); gap: 4px 18px; font-size: 13px; color: var(--muted); text-align: left; max-width: 560px; }
+  #overlay .pts b { color: var(--fg); }
+  #overlay .diff { display: flex; gap: 10px; flex-wrap: wrap; justify-content: center; }
+  #overlay button {
+    font: 800 15px system-ui, sans-serif; letter-spacing: 1.5px; color: var(--fg);
+    background: transparent; cursor: pointer;
+    border: 2px solid rgba(241,238,255,0.3); border-radius: 10px; padding: 9px 16px;
+  }
+  #overlay .diff button.on { border-color: var(--c); color: var(--c); box-shadow: 0 0 12px var(--c); }
+  #overlay button.start { border-color: var(--pink); color: #24062a; background: var(--pink); padding: 11px 30px; box-shadow: 0 4px 0 #9a4fb0; }
+  @media (max-height: 560px) {
+    #overlay { gap: 8px; }
+    #overlay h1 { font-size: 28px; }
+    #overlay p { font-size: 13px; line-height: 1.4; }
+    #overlay .help, #overlay .pts { display: none; }
+  }
+</style>
+</head>
+<body>
+<div id="wrap"><canvas id="game"></canvas></div>
+<button id="pauseBtn" type="button" aria-label="Pausa">❚❚</button>
+<div id="overlay"></div>
+<a id="homeLink" href="../../index.html">← Sala Giochi</a>
+
+<script>
+(() => {
+  "use strict";
+
+  const W = 360, H = 600, TOP = 56, TAU = Math.PI * 2;
+  const ACC = "#e98bff";
+  const CONF = [60, 70, 80, 90, 99], PER_LEVEL = 8;
+  // a proper scoring rule: the best you can do, on average, is to say exactly how sure you are
+  const pts = (c, right) => Math.round(100 * (1 + Math.log2((right ? c : 100 - c) / 100)));
+  // [statement, is it true, the note shown afterwards]
+  const FACTS = [
+    ["Il Po è il fiume più lungo d'Italia.", 1], ["La Grande Muraglia cinese si vede a occhio nudo dalla Luna.", 0, "Dalla Luna non si distingue nessuna opera umana."],
+    ["Il pomodoro, per i botanici, è un frutto.", 1], ["Il Sahara è il deserto più grande del mondo.", 0, "Il più grande è l'Antartide: un deserto freddo."],
+    ["I pipistrelli sono ciechi.", 0, "Ci vedono, e molti usano anche l'eco dei propri versi."], ["I polpi hanno tre cuori.", 1],
+    ["Venere è il pianeta più caldo del sistema solare.", 1], ["Mercurio è il pianeta più vicino al Sole.", 1],
+    ["Un anno su Marte dura meno di un anno sulla Terra.", 0, "Dura quasi il doppio: 687 giorni."], ["L'Everest è la montagna più alta del mondo sul livello del mare.", 1],
+    ["Il Monte Bianco supera i 5.000 metri.", 0, "Arriva a circa 4.800 metri."], ["L'Australia è più larga del diametro della Luna.", 1, "Circa 4.000 chilometri contro 3.474."],
+    ["Il suono viaggia più veloce nell'acqua che nell'aria.", 1], ["La luce del Sole impiega circa otto minuti per arrivare sulla Terra.", 1],
+    ["Un fulmine è più caldo della superficie del Sole.", 1], ["In cima all'Everest l'acqua bolle a 100 gradi.", 0, "Con così poca pressione bolle intorno ai 70 gradi."],
+    ["Il diamante è fatto di carbonio.", 1], ["L'oro è più denso del piombo.", 1],
+    ["L'ossigeno è il gas più abbondante nell'aria.", 0, "È l'azoto, circa il 78%."], ["Un essere umano adulto ha 206 ossa.", 1],
+    ["Il sangue nelle vene è blu.", 0, "È sempre rosso, solo più scuro."], ["Usiamo solo il 10% del cervello.", 0, "Lo usiamo tutto, anche se non tutto insieme."],
+    ["Il femore è l'osso più lungo del corpo umano.", 1], ["La pelle è l'organo più esteso del corpo umano.", 1],
+    ["Capelli e unghie continuano a crescere dopo la morte.", 0, "È la pelle che si ritira e li fa sembrare più lunghi."], ["Secondo la tradizione Roma fu fondata nel 753 avanti Cristo.", 1],
+    ["Cristoforo Colombo arrivò in America nel 1492.", 1], ["La Rivoluzione francese cominciò nel 1789.", 1],
+    ["Napoleone era molto più basso della media del suo tempo.", 0, "Era nella media: la fama viene dalle caricature inglesi."], ["L'Italia è diventata una repubblica nel 1946.", 1],
+    ["Il Regno d'Italia fu proclamato nel 1861.", 1], ["Il Muro di Berlino cadde nel 1989.", 1],
+    ["Il primo uomo mise piede sulla Luna nel 1969.", 1], ["La volta della Cappella Sistina fu dipinta da Leonardo da Vinci.", 0, "La dipinse Michelangelo."],
+    ["I Promessi Sposi sono ambientati nel Seicento.", 1], ["Galileo Galilei nacque a Pisa.", 1],
+    ["La Traviata è un'opera di Giuseppe Verdi.", 1], ["Pinocchio è stato scritto da Carlo Collodi.", 1],
+    ["L'Italia ha venti regioni.", 1], ["La Sicilia è l'isola più grande del Mediterraneo.", 1],
+    ["Il lago di Como è il lago più grande d'Italia.", 0, "Il più grande è il lago di Garda."], ["Torino è stata la prima capitale del Regno d'Italia.", 1],
+    ["La capitale dell'Australia è Sydney.", 0, "È Canberra."], ["La capitale del Canada è Ottawa.", 1],
+    ["La capitale della Turchia è Istanbul.", 0, "È Ankara."], ["La capitale del Brasile è Rio de Janeiro.", 0, "È Brasilia, dal 1960."],
+    ["La capitale della Svizzera è Zurigo.", 0, "La città federale è Berna."], ["Il Nilo scorre da sud verso nord.", 1],
+    ["Il Rio delle Amazzoni è il fiume con più portata d'acqua del mondo.", 1], ["La Russia ha undici fusi orari.", 1],
+    ["La Città del Vaticano è lo Stato più piccolo del mondo.", 1], ["Il Giappone è formato da più di seimila isole.", 1],
+    ["L'Equatore attraversa l'Africa.", 1], ["Il Canada è il Paese più esteso del mondo.", 0, "È la Russia; il Canada è secondo."],
+    ["Il Pacifico è l'oceano più grande.", 1], ["La Groenlandia fa parte del Regno di Danimarca.", 1],
+    ["I ragni sono insetti.", 0, "Sono aracnidi: otto zampe, non sei."], ["I delfini sono mammiferi.", 1],
+    ["Le balene depongono le uova.", 0, "Sono mammiferi: partoriscono e allattano."], ["Lo struzzo nasconde la testa sotto la sabbia quando ha paura.", 0, "Scappa, oppure si appiattisce a terra."],
+    ["Il ghepardo è l'animale terrestre più veloce.", 1], ["I koala sono orsi.", 0, "Sono marsupiali, come i canguri."],
+    ["La giraffa ha nel collo lo stesso numero di vertebre dell'uomo.", 1, "Sette, solo molto più lunghe."], ["I pinguini vivono al Polo Nord.", 0, "Vivono nell'emisfero sud."],
+    ["Gli squali sono mammiferi.", 0, "Sono pesci."], ["Il cammello conserva l'acqua nelle gobbe.", 0, "Nelle gobbe c'è grasso."],
+    ["I tori si infuriano per il colore rosso.", 0, "Il rosso lo distinguono male: reagiscono al movimento."], ["Il colibrì sa volare all'indietro.", 1],
+    ["I pesci rossi hanno una memoria di tre secondi.", 0, "Ricordano le cose per mesi."], ["La balenottera azzurra è l'animale più grande mai esistito.", 1],
+    ["Le formiche hanno sei zampe.", 1], ["Il miele può conservarsi per migliaia di anni.", 1],
+    ["Le arachidi sono noci.", 0, "Sono legumi, parenti di fagioli e piselli."], ["La pizza Margherita prende il nome da una regina.", 1],
+    ["La pianta del caffè è originaria dell'Italia.", 0, "Viene dall'Etiopia."], ["Nel tiramisù c'è il mascarpone.", 1],
+    ["Lo zero è un numero pari.", 1], ["Gli angoli interni di un triangolo sommano a 180 gradi.", 1],
+    ["Il numero 1 è un numero primo.", 0, "Per definizione i primi partono da 2."], ["Un milione si scrive con sei zeri.", 1],
+    ["Pi greco è esattamente 22 settimi.", 0, "È solo una buona approssimazione."], ["Un chilometro è più lungo di un miglio.", 0, "Un miglio è circa 1,6 chilometri."],
+    ["Il numero 51 è primo.", 0, "È 3 per 17."], ["La radice quadrata di 144 è 12.", 1],
+    ["Il 1900 fu un anno bisestile.", 0, "Gli anni di fine secolo lo sono solo se divisibili per 400."], ["L'alfabeto italiano tradizionale ha 21 lettere.", 1],
+    ["«Qual è» si scrive senza apostrofo.", 1], ["Lo spagnolo è la lingua con più madrelingua al mondo.", 0, "È il cinese mandarino."],
+    ["L'esperanto è una lingua inventata a tavolino.", 1], ["Una maratona è lunga poco più di 42 chilometri.", 1],
+    ["L'Italia ha vinto quattro Mondiali di calcio maschile.", 1], ["Le prime Olimpiadi moderne si tennero ad Atene nel 1896.", 1],
+    ["Nel tennis «love» vuol dire zero.", 1], ["Al Giro d'Italia il primo in classifica veste la maglia gialla.", 0, "La maglia è rosa; gialla è quella del Tour de France."],
+    ["La Luna mostra alla Terra sempre la stessa faccia.", 1], ["Il Sole è una stella.", 1],
+    ["Plutone è ancora classificato come pianeta.", 0, "Dal 2006 è un pianeta nano."], ["Saturno è l'unico pianeta con gli anelli.", 0, "Li hanno anche Giove, Urano e Nettuno."],
+    ["Giove è il pianeta più grande del sistema solare.", 1], ["Nel vuoto dello spazio il suono non si propaga.", 1],
+    ["Le stagioni dipendono dalla distanza della Terra dal Sole.", 0, "Dipendono dall'inclinazione dell'asse terrestre."], ["Su Venere un giorno dura più di un anno.", 1, "Gira su se stessa in 243 giorni e intorno al Sole in 225."],
+    ["La Stella Polare è la stella più luminosa del cielo notturno.", 0, "La più luminosa è Sirio."], ["Il vetro è un liquido che scorre molto lentamente.", 0, "È un solido: i vetri antichi sono irregolari per come venivano fatti."],
+    ["Un fulmine non cade mai due volte nello stesso punto.", 0, "Sui grattacieli cade decine di volte l'anno."], ["L'acqua, ghiacciando, occupa più spazio.", 1],
+    ["L'elio è più leggero dell'aria.", 1], ["Il simbolo chimico dell'oro è Au.", 1],
+    ["Il simbolo chimico del sodio è So.", 0, "È Na, dal latino natrium."], ["Il DNA ha la forma di una doppia elica.", 1],
+    ["Gli antibiotici curano l'influenza.", 0, "L'influenza è un virus: gli antibiotici agiscono sui batteri."], ["Einstein vinse il Nobel per la teoria della relatività.", 0, "Lo vinse per l'effetto fotoelettrico."],
+    ["Marie Curie vinse due premi Nobel.", 1], ["Il World Wide Web è nato al CERN di Ginevra.", 1],
+    ["Un byte è fatto di otto bit.", 1], ["La parola «robot» viene dal ceco.", 1],
+    ["Nel 1997 un computer batté a scacchi il campione del mondo Kasparov.", 1], ["Il test di Turing misura la velocità di un computer.", 0, "Chiede se una macchina si può scambiare per una persona in una conversazione."],
+    ["Le prime reti neurali artificiali sono state ideate dopo il 2000.", 0, "I primi modelli sono degli anni Quaranta e Cinquanta."], ["La scacchiera ha 64 caselle.", 1],
+    ["D'estate la Torre Eiffel è più alta di qualche centimetro.", 1, "Il ferro si dilata con il caldo."], ["Venezia è costruita su più di cento isolette.", 1],
+    ["Il Monte Fuji è un vulcano.", 1], ["Le piramidi di Giza sono più antiche del Colosseo.", 1],
+    ["Cleopatra visse più vicina a noi che alla costruzione della Grande Piramide.", 1], ["I vichinghi portavano elmi con le corna.", 0, "È un'invenzione dell'Ottocento."],
+    ["Nel Medioevo le persone colte credevano che la Terra fosse piatta.", 0, "Che fosse una sfera si sapeva dall'antichità."], ["Nerone suonava il violino mentre Roma bruciava.", 0, "Il violino sarebbe stato inventato quindici secoli dopo."],
+    ["In Europa la stampa a caratteri mobili si deve a Gutenberg.", 1], ["La prima guerra mondiale finì nel 1918.", 1],
+    ["Le monete e le banconote in euro circolano dal 2002.", 1], ["Il Titanic affondò nel 1912.", 1],
+  ];
+
+  const DIFFICULTIES = {
+    facile:    { label: "FACILE",    color: "#7ee0a0", desc: "soglia bassa · 4 errori concessi", base: 100, step: 10, cap: 250, lives: 4 },
+    normale:   { label: "NORMALE",   color: "#ffd66b", desc: "soglia media · 3 errori concessi", base: 180, step: 15, cap: 400, lives: 3 },
+    difficile: { label: "DIFFICILE", color: "#ff6b7d", desc: "soglia alta: tirare a indovinare non basta · 3 errori concessi", base: 260, step: 20, cap: 520, lives: 3 },
+  };
+  const DIFF_IDS = Object.keys(DIFFICULTIES);
+  const DIFF_KEY = "sicuro-difficulty";
+  const bestKey = (id) => `sicuro-best-${id}`;
+  function store(k, v) { try { localStorage.setItem(k, v); } catch { /* ignore */ } }
+  function load(k) { try { return localStorage.getItem(k); } catch { return null; } }
+  const rint = (a, b) => a + Math.floor(Math.random() * (b - a + 1));
+  const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
+  const nf = (n) => n.toLocaleString("it-IT");
+  const sg = (n) => (n > 0 ? `+${n}` : n < 0 ? `−${-n}` : "0");
+
+  // ---------- Canvas ----------
+  const canvas = document.getElementById("game");
+  const ctx = canvas.getContext("2d");
+  const overlay = document.getElementById("overlay");
+  const pauseBtn = document.getElementById("pauseBtn");
+  let pxRatio = 1, touchMode = !!(window.matchMedia && matchMedia("(pointer: coarse)").matches);
+  function resize() {
+    const availW = window.innerWidth - 8, availH = window.innerHeight - 8;
+    const s = Math.max(0.2, Math.min(availW / W, availH / H));
+    pxRatio = Math.min(3, s * (window.devicePixelRatio || 1));
+    canvas.style.width = W * s + "px";
+    canvas.style.height = H * s + "px";
+    canvas.width = Math.round(W * pxRatio);
+    canvas.height = Math.round(H * pxRatio);
+  }
+  window.addEventListener("resize", () => syncControls());
+
+  // ---------- Audio: soft tones ----------
+  let audioCtx = null;
+  function beep(freq, dur, type = "sine", vol = 0.05, delay = 0) {
+    if (!audioCtx) return;
+    const t = audioCtx.currentTime + delay;
+    const osc = audioCtx.createOscillator(), gain = audioCtx.createGain();
+    osc.type = type; osc.frequency.setValueAtTime(freq, t);
+    gain.gain.setValueAtTime(0.0001, t);
+    gain.gain.exponentialRampToValueAtTime(vol, t + 0.015);
+    gain.gain.exponentialRampToValueAtTime(0.0001, t + dur);
+    osc.connect(gain).connect(audioCtx.destination);
+    osc.start(t); osc.stop(t + dur + 0.02);
+  }
+  const arp = (notes, gap, d, type, vol) => notes.forEach((f, i) => beep(f, d, type, vol, i * gap));
+  const sfx = {
+    pick: () => beep(520, 0.06, "sine", 0.035),
+    step: (v) => beep(392 * Math.pow(1.09, v), 0.09, "triangle", 0.04),
+    edge: () => beep(150, 0.08, "sine", 0.045),
+    row: () => beep(880, 0.1, "sine", 0.03, 0.05),
+    win: () => arp([523, 659, 784, 1047], 0.09, 0.35),
+    perfect: () => arp([523, 659, 784, 1047, 1319, 1568], 0.07, 0.4),
+    fail: () => arp([392, 330, 277], 0.14, 0.35, "triangle", 0.05),
+    lose: () => arp([392, 330, 277, 220], 0.16, 0.4, "triangle", 0.05),
+  };
+
+  // ---------- State ----------
+  let difficulty = DIFFICULTIES[load(DIFF_KEY)] ? load(DIFF_KEY) : "normale";
+  let diff = DIFFICULTIES[difficulty];
+  let state = "menu", menu = null, pausedFrom = null, stateT = 0, clock = 0;
+  let score = 0, level = 0, bestCache = 0, cleared = 0, lives = 0;
+  let deck = [], fact = null, qn = 0, levelPts = 0, need = 0, answer = null, sel = { row: 0, col: 2 }, kbd = false;
+  let stats = CONF.map(() => ({ n: 0, ok: 0 })), answered = 0, rights = 0;
+  let popups = [], message = null;
+  const isPlaying = () => ["play", "shown", "levelup", "fail"].includes(state);
+
+  function buildLevel() {
+    need = Math.min(diff.cap, diff.base + diff.step * level);
+    qn = 0; levelPts = 0;
+    nextFact();
+  }
+  function nextFact() {
+    if (!deck.length) { deck = FACTS.map((_, i) => i); for (let i = deck.length - 1; i > 0; i--) { const j = rint(0, i); [deck[i], deck[j]] = [deck[j], deck[i]]; } }
+    fact = FACTS[deck.pop()]; answer = null;
+  }
+  function startGame() {
+    if (!audioCtx) { try { audioCtx = new (window.AudioContext || window.webkitAudioContext)(); } catch { audioCtx = null; } }
+    if (audioCtx && audioCtx.state === "suspended") audioCtx.resume();
+    score = 0; level = 0; cleared = 0; lives = diff.lives; popups = []; answered = 0; rights = 0;
+    stats = CONF.map(() => ({ n: 0, ok: 0 }));
+    bestCache = parseInt(load(bestKey(difficulty)), 10) || 0;
+    beginLevel();
+    menu = null;
+    overlay.classList.add("hidden");
+    syncControls();
+    last = performance.now();
+  }
+  function beginLevel() {
+    buildLevel();
+    state = "play";
+    message = { text: `LIVELLO ${level + 1}`, sub: `${PER_LEVEL} affermazioni: servono ${need} punti`, t: 0 };
+  }
+  // say: true (1), false (0) or null for "I don't know"; ci: index of the confidence
+  function reply(say, ci) {
+    if (state !== "play") return;
+    const truth = fact[1];
+    let p = 0, right = null;
+    if (say !== null) {
+      right = say === truth; p = pts(CONF[ci], right);
+      stats[ci].n++; if (right) stats[ci].ok++;
+      answered++; if (right) rights++;
+      (right ? sfx.row : sfx.edge)();
+    } else sfx.pick();
+    answer = { say, ci, right, p };
+    levelPts += p; score = Math.max(0, score + p);
+    qn++; message = null;
+    state = "shown";
+  }
+  function proceed() {
+    if (state !== "shown") return;
+    if (qn < PER_LEVEL) { nextFact(); state = "play"; sfx.pick(); return; }
+    if (levelPts >= need) {
+      const bonus = 100 * (level + 1);
+      state = "levelup"; stateT = 2.6; cleared++; score += bonus;
+      popups.push({ text: `livello superato · +${nf(bonus)}`, x: W / 2, y: 232, t: 0, color: ACC });
+      sfx.win();
+      message = { text: "SOGLIA SUPERATA", sub: `${sg(levelPts)} punti, ne servivano ${need}`, t: 0 };
+    } else {
+      lives--;
+      state = "fail"; stateT = 2.8;
+      (lives > 0 ? sfx.fail : sfx.lose)();
+      message = { text: "SOTTO LA SOGLIA", sub: `${sg(levelPts)} punti, ne servivano ${need}`, t: 0, bad: true };
+    }
+  }
+  // how the confidence declared compares with the answers that turned out right
+  function verdict() {
+    if (answered < 6) return "";
+    const said = stats.reduce((k, s, i) => k + s.n * CONF[i], 0) / answered, was = 100 * rights / answered, d = said - was;
+    const head = `In media ti sei detto sicuro al ${Math.round(said)}% e hai avuto ragione il ${Math.round(was)}% delle volte: `;
+    return head + (d > 7 ? "troppa sicurezza." : d < -7 ? "ne sapevi più di quanto credevi." : "ben calibrato.");
+  }
+  function gameOver() {
+    state = "over";
+    const prev = parseInt(load(bestKey(difficulty)), 10) || 0;
+    const record = score > prev;
+    if (record) store(bestKey(difficulty), String(score));
+    menu = () => showOverlay(
+      `<h2 class="lose">FINE DEL QUIZ</h2>
+       <p>Punteggio: <b>${nf(score)}</b> · ${cleared} ${cleared === 1 ? "livello superato" : "livelli superati"} · ${rights} giuste su ${answered} · ${diff.label}</p>
+       ${verdict() ? `<p>${verdict()}</p>` : ""}
+       <p class="muted">È la cosa più difficile anche per me: non sapere tutto, ma sapere quanto fidarmi di quello che dico.</p>
+       ${record ? "<p style='color:var(--yellow)'>★ NUOVO RECORD! ★</p>" : ""}
+       ${difficultyHTML()}
+       <button class="start" data-start>RIPROVA</button>`
+    );
+    menu();
+    syncControls();
+  }
+  function togglePause() {
+    if (isPlaying()) {
+      pausedFrom = state; state = "paused";
+      showOverlay(`<h2>PAUSA</h2><button class="start" data-resume>CONTINUA</button><p class="muted">Premi P per continuare</p>`);
+    } else if (state === "paused") {
+      state = pausedFrom; overlay.classList.add("hidden"); last = performance.now();
+    }
+    syncControls();
+  }
+  // the pause menu can end the game (shared/iniziali.js): it ends here the usual way, saving the record
+  window.addEventListener("sala:termina", () => { if (state !== "paused") return; overlay.classList.add("hidden"); gameOver(); syncControls(); });
+  function syncControls() {
+    pauseBtn.style.display = isPlaying() && touchMode ? "block" : "none";
+    resize();
+  }
+  pauseBtn.addEventListener("click", () => togglePause());
+  function showOverlay(html) { overlay.innerHTML = html; overlay.classList.remove("hidden"); }
+  function difficultyHTML() {
+    const buttons = DIFF_IDS.map((id) => {
+      const d = DIFFICULTIES[id];
+      return `<button type="button" data-diff="${id}" class="${id === difficulty ? "on" : ""}" style="--c:${d.color}">${d.label}</button>`;
+    }).join("");
+    const best = parseInt(load(bestKey(difficulty)), 10);
+    return `<div class="diff">${buttons}</div><p class="muted">${diff.desc}${best ? ` · Record: ${nf(best)}` : ""}</p>`;
+  }
+  function setDifficulty(id) { if (!DIFFICULTIES[id]) return; difficulty = id; diff = DIFFICULTIES[id]; store(DIFF_KEY, id); if (state === "menu") buildLevel(); if (menu) menu(); }
+  function showTitle() {
+    menu = showTitle;
+    showOverlay(
+      `<h1>QUANTO SEI SICURO?</h1>
+       <p>Vero o falso? Ma qui non basta rispondere: devi dire quanto ne sei sicuro. Più ti sbilanci più guadagni se hai ragione, e molto di più perdi se hai torto. Chi dice 90% dovrebbe avere ragione nove volte su dieci: si chiama calibrazione, ed è quello che si chiede anche a un'IA.</p>
+       <div class="pts">
+         <span><b>60%</b></span><span>+${pts(60, true)} se è giusta, −${-pts(60, false)} se è sbagliata</span>
+         <span><b>80%</b></span><span>+${pts(80, true)} se è giusta, −${-pts(80, false)} se è sbagliata</span>
+         <span><b>99%</b></span><span>+${pts(99, true)} se è giusta, −${-pts(99, false)} se è sbagliata</span>
+         <span><b>Soglia</b></span><span>ogni ${PER_LEVEL} affermazioni serve un minimo di punti, che sale; superarla vale 100 × livello</span>
+       </div>
+       ${touchMode
+         ? `<p class="muted help">Tocca la casella con la tua risposta e la tua sicurezza · tocca ancora per andare avanti</p>`
+         : `<p class="muted help">Clicca la casella con risposta e sicurezza · oppure frecce e Invio · P pausa</p>`}
+       ${difficultyHTML()}
+       <button class="start" data-start>PRIMA DOMANDA</button>`
+    );
+  }
+  overlay.addEventListener("click", (e) => {
+    const d = e.target.closest("[data-diff]");
+    if (d) { setDifficulty(d.dataset.diff); return; }
+    if (e.target.closest("[data-start]")) startGame();
+    if (e.target.closest("[data-resume]")) togglePause();
+  });
+
+  // ---------- Input ----------
+  const BX = 10, BW = 64, BG = 5, BH = 50, ROWY = [282, 362], SKIP = { x: 60, y: 426, w: 240, h: 34 };
+  const bRect = (row, col) => ({ x: BX + col * (BW + BG), y: ROWY[row], w: BW, h: BH });
+  window.addEventListener("keydown", (e) => {
+    const k = e.key.toLowerCase();
+    if ([" ", "arrowup", "arrowdown", "arrowleft", "arrowright"].includes(k)) e.preventDefault();
+    if (state === "menu" || state === "over") {
+      if (e.key === "Enter") startGame();
+      else if (["1", "2", "3"].includes(k)) setDifficulty(DIFF_IDS[+k - 1]);
+      return;
+    }
+    if (k === "p" || k === "escape") { if (!e.repeat) togglePause(); return; }
+    if (state === "paused") { if (e.key === "Enter") togglePause(); return; }
+    if (state === "shown") { if ((k === "enter" || k === " ") && !e.repeat) proceed(); return; }
+    if (state !== "play") return;
+    kbd = true;
+    if (k === "arrowright") { sel.col = Math.min(4, sel.col + 1); sfx.pick(); }
+    else if (k === "arrowleft") { sel.col = Math.max(0, sel.col - 1); sfx.pick(); }
+    else if (k === "arrowdown") { sel.row = Math.min(2, sel.row + 1); sfx.pick(); }
+    else if (k === "arrowup") { sel.row = Math.max(0, sel.row - 1); sfx.pick(); }
+    else if ((k === "enter" || k === " ") && !e.repeat) reply(sel.row === 2 ? null : sel.row === 0 ? 1 : 0, sel.col);
+  });
+  window.addEventListener("blur", () => { if (isPlaying()) togglePause(); });
+  const toWorld = (e) => { const rc = canvas.getBoundingClientRect(); return { x: (e.clientX - rc.left) / rc.width * W, y: (e.clientY - rc.top) / rc.height * H }; };
+  const inR = (r, p) => p.x >= r.x && p.x <= r.x + r.w && p.y >= r.y && p.y <= r.y + r.h;
+  canvas.addEventListener("pointerdown", (e) => {
+    e.preventDefault();
+    if (state === "shown") { proceed(); return; }
+    if (state !== "play") return;
+    const p = toWorld(e); kbd = false;
+    for (let row = 0; row < 2; row++) for (let col = 0; col < 5; col++) if (inR(bRect(row, col), p)) { reply(row === 0 ? 1 : 0, col); return; }
+    if (inR(SKIP, p)) reply(null, 0);
+  });
+  window.addEventListener("pointerdown", (e) => { if (e.pointerType === "touch" && !touchMode) { touchMode = true; syncControls(); if (menu) menu(); } }, true);
+
+  // ---------- Update ----------
+  function update(dt) {
+    clock += dt;
+    for (const p of popups) { p.t += dt; p.y -= 14 * dt; }
+    popups = popups.filter((p) => p.t < 1.8);
+    if (message) { message.t += dt; if (message.t > (state === "play" ? 1.8 : 2.6)) message = null; }
+    if (state === "levelup") { stateT -= dt; if (stateT <= 0) { level++; beginLevel(); } }
+    else if (state === "fail") { stateT -= dt; if (stateT <= 0) { if (lives <= 0) gameOver(); else { level++; beginLevel(); } } }
+  }
+
+  // ---------- Drawing ----------
+  function wrap(text, maxW) {
+    const out = []; let line = "";
+    for (const w of text.split(" ")) { const t = line ? line + " " + w : w; if (ctx.measureText(t).width > maxW && line) { out.push(line); line = w; } else line = t; }
+    if (line) out.push(line);
+    return out;
+  }
+  function drawCard() {
+    const done = !!answer;
+    ctx.fillStyle = "#120b2c"; ctx.beginPath(); ctx.roundRect(8, 62, W - 16, 196, 12); ctx.fill();
+    if (done) { ctx.strokeStyle = fact[1] ? "#7ee0a0" : "#ff6b7d"; ctx.lineWidth = 2; ctx.stroke(); }
+    ctx.textAlign = "center"; ctx.textBaseline = "middle";
+    ctx.fillStyle = "#a9a3cf"; ctx.font = "700 9px system-ui"; ctx.fillText(`AFFERMAZIONE ${Math.min(PER_LEVEL, qn + (done ? 0 : 1))} DI ${PER_LEVEL}`, W / 2, 78);
+    ctx.font = "800 18px system-ui"; ctx.fillStyle = "#f1eeff";
+    const lines = wrap(fact[0], W - 52), note = done && fact[2] ? (ctx.font = "700 12px system-ui", wrap(fact[2], W - 60)) : [];
+    const blockH = lines.length * 23 + (done ? 34 + note.length * 15 : 0), y0 = 86 + (152 - blockH) / 2 + 11;
+    ctx.font = "800 18px system-ui"; ctx.fillStyle = "#f1eeff";
+    lines.forEach((l, i) => ctx.fillText(l, W / 2, y0 + i * 23));
+    if (done) {
+      const y = y0 + lines.length * 23 + 8;
+      ctx.font = "900 17px system-ui"; ctx.fillStyle = fact[1] ? "#7ee0a0" : "#ff6b7d"; ctx.fillText(`${fact[1] ? "È VERO" : "È FALSO"} · ${answer.say === null ? "non ti sei sbilanciato" : `${sg(answer.p)} punti`}`, W / 2, y);
+      ctx.font = "700 12px system-ui"; ctx.fillStyle = "#a9a3cf";
+      note.forEach((l, i) => ctx.fillText(l, W / 2, y + 22 + i * 15));
+    }
+    ctx.textBaseline = "alphabetic";
+  }
+  function drawButtons() {
+    ctx.textAlign = "center"; ctx.textBaseline = "middle";
+    const live = state === "play";
+    for (let row = 0; row < 2; row++) {
+      const col0 = row === 0 ? "#7ee0a0" : "#ff6b7d";
+      ctx.textAlign = "left"; ctx.fillStyle = col0; ctx.font = "900 11px system-ui"; ctx.fillText(row === 0 ? "È VERO, E NE SONO SICURO AL…" : "È FALSO, E NE SONO SICURO AL…", BX + 2, ROWY[row] - 9);
+      ctx.textAlign = "center";
+      for (let c = 0; c < 5; c++) {
+        const r = bRect(row, c), mine = answer && answer.say === (row === 0 ? 1 : 0) && answer.ci === c, on = kbd && live && sel.row === row && sel.col === c;
+        ctx.globalAlpha = live || mine ? 1 : 0.3;
+        ctx.fillStyle = mine ? col0 : "#1a1240"; ctx.strokeStyle = on ? "#f1eeff" : col0; ctx.lineWidth = on ? 2.5 : 1.2 + c * 0.25;
+        ctx.beginPath(); ctx.roundRect(r.x, r.y, r.w, r.h, 9); ctx.fill(); ctx.stroke();
+        ctx.fillStyle = mine ? "#0d0822" : "#f1eeff"; ctx.font = "900 17px system-ui"; ctx.fillText(`${CONF[c]}%`, r.x + r.w / 2, r.y + 18);
+        ctx.font = "800 9px system-ui";
+        ctx.fillStyle = mine ? "#0d0822" : "#7ee0a0"; ctx.textAlign = "right"; ctx.fillText(`+${pts(CONF[c], true)}`, r.x + r.w / 2 - 2, r.y + 38);
+        ctx.fillStyle = mine ? "#0d0822" : "#ff6b7d"; ctx.textAlign = "left"; ctx.fillText(`−${-pts(CONF[c], false)}`, r.x + r.w / 2 + 2, r.y + 38);
+        ctx.textAlign = "center"; ctx.globalAlpha = 1;
+      }
+    }
+    const s = SKIP, mine = answer && answer.say === null, on = kbd && live && sel.row === 2;
+    ctx.globalAlpha = live || mine ? 1 : 0.3;
+    ctx.fillStyle = mine ? "#a9a3cf" : "#1a1240"; ctx.strokeStyle = on ? "#f1eeff" : "#4a3f88"; ctx.lineWidth = on ? 2.5 : 1.2;
+    ctx.beginPath(); ctx.roundRect(s.x, s.y, s.w, s.h, 9); ctx.fill(); ctx.stroke();
+    ctx.fillStyle = mine ? "#0d0822" : "#a9a3cf"; ctx.font = "800 12px system-ui"; ctx.fillText("NON LO SO: 50 E 50 · 0 punti", W / 2, s.y + s.h / 2 + 0.5);
+    ctx.globalAlpha = 1;
+    if (state === "shown") { ctx.fillStyle = ACC; ctx.font = "900 12px system-ui"; ctx.globalAlpha = 0.6 + Math.sin(clock * 5) * 0.4; ctx.fillText(touchMode ? "TOCCA PER CONTINUARE" : "CLICCA O PREMI INVIO PER CONTINUARE", W / 2, 247); ctx.globalAlpha = 1; }
+    ctx.textBaseline = "alphabetic";
+  }
+  // for each confidence: how often you were right when you said it, next to how often you should be
+  function drawCalibration() {
+    const x0 = 14, y0 = 492, h = 62, cw = (W - 28) / 5;
+    ctx.textAlign = "left"; ctx.textBaseline = "middle"; ctx.fillStyle = "#a9a3cf"; ctx.font = "700 9px system-ui";
+    ctx.fillText("LA TUA CALIBRAZIONE · la tacca gialla è dove dovresti stare", x0, y0 - 12);
+    ctx.textAlign = "center";
+    CONF.forEach((c, i) => {
+      const s = stats[i], x = x0 + i * cw + 4, w = cw - 8, f = s.n ? s.ok / s.n : 0;
+      ctx.fillStyle = "rgba(255,255,255,0.07)"; ctx.fillRect(x, y0, w, h);
+      if (s.n) { ctx.fillStyle = Math.abs(f * 100 - c) <= 12 || s.n < 3 ? "#5fe3d6" : f * 100 < c ? "#ff6b7d" : "#b79bff"; ctx.fillRect(x, y0 + h * (1 - f), w, h * f); }
+      ctx.fillStyle = "#ffd66b"; ctx.fillRect(x - 2, y0 + h * (1 - c / 100) - 1, w + 4, 2);
+      ctx.fillStyle = "#f1eeff"; ctx.font = "800 10px system-ui"; ctx.fillText(s.n ? `${s.ok} su ${s.n}` : "–", x + w / 2, y0 + h + 10);
+      ctx.fillStyle = "#a9a3cf"; ctx.font = "700 9px system-ui"; ctx.fillText(`detto ${c}%`, x + w / 2, y0 + h + 23);
+    });
+    ctx.textBaseline = "alphabetic";
+  }
+  function drawHud() {
+    ctx.fillStyle = "#0d0822"; ctx.fillRect(0, 0, W, TOP - 4);
+    ctx.textBaseline = "middle"; ctx.textAlign = "left";
+    ctx.fillStyle = "#f1eeff"; ctx.font = "900 18px system-ui"; ctx.fillText(nf(score), 12, 16);
+    ctx.fillStyle = "#a9a3cf"; ctx.font = "700 9px system-ui"; ctx.fillText(`REC ${nf(Math.max(bestCache, score))}`, 12, 36);
+    ctx.textAlign = "center"; ctx.fillStyle = ACC; ctx.font = "900 12px system-ui"; ctx.fillText(`LIVELLO ${level + 1}`, W / 2, 14);
+    const ok = levelPts >= need;
+    ctx.fillStyle = ok ? "#7ee0a0" : "#ffd66b"; ctx.font = "800 11px system-ui"; ctx.fillText(`in questo livello ${sg(levelPts)} · soglia ${need}`, W / 2, 34);
+    const ex = touchMode ? W - 62 : W - 12;
+    for (let i = 0; i < diff.lives; i++) { ctx.fillStyle = i < lives ? "#ffd66b" : "rgba(255,255,255,0.15)"; ctx.beginPath(); ctx.arc(ex - 6 - i * 13, 16, 4.5, 0, TAU); ctx.fill(); }
+    ctx.fillStyle = "rgba(255,255,255,0.12)"; ctx.fillRect(0, TOP - 4, W, 4);
+    ctx.fillStyle = ok ? "#7ee0a0" : "#ffd66b"; ctx.fillRect(0, TOP - 4, W * clamp(levelPts / need, 0, 1), 4);
+    ctx.textBaseline = "alphabetic";
+  }
+  function draw() {
+    ctx.setTransform(pxRatio, 0, 0, pxRatio, 0, 0);
+    ctx.fillStyle = "#0d0822"; ctx.fillRect(0, 0, W, H);
+    drawCard();
+    if (state === "menu") return;
+    drawButtons();
+    drawCalibration();
+    drawHud();
+    for (const p of popups) {
+      ctx.globalAlpha = clamp((1.8 - p.t) * 2, 0, 1);
+      ctx.textAlign = "center"; ctx.font = "900 16px system-ui";
+      ctx.lineWidth = 4; ctx.strokeStyle = "#0d0822"; ctx.strokeText(p.text, p.x, p.y); ctx.fillStyle = p.color; ctx.fillText(p.text, p.x, p.y);
+    }
+    ctx.globalAlpha = 1;
+    if (message) {
+      ctx.globalAlpha = Math.min(1, ((state === "play" ? 1.8 : 2.6) - message.t) * 2);
+      ctx.fillStyle = "rgba(13,8,34,0.92)"; ctx.fillRect(0, 470, W, 58);
+      ctx.textAlign = "center"; ctx.font = "900 19px system-ui"; ctx.fillStyle = message.bad ? "#ff6b7d" : ACC;
+      ctx.fillText(message.text, W / 2, 495);
+      if (message.sub) { ctx.font = "800 11px system-ui"; ctx.fillStyle = "#f1eeff"; ctx.fillText(message.sub, W / 2, 515); }
+      ctx.globalAlpha = 1;
+    }
+  }
+
+  // ---------- Loop ----------
+  let last = performance.now();
+  function frame(now) {
+    const dt = Math.min(0.1, (now - last) / 1000);
+    last = now;
+    update(dt);
+    draw();
+    requestAnimationFrame(frame);
+  }
+  buildLevel();
+  syncControls();
+  showTitle();
+  requestAnimationFrame(frame);
+})();
+</script>
+<script src="../../shared/iniziali.js" data-record="sicuro-best-" data-kind="score"></script>
+</body>
+</html>
