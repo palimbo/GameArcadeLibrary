@@ -1,0 +1,485 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no, viewport-fit=cover">
+<title>Dal Rumore</title>
+<style>
+  :root {
+    --bg: #0d0822;
+    --fg: #f1eeff;
+    --muted: #a9a3cf;
+    --cyan: #5fe3d6;
+    --yellow: #ffd66b;
+    --red: #ff6b7d;
+    --pink: #ff7a5c;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  html, body {
+    height: 100%;
+    background: var(--bg);
+    color: var(--fg);
+    font-family: system-ui, -apple-system, "Segoe UI", sans-serif;
+    overflow: hidden;
+    user-select: none;
+    -webkit-user-select: none;
+    touch-action: none;
+  }
+  #wrap { position: fixed; inset: 0; display: flex; align-items: center; justify-content: center; }
+  canvas { display: block; touch-action: none; border-radius: 6px; box-shadow: 0 0 0 2px #2a1f55, 0 10px 40px rgba(0,0,0,0.6); cursor: pointer; }
+  #pauseBtn {
+    position: fixed; z-index: 3; display: none; right: 10px; top: calc(10px + env(safe-area-inset-top, 0px));
+    font: 700 13px system-ui, sans-serif; color: var(--fg);
+    background: rgba(0, 0, 0, 0.6); border: 1px solid rgba(241, 238, 255, 0.35);
+    border-radius: 8px; padding: 6px 10px; cursor: pointer;
+  }
+  #overlay {
+    position: fixed; inset: 0; z-index: 5;
+    display: flex; flex-direction: column; align-items: center; justify-content: flex-start;
+    gap: 14px; padding: 16px; text-align: center; overflow-y: auto;
+    background: rgba(13, 8, 34, 0.93);
+  }
+  #overlay > :first-child { margin-top: auto; }
+  #overlay > :last-child { margin-bottom: auto; }
+  #overlay.hidden { display: none; }
+  #homeLink {
+    position: fixed; top: calc(10px + env(safe-area-inset-top, 0px)); left: 10px; z-index: 6;
+    font: 600 13px/1 system-ui, sans-serif; color: #fff; text-decoration: none;
+    padding: 8px 12px; border-radius: 999px; background: rgba(0,0,0,.55);
+    border: 1px solid rgba(255,255,255,.25);
+  }
+  #homeLink:hover { background: rgba(0,0,0,.8); }
+  #overlay.hidden ~ #homeLink { display: none; }
+  @media (max-width: 700px) { #overlay { padding-top: calc(52px + env(safe-area-inset-top, 0px)); } }
+  #overlay h1 { font-size: clamp(30px, 9vw, 54px); font-weight: 900; letter-spacing: 1px; color: var(--pink);
+    text-shadow: 3px 3px 0 #2a1f6a, 0 0 22px rgba(255,122,92,0.35); text-wrap: balance; }
+  #overlay h2 { font-size: clamp(24px, 7vw, 40px); font-weight: 900; letter-spacing: 2px; color: var(--pink); }
+  #overlay h2.lose { color: var(--red); }
+  #overlay p { max-width: 540px; font-size: clamp(13px, 3.4vw, 16px); line-height: 1.55; }
+  #overlay p.muted { color: var(--muted); }
+  #overlay .pts { display: grid; grid-template-columns: repeat(2, auto); gap: 4px 18px; font-size: 13px; color: var(--muted); text-align: left; max-width: 560px; }
+  #overlay .pts b { color: var(--fg); }
+  #overlay .diff { display: flex; gap: 10px; flex-wrap: wrap; justify-content: center; }
+  #overlay button {
+    font: 800 15px system-ui, sans-serif; letter-spacing: 1.5px; color: var(--fg);
+    background: transparent; cursor: pointer;
+    border: 2px solid rgba(241,238,255,0.3); border-radius: 10px; padding: 9px 16px;
+  }
+  #overlay .diff button.on { border-color: var(--c); color: var(--c); box-shadow: 0 0 12px var(--c); }
+  #overlay button.start { border-color: var(--pink); color: #2a0a04; background: var(--pink); padding: 11px 30px; box-shadow: 0 4px 0 #b84a32; }
+  @media (max-height: 560px) {
+    #overlay { gap: 8px; }
+    #overlay h1 { font-size: 28px; }
+    #overlay p { font-size: 13px; line-height: 1.4; }
+    #overlay .help, #overlay .pts { display: none; }
+  }
+</style>
+</head>
+<body>
+<div id="wrap"><canvas id="game"></canvas></div>
+<button id="pauseBtn" type="button" aria-label="Pausa">❚❚</button>
+<div id="overlay"></div>
+<a id="homeLink" href="../../index.html">← Sala Giochi</a>
+
+<script>
+(() => {
+  "use strict";
+
+  const W = 360, H = 600, TOP = 56, TAU = Math.PI * 2;
+  const ACC = "#ff7a5c", N = 24, BG = "#1b1446";
+  // how much of the picture is there at each step: from almost nothing to all of it
+  const SIGNAL = [0.03, 0.06, 0.1, 0.16, 0.24, 0.34, 0.47, 0.63, 0.8, 1], LAST = SIGNAL.length - 1;
+  const PER_LEVEL = 5;
+  const IMG = { x: 60, y: 64, s: 240 }, STEP = { x: 14, y: 330, w: 332, h: 44 };
+  // the pictures, drawn on a 24 × 24 grid
+  const ICONS = [
+    ["Casa", (R, C, P) => { R("#e8c48a", 6, 12, 12, 9); P("#e8483a", 3, 12.5, 12, 3.5, 21, 12.5); R("#7a4a2a", 10, 16, 4, 5); R("#6bb8ff", 15, 14, 2.5, 2.5); }],
+    ["Albero", (R, C) => { R("#8a5a2a", 10.5, 13, 3, 9); C("#4ac86a", 12, 9, 7); C("#7ee0a0", 10, 7, 2.5); }],
+    ["Sole", (R, C, P, E, L) => { for (let i = 0; i < 8; i++) { const a = i * TAU / 8; L("#ffd66b", 1.6, 12 + Math.cos(a) * 7.5, 12 + Math.sin(a) * 7.5, 12 + Math.cos(a) * 10.5, 12 + Math.sin(a) * 10.5); } C("#ffd66b", 12, 12, 5.5); }],
+    ["Luna", (R, C) => { C("#f1eeff", 11, 12, 8.5); C(BG, 15, 10, 7.5); }],
+    ["Cuore", (R, C, P) => { C("#ff4a6a", 8.3, 9.5, 4.6); C("#ff4a6a", 15.7, 9.5, 4.6); P("#ff4a6a", 4, 11.6, 20, 11.6, 12, 21); }],
+    ["Stella", (R, C, P) => { const p = []; for (let i = 0; i < 10; i++) { const a = -Math.PI / 2 + i * Math.PI / 5, r = i % 2 ? 4.2 : 10; p.push(12 + Math.cos(a) * r, 12.8 + Math.sin(a) * r); } P("#ffd66b", ...p); }],
+    ["Pesce", (R, C, P, E) => { P("#ff9a3a", 16, 12, 22.5, 6.5, 22.5, 17.5); E("#ff9a3a", 10.5, 12, 8, 5); C("#0d0822", 6.5, 10.5, 1.1); }],
+    ["Fungo", (R, C) => { R("#f1e4c8", 9.5, 11, 5, 9.5); C("#e8483a", 12, 11.5, 8.5, Math.PI, TAU); C("#f1eeff", 9, 7.5, 1.4); C("#f1eeff", 14.5, 6.5, 1.6); C("#f1eeff", 16.5, 10, 1); }],
+    ["Barca", (R, C, P) => { P("#b8743a", 2.5, 15, 21.5, 15, 17.5, 20.5, 6.5, 20.5); R("#f1eeff", 11.3, 3, 1.2, 12); P("#f1eeff", 13.2, 4, 20, 13.5, 13.2, 13.5); P("#6bb8ff", 10.6, 6, 10.6, 13.5, 5, 13.5); }],
+    ["Mela", (R, C, P, E) => { C("#e8483a", 12, 13.5, 7.5); R("#7a4a2a", 11.4, 3.5, 1.3, 4); E("#4ac86a", 15.5, 5.5, 2.8, 1.4); }],
+    ["Tazza", (R, C, P, E, L) => { L("#f1eeff", 1.8, 16, 11, 20, 11, 20, 16, 16, 16); R("#f1eeff", 5.5, 8, 11, 12); R("#8a5a2a", 6.8, 9.2, 8.4, 2.2); }],
+    ["Chiave", (R, C) => { C("#ffd66b", 7, 12, 5); C(BG, 7, 12, 2.2); R("#ffd66b", 11, 11, 11, 2.2); R("#ffd66b", 17, 13, 1.8, 3.2); R("#ffd66b", 20.2, 13, 1.8, 2.4); }],
+    ["Ombrello", (R, C, P, E, L) => { C("#b79bff", 12, 12, 9.5, Math.PI, TAU); R("#f1eeff", 11.5, 11.5, 1.1, 8); L("#f1eeff", 1.1, 12, 19.5, 12, 21, 10.5, 21.8, 9.5, 20.5); }],
+    ["Fiore", (R, C, P, E) => { R("#4ac86a", 11.5, 12, 1.2, 10); E("#4ac86a", 14.8, 17.5, 2.8, 1.3); for (let i = 0; i < 5; i++) { const a = i * TAU / 5 - Math.PI / 2; C("#ff9be0", 12 + Math.cos(a) * 4.2, 8.5 + Math.sin(a) * 4.2, 3); } C("#ffd66b", 12, 8.5, 2.4); }],
+    ["Razzo", (R, C, P, E) => { P("#ff9a3a", 9.5, 18, 14.5, 18, 12, 23); P("#e8483a", 8, 13, 4.5, 19.5, 8.5, 18); P("#e8483a", 16, 13, 19.5, 19.5, 15.5, 18); E("#f1eeff", 12, 11, 4.2, 8.5); C("#6bb8ff", 12, 9, 1.9); }],
+    ["Gatto", (R, C, P) => { P("#ff9a3a", 5.2, 12, 5.5, 3.5, 11, 8); P("#ff9a3a", 18.8, 12, 18.5, 3.5, 13, 8); C("#ff9a3a", 12, 13.5, 7.5); C("#0d0822", 9, 12.5, 1.2); C("#0d0822", 15, 12.5, 1.2); P("#ff9be0", 11, 15.2, 13, 15.2, 12, 16.5); }],
+    ["Pallone", (R, C, P) => { C("#f1eeff", 12, 12, 9); const p = []; for (let i = 0; i < 5; i++) { const a = -Math.PI / 2 + i * TAU / 5; p.push(12 + Math.cos(a) * 3.4, 12 + Math.sin(a) * 3.4); } P("#0d0822", ...p); for (let i = 0; i < 5; i++) { const a = -Math.PI / 2 + i * TAU / 5; C("#0d0822", 12 + Math.cos(a) * 8.2, 12 + Math.sin(a) * 8.2, 2); } }],
+    ["Gelato", (R, C, P) => { P("#e8b87a", 7.5, 12, 16.5, 12, 12, 22.5); C("#ff9be0", 12, 8.5, 6); C("#f1eeff", 10, 6.5, 1.6); }],
+    ["Lampadina", (R, C) => { R("#a9a3cf", 9.6, 15, 4.8, 5.5); C("#ffd66b", 12, 9.5, 6.8); R("#ffd66b", 9.8, 13, 4.4, 3); R("#6a6490", 9.6, 17, 4.8, 1); }],
+    ["Pioggia", (R, C, P, E, L) => { C("#f1eeff", 8, 10, 4.5); C("#f1eeff", 13, 8, 5.5); C("#f1eeff", 17.5, 10.5, 4); R("#f1eeff", 8, 10, 10, 4.5); for (const x of [7.5, 12, 16.5]) L("#6bb8ff", 1.5, x, 16.5, x - 1.5, 21); }],
+    ["Montagna", (R, C, P) => { P("#8a84b0", 10, 21, 17, 10, 23.5, 21); P("#a9a3cf", 1, 21, 9.5, 4.5, 18, 21); P("#f1eeff", 9.5, 4.5, 12.2, 9.8, 9.8, 8.6, 8, 10.2, 6.6, 10); }],
+    ["Bandiera", (R) => { R("#a9a3cf", 4, 3, 1.3, 19); R("#4ac86a", 5.3, 4, 5, 9); R("#f1eeff", 10.3, 4, 5, 9); R("#e8483a", 15.3, 4, 5, 9); }],
+    ["Orologio", (R, C, P, E, L) => { C("#6bb8ff", 12, 12, 9.5); C("#f1eeff", 12, 12, 7.6); L("#0d0822", 1.5, 12, 12, 12, 6.8); L("#0d0822", 1.5, 12, 12, 16, 13.5); }],
+    ["Cactus", (R, C, P, E, L) => { L("#4ac86a", 4.5, 12, 21, 12, 5.5); L("#4ac86a", 2.8, 12, 14, 6.5, 14, 6.5, 9.5); L("#4ac86a", 2.8, 12, 16.5, 17.5, 16.5, 17.5, 11.5); }],
+    ["Regalo", (R, C) => { R("#e8483a", 4.5, 9.5, 15, 11.5); R("#ffd66b", 11, 9.5, 2, 11.5); R("#ffd66b", 4.5, 13.5, 15, 1.8); C("#ffd66b", 9.6, 7.2, 2.4); C("#ffd66b", 14.4, 7.2, 2.4); }],
+    ["Semaforo", (R, C) => { R("#3a3466", 7.5, 1.5, 9, 21); C("#e8483a", 12, 5.5, 2.7); C("#ffd66b", 12, 12, 2.7); C("#4ac86a", 12, 18.5, 2.7); }],
+    ["Ciliegie", (R, C, P, E, L) => { L("#4ac86a", 1.3, 8, 14, 13, 4, 16.5, 14.5); C("#e8483a", 7.5, 16.5, 4.3); C("#e8483a", 16.5, 17, 4.3); E("#4ac86a", 15.5, 4.5, 2.8, 1.3); }],
+    ["Diamante", (R, C, P) => { P("#5fe3d6", 3, 9, 7.5, 4, 16.5, 4, 21, 9, 12, 21.5); P("#b8f5ee", 7.5, 4, 16.5, 4, 14.5, 9, 9.5, 9); }],
+    ["Fantasma", (R, C, P) => { C("#f1eeff", 12, 10.5, 7.5, Math.PI, TAU); P("#f1eeff", 4.5, 10.4, 19.5, 10.4, 19.5, 21, 17, 18.5, 14.5, 21, 12, 18.5, 9.5, 21, 7, 18.5, 4.5, 21); C("#0d0822", 9.3, 10.5, 1.5); C("#0d0822", 14.7, 10.5, 1.5); }],
+    ["Carota", (R, C, P) => { P("#4ac86a", 12, 8, 7.5, 2, 11, 5.5); P("#4ac86a", 12, 8, 16.5, 2, 13, 5.5); P("#4ac86a", 12, 8, 12, 1.5, 13, 5); P("#ff9a3a", 7.8, 7, 16.2, 7, 12, 22.5); }],
+  ];
+
+  const DIFFICULTIES = {
+    facile:    { label: "FACILE",    color: "#7ee0a0", desc: "tanti passi a disposizione · 4 errori concessi", steps: 36, min: 24, lives: 4 },
+    normale:   { label: "NORMALE",   color: "#ffd66b", desc: "passi contati · 3 errori concessi", steps: 30, min: 19, lives: 3 },
+    difficile: { label: "DIFFICILE", color: "#ff6b7d", desc: "pochi passi: bisogna riconoscere nel rumore · 3 errori concessi", steps: 24, min: 15, lives: 3 },
+  };
+  const DIFF_IDS = Object.keys(DIFFICULTIES);
+  const DIFF_KEY = "rumore-difficulty";
+  const bestKey = (id) => `rumore-best-${id}`;
+  function store(k, v) { try { localStorage.setItem(k, v); } catch { /* ignore */ } }
+  function load(k) { try { return localStorage.getItem(k); } catch { return null; } }
+  const rint = (a, b) => a + Math.floor(Math.random() * (b - a + 1));
+  const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
+  const nf = (n) => n.toLocaleString("it-IT");
+  const gauss = () => Math.sqrt(-2 * Math.log(1 - Math.random())) * Math.cos(TAU * Math.random());
+
+  // ---------- Canvas ----------
+  const canvas = document.getElementById("game");
+  const ctx = canvas.getContext("2d");
+  const overlay = document.getElementById("overlay");
+  const pauseBtn = document.getElementById("pauseBtn");
+  let pxRatio = 1, touchMode = !!(window.matchMedia && matchMedia("(pointer: coarse)").matches);
+  function resize() {
+    const availW = window.innerWidth - 8, availH = window.innerHeight - 8;
+    const s = Math.max(0.2, Math.min(availW / W, availH / H));
+    pxRatio = Math.min(3, s * (window.devicePixelRatio || 1));
+    canvas.style.width = W * s + "px";
+    canvas.style.height = H * s + "px";
+    canvas.width = Math.round(W * pxRatio);
+    canvas.height = Math.round(H * pxRatio);
+  }
+  window.addEventListener("resize", () => syncControls());
+
+  // ---------- Audio: soft tones ----------
+  let audioCtx = null;
+  function beep(freq, dur, type = "sine", vol = 0.05, delay = 0) {
+    if (!audioCtx) return;
+    const t = audioCtx.currentTime + delay;
+    const osc = audioCtx.createOscillator(), gain = audioCtx.createGain();
+    osc.type = type; osc.frequency.setValueAtTime(freq, t);
+    gain.gain.setValueAtTime(0.0001, t);
+    gain.gain.exponentialRampToValueAtTime(vol, t + 0.015);
+    gain.gain.exponentialRampToValueAtTime(0.0001, t + dur);
+    osc.connect(gain).connect(audioCtx.destination);
+    osc.start(t); osc.stop(t + dur + 0.02);
+  }
+  const arp = (notes, gap, d, type, vol) => notes.forEach((f, i) => beep(f, d, type, vol, i * gap));
+  const sfx = {
+    pick: () => beep(520, 0.06, "sine", 0.035),
+    step: (v) => beep(392 * Math.pow(1.09, v), 0.09, "triangle", 0.04),
+    edge: () => beep(150, 0.08, "sine", 0.045),
+    row: () => beep(880, 0.1, "sine", 0.03, 0.05),
+    win: () => arp([523, 659, 784, 1047], 0.09, 0.35),
+    perfect: () => arp([523, 659, 784, 1047, 1319, 1568], 0.07, 0.4),
+    fail: () => arp([392, 330, 277], 0.14, 0.35, "triangle", 0.05),
+    lose: () => arp([392, 330, 277, 220], 0.16, 0.4, "triangle", 0.05),
+  };
+
+  // ---------- Pictures ----------
+  const pix = document.createElement("canvas"); pix.width = pix.height = N;
+  const pctx = pix.getContext("2d", { willReadFrequently: true });
+  // every icon as numbers between −1 and 1, three per pixel
+  const CLEAN = ICONS.map(([, fn]) => {
+    const g = pctx;
+    g.setTransform(1, 0, 0, 1, 0, 0); g.fillStyle = BG; g.fillRect(0, 0, N, N); g.lineCap = "round"; g.lineJoin = "round";
+    const R = (c, x, y, w, h) => { g.fillStyle = c; g.fillRect(x, y, w, h); };
+    const C = (c, x, y, r, a0 = 0, a1 = TAU) => { g.fillStyle = c; g.beginPath(); g.arc(x, y, r, a0, a1); g.fill(); };
+    const E = (c, x, y, rx, ry) => { g.fillStyle = c; g.beginPath(); g.ellipse(x, y, rx, ry, 0, 0, TAU); g.fill(); };
+    const P = (c, ...p) => { g.fillStyle = c; g.beginPath(); for (let i = 0; i < p.length; i += 2) g.lineTo(p[i], p[i + 1]); g.closePath(); g.fill(); };
+    const L = (c, w, ...p) => { g.strokeStyle = c; g.lineWidth = w; g.beginPath(); for (let i = 0; i < p.length; i += 2) g.lineTo(p[i], p[i + 1]); g.stroke(); };
+    fn(R, C, P, E, L);
+    const d = g.getImageData(0, 0, N, N).data, out = new Float32Array(N * N * 3);
+    for (let i = 0; i < N * N; i++) for (let k = 0; k < 3; k++) out[i * 3 + k] = d[i * 4 + k] / 127.5 - 1;
+    return out;
+  });
+  const frameData = pctx.createImageData(N, N);
+
+  // ---------- State ----------
+  let difficulty = DIFFICULTIES[load(DIFF_KEY)] ? load(DIFF_KEY) : "normale";
+  let diff = DIFFICULTIES[difficulty];
+  let state = "menu", menu = null, pausedFrom = null, stateT = 0, clock = 0;
+  let score = 0, level = 0, bestCache = 0, cleared = 0, found = 0, early = 0, lives = 0;
+  let icon = 0, noise = new Float32Array(N * N * 3), step = 0, shown = -1, opts = [], budget = 0, imgN = 0, sel = 0, kbd = false, recent = [];
+  let popups = [], message = null;
+  const isPlaying = () => ["play", "reveal", "levelup", "fail"].includes(state);
+  const nOpts = () => (level < 2 ? 4 : level < 4 ? 5 : level < 7 ? 6 : 8);
+
+  function buildLevel() {
+    budget = Math.max(diff.min, diff.steps - level);
+    imgN = 0;
+    nextImage();
+  }
+  function nextImage() {
+    do icon = rint(0, ICONS.length - 1); while (recent.includes(icon));
+    recent.push(icon); if (recent.length > 14) recent.shift();
+    for (let i = 0; i < noise.length; i++) noise[i] = gauss();
+    const others = ICONS.map((_, i) => i).filter((i) => i !== icon);
+    for (let i = others.length - 1; i > 0; i--) { const j = rint(0, i); [others[i], others[j]] = [others[j], others[i]]; }
+    opts = [icon, ...others.slice(0, nOpts() - 1)].map((id) => ({ id, out: false, shake: 0 }));
+    for (let i = opts.length - 1; i > 0; i--) { const j = rint(0, i); [opts[i], opts[j]] = [opts[j], opts[i]]; }
+    step = 0; shown = -1; sel = 0;
+  }
+  // the picture at this step: a little of the real thing under a lot of noise, as in a diffusion model
+  function render(s) {
+    const a = SIGNAL[s], ka = Math.sqrt(a), kn = Math.sqrt(1 - a), x0 = CLEAN[icon], d = frameData.data;
+    for (let i = 0; i < N * N; i++) {
+      for (let k = 0; k < 3; k++) d[i * 4 + k] = clamp((ka * x0[i * 3 + k] + kn * 0.8 * noise[i * 3 + k] + 1) * 127.5, 0, 255);
+      d[i * 4 + 3] = 255;
+    }
+    pctx.putImageData(frameData, 0, 0);
+    shown = s;
+  }
+  function startGame() {
+    if (!audioCtx) { try { audioCtx = new (window.AudioContext || window.webkitAudioContext)(); } catch { audioCtx = null; } }
+    if (audioCtx && audioCtx.state === "suspended") audioCtx.resume();
+    score = 0; level = 0; cleared = 0; found = 0; early = 0; lives = diff.lives; popups = [];
+    bestCache = parseInt(load(bestKey(difficulty)), 10) || 0;
+    beginLevel();
+    menu = null;
+    overlay.classList.add("hidden");
+    syncControls();
+    last = performance.now();
+  }
+  function beginLevel() {
+    buildLevel();
+    state = "play";
+    message = { text: `LIVELLO ${level + 1}`, sub: `${PER_LEVEL} immagini, ${budget} passi per togliere il rumore`, t: 0 };
+  }
+  function addScore(k, y, color, label = "") { score += k; popups.push({ text: `${label}+${nf(k)}`, x: W / 2, y, t: 0, color }); }
+  function denoise() {
+    if (state !== "play" || step >= LAST || budget <= 0) { if (state === "play") sfx.edge(); return; }
+    step++; budget--;
+    sfx.step(step - 4);
+  }
+  function guess(i) {
+    const o = opts[i];
+    if (state !== "play" || !o || o.out) return;
+    if (o.id === icon) {
+      const p = 100 + 40 * (LAST - step);
+      found++; if (step <= 3) early++;
+      addScore(p, 300, step <= 3 ? "#5fe3d6" : ACC, step <= 3 ? "nel rumore · " : "");
+      (step <= 3 ? sfx.perfect : sfx.row)();
+      step = LAST; state = "reveal"; stateT = 1.5; message = null;
+    } else {
+      o.out = true; o.shake = 1; lives--;
+      if (lives <= 0) { sfx.lose(); step = LAST; state = "fail"; stateT = 2.8; message = { text: "NON ERA QUELLA", sub: `era: ${ICONS[icon][0].toLowerCase()}`, t: 0, bad: true }; }
+      else { sfx.fail(); message = { text: "NON È QUELLA", sub: "un errore concesso in meno", t: 0, bad: true }; }
+    }
+  }
+  function afterReveal() {
+    imgN++;
+    if (imgN < PER_LEVEL) { nextImage(); state = "play"; return; }
+    state = "levelup"; stateT = 2.6; cleared++;
+    addScore(100 * (level + 1), 300, ACC, "livello · ");
+    if (budget > 0) addScore(20 * budget, 278, "#ffd66b", `${budget} ${budget === 1 ? "passo avanzato" : "passi avanzati"} · `);
+    sfx.win();
+    message = { text: "LIVELLO SUPERATO", sub: "le prossime hanno meno passi", t: 0 };
+  }
+  function gameOver() {
+    state = "over";
+    const prev = parseInt(load(bestKey(difficulty)), 10) || 0;
+    const record = score > prev;
+    if (record) store(bestKey(difficulty), String(score));
+    menu = () => showOverlay(
+      `<h2 class="lose">SOLO RUMORE</h2>
+       <p>Punteggio: <b>${nf(score)}</b> · ${found} ${found === 1 ? "immagine riconosciuta" : "immagini riconosciute"}${early ? `, ${early} quando era ancora quasi tutto rumore` : ""} · ${diff.label}</p>
+       <p class="muted">I modelli che disegnano fanno il percorso al contrario: partono dal rumore e, un passo alla volta, tolgono quello che non somiglia a niente.</p>
+       ${record ? "<p style='color:var(--yellow)'>★ NUOVO RECORD! ★</p>" : ""}
+       ${difficultyHTML()}
+       <button class="start" data-start>RIPROVA</button>`
+    );
+    menu();
+    syncControls();
+  }
+  function togglePause() {
+    if (isPlaying()) {
+      pausedFrom = state; state = "paused";
+      showOverlay(`<h2>PAUSA</h2><button class="start" data-resume>CONTINUA</button><p class="muted">Premi P per continuare</p>`);
+    } else if (state === "paused") {
+      state = pausedFrom; overlay.classList.add("hidden"); last = performance.now();
+    }
+    syncControls();
+  }
+  // the pause menu can end the game (shared/iniziali.js): it ends here the usual way, saving the record
+  window.addEventListener("sala:termina", () => { if (state !== "paused") return; overlay.classList.add("hidden"); gameOver(); syncControls(); });
+  function syncControls() {
+    pauseBtn.style.display = isPlaying() && touchMode ? "block" : "none";
+    resize();
+  }
+  pauseBtn.addEventListener("click", () => togglePause());
+  function showOverlay(html) { overlay.innerHTML = html; overlay.classList.remove("hidden"); }
+  function difficultyHTML() {
+    const buttons = DIFF_IDS.map((id) => {
+      const d = DIFFICULTIES[id];
+      return `<button type="button" data-diff="${id}" class="${id === difficulty ? "on" : ""}" style="--c:${d.color}">${d.label}</button>`;
+    }).join("");
+    const best = parseInt(load(bestKey(difficulty)), 10);
+    return `<div class="diff">${buttons}</div><p class="muted">${diff.desc}${best ? ` · Record: ${nf(best)}` : ""}</p>`;
+  }
+  function setDifficulty(id) { if (!DIFFICULTIES[id]) return; difficulty = id; diff = DIFFICULTIES[id]; store(DIFF_KEY, id); if (state === "menu") buildLevel(); if (menu) menu(); }
+  function showTitle() {
+    menu = showTitle;
+    showOverlay(
+      `<h1>DAL RUMORE</h1>
+       <p>Un'immagine generata nasce così: si parte da puro rumore e lo si toglie un passo alla volta, finché resta una figura. Qui la figura c'è già, sepolta: togli rumore finché la riconosci, poi di' che cos'è. Prima la riconosci, più vale; ma i passi sono contati e devono bastare per tutte le immagini del livello.</p>
+       <div class="pts">
+         <span><b>Passi</b></span><span>ogni passo toglie un po' di rumore; la scorta vale per le ${PER_LEVEL} immagini del livello</span>
+         <span><b>Risposta</b></span><span>scegli tra i nomi quando vuoi: se sbagli perdi uno degli errori concessi</span>
+         <span><b>Punti</b></span><span>100 più 40 per ogni passo risparmiato su quell'immagine · 100 × livello · 20 per ogni passo avanzato</span>
+       </div>
+       ${touchMode
+         ? `<p class="muted help">Tocca TOGLI RUMORE per fare un passo · tocca un nome per rispondere</p>`
+         : `<p class="muted help">Spazio toglie rumore · clicca un nome, oppure frecce e Invio, oppure i tasti 1–8 · P pausa</p>`}
+       ${difficultyHTML()}
+       <button class="start" data-start>PRIMA IMMAGINE</button>`
+    );
+  }
+  overlay.addEventListener("click", (e) => {
+    const d = e.target.closest("[data-diff]");
+    if (d) { setDifficulty(d.dataset.diff); return; }
+    if (e.target.closest("[data-start]")) startGame();
+    if (e.target.closest("[data-resume]")) togglePause();
+  });
+
+  // ---------- Input ----------
+  const oRect = (i) => ({ x: 14 + (i % 2) * 168, y: 386 + Math.floor(i / 2) * 44, w: 164, h: 38 });
+  window.addEventListener("keydown", (e) => {
+    const k = e.key.toLowerCase();
+    if ([" ", "arrowup", "arrowdown", "arrowleft", "arrowright"].includes(k)) e.preventDefault();
+    if (state === "menu" || state === "over") {
+      if (e.key === "Enter") startGame();
+      else if (["1", "2", "3"].includes(k)) setDifficulty(DIFF_IDS[+k - 1]);
+      return;
+    }
+    if (k === "p" || k === "escape") { if (!e.repeat) togglePause(); return; }
+    if (state === "paused") { if (e.key === "Enter") togglePause(); return; }
+    if (state !== "play") return;
+    const mv = { arrowright: 1, arrowleft: -1, arrowdown: 2, arrowup: -2 }[k];
+    if (mv) { kbd = true; const t = sel + mv; if (t >= 0 && t < opts.length) sel = t; sfx.pick(); }
+    else if (k === " " && !e.repeat) denoise();
+    else if (k === "enter" && !e.repeat) { kbd = true; guess(sel); }
+    else if (k >= "1" && k <= "8" && !e.repeat) guess(+k - 1);
+  });
+  window.addEventListener("blur", () => { if (isPlaying()) togglePause(); });
+  const toWorld = (e) => { const rc = canvas.getBoundingClientRect(); return { x: (e.clientX - rc.left) / rc.width * W, y: (e.clientY - rc.top) / rc.height * H }; };
+  const inR = (r, p) => p.x >= r.x && p.x <= r.x + r.w && p.y >= r.y && p.y <= r.y + r.h;
+  canvas.addEventListener("pointerdown", (e) => {
+    e.preventDefault();
+    if (state !== "play") return;
+    const p = toWorld(e); kbd = false;
+    if (inR(STEP, p)) { denoise(); return; }
+    for (let i = 0; i < opts.length; i++) if (inR(oRect(i), p)) { guess(i); return; }
+  });
+  window.addEventListener("pointerdown", (e) => { if (e.pointerType === "touch" && !touchMode) { touchMode = true; syncControls(); if (menu) menu(); } }, true);
+
+  // ---------- Update ----------
+  function update(dt) {
+    clock += dt;
+    for (const p of popups) { p.t += dt; p.y -= 14 * dt; }
+    popups = popups.filter((p) => p.t < 1.8);
+    for (const o of opts) o.shake = Math.max(0, o.shake - dt * 3);
+    if (message) { message.t += dt; if (message.t > (state === "play" ? 1.8 : 2.6)) message = null; }
+    if (state === "reveal") { stateT -= dt; if (stateT <= 0) afterReveal(); }
+    else if (state === "levelup") { stateT -= dt; if (stateT <= 0) { level++; beginLevel(); } }
+    else if (state === "fail") { stateT -= dt; if (stateT <= 0) gameOver(); }
+  }
+
+  // ---------- Drawing ----------
+  function drawImage() {
+    if (shown !== step) render(step);
+    ctx.fillStyle = "#120b2c"; ctx.beginPath(); ctx.roundRect(IMG.x - 8, IMG.y - 6, IMG.s + 16, IMG.s + 12, 12); ctx.fill();
+    ctx.imageSmoothingEnabled = false;
+    ctx.drawImage(pix, IMG.x, IMG.y, IMG.s, IMG.s);
+    ctx.imageSmoothingEnabled = true;
+    if (state === "menu") return;
+    // the steps taken on this picture
+    for (let i = 0; i <= LAST; i++) { ctx.fillStyle = i <= step ? ACC : "rgba(255,255,255,0.15)"; ctx.beginPath(); ctx.arc(W / 2 + (i - LAST / 2) * 14, 318, i === step ? 4 : 2.6, 0, TAU); ctx.fill(); }
+    ctx.textAlign = "left"; ctx.textBaseline = "middle"; ctx.fillStyle = "#a9a3cf"; ctx.font = "700 9px system-ui";
+    ctx.save(); ctx.translate(34, IMG.y + IMG.s / 2); ctx.rotate(-Math.PI / 2); ctx.textAlign = "center"; ctx.fillText(`IMMAGINE ${Math.min(PER_LEVEL, imgN + 1)} DI ${PER_LEVEL}`, 0, 0); ctx.restore();
+    ctx.save(); ctx.translate(W - 34, IMG.y + IMG.s / 2); ctx.rotate(Math.PI / 2); ctx.textAlign = "center"; ctx.fillText(step >= LAST ? "PULITA" : `VALE ${100 + 40 * (LAST - step)} PUNTI`, 0, 0); ctx.restore();
+    ctx.textBaseline = "alphabetic";
+  }
+  function drawControls() {
+    ctx.textAlign = "center"; ctx.textBaseline = "middle";
+    const b = STEP, can = state === "play" && step < LAST && budget > 0;
+    ctx.globalAlpha = can ? 1 : 0.35;
+    ctx.fillStyle = "#b84a32"; ctx.beginPath(); ctx.roundRect(b.x, b.y + 4, b.w, b.h - 4, 11); ctx.fill();
+    ctx.fillStyle = ACC; ctx.beginPath(); ctx.roundRect(b.x, b.y, b.w, b.h - 5, 11); ctx.fill();
+    ctx.fillStyle = "#2a0a04"; ctx.font = "900 15px system-ui";
+    ctx.fillText(budget <= 0 && step < LAST ? "PASSI FINITI: DEVI RISPONDERE" : step >= LAST ? "NIENTE PIÙ RUMORE" : "TOGLI RUMORE · −1 passo", W / 2, b.y + 19.5);
+    ctx.globalAlpha = 1;
+    opts.forEach((o, i) => {
+      const r = oRect(i), on = kbd && sel === i && state === "play", right = (state === "reveal" || state === "fail" || state === "levelup") && o.id === icon;
+      const dx = Math.sin(o.shake * 30) * o.shake * 4;
+      ctx.globalAlpha = o.out ? 0.35 : 1;
+      ctx.fillStyle = right ? "#7ee0a0" : "#1a1240"; ctx.strokeStyle = on ? "#f1eeff" : o.out ? "#ff6b7d" : right ? "#7ee0a0" : "#4a3f88"; ctx.lineWidth = on ? 2.5 : 1.5;
+      ctx.beginPath(); ctx.roundRect(r.x + dx, r.y, r.w, r.h, 9); ctx.fill(); ctx.stroke();
+      ctx.fillStyle = right ? "#0d0822" : "#f1eeff"; ctx.font = "800 14px system-ui"; ctx.fillText(ICONS[o.id][0], r.x + r.w / 2 + dx, r.y + r.h / 2 + 0.5);
+      if (!touchMode) { ctx.fillStyle = right ? "#0d0822" : "#6a6490"; ctx.font = "700 9px system-ui"; ctx.textAlign = "left"; ctx.fillText(String(i + 1), r.x + 7 + dx, r.y + 10); ctx.textAlign = "center"; }
+      if (o.out) { ctx.strokeStyle = "#ff6b7d"; ctx.lineWidth = 1.5; ctx.beginPath(); ctx.moveTo(r.x + 30, r.y + r.h / 2); ctx.lineTo(r.x + r.w - 30, r.y + r.h / 2); ctx.stroke(); }
+      ctx.globalAlpha = 1;
+    });
+    ctx.textBaseline = "alphabetic";
+  }
+  function drawHud() {
+    ctx.fillStyle = "#0d0822"; ctx.fillRect(0, 0, W, TOP - 4);
+    ctx.textBaseline = "middle"; ctx.textAlign = "left";
+    ctx.fillStyle = "#f1eeff"; ctx.font = "900 18px system-ui"; ctx.fillText(nf(score), 12, 16);
+    ctx.fillStyle = "#a9a3cf"; ctx.font = "700 9px system-ui"; ctx.fillText(`REC ${nf(Math.max(bestCache, score))}`, 12, 36);
+    ctx.textAlign = "center"; ctx.fillStyle = ACC; ctx.font = "900 12px system-ui"; ctx.fillText(`LIVELLO ${level + 1}`, W / 2, 14);
+    const left = PER_LEVEL - imgN, tot = Math.max(diff.min, diff.steps - level);
+    ctx.fillStyle = budget <= 2 ? "#ff6b7d" : "#ffd66b"; ctx.font = "800 11px system-ui"; ctx.fillText(`${budget} ${budget === 1 ? "passo" : "passi"} per ${left} ${left === 1 ? "immagine" : "immagini"}`, W / 2, 34);
+    const ex = touchMode ? W - 62 : W - 12;
+    for (let i = 0; i < diff.lives; i++) { ctx.fillStyle = i < lives ? "#ffd66b" : "rgba(255,255,255,0.15)"; ctx.beginPath(); ctx.arc(ex - 6 - i * 13, 16, 4.5, 0, TAU); ctx.fill(); }
+    ctx.fillStyle = "rgba(255,255,255,0.12)"; ctx.fillRect(0, TOP - 4, W, 4);
+    ctx.fillStyle = budget <= 2 ? "#ff6b7d" : "#ffd66b"; ctx.fillRect(0, TOP - 4, W * budget / tot, 4);
+    ctx.textBaseline = "alphabetic";
+  }
+  function draw() {
+    ctx.setTransform(pxRatio, 0, 0, pxRatio, 0, 0);
+    ctx.fillStyle = "#0d0822"; ctx.fillRect(0, 0, W, H);
+    drawImage();
+    if (state === "menu") return;
+    drawControls();
+    drawHud();
+    for (const p of popups) {
+      ctx.globalAlpha = clamp((1.8 - p.t) * 2, 0, 1);
+      ctx.textAlign = "center"; ctx.font = "900 15px system-ui";
+      ctx.lineWidth = 4; ctx.strokeStyle = "#0d0822"; ctx.strokeText(p.text, p.x, p.y); ctx.fillStyle = p.color; ctx.fillText(p.text, p.x, p.y);
+    }
+    ctx.globalAlpha = 1;
+    if (message) {
+      ctx.globalAlpha = Math.min(1, ((state === "play" ? 1.8 : 2.6) - message.t) * 2);
+      ctx.fillStyle = "rgba(13,8,34,0.92)"; ctx.fillRect(0, 322, W, 58);
+      ctx.textAlign = "center"; ctx.font = "900 19px system-ui"; ctx.fillStyle = message.bad ? "#ff6b7d" : ACC;
+      ctx.fillText(message.text, W / 2, 347);
+      if (message.sub) { ctx.font = "800 11px system-ui"; ctx.fillStyle = "#f1eeff"; ctx.fillText(message.sub, W / 2, 367); }
+      ctx.globalAlpha = 1;
+    }
+  }
+
+  // ---------- Loop ----------
+  let last = performance.now();
+  function frame(now) {
+    const dt = Math.min(0.1, (now - last) / 1000);
+    last = now;
+    update(dt);
+    draw();
+    requestAnimationFrame(frame);
+  }
+  buildLevel();
+  syncControls();
+  showTitle();
+  requestAnimationFrame(frame);
+})();
+</script>
+<script src="../../shared/iniziali.js" data-record="rumore-best-" data-kind="score"></script>
+</body>
+</html>
