@@ -1,0 +1,466 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no, viewport-fit=cover">
+<title>Generazioni</title>
+<style>
+  :root {
+    --bg: #0d0822;
+    --fg: #f1eeff;
+    --muted: #a9a3cf;
+    --cyan: #5fe3d6;
+    --yellow: #ffd66b;
+    --red: #ff6b7d;
+    --pink: #ffb347;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  html, body {
+    height: 100%;
+    background: var(--bg);
+    color: var(--fg);
+    font-family: system-ui, -apple-system, "Segoe UI", sans-serif;
+    overflow: hidden;
+    user-select: none;
+    -webkit-user-select: none;
+    touch-action: none;
+  }
+  #wrap { position: fixed; inset: 0; display: flex; align-items: center; justify-content: center; }
+  canvas { display: block; touch-action: none; border-radius: 6px; box-shadow: 0 0 0 2px #2a1f55, 0 10px 40px rgba(0,0,0,0.6); cursor: pointer; }
+  #pauseBtn {
+    position: fixed; z-index: 3; display: none; right: 10px; top: calc(10px + env(safe-area-inset-top, 0px));
+    font: 700 13px system-ui, sans-serif; color: var(--fg);
+    background: rgba(0, 0, 0, 0.6); border: 1px solid rgba(241, 238, 255, 0.35);
+    border-radius: 8px; padding: 6px 10px; cursor: pointer;
+  }
+  #overlay {
+    position: fixed; inset: 0; z-index: 5;
+    display: flex; flex-direction: column; align-items: center; justify-content: flex-start;
+    gap: 14px; padding: 16px; text-align: center; overflow-y: auto;
+    background: rgba(13, 8, 34, 0.93);
+  }
+  #overlay > :first-child { margin-top: auto; }
+  #overlay > :last-child { margin-bottom: auto; }
+  #overlay.hidden { display: none; }
+  #homeLink {
+    position: fixed; top: calc(10px + env(safe-area-inset-top, 0px)); left: 10px; z-index: 6;
+    font: 600 13px/1 system-ui, sans-serif; color: #fff; text-decoration: none;
+    padding: 8px 12px; border-radius: 999px; background: rgba(0,0,0,.55);
+    border: 1px solid rgba(255,255,255,.25);
+  }
+  #homeLink:hover { background: rgba(0,0,0,.8); }
+  #overlay.hidden ~ #homeLink { display: none; }
+  @media (max-width: 700px) { #overlay { padding-top: calc(52px + env(safe-area-inset-top, 0px)); } }
+  #overlay h1 { font-size: clamp(30px, 9vw, 54px); font-weight: 900; letter-spacing: 1px; color: var(--pink);
+    text-shadow: 3px 3px 0 #2a1f6a, 0 0 22px rgba(255,179,71,0.35); text-wrap: balance; }
+  #overlay h2 { font-size: clamp(24px, 7vw, 40px); font-weight: 900; letter-spacing: 2px; color: var(--pink); }
+  #overlay h2.lose { color: var(--red); }
+  #overlay p { max-width: 540px; font-size: clamp(13px, 3.4vw, 16px); line-height: 1.55; }
+  #overlay p.muted { color: var(--muted); }
+  #overlay .pts { display: grid; grid-template-columns: repeat(2, auto); gap: 4px 18px; font-size: 13px; color: var(--muted); text-align: left; max-width: 560px; }
+  #overlay .pts b { color: var(--fg); }
+  #overlay .diff { display: flex; gap: 10px; flex-wrap: wrap; justify-content: center; }
+  #overlay button {
+    font: 800 15px system-ui, sans-serif; letter-spacing: 1.5px; color: var(--fg);
+    background: transparent; cursor: pointer;
+    border: 2px solid rgba(241,238,255,0.3); border-radius: 10px; padding: 9px 16px;
+  }
+  #overlay .diff button.on { border-color: var(--c); color: var(--c); box-shadow: 0 0 12px var(--c); }
+  #overlay button.start { border-color: var(--pink); color: #2a1804; background: var(--pink); padding: 11px 30px; box-shadow: 0 4px 0 #b87a22; }
+  @media (max-height: 560px) {
+    #overlay { gap: 8px; }
+    #overlay h1 { font-size: 28px; }
+    #overlay p { font-size: 13px; line-height: 1.4; }
+    #overlay .help, #overlay .pts { display: none; }
+  }
+</style>
+</head>
+<body>
+<div id="wrap"><canvas id="game"></canvas></div>
+<button id="pauseBtn" type="button" aria-label="Pausa">❚❚</button>
+<div id="overlay"></div>
+<a id="homeLink" href="../../index.html">← Sala Giochi</a>
+
+<script>
+(() => {
+  "use strict";
+
+  const W = 360, H = 600, TOP = 56, TAU = Math.PI * 2;
+  const ACC = "#ffb347", POP = 8, GMAX = 7;
+  // six genes, each from 0 to 7: size, colour, spikes, eyes, legs, shape
+  const GENES = ["taglia", "colore", "spine", "occhi", "zampe", "forma"];
+  const ORDER = [0, 1, 2, 5, 3, 4];   // the order in which genes come into play
+  const HUES = ["#ff5a6a", "#ff9a4a", "#ffd66b", "#a8e06b", "#4fd6a8", "#5fb8ff", "#8f8bff", "#e98bff"];
+  const BTN = { x: 14, y: 410, w: 332, h: 50 };
+
+  const DIFFICULTIES = {
+    facile:    { label: "FACILE",    color: "#7ee0a0", desc: "14 generazioni, la somiglianza è scritta · 4 errori concessi", gens: 14, min: 10, tol: 3, show: true, lives: 4 },
+    normale:   { label: "NORMALE",   color: "#ffd66b", desc: "12 generazioni, si giudica a occhio · 3 errori concessi", gens: 12, min: 8, tol: 2, lives: 3 },
+    difficile: { label: "DIFFICILE", color: "#ff6b7d", desc: "10 generazioni e una copia quasi perfetta · 3 errori concessi", gens: 10, min: 7, tol: 1, lives: 3 },
+  };
+  const DIFF_IDS = Object.keys(DIFFICULTIES);
+  const DIFF_KEY = "generazioni-difficulty";
+  const bestKey = (id) => `generazioni-best-${id}`;
+  function store(k, v) { try { localStorage.setItem(k, v); } catch { /* ignore */ } }
+  function load(k) { try { return localStorage.getItem(k); } catch { return null; } }
+  const rint = (a, b) => a + Math.floor(Math.random() * (b - a + 1));
+  const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
+  const nf = (n) => n.toLocaleString("it-IT");
+
+  // ---------- Canvas ----------
+  const canvas = document.getElementById("game");
+  const ctx = canvas.getContext("2d");
+  const overlay = document.getElementById("overlay");
+  const pauseBtn = document.getElementById("pauseBtn");
+  let pxRatio = 1, touchMode = !!(window.matchMedia && matchMedia("(pointer: coarse)").matches);
+  function resize() {
+    const availW = window.innerWidth - 8, availH = window.innerHeight - 8;
+    const s = Math.max(0.2, Math.min(availW / W, availH / H));
+    pxRatio = Math.min(3, s * (window.devicePixelRatio || 1));
+    canvas.style.width = W * s + "px";
+    canvas.style.height = H * s + "px";
+    canvas.width = Math.round(W * pxRatio);
+    canvas.height = Math.round(H * pxRatio);
+  }
+  window.addEventListener("resize", () => syncControls());
+
+  // ---------- Audio: soft tones ----------
+  let audioCtx = null;
+  function beep(freq, dur, type = "sine", vol = 0.05, delay = 0) {
+    if (!audioCtx) return;
+    const t = audioCtx.currentTime + delay;
+    const osc = audioCtx.createOscillator(), gain = audioCtx.createGain();
+    osc.type = type; osc.frequency.setValueAtTime(freq, t);
+    gain.gain.setValueAtTime(0.0001, t);
+    gain.gain.exponentialRampToValueAtTime(vol, t + 0.015);
+    gain.gain.exponentialRampToValueAtTime(0.0001, t + dur);
+    osc.connect(gain).connect(audioCtx.destination);
+    osc.start(t); osc.stop(t + dur + 0.02);
+  }
+  const arp = (notes, gap, d, type, vol) => notes.forEach((f, i) => beep(f, d, type, vol, i * gap));
+  const sfx = {
+    pick: () => beep(520, 0.06, "sine", 0.035),
+    step: (v) => beep(392 * Math.pow(1.09, v), 0.09, "triangle", 0.04),
+    edge: () => beep(150, 0.08, "sine", 0.045),
+    row: () => beep(880, 0.1, "sine", 0.03, 0.05),
+    win: () => arp([523, 659, 784, 1047], 0.09, 0.35),
+    perfect: () => arp([523, 659, 784, 1047, 1319, 1568], 0.07, 0.4),
+    fail: () => arp([392, 330, 277], 0.14, 0.35, "triangle", 0.05),
+    lose: () => arp([392, 330, 277, 220], 0.16, 0.4, "triangle", 0.05),
+  };
+
+  // ---------- State ----------
+  let difficulty = DIFFICULTIES[load(DIFF_KEY)] ? load(DIFF_KEY) : "normale";
+  let diff = DIFFICULTIES[difficulty];
+  let state = "menu", menu = null, pausedFrom = null, stateT = 0, clock = 0;
+  let score = 0, level = 0, bestCache = 0, cleared = 0, exacts = 0, lives = 0;
+  let target = [], pop = [], picks = [], gen = 0, maxGen = 10, active = 4, tol = 1, mut = 0.2, cur = 0, kbd = false, history = [], winner = -1;
+  let popups = [], message = null;
+  const isPlaying = () => ["play", "levelup", "fail"].includes(state);
+
+  // ---------- Genes ----------
+  const live = () => ORDER.slice(0, active);
+  const dist = (g) => live().reduce((k, i) => k + Math.abs(g[i] - target[i]), 0);
+  const like = (g) => Math.round(100 * (1 - dist(g) / (active * GMAX)));
+  const randomGenes = () => { const g = Array(6).fill(3); for (const i of live()) g[i] = rint(0, GMAX); return g; };
+  // a child takes each gene from one parent or the other, and now and then a gene slips by one
+  function child(a, b) {
+    const g = Array(6).fill(3);
+    for (const i of live()) { g[i] = Math.random() < 0.5 ? a[i] : b[i]; if (Math.random() < mut) g[i] = clamp(g[i] + (Math.random() < 0.5 ? -1 : 1), 0, GMAX); }
+    return g;
+  }
+  function buildLevel() {
+    active = level < 2 ? 4 : level < 4 ? 5 : 6;
+    maxGen = Math.max(diff.min, diff.gens - Math.floor(level / 3));
+    tol = Math.max(0, diff.tol - Math.floor(level / 6));
+    mut = 0.2;
+    target = randomGenes();
+    // a first litter with nobody close to the model
+    do pop = Array.from({ length: POP }, () => ({ g: randomGenes(), t: Math.random() })); while (pop.some((c) => dist(c.g) < active * 1.6));
+    picks = []; gen = 0; cur = 0; history = []; winner = -1;
+  }
+  function startGame() {
+    if (!audioCtx) { try { audioCtx = new (window.AudioContext || window.webkitAudioContext)(); } catch { audioCtx = null; } }
+    if (audioCtx && audioCtx.state === "suspended") audioCtx.resume();
+    score = 0; level = 0; cleared = 0; exacts = 0; lives = diff.lives; popups = [];
+    bestCache = parseInt(load(bestKey(difficulty)), 10) || 0;
+    beginLevel();
+    menu = null;
+    overlay.classList.add("hidden");
+    syncControls();
+    last = performance.now();
+  }
+  function beginLevel() {
+    buildLevel();
+    state = "play";
+    message = { text: `LIVELLO ${level + 1}`, sub: `${maxGen} generazioni per ${tol === 0 ? "la copia esatta" : "una copia quasi uguale"} del modello`, t: 0 };
+  }
+  function addScore(k, y, color, label = "") { score += k; popups.push({ text: `${label}+${nf(k)}`, x: W / 2, y, t: 0, color }); }
+  function pick(i) {
+    if (state !== "play" || !pop[i]) return;
+    const at = picks.indexOf(i);
+    if (at >= 0) picks.splice(at, 1); else { picks.push(i); if (picks.length > 2) picks.shift(); }
+    sfx.pick();
+  }
+  function breed() {
+    if (state !== "play" || picks.length < 2) { if (state === "play") sfx.edge(); return; }
+    const a = pop[picks[0]].g, b = pop[picks[1]].g;
+    history.push([a, b]);
+    // the two parents stay, six children join them
+    pop = [{ g: a, parent: true, t: 0 }, { g: b, parent: true, t: 0 }, ...Array.from({ length: POP - 2 }, (_, i) => ({ g: child(a, b), t: 0, born: 1 + i * 0.08 }))];
+    picks = []; gen++; cur = 0;
+    sfx.step(gen - 4);
+    let bi = 0; pop.forEach((c, i) => { if (dist(c.g) < dist(pop[bi].g)) bi = i; });
+    if (dist(pop[bi].g) <= tol) { winner = bi; win(); }
+    else if (gen >= maxGen) { winner = bi; lose(); }
+  }
+  function win() {
+    const left = maxGen - gen, exact = dist(pop[winner].g) === 0;
+    state = "levelup"; stateT = 2.8; cleared++;
+    addScore(300 * (level + 1), 404, ACC);
+    if (left > 0) addScore(100 * left, 382, "#ffd66b", `${left} ${left === 1 ? "generazione avanzata" : "generazioni avanzate"} · `);
+    if (exact) { exacts++; addScore(300, 360, "#5fe3d6", "copia esatta · "); sfx.perfect(); } else sfx.win();
+    message = { text: exact ? "IDENTICA AL MODELLO" : "QUASI IDENTICA: BASTA COSÌ", sub: `alla generazione ${gen} di ${maxGen}`, t: 0 };
+  }
+  function lose() {
+    lives--;
+    state = "fail"; stateT = 3;
+    (lives > 0 ? sfx.fail : sfx.lose)();
+    message = { text: "GENERAZIONI FINITE", sub: `la più vicina somigliava al ${like(pop[winner].g)}%`, t: 0, bad: true };
+  }
+  function gameOver() {
+    state = "over";
+    const prev = parseInt(load(bestKey(difficulty)), 10) || 0;
+    const record = score > prev;
+    if (record) store(bestKey(difficulty), String(score));
+    menu = () => showOverlay(
+      `<h2 class="lose">LA STIRPE SI FERMA QUI</h2>
+       <p>Punteggio: <b>${nf(score)}</b> · ${cleared} ${cleared === 1 ? "modello raggiunto" : "modelli raggiunti"}${exacts ? ` · ${exacts} in copia esatta` : ""} · ${diff.label}</p>
+       <p class="muted">Un algoritmo genetico fa quello che hai fatto tu: prova, tiene i migliori, li mescola, e lascia che qualche errore di copia porti qualcosa di nuovo. Solo, migliaia di volte al secondo.</p>
+       ${record ? "<p style='color:var(--yellow)'>★ NUOVO RECORD! ★</p>" : ""}
+       ${difficultyHTML()}
+       <button class="start" data-start>RIPROVA</button>`
+    );
+    menu();
+    syncControls();
+  }
+  function togglePause() {
+    if (isPlaying()) {
+      pausedFrom = state; state = "paused";
+      showOverlay(`<h2>PAUSA</h2><button class="start" data-resume>CONTINUA</button><p class="muted">Premi P per continuare</p>`);
+    } else if (state === "paused") {
+      state = pausedFrom; overlay.classList.add("hidden"); last = performance.now();
+    }
+    syncControls();
+  }
+  // the pause menu can end the game (shared/iniziali.js): it ends here the usual way, saving the record
+  window.addEventListener("sala:termina", () => { if (state !== "paused") return; overlay.classList.add("hidden"); gameOver(); syncControls(); });
+  function syncControls() {
+    pauseBtn.style.display = isPlaying() && touchMode ? "block" : "none";
+    resize();
+  }
+  pauseBtn.addEventListener("click", () => togglePause());
+  function showOverlay(html) { overlay.innerHTML = html; overlay.classList.remove("hidden"); }
+  function difficultyHTML() {
+    const buttons = DIFF_IDS.map((id) => {
+      const d = DIFFICULTIES[id];
+      return `<button type="button" data-diff="${id}" class="${id === difficulty ? "on" : ""}" style="--c:${d.color}">${d.label}</button>`;
+    }).join("");
+    const best = parseInt(load(bestKey(difficulty)), 10);
+    return `<div class="diff">${buttons}</div><p class="muted">${diff.desc}${best ? ` · Record: ${nf(best)}` : ""}</p>`;
+  }
+  function setDifficulty(id) { if (!DIFFICULTIES[id]) return; difficulty = id; diff = DIFFICULTIES[id]; store(DIFF_KEY, id); if (state === "menu") buildLevel(); if (menu) menu(); }
+  function showTitle() {
+    menu = showTitle;
+    showOverlay(
+      `<h1>GENERAZIONI</h1>
+       <p>In alto c'è una bestiolina modello, sotto una nidiata nata a caso. Scegli due genitori e incrociali: i figli prendono ogni caratteristica dall'uno o dall'altra, e ogni tanto un gene cambia da solo. Di generazione in generazione, avvicinati al modello. È un algoritmo genetico, e il giudice sei tu.</p>
+       <div class="pts">
+         <span><b>Geni</b></span><span>taglia, colore, spine e forma; più avanti anche occhi e zampe</span>
+         <span><b>Incrocio</b></span><span>i due genitori restano e nascono sei figli: scegli chi ha, tra tutti e due, quello che serve</span>
+         <span><b>Mutazioni</b></span><span>ogni tanto un gene scatta di uno: è l'unico modo per avere ciò che nessun genitore ha</span>
+         <span><b>Punti</b></span><span>300 × livello · 100 per ogni generazione avanzata · 300 per la copia esatta</span>
+       </div>
+       ${touchMode
+         ? `<p class="muted help">Tocca due bestioline per sceglierle, poi INCROCIA</p>`
+         : `<p class="muted help">Clicca due bestioline, poi INCROCIA · oppure frecce, Spazio per scegliere e Invio per incrociare · P pausa</p>`}
+       ${difficultyHTML()}
+       <button class="start" data-start>PRIMA NIDIATA</button>`
+    );
+  }
+  overlay.addEventListener("click", (e) => {
+    const d = e.target.closest("[data-diff]");
+    if (d) { setDifficulty(d.dataset.diff); return; }
+    if (e.target.closest("[data-start]")) startGame();
+    if (e.target.closest("[data-resume]")) togglePause();
+  });
+
+  // ---------- Input ----------
+  const cell = (i) => ({ x: 12 + (i % 4) * 84, y: 180 + Math.floor(i / 4) * 112, w: 80, h: 106 });
+  window.addEventListener("keydown", (e) => {
+    const k = e.key.toLowerCase();
+    if ([" ", "arrowup", "arrowdown", "arrowleft", "arrowright"].includes(k)) e.preventDefault();
+    if (state === "menu" || state === "over") {
+      if (e.key === "Enter") startGame();
+      else if (["1", "2", "3"].includes(k)) setDifficulty(DIFF_IDS[+k - 1]);
+      return;
+    }
+    if (k === "p" || k === "escape") { if (!e.repeat) togglePause(); return; }
+    if (state === "paused") { if (e.key === "Enter") togglePause(); return; }
+    if (state !== "play") return;
+    const mv = { arrowright: 1, arrowleft: -1, arrowdown: 4, arrowup: -4 }[k];
+    if (mv) { kbd = true; const t = cur + mv; if (t >= 0 && t < POP) cur = t; sfx.pick(); }
+    else if (k === " " && !e.repeat) { kbd = true; pick(cur); }
+    else if (k === "enter" && !e.repeat) breed();
+  });
+  window.addEventListener("blur", () => { if (isPlaying()) togglePause(); });
+  const toWorld = (e) => { const rc = canvas.getBoundingClientRect(); return { x: (e.clientX - rc.left) / rc.width * W, y: (e.clientY - rc.top) / rc.height * H }; };
+  const inR = (r, p) => p.x >= r.x && p.x <= r.x + r.w && p.y >= r.y && p.y <= r.y + r.h;
+  canvas.addEventListener("pointerdown", (e) => {
+    e.preventDefault();
+    if (state !== "play") return;
+    const p = toWorld(e); kbd = false;
+    if (inR(BTN, p)) { breed(); return; }
+    for (let i = 0; i < POP; i++) if (inR(cell(i), p)) { pick(i); return; }
+  });
+  window.addEventListener("pointerdown", (e) => { if (e.pointerType === "touch" && !touchMode) { touchMode = true; syncControls(); if (menu) menu(); } }, true);
+
+  // ---------- Update ----------
+  function update(dt) {
+    clock += dt;
+    for (const p of popups) { p.t += dt; p.y -= 14 * dt; }
+    popups = popups.filter((p) => p.t < 1.8);
+    for (const c of pop) { c.t += dt; if (c.born) c.born = Math.max(0, c.born - dt * 3); }
+    if (message) { message.t += dt; if (message.t > (state === "play" ? 2 : 2.8)) message = null; }
+    if (state === "levelup") { stateT -= dt; if (stateT <= 0) { level++; beginLevel(); } }
+    else if (state === "fail") { stateT -= dt; if (stateT <= 0) { if (lives <= 0) gameOver(); else beginLevel(); } }
+  }
+
+  // ---------- Drawing ----------
+  // a little beast drawn from its genes
+  function beast(g, x, y, k, bob = 0) {
+    const col = HUES[g[1]], R = (11 + g[0] * 1.5) * k, sx = 1.26 - g[5] * 0.075, rx = R * sx, ry = R / sx;
+    const legs = g[4] * 2 * k, cy = y - legs / 2 + Math.sin(bob) * 1.2 * k;
+    ctx.lineCap = "round"; ctx.lineJoin = "round";
+    if (g[4] > 0) {
+      ctx.strokeStyle = col; ctx.lineWidth = 2.6 * k;
+      for (const s of [-1, 1]) { const lx = x + s * rx * 0.42; ctx.beginPath(); ctx.moveTo(lx, cy + ry * 0.8); ctx.lineTo(lx, cy + ry + legs); ctx.lineTo(lx + s * 3.5 * k, cy + ry + legs); ctx.stroke(); }
+    }
+    ctx.fillStyle = col;
+    for (let i = 0; i < g[2]; i++) {
+      const a = -Math.PI / 2 + (g[2] === 1 ? 0 : (i / (g[2] - 1) - 0.5) * 2.1), px = x + Math.cos(a) * rx, py = cy + Math.sin(a) * ry, h = 7 * k, w = 0.2;
+      ctx.beginPath(); ctx.moveTo(x + Math.cos(a - w) * rx * 0.96, cy + Math.sin(a - w) * ry * 0.96); ctx.lineTo(px + Math.cos(a) * h, py + Math.sin(a) * h); ctx.lineTo(x + Math.cos(a + w) * rx * 0.96, cy + Math.sin(a + w) * ry * 0.96); ctx.closePath(); ctx.fill();
+    }
+    ctx.beginPath(); ctx.ellipse(x, cy, rx, ry, 0, 0, TAU); ctx.fill();
+    ctx.fillStyle = "rgba(255,255,255,0.2)"; ctx.beginPath(); ctx.ellipse(x - rx * 0.3, cy - ry * 0.45, rx * 0.35, ry * 0.22, -0.4, 0, TAU); ctx.fill();
+    const er = (1.6 + g[3] * 0.62) * k, ex = Math.max(er + 0.5 * k, rx * 0.4);
+    for (const s of [-1, 1]) {
+      ctx.fillStyle = "#f8f6ff"; ctx.beginPath(); ctx.arc(x + s * ex, cy - ry * 0.12, er, 0, TAU); ctx.fill();
+      ctx.fillStyle = "#0d0822"; ctx.beginPath(); ctx.arc(x + s * ex, cy - ry * 0.12, Math.max(0.8 * k, er * 0.5), 0, TAU); ctx.fill();
+    }
+    ctx.strokeStyle = "#0d0822"; ctx.lineWidth = 1.4 * k; ctx.beginPath(); ctx.arc(x, cy + ry * 0.38, rx * 0.2, 0.15 * Math.PI, 0.85 * Math.PI); ctx.stroke();
+  }
+  function drawTarget() {
+    ctx.fillStyle = "#120b2c"; ctx.beginPath(); ctx.roundRect(8, 62, W - 16, 110, 12); ctx.fill();
+    ctx.strokeStyle = ACC; ctx.lineWidth = 1.5; ctx.setLineDash([5, 4]); ctx.beginPath(); ctx.roundRect(22, 68, 108, 98, 10); ctx.stroke(); ctx.setLineDash([]);
+    beast(target, 76, 119, 1.08, clock * 2);
+    if (state === "menu") return;
+    ctx.textAlign = "left"; ctx.textBaseline = "middle";
+    ctx.fillStyle = ACC; ctx.font = "900 11px system-ui"; ctx.fillText("IL MODELLO", 146, 80);
+    ctx.fillStyle = "#f1eeff"; ctx.font = "800 13px system-ui"; ctx.fillText(`Generazione ${gen} di ${maxGen}`, 146, 100);
+    ctx.fillStyle = "#a9a3cf"; ctx.font = "700 10px system-ui";
+    ctx.fillText(`geni in gioco: ${live().map((i) => GENES[i]).join(", ")}`.slice(0, 44), 146, 118);
+    if (live().length > 4) ctx.fillText(live().slice(4).map((i) => GENES[i]).join(", "), 146, 131);
+    ctx.fillText(tol === 0 ? "serve la copia esatta" : `basta arrivare a ${tol} ${tol === 1 ? "scatto" : "scatti"} di distanza`, 146, 150);
+    ctx.textBaseline = "alphabetic";
+  }
+  function drawPop() {
+    ctx.textAlign = "center"; ctx.textBaseline = "middle";
+    pop.forEach((c, i) => {
+      const r = cell(i), on = picks.includes(i), k = 1 - (c.born || 0) * 0.6, isWin = winner === i && state !== "play";
+      ctx.fillStyle = on ? "rgba(255,179,71,0.16)" : "#151036"; ctx.strokeStyle = isWin ? (state === "fail" ? "#ff6b7d" : "#7ee0a0") : on ? ACC : kbd && cur === i && state === "play" ? "#f1eeff" : "#2e2560"; ctx.lineWidth = on || isWin ? 2.5 : 1.5;
+      ctx.beginPath(); ctx.roundRect(r.x, r.y, r.w, r.h, 10); ctx.fill(); ctx.stroke();
+      ctx.globalAlpha = clamp(1 - (c.born || 0), 0, 1);
+      beast(c.g, r.x + r.w / 2, r.y + 48, 0.9 * k, c.t * 2 + i);
+      ctx.globalAlpha = 1;
+      ctx.font = "800 9px system-ui";
+      if (diff.show || state !== "play") { ctx.fillStyle = "#a9a3cf"; ctx.fillText(`${like(c.g)}%`, r.x + r.w / 2, r.y + r.h - 9); }
+      else if (c.parent) { ctx.fillStyle = "#6a6490"; ctx.fillText("genitore", r.x + r.w / 2, r.y + r.h - 9); }
+      if (on) { ctx.fillStyle = ACC; ctx.beginPath(); ctx.arc(r.x + 12, r.y + 12, 7, 0, TAU); ctx.fill(); ctx.fillStyle = "#2a1804"; ctx.font = "900 10px system-ui"; ctx.fillText(String(picks.indexOf(i) + 1), r.x + 12, r.y + 12.5); }
+    });
+    ctx.textBaseline = "alphabetic";
+  }
+  function drawControls() {
+    ctx.textAlign = "center"; ctx.textBaseline = "middle";
+    const b = BTN, on = picks.length === 2 && state === "play";
+    ctx.globalAlpha = on ? 1 : 0.35;
+    ctx.fillStyle = "#b87a22"; ctx.beginPath(); ctx.roundRect(b.x, b.y + 5, b.w, b.h - 5, 12); ctx.fill();
+    ctx.fillStyle = ACC; ctx.beginPath(); ctx.roundRect(b.x, b.y, b.w, b.h - 6, 12); ctx.fill();
+    ctx.fillStyle = "#2a1804"; ctx.font = "900 16px system-ui"; ctx.fillText(on ? "INCROCIA" : picks.length === 1 ? "SCEGLI IL SECONDO GENITORE" : "SCEGLI DUE GENITORI", W / 2, b.y + 22);
+    ctx.globalAlpha = 1;
+    // the family tree so far: the pair chosen at every generation
+    ctx.textAlign = "left"; ctx.fillStyle = "#a9a3cf"; ctx.font = "700 9px system-ui"; ctx.fillText("LA STIRPE · le coppie scelte finora", 14, 484);
+    const n = Math.max(maxGen, 1), sw = (W - 28) / n;
+    for (let i = 0; i < n; i++) {
+      const x = 14 + i * sw;
+      ctx.fillStyle = i < history.length ? "#151036" : "rgba(255,255,255,0.04)"; ctx.beginPath(); ctx.roundRect(x + 1, 496, sw - 2, 84, 6); ctx.fill();
+      if (history[i]) { const k = Math.min(0.42, sw / 70); beast(history[i][0], x + sw / 2, 518, k); beast(history[i][1], x + sw / 2, 558, k); }
+    }
+    ctx.textBaseline = "alphabetic";
+  }
+  function drawHud() {
+    ctx.fillStyle = "#0d0822"; ctx.fillRect(0, 0, W, TOP - 4);
+    ctx.textBaseline = "middle"; ctx.textAlign = "left";
+    ctx.fillStyle = "#f1eeff"; ctx.font = "900 18px system-ui"; ctx.fillText(nf(score), 12, 16);
+    ctx.fillStyle = "#a9a3cf"; ctx.font = "700 9px system-ui"; ctx.fillText(`REC ${nf(Math.max(bestCache, score))}`, 12, 36);
+    ctx.textAlign = "center"; ctx.fillStyle = ACC; ctx.font = "900 12px system-ui"; ctx.fillText(`LIVELLO ${level + 1}`, W / 2, 14);
+    const left = maxGen - gen;
+    ctx.fillStyle = left <= 2 ? "#ff6b7d" : "#ffd66b"; ctx.font = "800 11px system-ui"; ctx.fillText(`${left} ${left === 1 ? "generazione" : "generazioni"} ancora`, W / 2, 34);
+    const ex = touchMode ? W - 62 : W - 12;
+    for (let i = 0; i < diff.lives; i++) { ctx.fillStyle = i < lives ? "#ffd66b" : "rgba(255,255,255,0.15)"; ctx.beginPath(); ctx.arc(ex - 6 - i * 13, 16, 4.5, 0, TAU); ctx.fill(); }
+    ctx.fillStyle = "rgba(255,255,255,0.12)"; ctx.fillRect(0, TOP - 4, W, 4);
+    ctx.fillStyle = left <= 2 ? "#ff6b7d" : "#ffd66b"; ctx.fillRect(0, TOP - 4, W * left / maxGen, 4);
+    ctx.textBaseline = "alphabetic";
+  }
+  function draw() {
+    ctx.setTransform(pxRatio, 0, 0, pxRatio, 0, 0);
+    ctx.fillStyle = "#0d0822"; ctx.fillRect(0, 0, W, H);
+    drawTarget();
+    drawPop();
+    if (state === "menu") return;
+    drawControls();
+    drawHud();
+    for (const p of popups) {
+      ctx.globalAlpha = clamp((1.8 - p.t) * 2, 0, 1);
+      ctx.textAlign = "center"; ctx.font = "900 14px system-ui";
+      ctx.lineWidth = 4; ctx.strokeStyle = "#0d0822"; ctx.strokeText(p.text, p.x, p.y); ctx.fillStyle = p.color; ctx.fillText(p.text, p.x, p.y);
+    }
+    ctx.globalAlpha = 1;
+    if (message) {
+      ctx.globalAlpha = Math.min(1, ((state === "play" ? 2 : 2.8) - message.t) * 2);
+      ctx.fillStyle = "rgba(13,8,34,0.92)"; ctx.fillRect(0, 406, W, 58);
+      ctx.textAlign = "center"; ctx.font = "900 19px system-ui"; ctx.fillStyle = message.bad ? "#ff6b7d" : ACC;
+      ctx.fillText(message.text, W / 2, 431);
+      if (message.sub) { ctx.font = "800 11px system-ui"; ctx.fillStyle = "#f1eeff"; ctx.fillText(message.sub, W / 2, 451); }
+      ctx.globalAlpha = 1;
+    }
+  }
+
+  // ---------- Loop ----------
+  let last = performance.now();
+  function frame(now) {
+    const dt = Math.min(0.1, (now - last) / 1000);
+    last = now;
+    update(dt);
+    draw();
+    requestAnimationFrame(frame);
+  }
+  buildLevel();
+  syncControls();
+  showTitle();
+  requestAnimationFrame(frame);
+})();
+</script>
+<script src="../../shared/iniziali.js" data-record="generazioni-best-" data-kind="score"></script>
+</body>
+</html>
