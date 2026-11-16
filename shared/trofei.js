@@ -9,6 +9,7 @@
   "use strict";
   // record key prefix → [bronzo, argento, oro] (and t for times)
   const DATA = {
+    "bit-best-": [8000, 14000, 10000],   // bravo-bit (bot)
     "avanti-best-": [5000, 8000, 5000],   // guarda-avanti (bot)
     "generazioni-best-": [6000, 8000, 4000],   // generazioni (bot)
     "rumore-best-": [4000, 6000, 3000],   // dal-rumore (stima)

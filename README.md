@@ -4,7 +4,7 @@ Raccolta di giochi arcade per il browser. Ogni gioco è un singolo file HTML sen
 
 ## 🕹️ Sala Giochi — `index.html`
 
-Apri `index.html` nella cartella principale per la pagina di raccolta: mostra tutti i 196 giochi con copertina, genere, comandi e i tuoi record per ogni difficoltà (Facile, Normale, Difficile). Tocca «Gioca» per avviare un gioco; in ogni gioco il pulsante «← Sala Giochi» in alto a sinistra (visibile nei menu) riporta alla raccolta.
+Apri `index.html` nella cartella principale per la pagina di raccolta: mostra tutti i 197 giochi con copertina, genere, comandi e i tuoi record per ogni difficoltà (Facile, Normale, Difficile). Tocca «Gioca» per avviare un gioco; in ogni gioco il pulsante «← Sala Giochi» in alto a sinistra (visibile nei menu) riporta alla raccolta.
 
 **Iniziali del record:** quando batti un record compare la schermata da sala giochi per inserire le tue tre iniziali (frecce ↑ ↓ per cambiare lettera, ← → per spostarti, oppure scrivile direttamente; su telefono i tasti ▲ ▼ e OK). Le iniziali vengono salvate insieme al record e compaiono nei menu del gioco e nella Sala Giochi. Il codice è condiviso da tutti i giochi in `shared/iniziali.js`.
 
@@ -12,7 +12,7 @@ Apri `index.html` nella cartella principale per la pagina di raccolta: mostra tu
 
 **Comandi touch: levetta o frecce:** in cima alla Sala Giochi e nel menu di pausa di ogni gioco con la levetta si sceglie se usare la levetta analogica o una croce di frecce. Con le frecce il tocco viene agganciato a una delle otto direzioni (le quattro principali hanno la zona più larga, così le diagonali si prendono solo di proposito) e spinto fino in fondo; la scelta vale per tutti i giochi e resta memorizzata. Funziona anche nei giochi con due levette (la sfida a due di *Pugni di Fuoco*, muovi e spara di *Assalto Robotico*).
 
-**Trofei:** ogni gioco ha tre trofei a punteggio: 🥉 **Bronzo** (la soglia in qualsiasi difficoltà), 🥈 **Argento** (a Normale o Difficile) e 🥇 **Oro** (a Difficile); nei giochi a tempo (*Corsa al Tramonto*, *Crystal Wars*) conta finire entro un certo tempo. I trofei si calcolano dai record salvati, quindi quelli già fatti si sbloccano da soli; quando un record nuovo ne conquista uno compare un avviso in alto. Le soglie sono nella schermata iniziale, in pausa e a fine partita di ogni gioco; in Sala Giochi ogni cabinato mostra i suoi trofei, in cima c'è il totale (su 588) con il numero di giochi giocati e il filtro **Già giocati** mostra solo i giochi con almeno un record. Le soglie vengono dalle partite di prova di un bot per circa un terzo dei giochi e sono stimate sulle regole di punteggio per gli altri (`shared/trofei.js`).
+**Trofei:** ogni gioco ha tre trofei a punteggio: 🥉 **Bronzo** (la soglia in qualsiasi difficoltà), 🥈 **Argento** (a Normale o Difficile) e 🥇 **Oro** (a Difficile); nei giochi a tempo (*Corsa al Tramonto*, *Crystal Wars*) conta finire entro un certo tempo. I trofei si calcolano dai record salvati, quindi quelli già fatti si sbloccano da soli; quando un record nuovo ne conquista uno compare un avviso in alto. Le soglie sono nella schermata iniziale, in pausa e a fine partita di ogni gioco; in Sala Giochi ogni cabinato mostra i suoi trofei, in cima c'è il totale (su 591) con il numero di giochi giocati e il filtro **Già giocati** mostra solo i giochi con almeno un record. Le soglie vengono dalle partite di prova di un bot per circa un terzo dei giochi e sono stimate sulle regole di punteggio per gli altri (`shared/trofei.js`).
 
 **Imprese:** i traguardi della sala sono pensati in tre livelli. Il **livello 1** sono i trofei di punteggio qui sopra, per tutti i giochi. Il **livello 2** (traguardi di progresso come «arriva al livello 5») abbiamo scelto di non farlo: lo coprono già in parte i trofei e, dove conta, le imprese. Il **livello 3** sono le **imprese** 🏅: due o tre prodezze caratteristiche di ogni gioco, come atterrare sulla piazzola più piccola in *Soccorso Lunare* o seppellire il capo rosso in *Trappola Aliena*. Le imprese di un gioco sono elencate nella sua schermata iniziale, in pausa e a fine partita (tocca un nome per leggere cosa chiede); quando ne fai una compare un avviso azzurro in alto. In Sala Giochi ogni cabinato mostra le sue (🏅 1/3 imprese) e in cima c'è il totale. Si aggiungono a gruppi di giochi: per ora ci sono le 150 imprese dei 50 giochi più recenti (da *Re della Giungla* a *Bocce*): i giochi nuovi nascono con le loro. Come i record, restano salvate in questo browser (`shared/imprese.js`).
 
@@ -3057,3 +3057,18 @@ Un gioco del genere **IA** sulla ricerca nell'albero delle mosse, il modo in cui
 - **Comandi:** clicca o tocca i finali, poi una mossa e GIOCA · tastiera: `←` `→` per spostarsi, `↑` `↓` per passare dai finali alle mosse, `Invio` · `P` pausa
 
 Per giocare apri `games/guarda-avanti/index.html` nel browser.
+
+### 🤖 Bravo, Bit! — `games/bravo-bit/index.html`
+
+Un gioco del genere **IA** sull'apprendimento per rinforzo: nessuno spiega cosa fare, arriva solo un premio (o un rimprovero) ogni tanto, e chi impara deve capire da solo a che cosa era dovuto. A differenza degli altri giochi del genere, qui il tempo scorre: Bit fa una mossa al secondo.
+
+- **Bit:** un cucciolo robot che fa una mossa dopo l'altra, scelta a caso: siede, salta, gira, abbaia, e più avanti dà la zampa. In testa ha una tabella: per ogni mossa appena fatta, quanto è propenso a farne ognuna delle altre subito dopo. All'inizio sono tutte uguali
+- **Il biscotto:** dato mentre Bit fa una mossa, rende quella mossa più probabile dopo quella che l'ha preceduta, e un po' anche le due mosse prima
+- **Il «no»:** dato mentre Bit fa una mossa, la rende molto meno probabile dopo quella che l'ha preceduta. Serve quando Bit comincia bene il numero e poi sbaglia il seguito. Una cosa sola per mossa: biscotto oppure «no»
+- **Il numero:** una mossa sola nei primi due livelli, poi due di fila, poi tre. Deve riuscire un certo numero di volte prima che finiscano le mosse a disposizione. I biscotti e i «no» sono contati
+- **La testa di Bit:** le barre mostrano in ogni momento con che probabilità farà ognuna delle mosse adesso; quella che servirebbe è incorniciata
+- **Punti:** 250 × livello · 30 per ogni mossa avanzata · 40 per ogni biscotto o «no» avanzato
+- **Difficoltà:** Facile (12 biscotti e 12 «no», Bit va piano, 4 errori concessi), Normale (9 e 9, 3 errori), Difficile (7 e 6, Bit va svelto); record separati per ogni difficoltà
+- **Comandi:** `Spazio` o `→` per il biscotto, `N` o `←` per il «no» · oppure i due pulsanti · `P` pausa
+
+Per giocare apri `games/bravo-bit/index.html` nel browser.
