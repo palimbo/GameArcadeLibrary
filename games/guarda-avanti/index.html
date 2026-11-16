@@ -1,0 +1,475 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no, viewport-fit=cover">
+<title>Guarda Avanti</title>
+<style>
+  :root {
+    --bg: #0d0822;
+    --fg: #f1eeff;
+    --muted: #a9a3cf;
+    --cyan: #5fe3d6;
+    --yellow: #ffd66b;
+    --red: #ff6b7d;
+    --pink: #ff6fb5;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  html, body {
+    height: 100%;
+    background: var(--bg);
+    color: var(--fg);
+    font-family: system-ui, -apple-system, "Segoe UI", sans-serif;
+    overflow: hidden;
+    user-select: none;
+    -webkit-user-select: none;
+    touch-action: none;
+  }
+  #wrap { position: fixed; inset: 0; display: flex; align-items: center; justify-content: center; }
+  canvas { display: block; touch-action: none; border-radius: 6px; box-shadow: 0 0 0 2px #2a1f55, 0 10px 40px rgba(0,0,0,0.6); cursor: pointer; }
+  #pauseBtn {
+    position: fixed; z-index: 3; display: none; right: 10px; top: calc(10px + env(safe-area-inset-top, 0px));
+    font: 700 13px system-ui, sans-serif; color: var(--fg);
+    background: rgba(0, 0, 0, 0.6); border: 1px solid rgba(241, 238, 255, 0.35);
+    border-radius: 8px; padding: 6px 10px; cursor: pointer;
+  }
+  #overlay {
+    position: fixed; inset: 0; z-index: 5;
+    display: flex; flex-direction: column; align-items: center; justify-content: flex-start;
+    gap: 14px; padding: 16px; text-align: center; overflow-y: auto;
+    background: rgba(13, 8, 34, 0.93);
+  }
+  #overlay > :first-child { margin-top: auto; }
+  #overlay > :last-child { margin-bottom: auto; }
+  #overlay.hidden { display: none; }
+  #homeLink {
+    position: fixed; top: calc(10px + env(safe-area-inset-top, 0px)); left: 10px; z-index: 6;
+    font: 600 13px/1 system-ui, sans-serif; color: #fff; text-decoration: none;
+    padding: 8px 12px; border-radius: 999px; background: rgba(0,0,0,.55);
+    border: 1px solid rgba(255,255,255,.25);
+  }
+  #homeLink:hover { background: rgba(0,0,0,.8); }
+  #overlay.hidden ~ #homeLink { display: none; }
+  @media (max-width: 700px) { #overlay { padding-top: calc(52px + env(safe-area-inset-top, 0px)); } }
+  #overlay h1 { font-size: clamp(30px, 9vw, 54px); font-weight: 900; letter-spacing: 1px; color: var(--pink);
+    text-shadow: 3px 3px 0 #2a1f6a, 0 0 22px rgba(255,111,181,0.35); text-wrap: balance; }
+  #overlay h2 { font-size: clamp(24px, 7vw, 40px); font-weight: 900; letter-spacing: 2px; color: var(--pink); }
+  #overlay h2.lose { color: var(--red); }
+  #overlay p { max-width: 540px; font-size: clamp(13px, 3.4vw, 16px); line-height: 1.55; }
+  #overlay p.muted { color: var(--muted); }
+  #overlay .pts { display: grid; grid-template-columns: repeat(2, auto); gap: 4px 18px; font-size: 13px; color: var(--muted); text-align: left; max-width: 560px; }
+  #overlay .pts b { color: var(--fg); }
+  #overlay .diff { display: flex; gap: 10px; flex-wrap: wrap; justify-content: center; }
+  #overlay button {
+    font: 800 15px system-ui, sans-serif; letter-spacing: 1.5px; color: var(--fg);
+    background: transparent; cursor: pointer;
+    border: 2px solid rgba(241,238,255,0.3); border-radius: 10px; padding: 9px 16px;
+  }
+  #overlay .diff button.on { border-color: var(--c); color: var(--c); box-shadow: 0 0 12px var(--c); }
+  #overlay button.start { border-color: var(--pink); color: #2a0618; background: var(--pink); padding: 11px 30px; box-shadow: 0 4px 0 #b03f78; }
+  @media (max-height: 560px) {
+    #overlay { gap: 8px; }
+    #overlay h1 { font-size: 28px; }
+    #overlay p { font-size: 13px; line-height: 1.4; }
+    #overlay .help, #overlay .pts { display: none; }
+  }
+</style>
+</head>
+<body>
+<div id="wrap"><canvas id="game"></canvas></div>
+<button id="pauseBtn" type="button" aria-label="Pausa">❚❚</button>
+<div id="overlay"></div>
+<a id="homeLink" href="../../index.html">← Sala Giochi</a>
+
+<script>
+(() => {
+  "use strict";
+
+  const W = 360, H = 600, TOP = 56, TAU = Math.PI * 2;
+  const ACC = "#ff6fb5", YOU = "#5fe3d6", FOE = "#ff9a6b", VMAX = 9;
+  const BTN = { x: 14, y: 500, w: 332, h: 50 };
+  // the trees, level after level: how many moves at each turn (you, the opponent, you again)
+  const SHAPES = [[3, 2], [3, 2], [3, 3], [3, 3], [2, 2, 2], [2, 2, 2], [2, 2, 3], [2, 3, 2], [3, 2, 2]];
+
+  const DIFFICULTIES = {
+    facile:    { label: "FACILE",    color: "#7ee0a0", desc: "tanti sguardi · 4 errori concessi", frac: 0.85, lives: 4 },
+    normale:   { label: "NORMALE",   color: "#ffd66b", desc: "sguardi contati · 3 errori concessi", frac: 0.7, lives: 3 },
+    difficile: { label: "DIFFICILE", color: "#ff6b7d", desc: "pochi sguardi: bisogna potare · 3 errori concessi", frac: 0.58, lives: 3 },
+  };
+  const DIFF_IDS = Object.keys(DIFFICULTIES);
+  const DIFF_KEY = "avanti-difficulty";
+  const bestKey = (id) => `avanti-best-${id}`;
+  function store(k, v) { try { localStorage.setItem(k, v); } catch { /* ignore */ } }
+  function load(k) { try { return localStorage.getItem(k); } catch { return null; } }
+  const rint = (a, b) => a + Math.floor(Math.random() * (b - a + 1));
+  const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
+  const nf = (n) => n.toLocaleString("it-IT");
+
+  // ---------- Canvas ----------
+  const canvas = document.getElementById("game");
+  const ctx = canvas.getContext("2d");
+  const overlay = document.getElementById("overlay");
+  const pauseBtn = document.getElementById("pauseBtn");
+  let pxRatio = 1, touchMode = !!(window.matchMedia && matchMedia("(pointer: coarse)").matches);
+  function resize() {
+    const availW = window.innerWidth - 8, availH = window.innerHeight - 8;
+    const s = Math.max(0.2, Math.min(availW / W, availH / H));
+    pxRatio = Math.min(3, s * (window.devicePixelRatio || 1));
+    canvas.style.width = W * s + "px";
+    canvas.style.height = H * s + "px";
+    canvas.width = Math.round(W * pxRatio);
+    canvas.height = Math.round(H * pxRatio);
+  }
+  window.addEventListener("resize", () => syncControls());
+
+  // ---------- Audio: soft tones ----------
+  let audioCtx = null;
+  function beep(freq, dur, type = "sine", vol = 0.05, delay = 0) {
+    if (!audioCtx) return;
+    const t = audioCtx.currentTime + delay;
+    const osc = audioCtx.createOscillator(), gain = audioCtx.createGain();
+    osc.type = type; osc.frequency.setValueAtTime(freq, t);
+    gain.gain.setValueAtTime(0.0001, t);
+    gain.gain.exponentialRampToValueAtTime(vol, t + 0.015);
+    gain.gain.exponentialRampToValueAtTime(0.0001, t + dur);
+    osc.connect(gain).connect(audioCtx.destination);
+    osc.start(t); osc.stop(t + dur + 0.02);
+  }
+  const arp = (notes, gap, d, type, vol) => notes.forEach((f, i) => beep(f, d, type, vol, i * gap));
+  const sfx = {
+    pick: () => beep(520, 0.06, "sine", 0.035),
+    step: (v) => beep(392 * Math.pow(1.09, v), 0.09, "triangle", 0.04),
+    edge: () => beep(150, 0.08, "sine", 0.045),
+    row: () => beep(880, 0.1, "sine", 0.03, 0.05),
+    win: () => arp([523, 659, 784, 1047], 0.09, 0.35),
+    perfect: () => arp([523, 659, 784, 1047, 1319, 1568], 0.07, 0.4),
+    fail: () => arp([392, 330, 277], 0.14, 0.35, "triangle", 0.05),
+    lose: () => arp([392, 330, 277, 220], 0.16, 0.4, "triangle", 0.05),
+  };
+
+  // ---------- State ----------
+  let difficulty = DIFFICULTIES[load(DIFF_KEY)] ? load(DIFF_KEY) : "normale";
+  let diff = DIFFICULTIES[difficulty];
+  let state = "menu", menu = null, pausedFrom = null, stateT = 0, clock = 0;
+  let score = 0, level = 0, bestCache = 0, cleared = 0, pruned = 0, lives = 0;
+  let root = null, leaves = [], nodes = [], peeks = 0, peeks0 = 0, armed = -1, chosen = -1, focus = null, kbd = false;
+  let popups = [], message = null;
+  const isPlaying = () => ["play", "levelup", "fail"].includes(state);
+
+  // ---------- The tree ----------
+  function grow(shape, d) {
+    if (d === shape.length) return { leaf: true, v: rint(1, VMAX), known: false, d };
+    return { max: d % 2 === 0, d, kids: Array.from({ length: shape[d] }, () => grow(shape, d + 1)) };
+  }
+  // the true value: you take the highest, the opponent leaves you the lowest
+  const value = (n) => (n.leaf ? n.v : (n.max ? Math.max : Math.min)(...n.kids.map(value)));
+  // what can be said of a node from the leaves seen so far: it lies between lo and hi
+  function bounds(n) {
+    if (n.leaf) { n.lo = n.known ? n.v : 1; n.hi = n.known ? n.v : VMAX; return; }
+    n.kids.forEach(bounds);
+    const f = n.max ? Math.max : Math.min;
+    n.lo = f(...n.kids.map((k) => k.lo)); n.hi = f(...n.kids.map((k) => k.hi));
+  }
+  // pruning: a branch is dead when, whatever it hides, it cannot change the value of the node above it
+  function prune(n, dead) {
+    n.dead = dead;
+    if (!n.leaf) for (const k of n.kids) prune(k, dead || (k.lo !== k.hi && (n.max ? k.hi <= n.lo : k.lo >= n.hi)));
+  }
+  function buildLevel() {
+    const shape = level < SHAPES.length ? SHAPES[level] : SHAPES[rint(4, SHAPES.length - 1)];
+    do { root = grow(shape, 0); } while (new Set(root.kids.map(value)).size < 2);
+    leaves = []; nodes = [];
+    const walk = (n, parent) => { n.parent = parent; nodes.push(n); if (n.leaf) leaves.push(n); else n.kids.forEach((k) => walk(k, n)); };
+    walk(root, null);
+    const depth = shape.length, ys = depth === 2 ? [96, 192, 300] : [92, 166, 240, 322];
+    leaves.forEach((l, i) => { l.x = 22 + (W - 44) * (i + 0.5) / leaves.length; });
+    const place = (n) => { n.y = ys[n.d]; if (!n.leaf) { n.kids.forEach(place); n.x = n.kids.reduce((k, c) => k + c.x, 0) / n.kids.length; } };
+    place(root);
+    peeks0 = peeks = Math.max(Math.ceil(leaves.length * 0.45), Math.round(leaves.length * diff.frac) - Math.floor(level / 5));
+    armed = -1; chosen = -1; focus = null;
+    bounds(root); prune(root, false);
+  }
+  function startGame() {
+    if (!audioCtx) { try { audioCtx = new (window.AudioContext || window.webkitAudioContext)(); } catch { audioCtx = null; } }
+    if (audioCtx && audioCtx.state === "suspended") audioCtx.resume();
+    score = 0; level = 0; cleared = 0; pruned = 0; lives = diff.lives; popups = [];
+    bestCache = parseInt(load(bestKey(difficulty)), 10) || 0;
+    beginLevel();
+    menu = null;
+    overlay.classList.add("hidden");
+    syncControls();
+    last = performance.now();
+  }
+  function beginLevel() {
+    buildLevel();
+    state = "play";
+    message = { text: `LIVELLO ${level + 1}`, sub: `${leaves.length} finali coperti, ${peeks} sguardi`, t: 0 };
+  }
+  function addScore(k, y, color, label = "") { score += k; popups.push({ text: `${label}+${nf(k)}`, x: W / 2, y, t: 0, color }); }
+  function peek(i) {
+    const l = leaves[i];
+    if (state !== "play" || !l || l.known) return;
+    if (peeks <= 0) { sfx.edge(); return; }
+    l.known = true; l.pop = 1; peeks--;
+    bounds(root); prune(root, false);
+    sfx.step(l.v - 4);
+  }
+  function arm(i) { if (state !== "play" || !root.kids[i]) return; armed = i; sfx.pick(); }
+  function play() {
+    if (state !== "play" || armed < 0) { if (state === "play") sfx.edge(); return; }
+    chosen = armed;
+    const hidden = leaves.filter((l) => !l.known).length, got = value(root.kids[chosen]), top = value(root);
+    for (const l of leaves) if (!l.known) { l.known = true; l.late = true; }
+    bounds(root);
+    if (got === top) {
+      state = "levelup"; stateT = 3; cleared++; pruned += hidden;
+      addScore(200 * (level + 1), 404, ACC);
+      if (peeks > 0) addScore(60 * peeks, 382, "#ffd66b", `${peeks} ${peeks === 1 ? "sguardo avanzato" : "sguardi avanzati"} · `);
+      sfx.win();
+      message = { text: "LA MOSSA MIGLIORE", sub: `finisce ${got}: di più non si poteva${hidden ? ` · ${hidden} finali mai guardati` : ""}`, t: 0 };
+    } else {
+      lives--;
+      state = "fail"; stateT = 3.2;
+      (lives > 0 ? sfx.fail : sfx.lose)();
+      message = { text: "C'ERA DI MEGLIO", sub: `con questa mossa finisce ${got}, con un'altra finiva ${top}`, t: 0, bad: true };
+    }
+  }
+  function gameOver() {
+    state = "over";
+    const prev = parseInt(load(bestKey(difficulty)), 10) || 0;
+    const record = score > prev;
+    if (record) store(bestKey(difficulty), String(score));
+    menu = () => showOverlay(
+      `<h2 class="lose">PARTITA CHIUSA</h2>
+       <p>Punteggio: <b>${nf(score)}</b> · ${cleared} ${cleared === 1 ? "mossa migliore trovata" : "mosse migliori trovate"}${pruned ? ` · ${pruned} finali mai guardati` : ""} · ${diff.label}</p>
+       <p class="muted">I programmi di scacchi che battevano i campioni facevano questo: guardare avanti, e soprattutto capire dove non valeva la pena guardare.</p>
+       ${record ? "<p style='color:var(--yellow)'>★ NUOVO RECORD! ★</p>" : ""}
+       ${difficultyHTML()}
+       <button class="start" data-start>RIPROVA</button>`
+    );
+    menu();
+    syncControls();
+  }
+  function togglePause() {
+    if (isPlaying()) {
+      pausedFrom = state; state = "paused";
+      showOverlay(`<h2>PAUSA</h2><button class="start" data-resume>CONTINUA</button><p class="muted">Premi P per continuare</p>`);
+    } else if (state === "paused") {
+      state = pausedFrom; overlay.classList.add("hidden"); last = performance.now();
+    }
+    syncControls();
+  }
+  // the pause menu can end the game (shared/iniziali.js): it ends here the usual way, saving the record
+  window.addEventListener("sala:termina", () => { if (state !== "paused") return; overlay.classList.add("hidden"); gameOver(); syncControls(); });
+  function syncControls() {
+    pauseBtn.style.display = isPlaying() && touchMode ? "block" : "none";
+    resize();
+  }
+  pauseBtn.addEventListener("click", () => togglePause());
+  function showOverlay(html) { overlay.innerHTML = html; overlay.classList.remove("hidden"); }
+  function difficultyHTML() {
+    const buttons = DIFF_IDS.map((id) => {
+      const d = DIFFICULTIES[id];
+      return `<button type="button" data-diff="${id}" class="${id === difficulty ? "on" : ""}" style="--c:${d.color}">${d.label}</button>`;
+    }).join("");
+    const best = parseInt(load(bestKey(difficulty)), 10);
+    return `<div class="diff">${buttons}</div><p class="muted">${diff.desc}${best ? ` · Record: ${nf(best)}` : ""}</p>`;
+  }
+  function setDifficulty(id) { if (!DIFFICULTIES[id]) return; difficulty = id; diff = DIFFICULTIES[id]; store(DIFF_KEY, id); if (state === "menu") buildLevel(); if (menu) menu(); }
+  function showTitle() {
+    menu = showTitle;
+    showOverlay(
+      `<h1>GUARDA AVANTI</h1>
+       <p>Tocca a te muovere. Ogni mossa porta a una risposta dell'avversario, e in fondo a ogni strada c'è un risultato da 1 a 9, coperto. Tu vuoi il numero più alto, l'avversario ti lascerà sempre il più basso. Hai pochi sguardi per scoprire i finali: usali dove servono, e lascia perdere i rami che ormai non possono più convenire.</p>
+       <div class="pts">
+         <span><b>Sguardi</b></span><span>tocca un finale coperto per scoprirlo: non bastano mai per tutti</span>
+         <span><b>Tra… e…</b></span><span>ogni nodo dice quello che già si sa: «3–9», «al più 4», «= 6»</span>
+         <span><b>Mossa</b></span><span>scegli uno dei rami in alto: vinci se è quello col risultato migliore</span>
+         <span><b>Punti</b></span><span>200 × livello · 60 per ogni sguardo avanzato</span>
+       </div>
+       ${touchMode
+         ? `<p class="muted help">Tocca i finali per scoprirli · tocca una mossa e poi GIOCA</p>`
+         : `<p class="muted help">Clicca i finali, poi una mossa e GIOCA · oppure frecce e Invio · P pausa</p>`}
+       ${difficultyHTML()}
+       <button class="start" data-start>PRIMA MOSSA</button>`
+    );
+  }
+  overlay.addEventListener("click", (e) => {
+    const d = e.target.closest("[data-diff]");
+    if (d) { setDifficulty(d.dataset.diff); return; }
+    if (e.target.closest("[data-start]")) startGame();
+    if (e.target.closest("[data-resume]")) togglePause();
+  });
+
+  // ---------- Input ----------
+  window.addEventListener("keydown", (e) => {
+    const k = e.key.toLowerCase();
+    if ([" ", "arrowup", "arrowdown", "arrowleft", "arrowright"].includes(k)) e.preventDefault();
+    if (state === "menu" || state === "over") {
+      if (e.key === "Enter") startGame();
+      else if (["1", "2", "3"].includes(k)) setDifficulty(DIFF_IDS[+k - 1]);
+      return;
+    }
+    if (k === "p" || k === "escape") { if (!e.repeat) togglePause(); return; }
+    if (state === "paused") { if (e.key === "Enter") togglePause(); return; }
+    if (state !== "play") return;
+    // the cursor lives on the row of moves or on the row of endings
+    if (!focus) focus = { row: "leaf", i: 0 };
+    const n = focus.row === "leaf" ? leaves.length : root.kids.length;
+    if (k === "arrowright") { kbd = true; focus.i = (focus.i + 1) % n; sfx.pick(); }
+    else if (k === "arrowleft") { kbd = true; focus.i = (focus.i + n - 1) % n; sfx.pick(); }
+    else if (k === "arrowup" || k === "arrowdown") { kbd = true; focus = focus.row === "leaf" ? { row: "move", i: Math.max(0, armed) } : { row: "leaf", i: 0 }; sfx.pick(); }
+    else if ((k === "enter" || k === " ") && !e.repeat) {
+      kbd = true;
+      if (focus.row === "leaf") peek(focus.i); else if (armed === focus.i) play(); else arm(focus.i);
+    }
+  });
+  window.addEventListener("blur", () => { if (isPlaying()) togglePause(); });
+  const toWorld = (e) => { const rc = canvas.getBoundingClientRect(); return { x: (e.clientX - rc.left) / rc.width * W, y: (e.clientY - rc.top) / rc.height * H }; };
+  canvas.addEventListener("pointerdown", (e) => {
+    e.preventDefault();
+    if (state !== "play") return;
+    const p = toWorld(e); kbd = false;
+    if (p.x >= BTN.x && p.x <= BTN.x + BTN.w && p.y >= BTN.y && p.y <= BTN.y + BTN.h) { play(); return; }
+    let hit = -1, bd = 24;
+    leaves.forEach((l, i) => { const d = Math.hypot(l.x - p.x, (l.y - p.y) * 0.7); if (d < bd) { bd = d; hit = i; } });
+    if (hit >= 0) { peek(hit); return; }
+    bd = 34;
+    root.kids.forEach((c, i) => { const d = Math.hypot(c.x - p.x, c.y - p.y); if (d < bd) { bd = d; hit = i; } });
+    if (hit >= 0) { if (armed === hit) play(); else arm(hit); }
+  });
+  window.addEventListener("pointerdown", (e) => { if (e.pointerType === "touch" && !touchMode) { touchMode = true; syncControls(); if (menu) menu(); } }, true);
+
+  // ---------- Update ----------
+  function update(dt) {
+    clock += dt;
+    for (const p of popups) { p.t += dt; p.y -= 14 * dt; }
+    popups = popups.filter((p) => p.t < 1.8);
+    for (const l of leaves) l.pop = Math.max(0, (l.pop || 0) - dt * 4);
+    if (message) { message.t += dt; if (message.t > (state === "play" ? 2 : 3)) message = null; }
+    if (state === "levelup") { stateT -= dt; if (stateT <= 0) { level++; beginLevel(); } }
+    else if (state === "fail") { stateT -= dt; if (stateT <= 0) { if (lives <= 0) gameOver(); else beginLevel(); } }
+  }
+
+  // ---------- Drawing ----------
+  const label = (n) => (n.lo === n.hi ? `= ${n.lo}` : n.lo === 1 && n.hi === VMAX ? "?" : n.lo === 1 ? `al più ${n.hi}` : n.hi === VMAX ? `almeno ${n.lo}` : `${n.lo}–${n.hi}`);
+  // the line the game follows once the move is played: each side takes its best
+  function onPath(n) {
+    if (chosen < 0) return false;
+    let c = root.kids[chosen];
+    for (;;) { if (c === n) return true; if (c.leaf) return false; const v = value(c); c = c.kids.find((k) => value(k) === v); }
+  }
+  function drawTree() {
+    const done = state === "levelup" || state === "fail";
+    ctx.fillStyle = "#120b2c"; ctx.beginPath(); ctx.roundRect(8, 62, W - 16, 296, 12); ctx.fill();
+    ctx.lineCap = "round";
+    for (const n of nodes) {
+      if (n.leaf) continue;
+      for (const k of n.kids) {
+        // a branch that cannot matter any more: whatever lies there, it will not change the move
+        const dead = !done && k.dead;
+        const hot = done && (k === root.kids[chosen] || (onPath(n) && onPath(k)));
+        ctx.strokeStyle = hot ? "#f1eeff" : dead ? "#2a2258" : n.max ? YOU : FOE; ctx.globalAlpha = hot ? 1 : dead ? 1 : 0.55; ctx.lineWidth = hot ? 3 : 1.6;
+        if (dead) ctx.setLineDash([3, 4]);
+        ctx.beginPath(); ctx.moveTo(n.x, n.y + 13); ctx.lineTo(k.x, k.y - (k.leaf ? 16 : 13)); ctx.stroke(); ctx.setLineDash([]); ctx.globalAlpha = 1;
+      }
+    }
+    ctx.textAlign = "center"; ctx.textBaseline = "middle";
+    for (const n of nodes) {
+      if (n.leaf) {
+        const i = leaves.indexOf(n), on = kbd && focus && focus.row === "leaf" && focus.i === i && state === "play", s = 1 + n.pop * 0.25, w = Math.min(24, (W - 44) / leaves.length - 4) * s, h = 30 * s;
+        ctx.fillStyle = n.known ? (n.late ? "#1c1546" : "#2a2060") : "#0d0822"; ctx.strokeStyle = on ? "#f1eeff" : onPath(n) && done ? "#f1eeff" : n.known ? (n.late ? "#3a2f72" : "#8f8bff") : "#4a3f88"; ctx.lineWidth = on || (onPath(n) && done) ? 2.5 : 1.5;
+        ctx.beginPath(); ctx.roundRect(n.x - w / 2, n.y - h / 2, w, h, 6); ctx.fill(); ctx.stroke();
+        ctx.fillStyle = n.known ? (n.late ? "#8a84b0" : "#f1eeff") : n.dead && !done ? "#2a2258" : "#8f8bff"; ctx.font = `900 ${n.known ? 16 : 13}px system-ui`; ctx.fillText(n.known ? String(n.v) : "?", n.x, n.y + 1);
+        continue;
+      }
+      const col = n.max ? YOU : FOE, isMove = n.parent === root, mi = isMove ? root.kids.indexOf(n) : -1, on = isMove && armed === mi, kf = kbd && focus && focus.row === "move" && focus.i === mi && state === "play";
+      const w = n === root ? 76 : Math.min(74, (W - 30) / (n.parent.kids.length * (n.parent === root ? 1 : root.kids.length)) - 6), h = 26;
+      ctx.fillStyle = on ? col : "#171036"; ctx.strokeStyle = kf ? "#f1eeff" : col; ctx.lineWidth = on || kf ? 2.5 : 1.5;
+      ctx.beginPath(); ctx.roundRect(n.x - w / 2, n.y - h / 2, w, h, n.max ? 13 : 5); ctx.fill(); ctx.stroke();
+      ctx.fillStyle = on ? "#0d0822" : "#f1eeff"; ctx.font = `900 ${w < 56 ? 10 : 12}px system-ui`; ctx.fillText(done ? `= ${value(n)}` : label(n), n.x, n.y + 0.5);
+    }
+    // who moves on each row
+    ctx.textAlign = "left"; ctx.font = "800 8px system-ui";
+    const rows = [...new Set(nodes.filter((n) => !n.leaf).map((n) => n.d))];
+    for (const d of rows) { const n = nodes.find((q) => q.d === d && !q.leaf); const t = n.max ? (d === 0 ? "TOCCA A TE: prendi il più alto" : "DI NUOVO TU: il più alto") : "L'AVVERSARIO: ti lascia il più basso", c = n.max ? YOU : FOE; ctx.fillStyle = "#120b2c"; ctx.fillRect(13, n.y - 28, ctx.measureText(t).width + 6, 12); ctx.fillStyle = c; ctx.fillText(t, 16, n.y - 22); }
+    ctx.fillStyle = "#a9a3cf"; ctx.fillText("I FINALI", 16, leaves[0].y - 23);
+    ctx.textBaseline = "alphabetic";
+  }
+  function drawControls() {
+    ctx.textAlign = "center"; ctx.textBaseline = "middle";
+    // the looks left, as eyes
+    const n = peeks0, gap = Math.min(24, (W - 60) / n);
+    for (let i = 0; i < n; i++) {
+      const x = W / 2 + (i - (n - 1) / 2) * gap, open = i < peeks;
+      ctx.fillStyle = open ? "#f1eeff" : "rgba(255,255,255,0.1)"; ctx.beginPath(); ctx.ellipse(x, 392, 8, 5.5, 0, 0, TAU); ctx.fill();
+      if (open) { ctx.fillStyle = "#0d0822"; ctx.beginPath(); ctx.arc(x, 392, 2.8, 0, TAU); ctx.fill(); }
+    }
+    ctx.fillStyle = peeks ? "#f1eeff" : "#ff6b7d"; ctx.font = "800 12px system-ui";
+    if (state === "play") ctx.fillText(peeks ? `${peeks} ${peeks === 1 ? "sguardo" : "sguardi"}: tocca un finale coperto` : "sguardi finiti: scegli la mossa con quello che sai", W / 2, 416);
+    ctx.fillStyle = "#a9a3cf"; ctx.font = "700 10px system-ui";
+    const sure = state === "play" && root.kids.findIndex((c, i) => root.kids.every((o, j) => j === i || c.lo >= o.hi));
+    if (state === "play") ctx.fillText(sure >= 0 ? "una mossa ormai non può essere battuta: il resto si può non guardare" : leaves.some((l) => l.dead && !l.known) ? "tratteggiati: i rami che non possono più cambiare niente" : "cerca i rami che non vale più la pena guardare", W / 2, 438);
+    if (armed >= 0 && state === "play") { const c = root.kids[armed]; ctx.fillStyle = YOU; ctx.font = "800 11px system-ui"; ctx.fillText(`mossa ${armed + 1}: ${c.lo === c.hi ? `finisce ${c.lo}` : `finisce tra ${c.lo} e ${c.hi}`}`, W / 2, 480); }
+    const b = BTN, on = armed >= 0 && state === "play";
+    ctx.globalAlpha = on ? 1 : 0.35;
+    ctx.fillStyle = "#b03f78"; ctx.beginPath(); ctx.roundRect(b.x, b.y + 5, b.w, b.h - 5, 12); ctx.fill();
+    ctx.fillStyle = ACC; ctx.beginPath(); ctx.roundRect(b.x, b.y, b.w, b.h - 6, 12); ctx.fill();
+    ctx.fillStyle = "#2a0618"; ctx.font = "900 16px system-ui"; ctx.fillText(on ? `GIOCA LA MOSSA ${armed + 1}` : "SCEGLI UNA MOSSA IN ALTO", W / 2, b.y + 22);
+    ctx.globalAlpha = 1; ctx.textBaseline = "alphabetic";
+  }
+  function drawHud() {
+    ctx.fillStyle = "#0d0822"; ctx.fillRect(0, 0, W, TOP - 4);
+    ctx.textBaseline = "middle"; ctx.textAlign = "left";
+    ctx.fillStyle = "#f1eeff"; ctx.font = "900 18px system-ui"; ctx.fillText(nf(score), 12, 16);
+    ctx.fillStyle = "#a9a3cf"; ctx.font = "700 9px system-ui"; ctx.fillText(`REC ${nf(Math.max(bestCache, score))}`, 12, 36);
+    ctx.textAlign = "center"; ctx.fillStyle = ACC; ctx.font = "900 12px system-ui"; ctx.fillText(`LIVELLO ${level + 1}`, W / 2, 14);
+    const hid = leaves.filter((l) => !l.known).length;
+    ctx.fillStyle = peeks <= 1 ? "#ff6b7d" : "#ffd66b"; ctx.font = "800 11px system-ui"; ctx.fillText(`${peeks} ${peeks === 1 ? "sguardo" : "sguardi"} · ${hid} finali coperti`, W / 2, 34);
+    const ex = touchMode ? W - 62 : W - 12;
+    for (let i = 0; i < diff.lives; i++) { ctx.fillStyle = i < lives ? "#ffd66b" : "rgba(255,255,255,0.15)"; ctx.beginPath(); ctx.arc(ex - 6 - i * 13, 16, 4.5, 0, TAU); ctx.fill(); }
+    ctx.fillStyle = "rgba(255,255,255,0.12)"; ctx.fillRect(0, TOP - 4, W, 4);
+    ctx.fillStyle = peeks <= 1 ? "#ff6b7d" : "#ffd66b"; ctx.fillRect(0, TOP - 4, W * peeks / Math.max(1, peeks0), 4);
+    ctx.textBaseline = "alphabetic";
+  }
+  function draw() {
+    ctx.setTransform(pxRatio, 0, 0, pxRatio, 0, 0);
+    ctx.fillStyle = "#0d0822"; ctx.fillRect(0, 0, W, H);
+    drawTree();
+    if (state === "menu") return;
+    drawControls();
+    drawHud();
+    for (const p of popups) {
+      ctx.globalAlpha = clamp((1.8 - p.t) * 2, 0, 1);
+      ctx.textAlign = "center"; ctx.font = "900 14px system-ui";
+      ctx.lineWidth = 4; ctx.strokeStyle = "#0d0822"; ctx.strokeText(p.text, p.x, p.y); ctx.fillStyle = p.color; ctx.fillText(p.text, p.x, p.y);
+    }
+    ctx.globalAlpha = 1;
+    if (message) {
+      ctx.globalAlpha = Math.min(1, ((state === "play" ? 2 : 3) - message.t) * 2);
+      ctx.fillStyle = "rgba(13,8,34,0.92)"; ctx.fillRect(0, 426, W, 58);
+      ctx.textAlign = "center"; ctx.font = "900 19px system-ui"; ctx.fillStyle = message.bad ? "#ff6b7d" : ACC;
+      ctx.fillText(message.text, W / 2, 451);
+      if (message.sub) { ctx.font = "800 11px system-ui"; ctx.fillStyle = "#f1eeff"; ctx.fillText(message.sub, W / 2, 471); }
+      ctx.globalAlpha = 1;
+    }
+  }
+
+  // ---------- Loop ----------
+  let last = performance.now();
+  function frame(now) {
+    const dt = Math.min(0.1, (now - last) / 1000);
+    last = now;
+    update(dt);
+    draw();
+    requestAnimationFrame(frame);
+  }
+  buildLevel();
+  syncControls();
+  showTitle();
+  requestAnimationFrame(frame);
+})();
+</script>
+<script src="../../shared/iniziali.js" data-record="avanti-best-" data-kind="score"></script>
+</body>
+</html>
