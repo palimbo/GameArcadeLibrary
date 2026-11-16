@@ -1,0 +1,451 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no, viewport-fit=cover">
+<title>Fuori dal Coro</title>
+<style>
+  :root {
+    --bg: #0d0822;
+    --fg: #f1eeff;
+    --muted: #a9a3cf;
+    --cyan: #5fe3d6;
+    --yellow: #ffd66b;
+    --red: #ff6b7d;
+    --pink: #7af0ff;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  html, body {
+    height: 100%;
+    background: var(--bg);
+    color: var(--fg);
+    font-family: system-ui, -apple-system, "Segoe UI", sans-serif;
+    overflow: hidden;
+    user-select: none;
+    -webkit-user-select: none;
+    touch-action: none;
+  }
+  #wrap { position: fixed; inset: 0; display: flex; align-items: center; justify-content: center; }
+  canvas { display: block; touch-action: none; border-radius: 6px; box-shadow: 0 0 0 2px #2a1f55, 0 10px 40px rgba(0,0,0,0.6); cursor: pointer; }
+  #pauseBtn {
+    position: fixed; z-index: 3; display: none; right: 10px; top: calc(10px + env(safe-area-inset-top, 0px));
+    font: 700 13px system-ui, sans-serif; color: var(--fg);
+    background: rgba(0, 0, 0, 0.6); border: 1px solid rgba(241, 238, 255, 0.35);
+    border-radius: 8px; padding: 6px 10px; cursor: pointer;
+  }
+  #overlay {
+    position: fixed; inset: 0; z-index: 5;
+    display: flex; flex-direction: column; align-items: center; justify-content: flex-start;
+    gap: 14px; padding: 16px; text-align: center; overflow-y: auto;
+    background: rgba(13, 8, 34, 0.93);
+  }
+  #overlay > :first-child { margin-top: auto; }
+  #overlay > :last-child { margin-bottom: auto; }
+  #overlay.hidden { display: none; }
+  #homeLink {
+    position: fixed; top: calc(10px + env(safe-area-inset-top, 0px)); left: 10px; z-index: 6;
+    font: 600 13px/1 system-ui, sans-serif; color: #fff; text-decoration: none;
+    padding: 8px 12px; border-radius: 999px; background: rgba(0,0,0,.55);
+    border: 1px solid rgba(255,255,255,.25);
+  }
+  #homeLink:hover { background: rgba(0,0,0,.8); }
+  #overlay.hidden ~ #homeLink { display: none; }
+  @media (max-width: 700px) { #overlay { padding-top: calc(52px + env(safe-area-inset-top, 0px)); } }
+  #overlay h1 { font-size: clamp(30px, 9vw, 54px); font-weight: 900; letter-spacing: 1px; color: var(--pink);
+    text-shadow: 3px 3px 0 #2a1f6a, 0 0 22px rgba(122,240,255,0.35); text-wrap: balance; }
+  #overlay h2 { font-size: clamp(24px, 7vw, 40px); font-weight: 900; letter-spacing: 2px; color: var(--pink); }
+  #overlay h2.lose { color: var(--red); }
+  #overlay p { max-width: 540px; font-size: clamp(13px, 3.4vw, 16px); line-height: 1.55; }
+  #overlay p.muted { color: var(--muted); }
+  #overlay .pts { display: grid; grid-template-columns: repeat(2, auto); gap: 4px 18px; font-size: 13px; color: var(--muted); text-align: left; max-width: 560px; }
+  #overlay .pts b { color: var(--fg); }
+  #overlay .diff { display: flex; gap: 10px; flex-wrap: wrap; justify-content: center; }
+  #overlay button {
+    font: 800 15px system-ui, sans-serif; letter-spacing: 1.5px; color: var(--fg);
+    background: transparent; cursor: pointer;
+    border: 2px solid rgba(241,238,255,0.3); border-radius: 10px; padding: 9px 16px;
+  }
+  #overlay .diff button.on { border-color: var(--c); color: var(--c); box-shadow: 0 0 12px var(--c); }
+  #overlay button.start { border-color: var(--pink); color: #04222a; background: var(--pink); padding: 11px 30px; box-shadow: 0 4px 0 #3f9fb0; }
+  @media (max-height: 560px) {
+    #overlay { gap: 8px; }
+    #overlay h1 { font-size: 28px; }
+    #overlay p { font-size: 13px; line-height: 1.4; }
+    #overlay .help, #overlay .pts { display: none; }
+  }
+</style>
+</head>
+<body>
+<div id="wrap"><canvas id="game"></canvas></div>
+<button id="pauseBtn" type="button" aria-label="Pausa">❚❚</button>
+<div id="overlay"></div>
+<a id="homeLink" href="../../index.html">← Sala Giochi</a>
+
+<script>
+(() => {
+  "use strict";
+
+  const W = 360, H = 600, TOP = 56, TAU = Math.PI * 2;
+  const ACC = "#7af0ff";
+  const AREA = { x: 14, y: 66, w: 332, h: 330 };
+  const CUT = 2.2;                                   // no ordinary point strays further than this many sigmas
+  const NAMES = { linea: "una retta", onda: "un'onda", arco: "un arco", anello: "un anello", grappoli: "dei grappoli", binari: "due binari" };
+  const ORDER = ["linea", "grappoli", "onda", "anello", "arco", "binari"];
+
+  const DIFFICULTIES = {
+    facile:    { label: "FACILE",    color: "#7ee0a0", desc: "la regola si vede in trasparenza · 5 errori concessi", d0: 6, dMin: 3.6, show: true, lives: 5 },
+    normale:   { label: "NORMALE",   color: "#ffd66b", desc: "la regola devi immaginarla · 4 errori concessi", d0: 5.5, dMin: 3.2, lives: 4 },
+    difficile: { label: "DIFFICILE", color: "#ff6b7d", desc: "anomalie appena fuori posto · 3 errori concessi", d0: 4.8, dMin: 2.9, lives: 3 },
+  };
+  const DIFF_IDS = Object.keys(DIFFICULTIES);
+  const DIFF_KEY = "anomalia-difficulty";
+  const bestKey = (id) => `anomalia-best-${id}`;
+  function store(k, v) { try { localStorage.setItem(k, v); } catch { /* ignore */ } }
+  function load(k) { try { return localStorage.getItem(k); } catch { return null; } }
+  const rint = (a, b) => a + Math.floor(Math.random() * (b - a + 1));
+  const rnd = (a, b) => a + Math.random() * (b - a);
+  const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
+  const nf = (n) => n.toLocaleString("it-IT");
+  const sig = (v) => v.toFixed(1).replace(".", ",");
+  const gauss = () => Math.sqrt(-2 * Math.log(1 - Math.random())) * Math.cos(TAU * Math.random());
+
+  // ---------- Canvas ----------
+  const canvas = document.getElementById("game");
+  const ctx = canvas.getContext("2d");
+  const overlay = document.getElementById("overlay");
+  const pauseBtn = document.getElementById("pauseBtn");
+  let pxRatio = 1, touchMode = !!(window.matchMedia && matchMedia("(pointer: coarse)").matches);
+  function resize() {
+    const availW = window.innerWidth - 8, availH = window.innerHeight - 8;
+    const s = Math.max(0.2, Math.min(availW / W, availH / H));
+    pxRatio = Math.min(3, s * (window.devicePixelRatio || 1));
+    canvas.style.width = W * s + "px";
+    canvas.style.height = H * s + "px";
+    canvas.width = Math.round(W * pxRatio);
+    canvas.height = Math.round(H * pxRatio);
+  }
+  window.addEventListener("resize", () => syncControls());
+
+  // ---------- Audio: soft tones ----------
+  let audioCtx = null;
+  function beep(freq, dur, type = "sine", vol = 0.05, delay = 0) {
+    if (!audioCtx) return;
+    const t = audioCtx.currentTime + delay;
+    const osc = audioCtx.createOscillator(), gain = audioCtx.createGain();
+    osc.type = type; osc.frequency.setValueAtTime(freq, t);
+    gain.gain.setValueAtTime(0.0001, t);
+    gain.gain.exponentialRampToValueAtTime(vol, t + 0.015);
+    gain.gain.exponentialRampToValueAtTime(0.0001, t + dur);
+    osc.connect(gain).connect(audioCtx.destination);
+    osc.start(t); osc.stop(t + dur + 0.02);
+  }
+  const arp = (notes, gap, d, type, vol) => notes.forEach((f, i) => beep(f, d, type, vol, i * gap));
+  const sfx = {
+    pick: () => beep(520, 0.06, "sine", 0.035),
+    step: (v) => beep(392 * Math.pow(1.09, v), 0.09, "triangle", 0.04),
+    edge: () => beep(150, 0.08, "sine", 0.045),
+    row: () => beep(880, 0.1, "sine", 0.03, 0.05),
+    win: () => arp([523, 659, 784, 1047], 0.09, 0.35),
+    perfect: () => arp([523, 659, 784, 1047, 1319, 1568], 0.07, 0.4),
+    fail: () => arp([392, 330, 277], 0.14, 0.35, "triangle", 0.05),
+    lose: () => arp([392, 330, 277, 220], 0.16, 0.4, "triangle", 0.05),
+  };
+
+  // ---------- State ----------
+  let difficulty = DIFFICULTIES[load(DIFF_KEY)] ? load(DIFF_KEY) : "normale";
+  let diff = DIFFICULTIES[difficulty];
+  let state = "menu", menu = null, pausedFrom = null, stateT = 0, clock = 0;
+  let score = 0, level = 0, bestCache = 0, cleared = 0, found = 0, lives = 0;
+  let kind = "linea", model = [], sigma = 8, pts = [], todo = 0, clean = true, lastTap = null, cur = { x: 180, y: 230 }, kbd = false;
+  let popups = [], message = null;
+  const isPlaying = () => ["play", "levelup", "fail"].includes(state);
+
+  // ---------- The crowd and the odd ones ----------
+  // the rule, as a chain of points (or, for clusters, just their centres)
+  function makeModel(k) {
+    const m = [], A = AREA, cx = A.x + A.w / 2, cy = A.y + A.h / 2, seg = (x0, y0, x1, y1) => { for (let i = 0; i <= 60; i++) m.push({ x: x0 + (x1 - x0) * i / 60, y: y0 + (y1 - y0) * i / 60 }); };
+    if (k === "linea") seg(A.x + 24, rnd(A.y + 60, A.y + A.h - 60), A.x + A.w - 24, rnd(A.y + 60, A.y + A.h - 60));
+    else if (k === "binari") { const y0 = rnd(A.y + 70, A.y + A.h - 150), s = rnd(-50, 50); seg(A.x + 24, y0, A.x + A.w - 24, y0 + s); seg(A.x + 24, y0 + 95, A.x + A.w - 24, y0 + s + 95); }
+    else if (k === "onda") { const amp = rnd(55, 80), f = rnd(1, 1.5), ph = rnd(0, TAU); for (let i = 0; i <= 140; i++) { const u = i / 140; m.push({ x: A.x + 24 + (A.w - 48) * u, y: cy + amp * Math.sin(TAU * f * u + ph) }); } }
+    else if (k === "arco") { const up = Math.random() < 0.5 ? 1 : -1; for (let i = 0; i <= 120; i++) { const u = i / 120 * 2 - 1; m.push({ x: cx + u * (A.w / 2 - 28), y: cy + up * (95 - 190 * u * u) }); } }
+    else if (k === "anello") { const r = rnd(90, 112); for (let i = 0; i < 160; i++) m.push({ x: cx + Math.cos(i / 160 * TAU) * r, y: cy + Math.sin(i / 160 * TAU) * r }); }
+    else { const n = rint(2, 3); for (let g = 0; m.length < n && g < 400; g++) { const c = { x: rnd(A.x + 70, A.x + A.w - 70), y: rnd(A.y + 70, A.y + A.h - 70) }; if (m.every((o) => Math.hypot(o.x - c.x, o.y - c.y) > 125)) m.push(c); } }
+    return m;
+  }
+  // how far a spot is from the rule, in sigmas
+  const dev = (x, y) => { let d = 1e9; for (const c of model) d = Math.min(d, Math.hypot(c.x - x, c.y - y)); return d / sigma; };
+  function buildLevel() {
+    kind = level < ORDER.length ? ORDER[level] : ORDER[rint(0, ORDER.length - 1)];
+    sigma = kind === "grappoli" ? 17 : 8;
+    const A = AREA, n = Math.min(80, 30 + level * 4), k = Math.min(4, 1 + Math.floor(level / 3)), dmin = Math.max(diff.dMin, diff.d0 - level * 0.22);
+    for (let tries = 0; tries < 60; tries++) {
+      model = makeModel(kind); pts = [];
+      for (let g = 0; pts.length < n && g < 5000; g++) {
+        const c = model[rint(0, model.length - 1)], r = Math.abs(gauss()) * sigma, a = rnd(0, TAU), p = { x: c.x + Math.cos(a) * r, y: c.y + Math.sin(a) * r };
+        if (dev(p.x, p.y) <= CUT && p.x > A.x + 6 && p.x < A.x + A.w - 6 && p.y > A.y + 6 && p.y < A.y + A.h - 6 && pts.every((o) => Math.hypot(o.x - p.x, o.y - p.y) > 5)) pts.push({ ...p, odd: false });
+      }
+      // the odd ones: just outside what the rule allows, and not hiding behind each other
+      const odd = [];
+      for (let g = 0; odd.length < k && g < 4000; g++) {
+        const p = { x: rnd(A.x + 10, A.x + A.w - 10), y: rnd(A.y + 10, A.y + A.h - 10) }, d = dev(p.x, p.y);
+        if (d >= dmin && d <= dmin + 1.3 && odd.every((o) => Math.hypot(o.x - p.x, o.y - p.y) > 60)) odd.push({ ...p, odd: true });
+      }
+      if (pts.length === n && odd.length === k) { pts.push(...odd); break; }
+    }
+    for (let i = pts.length - 1; i > 0; i--) { const j = rint(0, i); [pts[i], pts[j]] = [pts[j], pts[i]]; }
+    todo = pts.filter((p) => p.odd).length; clean = true; lastTap = null;
+  }
+  function startGame() {
+    if (!audioCtx) { try { audioCtx = new (window.AudioContext || window.webkitAudioContext)(); } catch { audioCtx = null; } }
+    if (audioCtx && audioCtx.state === "suspended") audioCtx.resume();
+    score = 0; level = 0; cleared = 0; found = 0; lives = diff.lives; popups = [];
+    bestCache = parseInt(load(bestKey(difficulty)), 10) || 0;
+    beginLevel();
+    menu = null;
+    overlay.classList.add("hidden");
+    syncControls();
+    last = performance.now();
+  }
+  function beginLevel() {
+    buildLevel();
+    state = "play";
+    message = { text: `LIVELLO ${level + 1}`, sub: `${pts.length} punti, ${todo === 1 ? "uno è fuori posto" : `${todo} sono fuori posto`}`, t: 0 };
+  }
+  function addScore(k, x, y, color, label = "") { score += k; popups.push({ text: `${label}+${nf(k)}`, x: clamp(x, 70, W - 70), y, t: 0, color }); }
+  function accuse(i) {
+    const p = pts[i];
+    if (state !== "play" || !p || p.hit) return;
+    p.hit = true; p.pop = 1;
+    lastTap = { d: dev(p.x, p.y), odd: p.odd };
+    if (p.odd) {
+      todo--; found++;
+      addScore(100 + 20 * level, p.x, p.y - 14, ACC);
+      sfx.row();
+      if (todo === 0) {
+        state = "levelup"; stateT = 2.8; cleared++;
+        if (clean) addScore(150, W / 2, 432, "#ffd66b", "nessun innocente accusato · ");
+        if (cleared % 4 === 0 && lives < diff.lives) { lives++; popups.push({ text: "un errore concesso in più", x: W / 2, y: 454, t: 0, color: "#7ee0a0" }); }
+        sfx.win();
+        message = { text: "TUTTE TROVATE", sub: `i punti seguivano ${NAMES[kind]}: eccola`, t: 0 };
+      }
+    } else {
+      lives--; clean = false;
+      if (lives <= 0) { sfx.lose(); state = "fail"; stateT = 3; message = { text: "ERA UN PUNTO QUALUNQUE", sub: "le anomalie erano quelle cerchiate", t: 0, bad: true }; }
+      else sfx.fail();
+    }
+  }
+  function gameOver() {
+    state = "over";
+    const prev = parseInt(load(bestKey(difficulty)), 10) || 0;
+    const record = score > prev;
+    if (record) store(bestKey(difficulty), String(score));
+    menu = () => showOverlay(
+      `<h2 class="lose">TROPPI INNOCENTI</h2>
+       <p>Punteggio: <b>${nf(score)}</b> · ${found} ${found === 1 ? "anomalia trovata" : "anomalie trovate"} in ${cleared} ${cleared === 1 ? "livello" : "livelli"} · ${diff.label}</p>
+       <p class="muted">Così si scoprono una carta di credito rubata o un pezzo difettoso: prima si impara che aspetto ha il normale, poi si guarda chi ne sta troppo lontano. E ogni falso allarme costa.</p>
+       ${record ? "<p style='color:var(--yellow)'>★ NUOVO RECORD! ★</p>" : ""}
+       ${difficultyHTML()}
+       <button class="start" data-start>RIPROVA</button>`
+    );
+    menu();
+    syncControls();
+  }
+  function togglePause() {
+    if (isPlaying()) {
+      pausedFrom = state; state = "paused";
+      showOverlay(`<h2>PAUSA</h2><button class="start" data-resume>CONTINUA</button><p class="muted">Premi P per continuare</p>`);
+    } else if (state === "paused") {
+      state = pausedFrom; overlay.classList.add("hidden"); last = performance.now();
+    }
+    syncControls();
+  }
+  // the pause menu can end the game (shared/iniziali.js): it ends here the usual way, saving the record
+  window.addEventListener("sala:termina", () => { if (state !== "paused") return; overlay.classList.add("hidden"); gameOver(); syncControls(); });
+  function syncControls() {
+    pauseBtn.style.display = isPlaying() && touchMode ? "block" : "none";
+    resize();
+  }
+  pauseBtn.addEventListener("click", () => togglePause());
+  function showOverlay(html) { overlay.innerHTML = html; overlay.classList.remove("hidden"); }
+  function difficultyHTML() {
+    const buttons = DIFF_IDS.map((id) => {
+      const d = DIFFICULTIES[id];
+      return `<button type="button" data-diff="${id}" class="${id === difficulty ? "on" : ""}" style="--c:${d.color}">${d.label}</button>`;
+    }).join("");
+    const best = parseInt(load(bestKey(difficulty)), 10);
+    return `<div class="diff">${buttons}</div><p class="muted">${diff.desc}${best ? ` · Record: ${nf(best)}` : ""}</p>`;
+  }
+  function setDifficulty(id) { if (!DIFFICULTIES[id]) return; difficulty = id; diff = DIFFICULTIES[id]; store(DIFF_KEY, id); if (state === "menu") buildLevel(); if (menu) menu(); }
+  function showTitle() {
+    menu = showTitle;
+    showOverlay(
+      `<h1>FUORI DAL CORO</h1>
+       <p>Una nuvola di punti segue una regola: una retta, un'onda, un anello, dei grappoli. Non precisamente, perché i dati veri ballano sempre un po'. Ma qualcuno non c'entra proprio: è un'anomalia. Trovale tutte, senza accusare i punti che sono solo un po' in disparte.</p>
+       <div class="pts">
+         <span><b>Accusa</b></span><span>tocca il punto che secondo te è fuori posto</span>
+         <span><b>Sigma</b></span><span>dopo ogni tocco vedi quanto era lontano dalla regola: i punti normali non superano mai ${sig(CUT)} σ</span>
+         <span><b>Errori</b></span><span>ogni innocente accusato costa uno degli errori concessi; ogni 4 livelli ne torna uno</span>
+         <span><b>Punti</b></span><span>100 + 20 × livello per anomalia · 150 se non accusi nessun innocente</span>
+       </div>
+       ${touchMode
+         ? `<p class="muted help">Tocca un punto per accusarlo</p>`
+         : `<p class="muted help">Clicca un punto · oppure frecce per muovere il mirino e Invio · P pausa</p>`}
+       ${difficultyHTML()}
+       <button class="start" data-start>PRIMA NUVOLA</button>`
+    );
+  }
+  overlay.addEventListener("click", (e) => {
+    const d = e.target.closest("[data-diff]");
+    if (d) { setDifficulty(d.dataset.diff); return; }
+    if (e.target.closest("[data-start]")) startGame();
+    if (e.target.closest("[data-resume]")) togglePause();
+  });
+
+  // ---------- Input ----------
+  const nearest = (x, y, max) => { let b = -1, bd = max; pts.forEach((p, i) => { const d = Math.hypot(p.x - x, p.y - y); if (!p.hit && d < bd) { bd = d; b = i; } }); return b; };
+  window.addEventListener("keydown", (e) => {
+    const k = e.key.toLowerCase();
+    if ([" ", "arrowup", "arrowdown", "arrowleft", "arrowright"].includes(k)) e.preventDefault();
+    if (state === "menu" || state === "over") {
+      if (e.key === "Enter") startGame();
+      else if (["1", "2", "3"].includes(k)) setDifficulty(DIFF_IDS[+k - 1]);
+      return;
+    }
+    if (k === "p" || k === "escape") { if (!e.repeat) togglePause(); return; }
+    if (state === "paused") { if (e.key === "Enter") togglePause(); return; }
+    if (state !== "play") return;
+    const mv = { arrowright: [1, 0], arrowleft: [-1, 0], arrowdown: [0, 1], arrowup: [0, -1] }[k];
+    if (mv) { kbd = true; const s = e.shiftKey ? 2 : 7; cur.x = clamp(cur.x + mv[0] * s, AREA.x, AREA.x + AREA.w); cur.y = clamp(cur.y + mv[1] * s, AREA.y, AREA.y + AREA.h); }
+    else if ((k === "enter" || k === " ") && !e.repeat) { kbd = true; const i = nearest(cur.x, cur.y, 14); if (i >= 0) accuse(i); else sfx.edge(); }
+  });
+  window.addEventListener("blur", () => { if (isPlaying()) togglePause(); });
+  const toWorld = (e) => { const rc = canvas.getBoundingClientRect(); return { x: (e.clientX - rc.left) / rc.width * W, y: (e.clientY - rc.top) / rc.height * H }; };
+  canvas.addEventListener("pointerdown", (e) => {
+    e.preventDefault();
+    if (state !== "play") return;
+    const p = toWorld(e); kbd = false;
+    const i = nearest(p.x, p.y, e.pointerType === "touch" ? 20 : 12);
+    if (i >= 0) accuse(i);
+  });
+  window.addEventListener("pointerdown", (e) => { if (e.pointerType === "touch" && !touchMode) { touchMode = true; syncControls(); if (menu) menu(); } }, true);
+
+  // ---------- Update ----------
+  function update(dt) {
+    clock += dt;
+    for (const p of popups) { p.t += dt; p.y -= 14 * dt; }
+    popups = popups.filter((p) => p.t < 1.8);
+    for (const p of pts) p.pop = Math.max(0, (p.pop || 0) - dt * 3);
+    if (message) { message.t += dt; if (message.t > (state === "play" ? 2 : 2.8)) message = null; }
+    if (state === "levelup") { stateT -= dt; if (stateT <= 0) { level++; beginLevel(); } }
+    else if (state === "fail") { stateT -= dt; if (stateT <= 0) gameOver(); }
+  }
+
+  // ---------- Drawing ----------
+  function drawRule(alpha) {
+    // the band inside which ordinary points live, then the rule itself
+    ctx.lineCap = "round"; ctx.lineJoin = "round";
+    const path = () => {
+      if (kind === "grappoli") return;
+      ctx.beginPath();
+      model.forEach((c, i) => { const jump = i > 0 && Math.hypot(c.x - model[i - 1].x, c.y - model[i - 1].y) > 30; if (i === 0 || jump) ctx.moveTo(c.x, c.y); else ctx.lineTo(c.x, c.y); });
+      if (kind === "anello") ctx.closePath();
+    };
+    ctx.globalAlpha = alpha * 0.16; ctx.strokeStyle = ACC; ctx.fillStyle = ACC;
+    if (kind === "grappoli") for (const c of model) { ctx.beginPath(); ctx.arc(c.x, c.y, CUT * sigma, 0, TAU); ctx.fill(); }
+    else { ctx.lineWidth = CUT * sigma * 2; path(); ctx.stroke(); }
+    ctx.globalAlpha = alpha * 0.7;
+    if (kind === "grappoli") for (const c of model) { ctx.beginPath(); ctx.arc(c.x, c.y, 3, 0, TAU); ctx.fill(); }
+    else { ctx.lineWidth = 1.5; path(); ctx.stroke(); }
+    ctx.globalAlpha = 1;
+  }
+  function drawCloud() {
+    const A = AREA, done = state === "levelup" || state === "fail";
+    ctx.fillStyle = "#120b2c"; ctx.beginPath(); ctx.roundRect(A.x - 6, A.y - 4, A.w + 12, A.h + 8, 12); ctx.fill();
+    ctx.save(); ctx.beginPath(); ctx.rect(A.x - 6, A.y - 4, A.w + 12, A.h + 8); ctx.clip();
+    if (done) drawRule(1); else if (diff.show && state !== "menu") drawRule(0.45);
+    for (const p of pts) {
+      const r = 3.4 + p.pop * 4;
+      if (p.hit && !p.odd) { ctx.strokeStyle = "#ff6b7d"; ctx.lineWidth = 1.6; ctx.beginPath(); ctx.moveTo(p.x - 4, p.y - 4); ctx.lineTo(p.x + 4, p.y + 4); ctx.moveTo(p.x + 4, p.y - 4); ctx.lineTo(p.x - 4, p.y + 4); ctx.stroke(); continue; }
+      ctx.fillStyle = p.odd && (p.hit || done) ? ACC : "#e4dfff"; ctx.beginPath(); ctx.arc(p.x, p.y, r, 0, TAU); ctx.fill();
+      if (p.odd && (p.hit || done)) { ctx.strokeStyle = p.hit ? ACC : "#ff6b7d"; ctx.lineWidth = 2; ctx.beginPath(); ctx.arc(p.x, p.y, 10 + Math.sin(clock * 6) * 1.2, 0, TAU); ctx.stroke(); }
+    }
+    if (kbd && state === "play") { ctx.strokeStyle = "#ffd66b"; ctx.lineWidth = 1.5; ctx.beginPath(); ctx.arc(cur.x, cur.y, 12, 0, TAU); ctx.moveTo(cur.x - 17, cur.y); ctx.lineTo(cur.x - 7, cur.y); ctx.moveTo(cur.x + 7, cur.y); ctx.lineTo(cur.x + 17, cur.y); ctx.moveTo(cur.x, cur.y - 17); ctx.lineTo(cur.x, cur.y - 7); ctx.moveTo(cur.x, cur.y + 7); ctx.lineTo(cur.x, cur.y + 17); ctx.stroke(); }
+    ctx.restore();
+  }
+  function drawPanel() {
+    ctx.textAlign = "center"; ctx.textBaseline = "middle";
+    ctx.fillStyle = "#f1eeff"; ctx.font = "800 13px system-ui";
+    if (state === "play") ctx.fillText(todo === 1 ? "resta un'anomalia da trovare" : `restano ${todo} anomalie da trovare`, W / 2, 422);
+    // the ruler of sigmas, with the last accused point on it
+    const x0 = 30, x1 = W - 30, y = 492, max = 8, fx = (d) => x0 + (x1 - x0) * Math.min(d, max) / max;
+    ctx.fillStyle = "#a9a3cf"; ctx.font = "700 9px system-ui"; ctx.textAlign = "left"; ctx.fillText("DISTANZA DALLA REGOLA, IN SIGMA", x0, y - 28);
+    ctx.fillStyle = "rgba(122,240,255,0.25)"; ctx.fillRect(x0, y - 5, fx(CUT) - x0, 10);
+    ctx.fillStyle = "rgba(255,255,255,0.07)"; ctx.fillRect(fx(CUT), y - 5, x1 - fx(CUT), 10);
+    ctx.textAlign = "center"; ctx.fillStyle = "#a9a3cf";
+    for (let d = 0; d <= max; d += 2) { ctx.fillRect(fx(d) - 0.5, y + 6, 1, 4); ctx.fillText(`${d}σ`, fx(d), y + 18); }
+    ctx.fillStyle = ACC; ctx.font = "700 9px system-ui"; ctx.textAlign = "left"; ctx.fillText("qui stanno i punti normali", x0 + 4, y - 13);
+    if (lastTap) {
+      const c = lastTap.odd ? ACC : "#ff6b7d", x = fx(lastTap.d);
+      ctx.fillStyle = c; ctx.beginPath(); ctx.moveTo(x, y - 7); ctx.lineTo(x - 6, y - 17); ctx.lineTo(x + 6, y - 17); ctx.fill(); ctx.fillRect(x - 1, y - 7, 2, 14);
+      ctx.textAlign = "center"; ctx.font = "800 12px system-ui";
+      ctx.fillText(lastTap.odd ? `era a ${sig(lastTap.d)} σ dalla regola: un'anomalia` : `era a ${sig(lastTap.d)} σ: un punto normale, solo un po' in disparte`, W / 2, 540);
+    } else { ctx.textAlign = "center"; ctx.fillStyle = "#a9a3cf"; ctx.font = "700 11px system-ui"; ctx.fillText(diff.show ? "la fascia chiara è dove stanno i punti normali" : "immagina la regola, poi cerca chi ne sta troppo lontano", W / 2, 540); }
+    ctx.fillStyle = "#a9a3cf"; ctx.font = "700 10px system-ui"; ctx.textAlign = "center";
+    if (state === "play") ctx.fillText(`i punti di questo livello seguono ${NAMES[kind]}`, W / 2, 566);
+    ctx.textBaseline = "alphabetic";
+  }
+  function drawHud() {
+    ctx.fillStyle = "#0d0822"; ctx.fillRect(0, 0, W, TOP - 4);
+    ctx.textBaseline = "middle"; ctx.textAlign = "left";
+    ctx.fillStyle = "#f1eeff"; ctx.font = "900 18px system-ui"; ctx.fillText(nf(score), 12, 16);
+    ctx.fillStyle = "#a9a3cf"; ctx.font = "700 9px system-ui"; ctx.fillText(`REC ${nf(Math.max(bestCache, score))}`, 12, 36);
+    ctx.textAlign = "center"; ctx.fillStyle = ACC; ctx.font = "900 12px system-ui"; ctx.fillText(`LIVELLO ${level + 1}`, W / 2, 14);
+    const all = pts.filter((p) => p.odd).length;
+    ctx.fillStyle = "#ffd66b"; ctx.font = "800 11px system-ui"; ctx.fillText(`${all - todo} di ${all} anomalie · ${pts.length} punti`, W / 2, 34);
+    const ex = touchMode ? W - 62 : W - 12;
+    for (let i = 0; i < diff.lives; i++) { ctx.fillStyle = i < lives ? "#ffd66b" : "rgba(255,255,255,0.15)"; ctx.beginPath(); ctx.arc(ex - 6 - i * 13, 16, 4.5, 0, TAU); ctx.fill(); }
+    ctx.fillStyle = "rgba(255,255,255,0.12)"; ctx.fillRect(0, TOP - 4, W, 4);
+    ctx.fillStyle = "#ffd66b"; ctx.fillRect(0, TOP - 4, W * (all - todo) / Math.max(1, all), 4);
+    ctx.textBaseline = "alphabetic";
+  }
+  function draw() {
+    ctx.setTransform(pxRatio, 0, 0, pxRatio, 0, 0);
+    ctx.fillStyle = "#0d0822"; ctx.fillRect(0, 0, W, H);
+    drawCloud();
+    if (state === "menu") return;
+    drawPanel();
+    drawHud();
+    for (const p of popups) {
+      ctx.globalAlpha = clamp((1.8 - p.t) * 2, 0, 1);
+      ctx.textAlign = "center"; ctx.font = "900 14px system-ui";
+      ctx.lineWidth = 4; ctx.strokeStyle = "#0d0822"; ctx.strokeText(p.text, p.x, p.y); ctx.fillStyle = p.color; ctx.fillText(p.text, p.x, p.y);
+    }
+    ctx.globalAlpha = 1;
+    if (message) {
+      ctx.globalAlpha = Math.min(1, ((state === "play" ? 2 : 2.8) - message.t) * 2);
+      ctx.fillStyle = "rgba(13,8,34,0.92)"; ctx.fillRect(0, 398, W, 54);
+      ctx.textAlign = "center"; ctx.font = "900 19px system-ui"; ctx.fillStyle = message.bad ? "#ff6b7d" : ACC;
+      ctx.fillText(message.text, W / 2, 421);
+      if (message.sub) { ctx.font = "800 11px system-ui"; ctx.fillStyle = "#f1eeff"; ctx.fillText(message.sub, W / 2, 441); }
+      ctx.globalAlpha = 1;
+    }
+  }
+
+  // ---------- Loop ----------
+  let last = performance.now();
+  function frame(now) {
+    const dt = Math.min(0.1, (now - last) / 1000);
+    last = now;
+    update(dt);
+    draw();
+    requestAnimationFrame(frame);
+  }
+  buildLevel();
+  syncControls();
+  showTitle();
+  requestAnimationFrame(frame);
+})();
+</script>
+<script src="../../shared/iniziali.js" data-record="anomalia-best-" data-kind="score"></script>
+</body>
+</html>
