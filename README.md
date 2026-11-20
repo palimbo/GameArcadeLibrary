@@ -4,7 +4,7 @@ Raccolta di giochi arcade per il browser. Ogni gioco è un singolo file HTML sen
 
 ## 🕹️ Sala Giochi — `index.html`
 
-Apri `index.html` nella cartella principale per la pagina di raccolta: mostra tutti i 199 giochi con copertina, genere, comandi e i tuoi record per ogni difficoltà (Facile, Normale, Difficile). Tocca «Gioca» per avviare un gioco; in ogni gioco il pulsante «← Sala Giochi» in alto a sinistra (visibile nei menu) riporta alla raccolta.
+Apri `index.html` nella cartella principale per la pagina di raccolta: mostra tutti i 200 giochi con copertina, genere, comandi e i tuoi record per ogni difficoltà (Facile, Normale, Difficile). Tocca «Gioca» per avviare un gioco; in ogni gioco il pulsante «← Sala Giochi» in alto a sinistra (visibile nei menu) riporta alla raccolta.
 
 **Iniziali del record:** quando batti un record compare la schermata da sala giochi per inserire le tue tre iniziali (frecce ↑ ↓ per cambiare lettera, ← → per spostarti, oppure scrivile direttamente; su telefono i tasti ▲ ▼ e OK). Le iniziali vengono salvate insieme al record e compaiono nei menu del gioco e nella Sala Giochi. Il codice è condiviso da tutti i giochi in `shared/iniziali.js`.
 
@@ -12,7 +12,7 @@ Apri `index.html` nella cartella principale per la pagina di raccolta: mostra tu
 
 **Comandi touch: levetta o frecce:** in cima alla Sala Giochi e nel menu di pausa di ogni gioco con la levetta si sceglie se usare la levetta analogica o una croce di frecce. Con le frecce il tocco viene agganciato a una delle otto direzioni (le quattro principali hanno la zona più larga, così le diagonali si prendono solo di proposito) e spinto fino in fondo; la scelta vale per tutti i giochi e resta memorizzata. Funziona anche nei giochi con due levette (la sfida a due di *Pugni di Fuoco*, muovi e spara di *Assalto Robotico*).
 
-**Trofei:** ogni gioco ha tre trofei a punteggio: 🥉 **Bronzo** (la soglia in qualsiasi difficoltà), 🥈 **Argento** (a Normale o Difficile) e 🥇 **Oro** (a Difficile); nei giochi a tempo (*Corsa al Tramonto*, *Crystal Wars*) conta finire entro un certo tempo. I trofei si calcolano dai record salvati, quindi quelli già fatti si sbloccano da soli; quando un record nuovo ne conquista uno compare un avviso in alto. Le soglie sono nella schermata iniziale, in pausa e a fine partita di ogni gioco; in Sala Giochi ogni cabinato mostra i suoi trofei, in cima c'è il totale (su 597) con il numero di giochi giocati e il filtro **Già giocati** mostra solo i giochi con almeno un record. Le soglie vengono dalle partite di prova di un bot per circa un terzo dei giochi e sono stimate sulle regole di punteggio per gli altri (`shared/trofei.js`).
+**Trofei:** ogni gioco ha tre trofei a punteggio: 🥉 **Bronzo** (la soglia in qualsiasi difficoltà), 🥈 **Argento** (a Normale o Difficile) e 🥇 **Oro** (a Difficile); nei giochi a tempo (*Corsa al Tramonto*, *Crystal Wars*) conta finire entro un certo tempo. I trofei si calcolano dai record salvati, quindi quelli già fatti si sbloccano da soli; quando un record nuovo ne conquista uno compare un avviso in alto. Le soglie sono nella schermata iniziale, in pausa e a fine partita di ogni gioco; in Sala Giochi ogni cabinato mostra i suoi trofei, in cima c'è il totale (su 600) con il numero di giochi giocati e il filtro **Già giocati** mostra solo i giochi con almeno un record. Le soglie vengono dalle partite di prova di un bot per circa un terzo dei giochi e sono stimate sulle regole di punteggio per gli altri (`shared/trofei.js`).
 
 **Imprese:** i traguardi della sala sono pensati in tre livelli. Il **livello 1** sono i trofei di punteggio qui sopra, per tutti i giochi. Il **livello 2** (traguardi di progresso come «arriva al livello 5») abbiamo scelto di non farlo: lo coprono già in parte i trofei e, dove conta, le imprese. Il **livello 3** sono le **imprese** 🏅: due o tre prodezze caratteristiche di ogni gioco, come atterrare sulla piazzola più piccola in *Soccorso Lunare* o seppellire il capo rosso in *Trappola Aliena*. Le imprese di un gioco sono elencate nella sua schermata iniziale, in pausa e a fine partita (tocca un nome per leggere cosa chiede); quando ne fai una compare un avviso azzurro in alto. In Sala Giochi ogni cabinato mostra le sue (🏅 1/3 imprese) e in cima c'è il totale. Si aggiungono a gruppi di giochi: per ora ci sono le 150 imprese dei 50 giochi più recenti (da *Re della Giungla* a *Bocce*): i giochi nuovi nascono con le loro. Come i record, restano salvate in questo browser (`shared/imprese.js`).
 
@@ -3100,3 +3100,17 @@ Un gioco del genere **IA** sul clustering con il k-means: l'algoritmo che divide
 - **Comandi:** clicca o tocca per piazzare un centro, trascinalo per spostarlo, poi VIA · tastiera: frecce per il mirino, `Spazio` per piazzare o prendere e lasciare un centro, `Invio` per VIA · `P` pausa
 
 Per giocare apri `games/baricentri/index.html` nel browser.
+
+### 🤖 Dimmi con chi vai — `games/dimmi-con-chi-vai/index.html`
+
+Un gioco del genere **IA** sull'apprendimento attivo: etichettare i dati costa, quindi conviene scegliere bene quali far etichettare. Il classificatore è il più semplice che ci sia, il vicino più prossimo: ogni punto prende il colore del punto noto più vicino. Dimmi con chi vai e ti dirò chi sei.
+
+- **La mappa:** sotto c'è una divisione in regioni colorate che non si vede: un semipiano, un disco, una fascia, tre settori, un anello, un'onda, regioni sparse, isole, una scacchiera. Due o tre colori
+- **Le domande:** ogni tocco scopre il colore vero di quel punto, che diventa un esempio noto. Subito il classificatore ricolora tutta la mappa: ogni zona prende il colore dell'esempio più vicino
+- **La precisione:** la parte di mappa colorata giusta. Il livello finisce appena raggiunge l'obiettivo; se le domande finiscono prima si perde uno degli errori concessi e arriva una mappa nuova. Alla fine di ogni livello compare la mappa vera, con sopra a strisce l'ipotesi del classificatore: dove le due non coincidono si vede subito
+- **Le domande contate:** il numero a disposizione si calcola su ogni mappa giocandola con una strategia di riferimento (prima domande sparse, poi sui confini fra colori diversi), con un margine che cala con i livelli. Un «oracolo» che vede la mappa vera dice quante domande sarebbero bastate
+- **Punti:** 200 × livello · 60 per ogni domanda avanzata · 300 se ne usi non più dell'oracolo
+- **Difficoltà:** Facile (obiettivo 85%, margine largo, 4 errori concessi), Normale (88%, 3 errori), Difficile (91%, margine stretto); record separati per ogni difficoltà
+- **Comandi:** clicca o tocca la mappa · tastiera: frecce per il mirino (con `Maiusc` a passi piccoli), `Invio` o `Spazio` per chiedere · `P` pausa
+
+Per giocare apri `games/dimmi-con-chi-vai/index.html` nel browser.
