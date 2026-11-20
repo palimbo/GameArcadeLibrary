@@ -1,0 +1,518 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no, viewport-fit=cover">
+<title>Baricentri</title>
+<style>
+  :root {
+    --bg: #0d0822;
+    --fg: #f1eeff;
+    --muted: #a9a3cf;
+    --cyan: #5fe3d6;
+    --yellow: #ffd66b;
+    --red: #ff6b7d;
+    --pink: #9effd0;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  html, body {
+    height: 100%;
+    background: var(--bg);
+    color: var(--fg);
+    font-family: system-ui, -apple-system, "Segoe UI", sans-serif;
+    overflow: hidden;
+    user-select: none;
+    -webkit-user-select: none;
+    touch-action: none;
+  }
+  #wrap { position: fixed; inset: 0; display: flex; align-items: center; justify-content: center; }
+  canvas { display: block; touch-action: none; border-radius: 6px; box-shadow: 0 0 0 2px #2a1f55, 0 10px 40px rgba(0,0,0,0.6); cursor: pointer; }
+  #pauseBtn {
+    position: fixed; z-index: 3; display: none; right: 10px; top: calc(10px + env(safe-area-inset-top, 0px));
+    font: 700 13px system-ui, sans-serif; color: var(--fg);
+    background: rgba(0, 0, 0, 0.6); border: 1px solid rgba(241, 238, 255, 0.35);
+    border-radius: 8px; padding: 6px 10px; cursor: pointer;
+  }
+  #overlay {
+    position: fixed; inset: 0; z-index: 5;
+    display: flex; flex-direction: column; align-items: center; justify-content: flex-start;
+    gap: 14px; padding: 16px; text-align: center; overflow-y: auto;
+    background: rgba(13, 8, 34, 0.93);
+  }
+  #overlay > :first-child { margin-top: auto; }
+  #overlay > :last-child { margin-bottom: auto; }
+  #overlay.hidden { display: none; }
+  #homeLink {
+    position: fixed; top: calc(10px + env(safe-area-inset-top, 0px)); left: 10px; z-index: 6;
+    font: 600 13px/1 system-ui, sans-serif; color: #fff; text-decoration: none;
+    padding: 8px 12px; border-radius: 999px; background: rgba(0,0,0,.55);
+    border: 1px solid rgba(255,255,255,.25);
+  }
+  #homeLink:hover { background: rgba(0,0,0,.8); }
+  #overlay.hidden ~ #homeLink { display: none; }
+  @media (max-width: 700px) { #overlay { padding-top: calc(52px + env(safe-area-inset-top, 0px)); } }
+  #overlay h1 { font-size: clamp(30px, 9vw, 54px); font-weight: 900; letter-spacing: 1px; color: var(--pink);
+    text-shadow: 3px 3px 0 #2a1f6a, 0 0 22px rgba(158,255,208,0.35); text-wrap: balance; }
+  #overlay h2 { font-size: clamp(24px, 7vw, 40px); font-weight: 900; letter-spacing: 2px; color: var(--pink); }
+  #overlay h2.lose { color: var(--red); }
+  #overlay p { max-width: 540px; font-size: clamp(13px, 3.4vw, 16px); line-height: 1.55; }
+  #overlay p.muted { color: var(--muted); }
+  #overlay .pts { display: grid; grid-template-columns: repeat(2, auto); gap: 4px 18px; font-size: 13px; color: var(--muted); text-align: left; max-width: 560px; }
+  #overlay .pts b { color: var(--fg); }
+  #overlay .diff { display: flex; gap: 10px; flex-wrap: wrap; justify-content: center; }
+  #overlay button {
+    font: 800 15px system-ui, sans-serif; letter-spacing: 1.5px; color: var(--fg);
+    background: transparent; cursor: pointer;
+    border: 2px solid rgba(241,238,255,0.3); border-radius: 10px; padding: 9px 16px;
+  }
+  #overlay .diff button.on { border-color: var(--c); color: var(--c); box-shadow: 0 0 12px var(--c); }
+  #overlay button.start { border-color: var(--pink); color: #06281c; background: var(--pink); padding: 11px 30px; box-shadow: 0 4px 0 #4fae86; }
+  @media (max-height: 560px) {
+    #overlay { gap: 8px; }
+    #overlay h1 { font-size: 28px; }
+    #overlay p { font-size: 13px; line-height: 1.4; }
+    #overlay .help, #overlay .pts { display: none; }
+  }
+</style>
+</head>
+<body>
+<div id="wrap"><canvas id="game"></canvas></div>
+<button id="pauseBtn" type="button" aria-label="Pausa">❚❚</button>
+<div id="overlay"></div>
+<a id="homeLink" href="../../index.html">← Sala Giochi</a>
+
+<script>
+(() => {
+  "use strict";
+
+  const W = 360, H = 600, TOP = 56, TAU = Math.PI * 2;
+  const ACC = "#9effd0";
+  const COLS = ["#ff6b7d", "#ffd66b", "#5fe3d6", "#b79bff", "#ff9a6b", "#6bb8ff"];
+  const AREA = { x: 14, y: 66, w: 332, h: 330 };
+  const BTN = { x: 14, y: 500, w: 332, h: 52 };
+  const STEP = 0.55;                                 // seconds per round of the algorithm
+
+  const DIFFICULTIES = {
+    facile:    { label: "FACILE",    color: "#7ee0a0", desc: "margine del 6% sul minimo, dispersione sempre visibile · 4 errori concessi", tol: 0.06, live: true, lives: 4 },
+    normale:   { label: "NORMALE",   color: "#ffd66b", desc: "margine del 3% sul minimo · 3 errori concessi", tol: 0.03, lives: 3 },
+    difficile: { label: "DIFFICILE", color: "#ff6b7d", desc: "margine dell'1%: serve proprio il minimo · 3 errori concessi", tol: 0.01, lives: 3 },
+  };
+  const DIFF_IDS = Object.keys(DIFFICULTIES);
+  const DIFF_KEY = "baricentri-difficulty";
+  const bestKey = (id) => `baricentri-best-${id}`;
+  function store(k, v) { try { localStorage.setItem(k, v); } catch { /* ignore */ } }
+  function load(k) { try { return localStorage.getItem(k); } catch { return null; } }
+  const rint = (a, b) => a + Math.floor(Math.random() * (b - a + 1));
+  const rnd = (a, b) => a + Math.random() * (b - a);
+  const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
+  const nf = (n) => n.toLocaleString("it-IT");
+  const d1 = (v) => v.toFixed(1).replace(".", ",");
+  const gauss = () => Math.sqrt(-2 * Math.log(1 - Math.random())) * Math.cos(TAU * Math.random());
+
+  // ---------- Canvas ----------
+  const canvas = document.getElementById("game");
+  const ctx = canvas.getContext("2d");
+  const overlay = document.getElementById("overlay");
+  const pauseBtn = document.getElementById("pauseBtn");
+  let pxRatio = 1, touchMode = !!(window.matchMedia && matchMedia("(pointer: coarse)").matches);
+  function resize() {
+    const availW = window.innerWidth - 8, availH = window.innerHeight - 8;
+    const s = Math.max(0.2, Math.min(availW / W, availH / H));
+    pxRatio = Math.min(3, s * (window.devicePixelRatio || 1));
+    canvas.style.width = W * s + "px";
+    canvas.style.height = H * s + "px";
+    canvas.width = Math.round(W * pxRatio);
+    canvas.height = Math.round(H * pxRatio);
+  }
+  window.addEventListener("resize", () => syncControls());
+
+  // ---------- Audio: soft tones ----------
+  let audioCtx = null;
+  function beep(freq, dur, type = "sine", vol = 0.05, delay = 0) {
+    if (!audioCtx) return;
+    const t = audioCtx.currentTime + delay;
+    const osc = audioCtx.createOscillator(), gain = audioCtx.createGain();
+    osc.type = type; osc.frequency.setValueAtTime(freq, t);
+    gain.gain.setValueAtTime(0.0001, t);
+    gain.gain.exponentialRampToValueAtTime(vol, t + 0.015);
+    gain.gain.exponentialRampToValueAtTime(0.0001, t + dur);
+    osc.connect(gain).connect(audioCtx.destination);
+    osc.start(t); osc.stop(t + dur + 0.02);
+  }
+  const arp = (notes, gap, d, type, vol) => notes.forEach((f, i) => beep(f, d, type, vol, i * gap));
+  const sfx = {
+    pick: () => beep(520, 0.06, "sine", 0.035),
+    step: (v) => beep(392 * Math.pow(1.09, v), 0.09, "triangle", 0.04),
+    edge: () => beep(150, 0.08, "sine", 0.045),
+    row: () => beep(880, 0.1, "sine", 0.03, 0.05),
+    win: () => arp([523, 659, 784, 1047], 0.09, 0.35),
+    perfect: () => arp([523, 659, 784, 1047, 1319, 1568], 0.07, 0.4),
+    fail: () => arp([392, 330, 277], 0.14, 0.35, "triangle", 0.05),
+    lose: () => arp([392, 330, 277, 220], 0.16, 0.4, "triangle", 0.05),
+  };
+
+  // ---------- State ----------
+  let difficulty = DIFFICULTIES[load(DIFF_KEY)] ? load(DIFF_KEY) : "normale";
+  let diff = DIFFICULTIES[difficulty];
+  let state = "menu", menu = null, pausedFrom = null, stateT = 0, clock = 0;
+  let score = 0, level = 0, bestCache = 0, cleared = 0, perfects = 0, lives = 0;
+  let K = 3, pts = [], truth = [], cents = [], best = 0, bestC = [], phase = "place", iters = 0, hist = [], runT = 0, prevA = null, result = null;
+  let held = -1, cur = { x: 180, y: 230 }, kbd = false;
+  let popups = [], message = null;
+  const isPlaying = () => ["play", "levelup", "fail"].includes(state);
+
+  // ---------- k-means ----------
+  const near = (p, C) => { let b = 0, bd = 1e18; for (let i = 0; i < C.length; i++) { const d = (p.x - C[i].x) ** 2 + (p.y - C[i].y) ** 2; if (d < bd) { bd = d; b = i; } } return [b, bd]; };
+  const inertia = (C) => pts.reduce((k, p) => k + near(p, C)[1], 0);
+  const disp = (I) => I / pts.length / 100;           // what the player reads: mean squared distance, in hundreds of px²
+  // the centre of each group: the mean of its points (an empty group keeps its place)
+  function means(C, a) {
+    const s = C.map(() => ({ x: 0, y: 0, n: 0 }));
+    pts.forEach((p, i) => { const q = s[a[i]]; q.x += p.x; q.y += p.y; q.n++; });
+    return C.map((c, i) => (s[i].n ? { x: s[i].x / s[i].n, y: s[i].y / s[i].n } : { x: c.x, y: c.y }));
+  }
+  function lloyd(C0) {
+    let C = C0.map((c) => ({ x: c.x, y: c.y })), a = null, it = 0;
+    for (; it < 60; it++) {
+      const na = pts.map((p) => near(p, C)[0]);
+      if (a && na.every((v, i) => v === a[i])) break;
+      a = na; C = means(C, a);
+    }
+    return { C, I: inertia(C), it };
+  }
+  // k-means++: each new start drawn far from the ones already chosen
+  function plusplus() {
+    const C = [pts[rint(0, pts.length - 1)]];
+    while (C.length < K) {
+      const d = pts.map((p) => near(p, C)[1]), s = d.reduce((x, y) => x + y, 0);
+      let r = Math.random() * s, i = 0; while (i < pts.length - 1 && r >= d[i]) r -= d[i++];
+      C.push(pts[i]);
+    }
+    return C;
+  }
+
+  // ---------- The cloud ----------
+  function buildLevel() {
+    K = level < 8 ? [2, 3, 3, 4, 4, 5, 5, 6][level] : rint(4, 6);
+    const A = AREA, sep = Math.max(44, 112 - level * 7);
+    let fails = 0;
+    for (let tries = 0; tries < 60; tries++) {
+      const bl = [];
+      for (let g = 0; bl.length < K && g < 3000; g++) {
+        const b = { x: rnd(A.x + 40, A.x + A.w - 40), y: rnd(A.y + 40, A.y + A.h - 40), s: rnd(12, 22 + Math.min(16, level * 1.6)), n: level >= 3 ? rint(7, 30) : rint(14, 24), ax: level >= 4 ? rnd(1, 2) : rnd(1, 1.25), an: rnd(0, TAU) };
+        if (bl.every((o) => Math.hypot(o.x - b.x, o.y - b.y) > sep)) bl.push(b);
+      }
+      if (bl.length < K) continue;
+      pts = [];
+      for (const b of bl) for (let i = 0, g = 0; i < b.n && g < 400; g++) {
+        const u = gauss() * b.s * b.ax, v = gauss() * b.s / b.ax, x = b.x + u * Math.cos(b.an) - v * Math.sin(b.an), y = b.y + u * Math.sin(b.an) + v * Math.cos(b.an);
+        if (x > A.x + 5 && x < A.x + A.w - 5 && y > A.y + 5 && y < A.y + A.h - 5) { pts.push({ x, y, g: bl.indexOf(b) }); i++; }
+      }
+      if (level >= 5) for (let i = rint(3, 6 + Math.min(8, level - 5)); i > 0; i--) pts.push({ x: rnd(A.x + 8, A.x + A.w - 8), y: rnd(A.y + 8, A.y + A.h - 8), g: -1 });
+      truth = bl.map((b, i) => { const m = pts.filter((p) => p.g === i); return { x: m.reduce((k, p) => k + p.x, 0) / m.length, y: m.reduce((k, p) => k + p.y, 0) / m.length }; });
+      // the best grouping we can find
+      const tr = lloyd(truth); best = tr.I; bestC = tr.C;
+      for (let r = 0; r < 40; r++) { const o = lloyd(plusplus()); if (o.I < best) { best = o.I; bestC = o.C; } }
+      // the groups you see must be the best answer, and a careless start must be able to get stuck
+      if (tr.I > best * 1.005) { fails++; continue; }
+      let stuck = 0;
+      for (let r = 0; r < 30; r++) { const R = Array.from({ length: K }, () => ({ x: rnd(A.x, A.x + A.w), y: rnd(A.y, A.y + A.h) })); if (lloyd(R).I > best * (1 + diff.tol)) stuck++; }
+      if (stuck >= 8 || tries > 40) break;
+    }
+    window.__fails = fails;
+    cents = []; phase = "place"; iters = 0; hist = []; prevA = null; result = null; held = -1;
+    for (const p of pts) p.c = -1;
+  }
+  function recolor() { for (const p of pts) p.c = cents.length ? near(p, cents)[0] : -1; }
+  function startGame() {
+    if (!audioCtx) { try { audioCtx = new (window.AudioContext || window.webkitAudioContext)(); } catch { audioCtx = null; } }
+    if (audioCtx && audioCtx.state === "suspended") audioCtx.resume();
+    score = 0; level = 0; cleared = 0; perfects = 0; lives = diff.lives; popups = [];
+    bestCache = parseInt(load(bestKey(difficulty)), 10) || 0;
+    beginLevel();
+    menu = null;
+    overlay.classList.add("hidden");
+    syncControls();
+    last = performance.now();
+  }
+  function beginLevel() {
+    buildLevel();
+    state = "play";
+    message = { text: `LIVELLO ${level + 1}`, sub: `${pts.length} punti: cerca ${K} gruppi`, t: 0 };
+  }
+  function addScore(k, y, color, label = "") { score += k; popups.push({ text: `${label}+${nf(k)}`, x: W / 2, y, t: 0, color }); }
+  function place(x, y) {
+    if (state !== "play" || phase !== "place" || cents.length >= K) return -1;
+    cents.push({ x: clamp(x, AREA.x, AREA.x + AREA.w), y: clamp(y, AREA.y, AREA.y + AREA.h), trail: [] });
+    recolor(); sfx.pick();
+    return cents.length - 1;
+  }
+  function moveTo(i, x, y) { if (!cents[i] || phase !== "place") return; cents[i].x = clamp(x, AREA.x, AREA.x + AREA.w); cents[i].y = clamp(y, AREA.y, AREA.y + AREA.h); recolor(); }
+  function go() {
+    if (state !== "play" || phase !== "place" || cents.length < K) { if (state === "play") sfx.edge(); return; }
+    phase = "run"; held = -1; runT = 0; message = null;
+    stepAlgo();
+  }
+  // one round: every point to its nearest centre, every centre to the middle of its points
+  function stepAlgo() {
+    const a = pts.map((p) => near(p, cents)[0]);
+    pts.forEach((p, i) => { p.c = a[i]; });
+    hist.push(inertia(cents));
+    if (prevA && a.every((v, i) => v === prevA[i])) { finish(); return; }
+    prevA = a;
+    const M = means(cents, a);
+    cents.forEach((c, i) => { c.fx = c.x; c.fy = c.y; c.tx = M[i].x; c.ty = M[i].y; c.trail.push({ x: c.x, y: c.y }); });
+    iters++; runT = 0;
+    sfx.step(Math.min(6, iters) - 2);
+  }
+  function finish() {
+    phase = "done";
+    const I = inertia(cents), ok = I <= best * (1 + diff.tol), perfect = I <= best * 1.001;
+    result = { I, ok, perfect };
+    if (ok) {
+      state = "levelup"; stateT = 3; cleared++;
+      addScore(200 * (level + 1), 326, ACC);
+      const fast = 50 * Math.max(0, 7 - iters);
+      if (fast) addScore(fast, 304, "#ffd66b", `${iters} ${iters === 1 ? "giro" : "giri"} · `);
+      if (perfect) { perfects++; addScore(300, 282, "#5fe3d6", "il minimo · "); sfx.perfect(); } else sfx.win();
+      message = { text: perfect ? "IL MINIMO" : "BUONI GRUPPI", sub: `dispersione ${d1(disp(I))}, il minimo è ${d1(disp(best))}`, t: 0 };
+    } else {
+      lives--;
+      state = "fail"; stateT = 3.4;
+      (lives > 0 ? sfx.fail : sfx.lose)();
+      message = { text: "BLOCCATO IN UN MINIMO LOCALE", sub: `dispersione ${d1(disp(I))}, si poteva arrivare a ${d1(disp(best))}`, t: 0, bad: true };
+    }
+  }
+  function gameOver() {
+    state = "over";
+    const prev = parseInt(load(bestKey(difficulty)), 10) || 0;
+    const record = score > prev;
+    if (record) store(bestKey(difficulty), String(score));
+    menu = () => showOverlay(
+      `<h2 class="lose">NUVOLA DISPERSA</h2>
+       <p>Punteggio: <b>${nf(score)}</b> · ${cleared} ${cleared === 1 ? "nuvola divisa" : "nuvole divise"}${perfects ? ` · ${perfects} al minimo` : ""} · ${diff.label}</p>
+       <p class="muted">Si chiama k-means. Non sa che cosa sia un gruppo: sposta solo ogni centro verso la media dei suoi punti. Per questo da dove parte conta così tanto.</p>
+       ${record ? "<p style='color:var(--yellow)'>★ NUOVO RECORD! ★</p>" : ""}
+       ${difficultyHTML()}
+       <button class="start" data-start>RIPROVA</button>`
+    );
+    menu();
+    syncControls();
+  }
+  function togglePause() {
+    if (isPlaying()) {
+      pausedFrom = state; state = "paused";
+      showOverlay(`<h2>PAUSA</h2><button class="start" data-resume>CONTINUA</button><p class="muted">Premi P per continuare</p>`);
+    } else if (state === "paused") {
+      state = pausedFrom; overlay.classList.add("hidden"); last = performance.now();
+    }
+    syncControls();
+  }
+  // the pause menu can end the game (shared/iniziali.js): it ends here the usual way, saving the record
+  window.addEventListener("sala:termina", () => { if (state !== "paused") return; overlay.classList.add("hidden"); gameOver(); syncControls(); });
+  function syncControls() {
+    pauseBtn.style.display = isPlaying() && touchMode ? "block" : "none";
+    resize();
+  }
+  pauseBtn.addEventListener("click", () => togglePause());
+  function showOverlay(html) { overlay.innerHTML = html; overlay.classList.remove("hidden"); }
+  function difficultyHTML() {
+    const buttons = DIFF_IDS.map((id) => {
+      const d = DIFFICULTIES[id];
+      return `<button type="button" data-diff="${id}" class="${id === difficulty ? "on" : ""}" style="--c:${d.color}">${d.label}</button>`;
+    }).join("");
+    const best = parseInt(load(bestKey(difficulty)), 10);
+    return `<div class="diff">${buttons}</div><p class="muted">${diff.desc}${best ? ` · Record: ${nf(best)}` : ""}</p>`;
+  }
+  function setDifficulty(id) { if (!DIFFICULTIES[id]) return; difficulty = id; diff = DIFFICULTIES[id]; store(DIFF_KEY, id); if (state === "menu") buildLevel(); if (menu) menu(); }
+  function showTitle() {
+    menu = showTitle;
+    showOverlay(
+      `<h1>BARICENTRI</h1>
+       <p>Una nuvola di punti e un numero: quanti gruppi cercare. Piazza i centri, poi premi VIA e l'algoritmo fa il resto: ogni punto va col centro più vicino, ogni centro si sposta nel mezzo dei suoi punti, e così via finché niente cambia più. Ma se parti male si ferma su una divisione peggiore, e non lo sa.</p>
+       <div class="pts">
+         <span><b>Centri</b></span><span>tocca per piazzarli, trascinali per spostarli: i punti si colorano col centro più vicino</span>
+         <span><b>Dispersione</b></span><span>quanto i punti stanno lontani dal loro centro: va resa la più piccola possibile</span>
+         <span><b>Giri</b></span><span>più i centri partono vicini al punto giusto, meno giri servono</span>
+         <span><b>Punti</b></span><span>200 × livello · 50 per ogni giro risparmiato (sotto 7) · 300 se arrivi al minimo</span>
+       </div>
+       ${touchMode
+         ? `<p class="muted help">Tocca per piazzare un centro, trascina per spostarlo, poi VIA</p>`
+         : `<p class="muted help">Clicca per piazzare, trascina per spostare, poi VIA · oppure frecce, Spazio e Invio · P pausa</p>`}
+       ${difficultyHTML()}
+       <button class="start" data-start>PRIMA NUVOLA</button>`
+    );
+  }
+  overlay.addEventListener("click", (e) => {
+    const d = e.target.closest("[data-diff]");
+    if (d) { setDifficulty(d.dataset.diff); return; }
+    if (e.target.closest("[data-start]")) startGame();
+    if (e.target.closest("[data-resume]")) togglePause();
+  });
+
+  // ---------- Input ----------
+  const grab = (x, y, r) => { let b = -1, bd = r; cents.forEach((c, i) => { const d = Math.hypot(c.x - x, c.y - y); if (d < bd) { bd = d; b = i; } }); return b; };
+  const inArea = (p) => p.x >= AREA.x - 6 && p.x <= AREA.x + AREA.w + 6 && p.y >= AREA.y - 4 && p.y <= AREA.y + AREA.h + 4;
+  window.addEventListener("keydown", (e) => {
+    const k = e.key.toLowerCase();
+    if ([" ", "arrowup", "arrowdown", "arrowleft", "arrowright"].includes(k)) e.preventDefault();
+    if (state === "menu" || state === "over") {
+      if (e.key === "Enter") startGame();
+      else if (["1", "2", "3"].includes(k)) setDifficulty(DIFF_IDS[+k - 1]);
+      return;
+    }
+    if (k === "p" || k === "escape") { if (!e.repeat) togglePause(); return; }
+    if (state === "paused") { if (e.key === "Enter") togglePause(); return; }
+    if (state !== "play" || phase !== "place") return;
+    const mv = { arrowright: [1, 0], arrowleft: [-1, 0], arrowdown: [0, 1], arrowup: [0, -1] }[k];
+    if (mv) { kbd = true; const s = e.shiftKey ? 2 : 8; cur.x = clamp(cur.x + mv[0] * s, AREA.x, AREA.x + AREA.w); cur.y = clamp(cur.y + mv[1] * s, AREA.y, AREA.y + AREA.h); if (held >= 0) moveTo(held, cur.x, cur.y); }
+    else if (k === " " && !e.repeat) {
+      kbd = true;
+      if (held >= 0) { held = -1; sfx.pick(); }
+      else { const i = grab(cur.x, cur.y, 16); if (i >= 0) { held = i; sfx.pick(); } else place(cur.x, cur.y); }
+    } else if (k === "enter" && !e.repeat) go();
+  });
+  window.addEventListener("blur", () => { if (isPlaying()) togglePause(); });
+  const toWorld = (e) => { const rc = canvas.getBoundingClientRect(); return { x: (e.clientX - rc.left) / rc.width * W, y: (e.clientY - rc.top) / rc.height * H }; };
+  canvas.addEventListener("pointerdown", (e) => {
+    e.preventDefault();
+    if (state !== "play") return;
+    const p = toWorld(e); kbd = false;
+    if (p.x >= BTN.x && p.x <= BTN.x + BTN.w && p.y >= BTN.y && p.y <= BTN.y + BTN.h) { go(); return; }
+    if (phase !== "place" || !inArea(p)) return;
+    const i = grab(p.x, p.y, e.pointerType === "touch" ? 26 : 16);
+    held = i >= 0 ? i : place(p.x, p.y);
+    try { canvas.setPointerCapture(e.pointerId); } catch { /* ignore */ }
+  });
+  canvas.addEventListener("pointermove", (e) => { if (held < 0 || phase !== "place") return; const p = toWorld(e); moveTo(held, p.x, p.y); });
+  const drop = () => { if (held >= 0 && !kbd) held = -1; };
+  canvas.addEventListener("pointerup", drop); canvas.addEventListener("pointercancel", drop);
+  window.addEventListener("pointerdown", (e) => { if (e.pointerType === "touch" && !touchMode) { touchMode = true; syncControls(); if (menu) menu(); } }, true);
+
+  // ---------- Update ----------
+  function update(dt) {
+    clock += dt;
+    for (const p of popups) { p.t += dt; p.y -= 14 * dt; }
+    popups = popups.filter((p) => p.t < 1.8);
+    if (message) { message.t += dt; if (message.t > (state === "play" ? 2 : 3)) message = null; }
+    if (state === "play" && phase === "run") {
+      runT += dt;
+      const u = Math.min(1, runT / (STEP * 0.75)), e = 1 - (1 - u) * (1 - u);
+      for (const c of cents) { c.x = c.fx + (c.tx - c.fx) * e; c.y = c.fy + (c.ty - c.fy) * e; }
+      if (runT >= STEP) stepAlgo();
+    } else if (state === "levelup") { stateT -= dt; if (stateT <= 0) { level++; beginLevel(); } }
+    else if (state === "fail") { stateT -= dt; if (stateT <= 0) { if (lives <= 0) gameOver(); else beginLevel(); } }
+  }
+
+  // ---------- Drawing ----------
+  function marker(x, y, col, r, label) {
+    ctx.strokeStyle = "#0d0822"; ctx.lineWidth = 5; ctx.beginPath(); ctx.moveTo(x - r, y); ctx.lineTo(x + r, y); ctx.moveTo(x, y - r); ctx.lineTo(x, y + r); ctx.stroke();
+    ctx.strokeStyle = col; ctx.lineWidth = 2.5; ctx.beginPath(); ctx.moveTo(x - r, y); ctx.lineTo(x + r, y); ctx.moveTo(x, y - r); ctx.lineTo(x, y + r); ctx.stroke();
+    ctx.fillStyle = col; ctx.strokeStyle = "#0d0822"; ctx.lineWidth = 2; ctx.beginPath(); ctx.arc(x, y, r * 0.5, 0, TAU); ctx.fill(); ctx.stroke();
+    if (label) { ctx.fillStyle = "#0d0822"; ctx.font = "900 8px system-ui"; ctx.textAlign = "center"; ctx.textBaseline = "middle"; ctx.fillText(label, x, y + 0.5); ctx.textBaseline = "alphabetic"; }
+  }
+  function drawCloud() {
+    const A = AREA, done = state === "levelup" || state === "fail";
+    ctx.fillStyle = "#120b2c"; ctx.beginPath(); ctx.roundRect(A.x - 6, A.y - 4, A.w + 12, A.h + 8, 12); ctx.fill();
+    ctx.save(); ctx.beginPath(); ctx.rect(A.x - 6, A.y - 4, A.w + 12, A.h + 8); ctx.clip();
+    // each point joined faintly to its centre, then the points themselves
+    if (cents.length) { ctx.lineWidth = 1; for (const p of pts) { if (p.c < 0) continue; const c = cents[p.c]; ctx.strokeStyle = COLS[p.c]; ctx.globalAlpha = 0.13; ctx.beginPath(); ctx.moveTo(p.x, p.y); ctx.lineTo(c.x, c.y); ctx.stroke(); } ctx.globalAlpha = 1; }
+    for (const p of pts) { ctx.fillStyle = p.c >= 0 ? COLS[p.c] : "#e4dfff"; ctx.beginPath(); ctx.arc(p.x, p.y, 3.2, 0, TAU); ctx.fill(); }
+    // the way each centre has travelled
+    for (let i = 0; i < cents.length; i++) {
+      const c = cents[i]; if (!c.trail.length) continue;
+      ctx.strokeStyle = COLS[i]; ctx.globalAlpha = 0.55; ctx.lineWidth = 1.5; ctx.setLineDash([3, 3]); ctx.beginPath(); ctx.moveTo(c.trail[0].x, c.trail[0].y);
+      for (const q of c.trail) ctx.lineTo(q.x, q.y); ctx.lineTo(c.x, c.y); ctx.stroke(); ctx.setLineDash([]);
+      ctx.fillStyle = COLS[i]; ctx.beginPath(); ctx.arc(c.trail[0].x, c.trail[0].y, 3, 0, TAU); ctx.fill(); ctx.globalAlpha = 1;
+    }
+    // after a failure: where the best centres were
+    if (state === "fail") for (const c of bestC) { ctx.strokeStyle = "#f1eeff"; ctx.lineWidth = 1.5; ctx.setLineDash([4, 3]); ctx.beginPath(); ctx.arc(c.x, c.y, 13 + Math.sin(clock * 5) * 1.5, 0, TAU); ctx.stroke(); ctx.setLineDash([]); }
+    cents.forEach((c, i) => marker(c.x, c.y, COLS[i], held === i ? 13 : 10, String(i + 1)));
+    if (kbd && state === "play" && phase === "place") { ctx.strokeStyle = "#f1eeff"; ctx.lineWidth = 1.2; ctx.beginPath(); ctx.arc(cur.x, cur.y, 15, 0, TAU); ctx.stroke(); ctx.fillStyle = "#f1eeff"; ctx.beginPath(); ctx.arc(cur.x, cur.y, 1.6, 0, TAU); ctx.fill(); }
+    if (done && result) { ctx.globalAlpha = 0.9; }
+    ctx.restore(); ctx.globalAlpha = 1;
+  }
+  function drawPanel() {
+    ctx.textAlign = "center"; ctx.textBaseline = "middle";
+    // the centres to place
+    for (let i = 0; i < K; i++) { const x = W / 2 + (i - (K - 1) / 2) * 24; if (i < cents.length) marker(x, 418, COLS[i], 8); else { ctx.strokeStyle = "#4a3f88"; ctx.lineWidth = 1.5; ctx.setLineDash([3, 3]); ctx.beginPath(); ctx.arc(x, 418, 7, 0, TAU); ctx.stroke(); ctx.setLineDash([]); } }
+    // the dispersion, round after round, against the best possible
+    const x0 = 24, y0 = 446, w = W - 48, h = 34;
+    if (hist.length) {
+      const top = Math.max(...hist, best) * 1.05, n = Math.max(8, hist.length), bw = w / n;
+      ctx.fillStyle = "rgba(255,255,255,0.05)"; ctx.fillRect(x0, y0, w, h);
+      hist.forEach((v, i) => { ctx.fillStyle = v <= best * (1 + diff.tol) ? "#7ee0a0" : "#8f8bff"; const bh = h * v / top; ctx.fillRect(x0 + i * bw + 2, y0 + h - bh, bw - 4, bh); });
+      if (phase === "done") { ctx.fillStyle = "#ffd66b"; const yb = y0 + h - h * best * (1 + diff.tol) / top; ctx.fillRect(x0, yb - 1, w, 2); }
+      ctx.textAlign = "left"; ctx.fillStyle = "#a9a3cf"; ctx.font = "700 9px system-ui"; ctx.fillText(`DISPERSIONE, GIRO PER GIRO · ${iters} ${iters === 1 ? "giro" : "giri"}`, x0, y0 - 9);
+      ctx.textAlign = "right"; ctx.fillStyle = "#f1eeff"; ctx.font = "800 11px system-ui"; ctx.fillText(d1(disp(hist[hist.length - 1])), x0 + w, y0 - 9);
+    } else {
+      ctx.fillStyle = "#a9a3cf"; ctx.font = "700 11px system-ui";
+      ctx.fillText(cents.length < K ? `piazza ancora ${K - cents.length} ${K - cents.length === 1 ? "centro" : "centri"}: tocca la nuvola` : "trascina i centri finché ti convincono, poi VIA", W / 2, 452);
+      if (diff.live && cents.length === K) { ctx.fillStyle = "#f1eeff"; ctx.font = "800 12px system-ui"; ctx.fillText(`dispersione adesso: ${d1(disp(inertia(cents)))}`, W / 2, 472); }
+    }
+    const b = BTN, on = state === "play" && phase === "place" && cents.length === K;
+    ctx.textAlign = "center"; ctx.globalAlpha = on ? 1 : 0.35;
+    ctx.fillStyle = "#4fae86"; ctx.beginPath(); ctx.roundRect(b.x, b.y + 5, b.w, b.h - 5, 12); ctx.fill();
+    ctx.fillStyle = ACC; ctx.beginPath(); ctx.roundRect(b.x, b.y, b.w, b.h - 6, 12); ctx.fill();
+    ctx.fillStyle = "#06281c"; ctx.font = "900 17px system-ui";
+    ctx.fillText(phase === "run" ? `GIRO ${iters}…` : phase === "done" ? "FERMO: NIENTE CAMBIA PIÙ" : on ? "VIA" : `PIAZZA ${K} CENTRI`, W / 2, b.y + 23);
+    ctx.globalAlpha = 1;
+    ctx.fillStyle = "#a9a3cf"; ctx.font = "700 10px system-ui";
+    if (phase === "run") ctx.fillText("ogni punto col centro più vicino, ogni centro nel mezzo dei suoi punti", W / 2, 572);
+    else if (state === "fail") ctx.fillText("i cerchi tratteggiati: dove stavano i centri migliori", W / 2, 572);
+    ctx.textBaseline = "alphabetic";
+  }
+  function drawHud() {
+    ctx.fillStyle = "#0d0822"; ctx.fillRect(0, 0, W, TOP - 4);
+    ctx.textBaseline = "middle"; ctx.textAlign = "left";
+    ctx.fillStyle = "#f1eeff"; ctx.font = "900 18px system-ui"; ctx.fillText(nf(score), 12, 16);
+    ctx.fillStyle = "#a9a3cf"; ctx.font = "700 9px system-ui"; ctx.fillText(`REC ${nf(Math.max(bestCache, score))}`, 12, 36);
+    ctx.textAlign = "center"; ctx.fillStyle = ACC; ctx.font = "900 12px system-ui"; ctx.fillText(`LIVELLO ${level + 1}`, W / 2, 14);
+    ctx.fillStyle = "#ffd66b"; ctx.font = "800 11px system-ui"; ctx.fillText(`${K} gruppi · ${pts.length} punti`, W / 2, 34);
+    const ex = touchMode ? W - 62 : W - 12;
+    for (let i = 0; i < diff.lives; i++) { ctx.fillStyle = i < lives ? "#ffd66b" : "rgba(255,255,255,0.15)"; ctx.beginPath(); ctx.arc(ex - 6 - i * 13, 16, 4.5, 0, TAU); ctx.fill(); }
+    ctx.fillStyle = "rgba(255,255,255,0.12)"; ctx.fillRect(0, TOP - 4, W, 4);
+    ctx.fillStyle = "#ffd66b"; ctx.fillRect(0, TOP - 4, W * cents.length / K, 4);
+    ctx.textBaseline = "alphabetic";
+  }
+  function draw() {
+    ctx.setTransform(pxRatio, 0, 0, pxRatio, 0, 0);
+    ctx.fillStyle = "#0d0822"; ctx.fillRect(0, 0, W, H);
+    drawCloud();
+    if (state === "menu") return;
+    drawPanel();
+    drawHud();
+    for (const p of popups) {
+      ctx.globalAlpha = clamp((1.8 - p.t) * 2, 0, 1);
+      ctx.textAlign = "center"; ctx.font = "900 14px system-ui";
+      ctx.lineWidth = 4; ctx.strokeStyle = "#0d0822"; ctx.strokeText(p.text, p.x, p.y); ctx.fillStyle = p.color; ctx.fillText(p.text, p.x, p.y);
+    }
+    ctx.globalAlpha = 1;
+    if (message) {
+      ctx.globalAlpha = Math.min(1, ((state === "play" ? 2 : 3) - message.t) * 2);
+      ctx.fillStyle = "rgba(13,8,34,0.92)"; ctx.fillRect(0, 340, W, 54);
+      ctx.textAlign = "center"; ctx.font = `900 ${message.text.length > 22 ? 16 : 19}px system-ui`; ctx.fillStyle = message.bad ? "#ff6b7d" : ACC;
+      ctx.fillText(message.text, W / 2, 363);
+      if (message.sub) { ctx.font = "800 11px system-ui"; ctx.fillStyle = "#f1eeff"; ctx.fillText(message.sub, W / 2, 383); }
+      ctx.globalAlpha = 1;
+    }
+  }
+
+  // ---------- Loop ----------
+  let last = performance.now();
+  function frame(now) {
+    const dt = Math.min(0.1, (now - last) / 1000);
+    last = now;
+    update(dt);
+    draw();
+    requestAnimationFrame(frame);
+  }
+  buildLevel();
+  syncControls();
+  showTitle();
+  requestAnimationFrame(frame);
+})();
+</script>
+<script src="../../shared/iniziali.js" data-record="baricentri-best-" data-kind="score"></script>
+</body>
+</html>

@@ -4,7 +4,7 @@ Raccolta di giochi arcade per il browser. Ogni gioco è un singolo file HTML sen
 
 ## 🕹️ Sala Giochi — `index.html`
 
-Apri `index.html` nella cartella principale per la pagina di raccolta: mostra tutti i 198 giochi con copertina, genere, comandi e i tuoi record per ogni difficoltà (Facile, Normale, Difficile). Tocca «Gioca» per avviare un gioco; in ogni gioco il pulsante «← Sala Giochi» in alto a sinistra (visibile nei menu) riporta alla raccolta.
+Apri `index.html` nella cartella principale per la pagina di raccolta: mostra tutti i 199 giochi con copertina, genere, comandi e i tuoi record per ogni difficoltà (Facile, Normale, Difficile). Tocca «Gioca» per avviare un gioco; in ogni gioco il pulsante «← Sala Giochi» in alto a sinistra (visibile nei menu) riporta alla raccolta.
 
 **Iniziali del record:** quando batti un record compare la schermata da sala giochi per inserire le tue tre iniziali (frecce ↑ ↓ per cambiare lettera, ← → per spostarti, oppure scrivile direttamente; su telefono i tasti ▲ ▼ e OK). Le iniziali vengono salvate insieme al record e compaiono nei menu del gioco e nella Sala Giochi. Il codice è condiviso da tutti i giochi in `shared/iniziali.js`.
 
@@ -12,7 +12,7 @@ Apri `index.html` nella cartella principale per la pagina di raccolta: mostra tu
 
 **Comandi touch: levetta o frecce:** in cima alla Sala Giochi e nel menu di pausa di ogni gioco con la levetta si sceglie se usare la levetta analogica o una croce di frecce. Con le frecce il tocco viene agganciato a una delle otto direzioni (le quattro principali hanno la zona più larga, così le diagonali si prendono solo di proposito) e spinto fino in fondo; la scelta vale per tutti i giochi e resta memorizzata. Funziona anche nei giochi con due levette (la sfida a due di *Pugni di Fuoco*, muovi e spara di *Assalto Robotico*).
 
-**Trofei:** ogni gioco ha tre trofei a punteggio: 🥉 **Bronzo** (la soglia in qualsiasi difficoltà), 🥈 **Argento** (a Normale o Difficile) e 🥇 **Oro** (a Difficile); nei giochi a tempo (*Corsa al Tramonto*, *Crystal Wars*) conta finire entro un certo tempo. I trofei si calcolano dai record salvati, quindi quelli già fatti si sbloccano da soli; quando un record nuovo ne conquista uno compare un avviso in alto. Le soglie sono nella schermata iniziale, in pausa e a fine partita di ogni gioco; in Sala Giochi ogni cabinato mostra i suoi trofei, in cima c'è il totale (su 594) con il numero di giochi giocati e il filtro **Già giocati** mostra solo i giochi con almeno un record. Le soglie vengono dalle partite di prova di un bot per circa un terzo dei giochi e sono stimate sulle regole di punteggio per gli altri (`shared/trofei.js`).
+**Trofei:** ogni gioco ha tre trofei a punteggio: 🥉 **Bronzo** (la soglia in qualsiasi difficoltà), 🥈 **Argento** (a Normale o Difficile) e 🥇 **Oro** (a Difficile); nei giochi a tempo (*Corsa al Tramonto*, *Crystal Wars*) conta finire entro un certo tempo. I trofei si calcolano dai record salvati, quindi quelli già fatti si sbloccano da soli; quando un record nuovo ne conquista uno compare un avviso in alto. Le soglie sono nella schermata iniziale, in pausa e a fine partita di ogni gioco; in Sala Giochi ogni cabinato mostra i suoi trofei, in cima c'è il totale (su 597) con il numero di giochi giocati e il filtro **Già giocati** mostra solo i giochi con almeno un record. Le soglie vengono dalle partite di prova di un bot per circa un terzo dei giochi e sono stimate sulle regole di punteggio per gli altri (`shared/trofei.js`).
 
 **Imprese:** i traguardi della sala sono pensati in tre livelli. Il **livello 1** sono i trofei di punteggio qui sopra, per tutti i giochi. Il **livello 2** (traguardi di progresso come «arriva al livello 5») abbiamo scelto di non farlo: lo coprono già in parte i trofei e, dove conta, le imprese. Il **livello 3** sono le **imprese** 🏅: due o tre prodezze caratteristiche di ogni gioco, come atterrare sulla piazzola più piccola in *Soccorso Lunare* o seppellire il capo rosso in *Trappola Aliena*. Le imprese di un gioco sono elencate nella sua schermata iniziale, in pausa e a fine partita (tocca un nome per leggere cosa chiede); quando ne fai una compare un avviso azzurro in alto. In Sala Giochi ogni cabinato mostra le sue (🏅 1/3 imprese) e in cima c'è il totale. Si aggiungono a gruppi di giochi: per ora ci sono le 150 imprese dei 50 giochi più recenti (da *Re della Giungla* a *Bocce*): i giochi nuovi nascono con le loro. Come i record, restano salvate in questo browser (`shared/imprese.js`).
 
@@ -3086,3 +3086,17 @@ Un gioco del genere **IA** sul riconoscimento delle anomalie: prima si capisce c
 - **Comandi:** clicca o tocca un punto · tastiera: frecce per muovere il mirino (con `Maiusc` a passi piccoli), `Invio` per accusare · `P` pausa
 
 Per giocare apri `games/fuori-dal-coro/index.html` nel browser.
+
+### 🤖 Baricentri — `games/baricentri/index.html`
+
+Un gioco del genere **IA** sul clustering con il k-means: l'algoritmo che divide dei dati in gruppi senza che nessuno gli dica quali sono. Non sa che cosa sia un gruppo: sposta solo ogni centro verso la media dei suoi punti, e per questo da dove parte conta moltissimo.
+
+- **La nuvola:** da 40 a 150 punti raccolti in gruppi, e il numero di gruppi da cercare: 2 al primo livello, fino a 6. Con i livelli i gruppi si avvicinano, diventano allungati, di dimensioni diverse, e compaiono punti sparsi
+- **I centri:** si piazzano toccando la nuvola e si spostano trascinandoli. Ogni punto si colora col centro più vicino, così si vede subito come verrebbe divisa la nuvola
+- **L'algoritmo:** con VIA parte il k-means, un giro ogni mezzo secondo: ogni punto va col centro più vicino, poi ogni centro si sposta nel mezzo dei suoi punti. Si ferma quando nessun punto cambia più gruppo. Restano le scie dei centri e un grafico della dispersione giro per giro
+- **La dispersione:** quanto i punti stanno lontani dal loro centro, in media. Il gioco conosce la divisione migliore (la cerca ripartendo molte volte con il k-means++): si vince se l'algoritmo si ferma abbastanza vicino a quella. Altrimenti è un minimo locale: si perde uno degli errori concessi, i cerchi tratteggiati mostrano dove stavano i centri migliori e arriva una nuvola nuova
+- **Punti:** 200 × livello · 50 per ogni giro risparmiato sotto i sette · 300 se si arriva proprio al minimo
+- **Difficoltà:** Facile (margine del 6% sul minimo, la dispersione si vede già mentre si piazzano i centri, 4 errori concessi), Normale (3%, 3 errori), Difficile (1%); record separati per ogni difficoltà
+- **Comandi:** clicca o tocca per piazzare un centro, trascinalo per spostarlo, poi VIA · tastiera: frecce per il mirino, `Spazio` per piazzare o prendere e lasciare un centro, `Invio` per VIA · `P` pausa
+
+Per giocare apri `games/baricentri/index.html` nel browser.
