@@ -1,0 +1,464 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no, viewport-fit=cover">
+<title>Fermati in Tempo</title>
+<style>
+  :root {
+    --bg: #0d0822;
+    --fg: #f1eeff;
+    --muted: #a9a3cf;
+    --cyan: #5fe3d6;
+    --yellow: #ffd66b;
+    --red: #ff6b7d;
+    --pink: #7fd1ff;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  html, body {
+    height: 100%;
+    background: var(--bg);
+    color: var(--fg);
+    font-family: system-ui, -apple-system, "Segoe UI", sans-serif;
+    overflow: hidden;
+    user-select: none;
+    -webkit-user-select: none;
+    touch-action: none;
+  }
+  #wrap { position: fixed; inset: 0; display: flex; align-items: center; justify-content: center; }
+  canvas { display: block; touch-action: none; border-radius: 6px; box-shadow: 0 0 0 2px #2a1f55, 0 10px 40px rgba(0,0,0,0.6); cursor: pointer; }
+  #pauseBtn {
+    position: fixed; z-index: 3; display: none; right: 10px; top: calc(10px + env(safe-area-inset-top, 0px));
+    font: 700 13px system-ui, sans-serif; color: var(--fg);
+    background: rgba(0, 0, 0, 0.6); border: 1px solid rgba(241, 238, 255, 0.35);
+    border-radius: 8px; padding: 6px 10px; cursor: pointer;
+  }
+  #overlay {
+    position: fixed; inset: 0; z-index: 5;
+    display: flex; flex-direction: column; align-items: center; justify-content: flex-start;
+    gap: 14px; padding: 16px; text-align: center; overflow-y: auto;
+    background: rgba(13, 8, 34, 0.93);
+  }
+  #overlay > :first-child { margin-top: auto; }
+  #overlay > :last-child { margin-bottom: auto; }
+  #overlay.hidden { display: none; }
+  #homeLink {
+    position: fixed; top: calc(10px + env(safe-area-inset-top, 0px)); left: 10px; z-index: 6;
+    font: 600 13px/1 system-ui, sans-serif; color: #fff; text-decoration: none;
+    padding: 8px 12px; border-radius: 999px; background: rgba(0,0,0,.55);
+    border: 1px solid rgba(255,255,255,.25);
+  }
+  #homeLink:hover { background: rgba(0,0,0,.8); }
+  #overlay.hidden ~ #homeLink { display: none; }
+  @media (max-width: 700px) { #overlay { padding-top: calc(52px + env(safe-area-inset-top, 0px)); } }
+  #overlay h1 { font-size: clamp(30px, 9vw, 54px); font-weight: 900; letter-spacing: 1px; color: var(--pink);
+    text-shadow: 3px 3px 0 #2a1f6a, 0 0 22px rgba(127,209,255,0.35); text-wrap: balance; }
+  #overlay h2 { font-size: clamp(24px, 7vw, 40px); font-weight: 900; letter-spacing: 2px; color: var(--pink); }
+  #overlay h2.lose { color: var(--red); }
+  #overlay p { max-width: 540px; font-size: clamp(13px, 3.4vw, 16px); line-height: 1.55; }
+  #overlay p.muted { color: var(--muted); }
+  #overlay .pts { display: grid; grid-template-columns: repeat(2, auto); gap: 4px 18px; font-size: 13px; color: var(--muted); text-align: left; max-width: 560px; }
+  #overlay .pts b { color: var(--fg); }
+  #overlay .diff { display: flex; gap: 10px; flex-wrap: wrap; justify-content: center; }
+  #overlay button {
+    font: 800 15px system-ui, sans-serif; letter-spacing: 1.5px; color: var(--fg);
+    background: transparent; cursor: pointer;
+    border: 2px solid rgba(241,238,255,0.3); border-radius: 10px; padding: 9px 16px;
+  }
+  #overlay .diff button.on { border-color: var(--c); color: var(--c); box-shadow: 0 0 12px var(--c); }
+  #overlay button.start { border-color: var(--pink); color: #04202e; background: var(--pink); padding: 11px 30px; box-shadow: 0 4px 0 #3f86b0; }
+  @media (max-height: 560px) {
+    #overlay { gap: 8px; }
+    #overlay h1 { font-size: 28px; }
+    #overlay p { font-size: 13px; line-height: 1.4; }
+    #overlay .help, #overlay .pts { display: none; }
+  }
+</style>
+</head>
+<body>
+<div id="wrap"><canvas id="game"></canvas></div>
+<button id="pauseBtn" type="button" aria-label="Pausa">❚❚</button>
+<div id="overlay"></div>
+<a id="homeLink" href="../../index.html">← Sala Giochi</a>
+
+<script>
+(() => {
+  "use strict";
+
+  const W = 360, H = 600, TOP = 56, TAU = Math.PI * 2;
+  const ACC = "#7fd1ff", TRAIN = "#8f8bff", VAL = "#ffd66b";
+  const N = 100, RUNS = 4;                           // epochs per training, trainings per level
+  const PLOT = { x: 44, y: 110, w: 296, h: 280 };
+  const BTN = { x: 14, y: 480, w: 332, h: 70 };
+
+  const DIFFICULTIES = {
+    facile:    { label: "FACILE",    color: "#7ee0a0", desc: "basta il 75% · si vede anche la media mobile · 4 errori concessi", need: 0.75, smooth: true, lives: 4 },
+    normale:   { label: "NORMALE",   color: "#ffd66b", desc: "serve l'82% · 3 errori concessi", need: 0.82, lives: 3 },
+    difficile: { label: "DIFFICILE", color: "#ff6b7d", desc: "serve l'88% · curve più nervose · 3 errori concessi", need: 0.88, extraNoise: 0.4, lives: 3 },
+  };
+  const DIFF_IDS = Object.keys(DIFFICULTIES);
+  const DIFF_KEY = "fermati-difficulty";
+  const bestKey = (id) => `fermati-best-${id}`;
+  function store(k, v) { try { localStorage.setItem(k, v); } catch { /* ignore */ } }
+  function load(k) { try { return localStorage.getItem(k); } catch { return null; } }
+  const rint = (a, b) => a + Math.floor(Math.random() * (b - a + 1));
+  const rnd = (a, b) => a + Math.random() * (b - a);
+  const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
+  const nf = (n) => n.toLocaleString("it-IT");
+  const pc = (v) => `${Math.round(v * 100)}%`;
+  const gauss = () => Math.sqrt(-2 * Math.log(1 - Math.random())) * Math.cos(TAU * Math.random());
+
+  // ---------- Canvas ----------
+  const canvas = document.getElementById("game");
+  const ctx = canvas.getContext("2d");
+  const overlay = document.getElementById("overlay");
+  const pauseBtn = document.getElementById("pauseBtn");
+  let pxRatio = 1, touchMode = !!(window.matchMedia && matchMedia("(pointer: coarse)").matches);
+  function resize() {
+    const availW = window.innerWidth - 8, availH = window.innerHeight - 8;
+    const s = Math.max(0.2, Math.min(availW / W, availH / H));
+    pxRatio = Math.min(3, s * (window.devicePixelRatio || 1));
+    canvas.style.width = W * s + "px";
+    canvas.style.height = H * s + "px";
+    canvas.width = Math.round(W * pxRatio);
+    canvas.height = Math.round(H * pxRatio);
+  }
+  window.addEventListener("resize", () => syncControls());
+
+  // ---------- Audio: soft tones ----------
+  let audioCtx = null;
+  function beep(freq, dur, type = "sine", vol = 0.05, delay = 0) {
+    if (!audioCtx) return;
+    const t = audioCtx.currentTime + delay;
+    const osc = audioCtx.createOscillator(), gain = audioCtx.createGain();
+    osc.type = type; osc.frequency.setValueAtTime(freq, t);
+    gain.gain.setValueAtTime(0.0001, t);
+    gain.gain.exponentialRampToValueAtTime(vol, t + 0.015);
+    gain.gain.exponentialRampToValueAtTime(0.0001, t + dur);
+    osc.connect(gain).connect(audioCtx.destination);
+    osc.start(t); osc.stop(t + dur + 0.02);
+  }
+  const arp = (notes, gap, d, type, vol) => notes.forEach((f, i) => beep(f, d, type, vol, i * gap));
+  const sfx = {
+    pick: () => beep(520, 0.06, "sine", 0.035),
+    step: (v) => beep(392 * Math.pow(1.09, v), 0.09, "triangle", 0.04),
+    edge: () => beep(150, 0.08, "sine", 0.045),
+    row: () => beep(880, 0.1, "sine", 0.03, 0.05),
+    win: () => arp([523, 659, 784, 1047], 0.09, 0.35),
+    perfect: () => arp([523, 659, 784, 1047, 1319, 1568], 0.07, 0.4),
+    fail: () => arp([392, 330, 277], 0.14, 0.35, "triangle", 0.05),
+    lose: () => arp([392, 330, 277, 220], 0.16, 0.4, "triangle", 0.05),
+  };
+
+  // ---------- State ----------
+  let difficulty = DIFFICULTIES[load(DIFF_KEY)] ? load(DIFF_KEY) : "normale";
+  let diff = DIFFICULTIES[difficulty];
+  let state = "menu", menu = null, pausedFrom = null, stateT = 0, clock = 0;
+  let score = 0, level = 0, bestCache = 0, cleared = 0, perfects = 0, lives = 0;
+  let run = 0, levelOk = 0, phase = "ready", ep = 0, speed = 12, readyT = 0;
+  let trueV = [], obsV = [], trainL = [], best = 0, vmin = 0, scale = 1, stopAt = -1, eff = 0, kindTxt = "", top = 1;
+  let popups = [], message = null;
+  const isPlaying = () => ["play", "levelup", "fail"].includes(state);
+
+  // ---------- A training run ----------
+  // validation error: falls as the net learns, then rises again as it starts learning the training set by heart
+  function makeRun() {
+    for (let tries = 0; tries < 400; tries++) {
+      const A = rnd(0.45, 0.8), tau = rnd(5, 20), B = rnd(0.25, 0.4), C = rnd(0.12, 0.55), p = rnd(1.4, 2.8);
+      const V = Array.from({ length: N + 1 }, (_, t) => A * Math.exp(-t / tau) + B + C * Math.pow(t / N, p));
+      let bi = 0; V.forEach((v, i) => { if (v < V[bi]) bi = i; });
+      const S = V[N] - V[bi];
+      if (bi < 18 || bi > 82 || S < 0.07 || S > 0.35) continue;
+      trueV = V; best = bi; vmin = V[bi]; scale = S;
+      const tl = rnd(0.35, 0.6), floor = rnd(0.02, 0.08);
+      trainL = Array.from({ length: N + 1 }, (_, t) => (A + 0.05) * Math.exp(-t / (tau * tl)) + floor + 0.03 * Math.exp(-t / 40));
+      // what you actually see: the validation error measured on a small set, so it trembles
+      const sig = Math.min(0.05, 0.012 + level * 0.0028) * (1 + (diff.extraNoise || 0)) * (0.7 + S * 2);
+      let ar = 0; obsV = V.map((v) => { ar = 0.55 * ar + gauss() * sig; return v + ar; });
+      top = Math.max(...obsV.slice(0, 6), ...trainL.slice(0, 3)) * 1.04;
+      kindTxt = bi < 35 ? "impara in fretta" : bi > 65 ? "impara con calma" : "";
+      return;
+    }
+  }
+  const effAt = (e) => clamp(1 - (trueV[e] - vmin) / scale, 0, 1);
+  function buildLevel() {
+    run = 0; levelOk = 0;
+    speed = Math.min(22, 11 + level * 1.3);
+    newRun();
+  }
+  function newRun() { makeRun(); phase = "ready"; readyT = 1.1; ep = 0; stopAt = -1; eff = 0; }
+  function startGame() {
+    if (!audioCtx) { try { audioCtx = new (window.AudioContext || window.webkitAudioContext)(); } catch { audioCtx = null; } }
+    if (audioCtx && audioCtx.state === "suspended") audioCtx.resume();
+    score = 0; level = 0; cleared = 0; perfects = 0; lives = diff.lives; popups = [];
+    bestCache = parseInt(load(bestKey(difficulty)), 10) || 0;
+    beginLevel();
+    menu = null;
+    overlay.classList.add("hidden");
+    syncControls();
+    last = performance.now();
+  }
+  function beginLevel() {
+    buildLevel();
+    state = "play";
+    message = { text: `LIVELLO ${level + 1}`, sub: `${RUNS} allenamenti · ${Math.round(speed)} epoche al secondo`, t: 0 };
+  }
+  function addScore(k, y, color, label = "") { score += k; popups.push({ text: `${label}+${nf(k)}`, x: W / 2, y, t: 0, color }); }
+  function stop() {
+    if (state !== "play") return;
+    if (phase === "shown") { proceed(); return; }
+    if (phase !== "run") return;
+    finish(Math.floor(ep));
+  }
+  function finish(e) {
+    stopAt = e; phase = "shown"; ep = Math.max(ep, e);
+    eff = effAt(e);
+    const ok = eff >= diff.need, mult = 1 + level * 0.25;
+    if (ok) {
+      levelOk++;
+      addScore(Math.round(eff * 300 * mult), 150, ACC);
+      if (eff >= 0.97) { perfects++; addScore(Math.round(200 * mult), 128, "#5fe3d6", "al momento giusto · "); sfx.perfect(); } else sfx.win();
+    } else { lives--; (lives > 0 ? sfx.fail : sfx.lose)(); }
+  }
+  function proceed() {
+    run++;
+    if (lives <= 0) { state = "fail"; stateT = 0.2; return; }
+    if (run < RUNS) { newRun(); sfx.pick(); return; }
+    state = "levelup"; stateT = 2.4; cleared++;
+    if (levelOk === RUNS) addScore(100 * (level + 1), 150, "#ffd66b", "livello pulito · ");
+    sfx.win();
+    message = { text: "LIVELLO FINITO", sub: `${levelOk} allenamenti fermati bene su ${RUNS}`, t: 0 };
+  }
+  function gameOver() {
+    state = "over";
+    const prev = parseInt(load(bestKey(difficulty)), 10) || 0;
+    const record = score > prev;
+    if (record) store(bestKey(difficulty), String(score));
+    menu = () => showOverlay(
+      `<h2 class="lose">ALLENAMENTO CHIUSO</h2>
+       <p>Punteggio: <b>${nf(score)}</b> · ${cleared} ${cleared === 1 ? "livello finito" : "livelli finiti"}${perfects ? ` · ${perfects} volte al momento giusto` : ""} · ${diff.label}</p>
+       <p class="muted">Anche il mio allenamento, a un certo punto, qualcuno l'ha fermato. Spero al momento giusto.</p>
+       ${record ? "<p style='color:var(--yellow)'>★ NUOVO RECORD! ★</p>" : ""}
+       ${difficultyHTML()}
+       <button class="start" data-start>RIPROVA</button>`
+    );
+    menu();
+    syncControls();
+  }
+  function togglePause() {
+    if (isPlaying()) {
+      pausedFrom = state; state = "paused";
+      showOverlay(`<h2>PAUSA</h2><button class="start" data-resume>CONTINUA</button><p class="muted">Premi P per continuare</p>`);
+    } else if (state === "paused") {
+      state = pausedFrom; overlay.classList.add("hidden"); last = performance.now();
+    }
+    syncControls();
+  }
+  // the pause menu can end the game (shared/iniziali.js): it ends here the usual way, saving the record
+  window.addEventListener("sala:termina", () => { if (state !== "paused") return; overlay.classList.add("hidden"); gameOver(); syncControls(); });
+  function syncControls() {
+    pauseBtn.style.display = isPlaying() && touchMode ? "block" : "none";
+    resize();
+  }
+  pauseBtn.addEventListener("click", () => togglePause());
+  function showOverlay(html) { overlay.innerHTML = html; overlay.classList.remove("hidden"); }
+  function difficultyHTML() {
+    const buttons = DIFF_IDS.map((id) => {
+      const d = DIFFICULTIES[id];
+      return `<button type="button" data-diff="${id}" class="${id === difficulty ? "on" : ""}" style="--c:${d.color}">${d.label}</button>`;
+    }).join("");
+    const best = parseInt(load(bestKey(difficulty)), 10);
+    return `<div class="diff">${buttons}</div><p class="muted">${diff.desc}${best ? ` · Record: ${nf(best)}` : ""}</p>`;
+  }
+  function setDifficulty(id) { if (!DIFFICULTIES[id]) return; difficulty = id; diff = DIFFICULTIES[id]; store(DIFF_KEY, id); if (state === "menu") buildLevel(); if (menu) menu(); }
+  function showTitle() {
+    menu = showTitle;
+    showOverlay(
+      `<h1>FERMATI IN TEMPO</h1>
+       <p>Una rete neurale si allena sotto i tuoi occhi. L'errore sui dati d'allenamento scende sempre; quello sui dati di prova, che non ha mai visto, scende e poi risale: la rete ha cominciato a imparare a memoria invece di capire. Premi STOP nel momento migliore. Ma la curva trema, e capisci che era il minimo solo quando l'hai già passato.</p>
+       <div class="pts">
+         <span><b>Viola</b></span><span>l'errore sull'allenamento: scende sempre, non fidarti</span>
+         <span><b>Giallo</b></span><span>l'errore sulla prova: è quello che conta</span>
+         <span><b>Bontà</b></span><span>100% se fermi proprio al minimo; 0% se fermi come alla fine dell'allenamento o prima ancora</span>
+         <span><b>Punti</b></span><span>fino a 300 per allenamento, di più nei livelli alti · 200 se sei al momento giusto · 100 × livello se li fermi tutti bene</span>
+       </div>
+       ${touchMode
+         ? `<p class="muted help">Tocca STOP (o tocca ovunque) per fermare l'allenamento</p>`
+         : `<p class="muted help">Spazio o clic per fermare l'allenamento · P pausa</p>`}
+       ${difficultyHTML()}
+       <button class="start" data-start>PRIMO ALLENAMENTO</button>`
+    );
+  }
+  overlay.addEventListener("click", (e) => {
+    const d = e.target.closest("[data-diff]");
+    if (d) { setDifficulty(d.dataset.diff); return; }
+    if (e.target.closest("[data-start]")) startGame();
+    if (e.target.closest("[data-resume]")) togglePause();
+  });
+
+  // ---------- Input ----------
+  window.addEventListener("keydown", (e) => {
+    const k = e.key.toLowerCase();
+    if ([" ", "arrowup", "arrowdown", "arrowleft", "arrowright"].includes(k)) e.preventDefault();
+    if (state === "menu" || state === "over") {
+      if (e.key === "Enter") startGame();
+      else if (["1", "2", "3"].includes(k)) setDifficulty(DIFF_IDS[+k - 1]);
+      return;
+    }
+    if (k === "p" || k === "escape") { if (!e.repeat) togglePause(); return; }
+    if (state === "paused") { if (e.key === "Enter") togglePause(); return; }
+    if ((k === " " || k === "enter") && !e.repeat) stop();
+  });
+  window.addEventListener("blur", () => { if (isPlaying()) togglePause(); });
+  canvas.addEventListener("pointerdown", (e) => { e.preventDefault(); if (state === "play") stop(); });
+  window.addEventListener("pointerdown", (e) => { if (e.pointerType === "touch" && !touchMode) { touchMode = true; syncControls(); if (menu) menu(); } }, true);
+
+  // ---------- Update ----------
+  function update(dt) {
+    clock += dt;
+    for (const p of popups) { p.t += dt; p.y -= 14 * dt; }
+    popups = popups.filter((p) => p.t < 1.8);
+    if (message) { message.t += dt; if (message.t > 2.2) message = null; }
+    if (state === "play") {
+      if (phase === "ready") { readyT -= dt; if (readyT <= 0) { phase = "run"; sfx.pick(); } }
+      else if (phase === "run") {
+        const before = Math.floor(ep);
+        ep = Math.min(N, ep + dt * speed);
+        if (Math.floor(ep) !== before && Math.floor(ep) % 10 === 0) beep(300 + Math.floor(ep) * 3, 0.03, "sine", 0.015);
+        if (ep >= N) finish(N);
+      }
+    } else if (state === "levelup") { stateT -= dt; if (stateT <= 0) { level++; beginLevel(); } }
+    else if (state === "fail") { stateT -= dt; if (stateT <= 0) gameOver(); }
+  }
+
+  // ---------- Drawing ----------
+  const X = (t) => PLOT.x + PLOT.w * t / N, Y = (v) => PLOT.y + PLOT.h * (1 - clamp(v / top, 0, 1.02));
+  function line(arr, upto, col, w, dash) {
+    ctx.strokeStyle = col; ctx.lineWidth = w; ctx.lineJoin = "round"; if (dash) ctx.setLineDash(dash);
+    ctx.beginPath(); for (let t = 0; t <= upto; t++) { const x = X(t), y = Y(arr[t]); if (t === 0) ctx.moveTo(x, y); else ctx.lineTo(x, y); }
+    const fr = upto - Math.floor(upto); if (fr > 0 && Math.floor(upto) < N) { const a = arr[Math.floor(upto)], b = arr[Math.floor(upto) + 1]; ctx.lineTo(X(upto), Y(a + (b - a) * fr)); }
+    ctx.stroke(); ctx.setLineDash([]);
+  }
+  function drawPlot() {
+    const P = PLOT, shown = phase === "shown" || state === "levelup" || state === "fail";
+    ctx.fillStyle = "#120b2c"; ctx.beginPath(); ctx.roundRect(8, 66, W - 16, 352, 12); ctx.fill();
+    ctx.strokeStyle = "rgba(255,255,255,0.06)"; ctx.lineWidth = 1;
+    for (let t = 0; t <= N; t += 20) { ctx.beginPath(); ctx.moveTo(X(t), P.y); ctx.lineTo(X(t), P.y + P.h); ctx.stroke(); }
+    for (let i = 0; i <= 4; i++) { const y = P.y + P.h * i / 4; ctx.beginPath(); ctx.moveTo(P.x, y); ctx.lineTo(P.x + P.w, y); ctx.stroke(); }
+    ctx.strokeStyle = "#4a3f88"; ctx.lineWidth = 1.5; ctx.beginPath(); ctx.moveTo(P.x, P.y); ctx.lineTo(P.x, P.y + P.h); ctx.lineTo(P.x + P.w, P.y + P.h); ctx.stroke();
+    ctx.fillStyle = "#a9a3cf"; ctx.font = "700 9px system-ui"; ctx.textAlign = "center"; ctx.textBaseline = "middle";
+    for (let t = 0; t <= N; t += 20) ctx.fillText(String(t), X(t), P.y + P.h + 11);
+    ctx.fillText("EPOCHE", P.x + P.w / 2, P.y + P.h + 24);
+    ctx.save(); ctx.translate(22, P.y + P.h / 2); ctx.rotate(-Math.PI / 2); ctx.fillText("ERRORE", 0, 0); ctx.restore();
+    if (state === "menu" || !trueV.length) { ctx.textBaseline = "alphabetic"; return; }
+    // legend
+    ctx.textAlign = "left"; ctx.font = "800 10px system-ui";
+    ctx.fillStyle = TRAIN; ctx.fillRect(P.x + 6, 84, 14, 3); ctx.fillText("allenamento", P.x + 24, 86);
+    ctx.fillStyle = VAL; ctx.fillRect(P.x + 104, 84, 14, 3); ctx.fillText("prova", P.x + 122, 86);
+    if (kindTxt) { ctx.textAlign = "right"; ctx.fillStyle = "#a9a3cf"; ctx.fillText(`questa rete ${kindTxt}`, P.x + P.w, 86); }
+    const upto = shown ? (stopAt >= 0 ? Math.max(stopAt, Math.min(N, ep)) : ep) : ep;
+    if (shown) {
+      // what happens after the stop, faded: the training you saved the net from
+      ctx.globalAlpha = 0.25; line(obsV, N, VAL, 1.5); line(trainL, N, TRAIN, 1.5); ctx.globalAlpha = 1;
+    }
+    line(trainL, Math.min(upto, shown ? stopAt : upto), TRAIN, 2);
+    line(obsV, Math.min(upto, shown ? stopAt : upto), VAL, 2.2);
+    if (diff.smooth && !shown) {
+      // the moving average over the last 5 epochs, to help the eye
+      const ma = obsV.map((_, t) => { let s = 0, n = 0; for (let k = Math.max(0, t - 4); k <= t; k++) { s += obsV[k]; n++; } return s / n; });
+      line(ma, Math.max(0, ep - 0.001), "#f1eeff", 1.2, [3, 3]);
+    }
+    if (phase === "run" || phase === "ready") {
+      const e = Math.min(N, Math.floor(ep)), x = X(ep);
+      ctx.strokeStyle = "rgba(127,209,255,0.4)"; ctx.lineWidth = 1; ctx.beginPath(); ctx.moveTo(x, P.y); ctx.lineTo(x, P.y + P.h); ctx.stroke();
+      ctx.fillStyle = VAL; ctx.beginPath(); ctx.arc(x, Y(obsV[e]), 4, 0, TAU); ctx.fill();
+    }
+    if (shown && stopAt >= 0) {
+      // the true curve under the noise, the best moment and yours
+      line(trueV, N, "#f1eeff", 1.6, [5, 4]);
+      ctx.strokeStyle = "#7ee0a0"; ctx.lineWidth = 2; ctx.beginPath(); ctx.moveTo(X(best), P.y); ctx.lineTo(X(best), P.y + P.h); ctx.stroke();
+      ctx.fillStyle = "#7ee0a0"; ctx.font = "800 9px system-ui"; ctx.textAlign = "center"; ctx.fillText("il minimo", X(best), P.y - 7);
+      const ok = eff >= diff.need, col = ok ? ACC : "#ff6b7d";
+      ctx.strokeStyle = col; ctx.lineWidth = 2; ctx.setLineDash([3, 3]); ctx.beginPath(); ctx.moveTo(X(stopAt), P.y + 10); ctx.lineTo(X(stopAt), P.y + P.h); ctx.stroke(); ctx.setLineDash([]);
+      ctx.fillStyle = col; ctx.beginPath(); ctx.arc(X(stopAt), Y(trueV[stopAt]), 5, 0, TAU); ctx.fill();
+      ctx.fillText("STOP", clamp(X(stopAt), P.x + 14, P.x + P.w - 14), P.y + P.h - 8 - (Math.abs(stopAt - best) < 8 ? 0 : 0));
+    }
+    ctx.textBaseline = "alphabetic";
+  }
+  function drawPanel() {
+    ctx.textAlign = "center"; ctx.textBaseline = "middle";
+    for (let i = 0; i < RUNS; i++) { const x = W / 2 + (i - (RUNS - 1) / 2) * 18; ctx.fillStyle = i < run ? ACC : i === run ? "#f1eeff" : "rgba(255,255,255,0.15)"; ctx.beginPath(); ctx.arc(x, 430, i === run ? 5 : 4, 0, TAU); ctx.fill(); }
+    if (phase === "shown") {
+      const ok = eff >= diff.need, d = stopAt - best;
+      ctx.font = "900 16px system-ui"; ctx.fillStyle = ok ? "#7ee0a0" : "#ff6b7d";
+      ctx.fillText(stopAt >= N ? "NON L'HAI FERMATA" : eff >= 0.97 ? `AL MOMENTO GIUSTO · ${pc(eff)}` : ok ? `BUONO · ${pc(eff)}` : d < 0 ? `TROPPO PRESTO · ${pc(eff)}` : `TROPPO TARDI · ${pc(eff)}`, W / 2, 452);
+      ctx.font = "700 11px system-ui"; ctx.fillStyle = "#f1eeff";
+      ctx.fillText(stopAt >= N ? "a fine allenamento ha imparato i dati a memoria" : `epoca ${stopAt}, il minimo era all'epoca ${best} · serviva il ${pc(diff.need)}`, W / 2, 471);
+    }
+    const b = BTN, live = state === "play" && (phase === "run" || phase === "shown");
+    ctx.globalAlpha = live ? 1 : 0.4;
+    const col = phase === "shown" ? ACC : "#ff6b7d", dark = phase === "shown" ? "#3f86b0" : "#a8404e";
+    ctx.fillStyle = dark; ctx.beginPath(); ctx.roundRect(b.x, b.y + 8 + 6, b.w, b.h - 20, 14); ctx.fill();
+    ctx.fillStyle = col; ctx.beginPath(); ctx.roundRect(b.x, b.y + 8, b.w, b.h - 21, 14); ctx.fill();
+    ctx.fillStyle = phase === "shown" ? "#04202e" : "#2a0610"; ctx.font = "900 22px system-ui";
+    ctx.fillText(phase === "shown" ? (lives > 0 ? "AVANTI" : "FINE") : phase === "ready" ? "PRONTI…" : `STOP · epoca ${Math.floor(ep)}`, W / 2, b.y + 33);
+    ctx.globalAlpha = 1;
+    ctx.fillStyle = "#a9a3cf"; ctx.font = "700 10px system-ui";
+    if (phase === "run") ctx.fillText("tocca ovunque o premi Spazio", W / 2, 572);
+    else if (phase === "shown") ctx.fillText("tratteggiata: la vera curva, senza il tremolio", W / 2, 572);
+    ctx.textBaseline = "alphabetic";
+  }
+  function drawHud() {
+    ctx.fillStyle = "#0d0822"; ctx.fillRect(0, 0, W, TOP - 4);
+    ctx.textBaseline = "middle"; ctx.textAlign = "left";
+    ctx.fillStyle = "#f1eeff"; ctx.font = "900 18px system-ui"; ctx.fillText(nf(score), 12, 16);
+    ctx.fillStyle = "#a9a3cf"; ctx.font = "700 9px system-ui"; ctx.fillText(`REC ${nf(Math.max(bestCache, score))}`, 12, 36);
+    ctx.textAlign = "center"; ctx.fillStyle = ACC; ctx.font = "900 12px system-ui"; ctx.fillText(`LIVELLO ${level + 1}`, W / 2, 14);
+    ctx.fillStyle = "#ffd66b"; ctx.font = "800 11px system-ui"; ctx.fillText(`allenamento ${Math.min(RUNS, run + 1)} di ${RUNS} · ${Math.round(speed)} epoche/s`, W / 2, 34);
+    const ex = touchMode ? W - 62 : W - 12;
+    for (let i = 0; i < diff.lives; i++) { ctx.fillStyle = i < lives ? "#ffd66b" : "rgba(255,255,255,0.15)"; ctx.beginPath(); ctx.arc(ex - 6 - i * 13, 16, 4.5, 0, TAU); ctx.fill(); }
+    ctx.fillStyle = "rgba(255,255,255,0.12)"; ctx.fillRect(0, TOP - 4, W, 4);
+    ctx.fillStyle = "#ffd66b"; ctx.fillRect(0, TOP - 4, W * ep / N, 4);
+    ctx.textBaseline = "alphabetic";
+  }
+  function draw() {
+    ctx.setTransform(pxRatio, 0, 0, pxRatio, 0, 0);
+    ctx.fillStyle = "#0d0822"; ctx.fillRect(0, 0, W, H);
+    drawPlot();
+    if (state === "menu") return;
+    drawPanel();
+    drawHud();
+    for (const p of popups) {
+      ctx.globalAlpha = clamp((1.8 - p.t) * 2, 0, 1);
+      ctx.textAlign = "center"; ctx.font = "900 14px system-ui";
+      ctx.lineWidth = 4; ctx.strokeStyle = "#0d0822"; ctx.strokeText(p.text, p.x, p.y); ctx.fillStyle = p.color; ctx.fillText(p.text, p.x, p.y);
+    }
+    ctx.globalAlpha = 1;
+    if (message) {
+      ctx.globalAlpha = Math.min(1, (2.2 - message.t) * 2);
+      ctx.fillStyle = "rgba(13,8,34,0.92)"; ctx.fillRect(0, 212, W, 54);
+      ctx.textAlign = "center"; ctx.font = "900 19px system-ui"; ctx.fillStyle = message.bad ? "#ff6b7d" : ACC;
+      ctx.fillText(message.text, W / 2, 235);
+      if (message.sub) { ctx.font = "800 11px system-ui"; ctx.fillStyle = "#f1eeff"; ctx.fillText(message.sub, W / 2, 255); }
+      ctx.globalAlpha = 1;
+    }
+  }
+
+  // ---------- Loop ----------
+  let last = performance.now();
+  function frame(now) {
+    const dt = Math.min(0.1, (now - last) / 1000);
+    last = now;
+    update(dt);
+    draw();
+    requestAnimationFrame(frame);
+  }
+  buildLevel();
+  syncControls();
+  showTitle();
+  requestAnimationFrame(frame);
+})();
+</script>
+<script src="../../shared/iniziali.js" data-record="fermati-best-" data-kind="score"></script>
+</body>
+</html>
