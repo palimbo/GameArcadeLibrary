@@ -1,0 +1,520 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no, viewport-fit=cover">
+<title>Aritmetica delle Parole</title>
+<style>
+  :root {
+    --bg: #0d0822;
+    --fg: #f1eeff;
+    --muted: #a9a3cf;
+    --cyan: #5fe3d6;
+    --yellow: #ffd66b;
+    --red: #ff6b7d;
+    --pink: #ff9f9f;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  html, body {
+    height: 100%;
+    background: var(--bg);
+    color: var(--fg);
+    font-family: system-ui, -apple-system, "Segoe UI", sans-serif;
+    overflow: hidden;
+    user-select: none;
+    -webkit-user-select: none;
+    touch-action: none;
+  }
+  #wrap { position: fixed; inset: 0; display: flex; align-items: center; justify-content: center; }
+  canvas { display: block; touch-action: none; border-radius: 6px; box-shadow: 0 0 0 2px #2a1f55, 0 10px 40px rgba(0,0,0,0.6); cursor: pointer; }
+  #pauseBtn {
+    position: fixed; z-index: 3; display: none; right: 10px; top: calc(10px + env(safe-area-inset-top, 0px));
+    font: 700 13px system-ui, sans-serif; color: var(--fg);
+    background: rgba(0, 0, 0, 0.6); border: 1px solid rgba(241, 238, 255, 0.35);
+    border-radius: 8px; padding: 6px 10px; cursor: pointer;
+  }
+  #overlay {
+    position: fixed; inset: 0; z-index: 5;
+    display: flex; flex-direction: column; align-items: center; justify-content: flex-start;
+    gap: 14px; padding: 16px; text-align: center; overflow-y: auto;
+    background: rgba(13, 8, 34, 0.93);
+  }
+  #overlay > :first-child { margin-top: auto; }
+  #overlay > :last-child { margin-bottom: auto; }
+  #overlay.hidden { display: none; }
+  #homeLink {
+    position: fixed; top: calc(10px + env(safe-area-inset-top, 0px)); left: 10px; z-index: 6;
+    font: 600 13px/1 system-ui, sans-serif; color: #fff; text-decoration: none;
+    padding: 8px 12px; border-radius: 999px; background: rgba(0,0,0,.55);
+    border: 1px solid rgba(255,255,255,.25);
+  }
+  #homeLink:hover { background: rgba(0,0,0,.8); }
+  #overlay.hidden ~ #homeLink { display: none; }
+  @media (max-width: 700px) { #overlay { padding-top: calc(52px + env(safe-area-inset-top, 0px)); } }
+  #overlay h1 { font-size: clamp(30px, 9vw, 54px); font-weight: 900; letter-spacing: 1px; color: var(--pink);
+    text-shadow: 3px 3px 0 #2a1f6a, 0 0 22px rgba(255,159,159,0.35); text-wrap: balance; }
+  #overlay h2 { font-size: clamp(24px, 7vw, 40px); font-weight: 900; letter-spacing: 2px; color: var(--pink); }
+  #overlay h2.lose { color: var(--red); }
+  #overlay p { max-width: 540px; font-size: clamp(13px, 3.4vw, 16px); line-height: 1.55; }
+  #overlay p.muted { color: var(--muted); }
+  #overlay .pts { display: grid; grid-template-columns: repeat(2, auto); gap: 4px 18px; font-size: 13px; color: var(--muted); text-align: left; max-width: 560px; }
+  #overlay .pts b { color: var(--fg); }
+  #overlay .diff { display: flex; gap: 10px; flex-wrap: wrap; justify-content: center; }
+  #overlay button {
+    font: 800 15px system-ui, sans-serif; letter-spacing: 1.5px; color: var(--fg);
+    background: transparent; cursor: pointer;
+    border: 2px solid rgba(241,238,255,0.3); border-radius: 10px; padding: 9px 16px;
+  }
+  #overlay .diff button.on { border-color: var(--c); color: var(--c); box-shadow: 0 0 12px var(--c); }
+  #overlay button.start { border-color: var(--pink); color: #2a0808; background: var(--pink); padding: 11px 30px; box-shadow: 0 4px 0 #b05c5c; }
+  @media (max-height: 560px) {
+    #overlay { gap: 8px; }
+    #overlay h1 { font-size: 28px; }
+    #overlay p { font-size: 13px; line-height: 1.4; }
+    #overlay .help, #overlay .pts { display: none; }
+  }
+</style>
+</head>
+<body>
+<div id="wrap"><canvas id="game"></canvas></div>
+<button id="pauseBtn" type="button" aria-label="Pausa">❚❚</button>
+<div id="overlay"></div>
+<a id="homeLink" href="../../index.html">← Sala Giochi</a>
+
+<script>
+(() => {
+  "use strict";
+
+  const W = 360, H = 600, TOP = 56, TAU = Math.PI * 2;
+  const ACC = "#ff9f9f", CA = "#ffd66b", CB = "#ff9be0", CC = "#5fe3d6";
+  const AREA = { x: 18, y: 112, w: 324, h: 322 };
+  const PER_LEVEL = 5;
+  // word pairs that differ by the same "meaning", and other words of the same world
+  const THEMES = [
+    { pairs: [["re", "regina"], ["uomo", "donna"], ["principe", "principessa"], ["attore", "attrice"], ["zio", "zia"], ["nonno", "nonna"], ["padre", "madre"], ["fratello", "sorella"], ["gallo", "gallina"], ["cavaliere", "dama"]], extra: ["trono", "corona", "bambino", "famiglia", "castello", "palco", "nipote"] },
+    { pairs: [["Italia", "Roma"], ["Francia", "Parigi"], ["Spagna", "Madrid"], ["Germania", "Berlino"], ["Grecia", "Atene"], ["Portogallo", "Lisbona"], ["Austria", "Vienna"], ["Egitto", "Il Cairo"], ["Giappone", "Tokyo"], ["Russia", "Mosca"]], extra: ["Milano", "Lione", "Barcellona", "Monaco", "Napoli", "Porto", "Salisburgo", "Osaka"] },
+    { pairs: [["cane", "cucciolo"], ["gatto", "gattino"], ["cavallo", "puledro"], ["mucca", "vitello"], ["pecora", "agnello"], ["gallina", "pulcino"], ["orso", "orsetto"], ["capra", "capretto"]], extra: ["latte", "stalla", "lana", "uovo", "prato", "osso", "fieno"] },
+    { pairs: [["pittore", "pennello"], ["cuoco", "padella"], ["sarto", "ago"], ["falegname", "sega"], ["scrittore", "penna"], ["giardiniere", "rastrello"], ["pescatore", "rete"], ["medico", "stetoscopio"]], extra: ["quadro", "cucina", "stoffa", "legno", "libro", "orto", "barca"] },
+    { pairs: [["Italia", "italiano"], ["Francia", "francese"], ["Spagna", "spagnolo"], ["Germania", "tedesco"], ["Grecia", "greco"], ["Giappone", "giapponese"], ["Russia", "russo"], ["Portogallo", "portoghese"]], extra: ["dialetto", "alfabeto", "inglese", "latino", "parola", "accento"] },
+  ];
+
+  const DIFFICULTIES = {
+    facile:    { label: "FACILE",    color: "#7ee0a0", desc: "la freccia della differenza si vede · 5 errori concessi", arrow: true, lives: 5 },
+    normale:   { label: "NORMALE",   color: "#ffd66b", desc: "la freccia della differenza si vede · 3 errori concessi", arrow: true, lives: 3 },
+    difficile: { label: "DIFFICILE", color: "#ff6b7d", desc: "nessuna freccia: la differenza va vista a occhio · 3 errori concessi", arrow: false, lives: 3 },
+  };
+  const DIFF_IDS = Object.keys(DIFFICULTIES);
+  const DIFF_KEY = "parole-difficulty";
+  const bestKey = (id) => `aritmetica-best-${id}`;
+  function store(k, v) { try { localStorage.setItem(k, v); } catch { /* ignore */ } }
+  function load(k) { try { return localStorage.getItem(k); } catch { return null; } }
+  const rint = (a, b) => a + Math.floor(Math.random() * (b - a + 1));
+  const rnd = (a, b) => a + Math.random() * (b - a);
+  const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
+  const nf = (n) => n.toLocaleString("it-IT");
+  const gauss = () => Math.sqrt(-2 * Math.log(1 - Math.random())) * Math.cos(TAU * Math.random());
+  const shuffle = (a) => { for (let i = a.length - 1; i > 0; i--) { const j = rint(0, i); [a[i], a[j]] = [a[j], a[i]]; } return a; };
+
+  // ---------- Canvas ----------
+  const canvas = document.getElementById("game");
+  const ctx = canvas.getContext("2d");
+  const overlay = document.getElementById("overlay");
+  const pauseBtn = document.getElementById("pauseBtn");
+  let pxRatio = 1, touchMode = !!(window.matchMedia && matchMedia("(pointer: coarse)").matches);
+  function resize() {
+    const availW = window.innerWidth - 8, availH = window.innerHeight - 8;
+    const s = Math.max(0.2, Math.min(availW / W, availH / H));
+    pxRatio = Math.min(3, s * (window.devicePixelRatio || 1));
+    canvas.style.width = W * s + "px";
+    canvas.style.height = H * s + "px";
+    canvas.width = Math.round(W * pxRatio);
+    canvas.height = Math.round(H * pxRatio);
+  }
+  window.addEventListener("resize", () => syncControls());
+
+  // ---------- Audio: soft tones ----------
+  let audioCtx = null;
+  function beep(freq, dur, type = "sine", vol = 0.05, delay = 0) {
+    if (!audioCtx) return;
+    const t = audioCtx.currentTime + delay;
+    const osc = audioCtx.createOscillator(), gain = audioCtx.createGain();
+    osc.type = type; osc.frequency.setValueAtTime(freq, t);
+    gain.gain.setValueAtTime(0.0001, t);
+    gain.gain.exponentialRampToValueAtTime(vol, t + 0.015);
+    gain.gain.exponentialRampToValueAtTime(0.0001, t + dur);
+    osc.connect(gain).connect(audioCtx.destination);
+    osc.start(t); osc.stop(t + dur + 0.02);
+  }
+  const arp = (notes, gap, d, type, vol) => notes.forEach((f, i) => beep(f, d, type, vol, i * gap));
+  const sfx = {
+    pick: () => beep(520, 0.06, "sine", 0.035),
+    step: (v) => beep(392 * Math.pow(1.09, v), 0.09, "triangle", 0.04),
+    edge: () => beep(150, 0.08, "sine", 0.045),
+    row: () => beep(880, 0.1, "sine", 0.03, 0.05),
+    win: () => arp([523, 659, 784, 1047], 0.09, 0.35),
+    perfect: () => arp([523, 659, 784, 1047, 1319, 1568], 0.07, 0.4),
+    fail: () => arp([392, 330, 277], 0.14, 0.35, "triangle", 0.05),
+    lose: () => arp([392, 330, 277, 220], 0.16, 0.4, "triangle", 0.05),
+  };
+
+  // ---------- State ----------
+  let difficulty = DIFFICULTIES[load(DIFF_KEY)] ? load(DIFF_KEY) : "normale";
+  let diff = DIFFICULTIES[difficulty];
+  let state = "menu", menu = null, pausedFrom = null, stateT = 0, clock = 0;
+  let score = 0, level = 0, bestCache = 0, cleared = 0, rights = 0, dodged = 0, lives = 0;
+  let words = [], qs = [], qi = 0, q = null, phase = "ask", pick = -1, sel = -1, kbd = false, levelOk = 0;
+  let popups = [], message = null;
+  const isPlaying = () => ["play", "levelup", "fail"].includes(state);
+
+  // ---------- The map of words ----------
+  const inA = (p, m) => p.x > AREA.x + m && p.x < AREA.x + AREA.w - m && p.y > AREA.y + m && p.y < AREA.y + AREA.h - m;
+  // a word takes up its dot and its label: no two may touch
+  const box = (p, t) => { ctx.font = "900 12px system-ui"; const tw = ctx.measureText(t).width, right = p.x > AREA.x + AREA.w - tw - 16; return right ? { a: p.x - 9 - tw, b: p.x + 7, y: p.y } : { a: p.x - 7, b: p.x + 9 + tw, y: p.y }; };
+  const free = (p, t) => { const m = box(p, t); return words.every((w) => { const o = box(w, w.t); return m.b + 6 < o.a || o.b + 6 < m.a || Math.abs(m.y - o.y) > 22; }); };
+  // the model's answer: the word nearest to C + (A − B), leaving out the three words of the question
+  function nearest(t, skip) {
+    let b = -1, bd = 1e18, d2 = 1e18;
+    words.forEach((w, i) => { if (skip.includes(i)) return; const d = (w.x - t.x) ** 2 + (w.y - t.y) ** 2; if (d < bd) { d2 = bd; bd = d; b = i; } else if (d < d2) d2 = d; });
+    return { i: b, d1: Math.sqrt(bd), d2: Math.sqrt(d2) };
+  }
+  function buildLevel() {
+    const th = THEMES[level % THEMES.length];
+    const np = Math.min(th.pairs.length, 5 + Math.floor(level / 3)), noise = Math.min(16, 5 + level * 1.4), nDecoy = Math.min(th.extra.length, 2 + Math.floor(level / 2));
+    for (let tries = 0; tries < 300; tries++) {
+      const ang = rnd(0, TAU), len = rnd(100, 135), v = { x: Math.cos(ang) * len, y: Math.sin(ang) * len };
+      words = [];
+      const pairs = shuffle(th.pairs.slice()).slice(0, np), pidx = [];
+      let ok = true;
+      for (const [a, b] of pairs) {
+        let placed = false;
+        for (let g = 0; g < 300 && !placed; g++) {
+          const p = { x: rnd(AREA.x + 14, AREA.x + AREA.w - 14), y: rnd(AREA.y + 14, AREA.y + AREA.h - 14) }, s = { x: p.x + v.x + gauss() * noise, y: p.y + v.y + gauss() * noise };
+          if (!inA(s, 14) || !free(p, a) || !free(s, b)) continue;
+          { const m = box(p, a), o = box(s, b); if (!(m.b + 6 < o.a || o.b + 6 < m.a || Math.abs(m.y - o.y) > 22)) continue; }
+          pidx.push([words.length, words.length + 1]);
+          words.push({ t: a, x: p.x, y: p.y, side: 0 }, { t: b, x: s.x, y: s.y, side: 1 });
+          placed = true;
+        }
+        if (!placed) { ok = false; break; }
+      }
+      if (!ok) continue;
+      // the decoys: words of the same world, some sitting right where an answer is expected
+      for (const e of shuffle(th.extra.slice()).slice(0, nDecoy)) {
+        for (let g = 0; g < 300; g++) {
+          const near = Math.random() < 0.7 ? words[pidx[rint(0, pidx.length - 1)][rint(0, 1)]] : null;
+          const p = near ? { x: near.x + rnd(-1, 1) * 60, y: near.y + rnd(-1, 1) * 34 } : { x: rnd(AREA.x + 14, AREA.x + AREA.w - 14), y: rnd(AREA.y + 14, AREA.y + AREA.h - 14) };
+          if (inA(p, 12) && free(p, e)) { words.push({ t: e, x: p.x, y: p.y, side: 2 }); break; }
+        }
+      }
+      // all the questions this map allows, both ways round, kept only when the nearest word is clearly the nearest
+      const all = [];
+      for (const [i0, i1] of pidx) for (const [j0, j1] of pidx) {
+        if (i0 === j0) continue;
+        for (const [A, B, C, D] of [[i1, i0, j0, j1], [i0, i1, j1, j0]]) {
+          const t = { x: words[C].x + words[A].x - words[B].x, y: words[C].y + words[A].y - words[B].y }, n = nearest(t, [A, B, C]);
+          if (n.i >= 0 && n.d1 < 0.62 * n.d2 && n.d1 < 40) all.push({ A, B, C, D, t, ans: n.i, sem: n.i === D });
+        }
+      }
+      const tricky = shuffle(all.filter((x) => !x.sem)), plain = shuffle(all.filter((x) => x.sem));
+      const want = level < 1 ? 0 : level < 3 ? 1 : level < 6 ? 2 : 3;
+      if (tricky.length < want || plain.length < PER_LEVEL - want) continue;
+      // no question repeats the same C
+      qs = []; const used = new Set();
+      for (const x of [...tricky.slice(0, want * 3), ...plain]) { if (qs.length >= PER_LEVEL || used.has(x.C)) continue; if (!x.sem && qs.filter((y) => !y.sem).length >= want) continue; qs.push(x); used.add(x.C); }
+      if (qs.length < PER_LEVEL || qs.filter((y) => !y.sem).length < want) continue;
+      shuffle(qs);
+      break;
+    }
+    qi = 0; levelOk = 0;
+    nextQ();
+  }
+  function nextQ() { q = qs[qi]; phase = "ask"; pick = -1; sel = -1; }
+  function startGame() {
+    if (!audioCtx) { try { audioCtx = new (window.AudioContext || window.webkitAudioContext)(); } catch { audioCtx = null; } }
+    if (audioCtx && audioCtx.state === "suspended") audioCtx.resume();
+    score = 0; level = 0; cleared = 0; rights = 0; dodged = 0; lives = diff.lives; popups = [];
+    bestCache = parseInt(load(bestKey(difficulty)), 10) || 0;
+    beginLevel();
+    menu = null;
+    overlay.classList.add("hidden");
+    syncControls();
+    last = performance.now();
+  }
+  function beginLevel() {
+    buildLevel();
+    state = "play";
+    message = { text: `LIVELLO ${level + 1}`, sub: `${words.length} parole sulla mappa · ${PER_LEVEL} domande`, t: 0 };
+  }
+  function addScore(k, y, color, label = "") { score += k; popups.push({ text: `${label}+${nf(k)}`, x: W / 2, y, t: 0, color }); }
+  function answer(i) {
+    if (state !== "play" || phase !== "ask" || i < 0 || [q.A, q.B, q.C].includes(i)) return;
+    pick = i; phase = "shown"; message = null;
+    if (i === q.ans) {
+      rights++; levelOk++;
+      addScore(50 + 25 * level, 300, ACC);
+      if (!q.sem) { dodged++; addScore(100, 278, "#5fe3d6", "non ti sei fatto ingannare · "); }
+      sfx.row();
+    } else { lives--; (lives > 0 ? sfx.fail : sfx.lose)(); }
+  }
+  function proceed() {
+    if (state !== "play" || phase !== "shown") return;
+    if (lives <= 0) { state = "fail"; stateT = 0.3; return; }
+    qi++;
+    if (qi < PER_LEVEL) { nextQ(); sfx.pick(); return; }
+    state = "levelup"; stateT = 2.4; cleared++;
+    if (levelOk === PER_LEVEL) addScore(150 * (level + 1), 300, "#ffd66b", "nessun errore · ");
+    sfx.win();
+    message = { text: "MAPPA LETTA", sub: `${levelOk} risposte giuste su ${PER_LEVEL}`, t: 0 };
+  }
+  function gameOver() {
+    state = "over";
+    const prev = parseInt(load(bestKey(difficulty)), 10) || 0;
+    const record = score > prev;
+    if (record) store(bestKey(difficulty), String(score));
+    menu = () => showOverlay(
+      `<h2 class="lose">IL MODELLO HA PARLATO</h2>
+       <p>Punteggio: <b>${nf(score)}</b> · ${rights} ${rights === 1 ? "risposta giusta" : "risposte giuste"}${dodged ? `, ${dodged} senza farti ingannare dal significato` : ""} · ${diff.label}</p>
+       <p class="muted">Anch'io tengo le parole così, come punti in uno spazio: solo che le dimensioni sono migliaia, non due. Il significato, lì dentro, è una questione di direzioni.</p>
+       ${record ? "<p style='color:var(--yellow)'>★ NUOVO RECORD! ★</p>" : ""}
+       ${difficultyHTML()}
+       <button class="start" data-start>RIPROVA</button>`
+    );
+    menu();
+    syncControls();
+  }
+  function togglePause() {
+    if (isPlaying()) {
+      pausedFrom = state; state = "paused";
+      showOverlay(`<h2>PAUSA</h2><button class="start" data-resume>CONTINUA</button><p class="muted">Premi P per continuare</p>`);
+    } else if (state === "paused") {
+      state = pausedFrom; overlay.classList.add("hidden"); last = performance.now();
+    }
+    syncControls();
+  }
+  // the pause menu can end the game (shared/iniziali.js): it ends here the usual way, saving the record
+  window.addEventListener("sala:termina", () => { if (state !== "paused") return; overlay.classList.add("hidden"); gameOver(); syncControls(); });
+  function syncControls() {
+    pauseBtn.style.display = isPlaying() && touchMode ? "block" : "none";
+    resize();
+  }
+  pauseBtn.addEventListener("click", () => togglePause());
+  function showOverlay(html) { overlay.innerHTML = html; overlay.classList.remove("hidden"); }
+  function difficultyHTML() {
+    const buttons = DIFF_IDS.map((id) => {
+      const d = DIFFICULTIES[id];
+      return `<button type="button" data-diff="${id}" class="${id === difficulty ? "on" : ""}" style="--c:${d.color}">${d.label}</button>`;
+    }).join("");
+    const best = parseInt(load(bestKey(difficulty)), 10);
+    return `<div class="diff">${buttons}</div><p class="muted">${diff.desc}${best ? ` · Record: ${nf(best)}` : ""}</p>`;
+  }
+  function setDifficulty(id) { if (!DIFFICULTIES[id]) return; difficulty = id; diff = DIFFICULTIES[id]; store(DIFF_KEY, id); if (state === "menu") buildLevel(); if (menu) menu(); }
+  function showTitle() {
+    menu = showTitle;
+    showOverlay(
+      `<h1>ARITMETICA DELLE PAROLE</h1>
+       <p>Un modello linguistico tiene ogni parola come un punto in uno spazio, e le parole simili stanno vicine. Il bello è che anche le differenze hanno un senso: da «Italia» a «Roma» c'è lo stesso spostamento che da «Francia» a «Parigi». Così Roma − Italia + Francia dà… quello che sta lì. Ma il modello non sa cosa sia Parigi: sa solo dove sta. E a volte lì c'è un'altra parola.</p>
+       <div class="pts">
+         <span><b>La domanda</b></span><span>A − B + C: parti da C e fai lo stesso spostamento che porta da B ad A</span>
+         <span><b>La risposta</b></span><span>tocca la parola più vicina al punto d'arrivo: quella dice il modello</span>
+         <span><b>Trappole</b></span><span>a volte la parola «giusta» non è la più vicina: conta la mappa, non il significato</span>
+         <span><b>Punti</b></span><span>50 + 25 × livello per risposta · 100 per ogni trappola evitata · 150 × livello se il livello è senza errori</span>
+       </div>
+       ${touchMode
+         ? `<p class="muted help">Tocca la parola · tocca ancora per andare avanti</p>`
+         : `<p class="muted help">Clicca la parola, oppure frecce e Invio · Invio per andare avanti · P pausa</p>`}
+       ${difficultyHTML()}
+       <button class="start" data-start>PRIMA MAPPA</button>`
+    );
+  }
+  overlay.addEventListener("click", (e) => {
+    const d = e.target.closest("[data-diff]");
+    if (d) { setDifficulty(d.dataset.diff); return; }
+    if (e.target.closest("[data-start]")) startGame();
+    if (e.target.closest("[data-resume]")) togglePause();
+  });
+
+  // ---------- Input ----------
+  const choosable = (i) => q && ![q.A, q.B, q.C].includes(i);
+  function stepSel(dx, dy) {
+    const from = sel >= 0 ? words[sel] : words[q.C];
+    let b = -1, bd = 1e9;
+    words.forEach((w, i) => {
+      if (!choosable(i) || i === sel) return;
+      const vx = w.x - from.x, vy = w.y - from.y, along = vx * dx + vy * dy, side = Math.abs(vx * dy - vy * dx);
+      if (along <= 0) return;
+      const d = along + side * 2;
+      if (d < bd) { bd = d; b = i; }
+    });
+    if (b >= 0) { sel = b; sfx.pick(); }
+  }
+  window.addEventListener("keydown", (e) => {
+    const k = e.key.toLowerCase();
+    if ([" ", "arrowup", "arrowdown", "arrowleft", "arrowright"].includes(k)) e.preventDefault();
+    if (state === "menu" || state === "over") {
+      if (e.key === "Enter") startGame();
+      else if (["1", "2", "3"].includes(k)) setDifficulty(DIFF_IDS[+k - 1]);
+      return;
+    }
+    if (k === "p" || k === "escape") { if (!e.repeat) togglePause(); return; }
+    if (state === "paused") { if (e.key === "Enter") togglePause(); return; }
+    if (state !== "play") return;
+    if (phase === "shown") { if ((k === "enter" || k === " ") && !e.repeat) proceed(); return; }
+    const mv = { arrowright: [1, 0], arrowleft: [-1, 0], arrowdown: [0, 1], arrowup: [0, -1] }[k];
+    if (mv) { kbd = true; stepSel(mv[0], mv[1]); }
+    else if ((k === "enter" || k === " ") && !e.repeat && sel >= 0) answer(sel);
+  });
+  window.addEventListener("blur", () => { if (isPlaying()) togglePause(); });
+  const toWorld = (e) => { const rc = canvas.getBoundingClientRect(); return { x: (e.clientX - rc.left) / rc.width * W, y: (e.clientY - rc.top) / rc.height * H }; };
+  canvas.addEventListener("pointerdown", (e) => {
+    e.preventDefault();
+    if (state !== "play") return;
+    if (phase === "shown") { proceed(); return; }
+    const p = toWorld(e); kbd = false;
+    // a word is hit on its dot or on its label
+    let b = -1, bd = e.pointerType === "touch" ? 26 : 20;
+    words.forEach((w, i) => {
+      if (!choosable(i)) return;
+      const lx = labelX(w), d = Math.min(Math.hypot(w.x - p.x, w.y - p.y), p.y > w.y - 9 && p.y < w.y + 9 && p.x > Math.min(lx.a, lx.b) && p.x < Math.max(lx.a, lx.b) ? 4 : 99);
+      if (d < bd) { bd = d; b = i; }
+    });
+    if (b >= 0) answer(b);
+  });
+  window.addEventListener("pointerdown", (e) => { if (e.pointerType === "touch" && !touchMode) { touchMode = true; syncControls(); if (menu) menu(); } }, true);
+
+  // ---------- Update ----------
+  function update(dt) {
+    clock += dt;
+    for (const p of popups) { p.t += dt; p.y -= 14 * dt; }
+    popups = popups.filter((p) => p.t < 1.8);
+    if (message) { message.t += dt; if (message.t > 2.4) message = null; }
+    if (state === "levelup") { stateT -= dt; if (stateT <= 0) { level++; beginLevel(); } }
+    else if (state === "fail") { stateT -= dt; if (stateT <= 0) gameOver(); }
+  }
+
+  // ---------- Drawing ----------
+  ctx.font = "800 11px system-ui";
+  const labelX = (w) => { ctx.font = "800 11px system-ui"; const tw = ctx.measureText(w.t).width; return w.x > AREA.x + AREA.w - tw - 16 ? { a: w.x - 7 - tw, b: w.x - 7, right: true } : { a: w.x + 7, b: w.x + 7 + tw, right: false }; };
+  function arrow(x0, y0, x1, y1, col, dash) {
+    const a = Math.atan2(y1 - y0, x1 - x0), L = Math.hypot(x1 - x0, y1 - y0), e = Math.max(0, L - 8);
+    const ex = x0 + Math.cos(a) * e, ey = y0 + Math.sin(a) * e;
+    ctx.strokeStyle = col; ctx.lineWidth = 2.2; if (dash) ctx.setLineDash([5, 4]);
+    ctx.beginPath(); ctx.moveTo(x0 + Math.cos(a) * 7, y0 + Math.sin(a) * 7); ctx.lineTo(ex, ey); ctx.stroke(); ctx.setLineDash([]);
+    ctx.fillStyle = col; ctx.beginPath(); ctx.moveTo(ex + Math.cos(a) * 6, ey + Math.sin(a) * 6); ctx.lineTo(ex + Math.cos(a + 2.5) * 8, ey + Math.sin(a + 2.5) * 8); ctx.lineTo(ex + Math.cos(a - 2.5) * 8, ey + Math.sin(a - 2.5) * 8); ctx.fill();
+  }
+  function drawMap() {
+    const A = AREA;
+    ctx.fillStyle = "#120b2c"; ctx.beginPath(); ctx.roundRect(A.x - 10, A.y - 6, A.w + 20, A.h + 12, 12); ctx.fill();
+    // a faint grid, as on a chart
+    ctx.strokeStyle = "rgba(255,255,255,0.04)"; ctx.lineWidth = 1;
+    for (let x = A.x; x <= A.x + A.w; x += 27) { ctx.beginPath(); ctx.moveTo(x, A.y - 4); ctx.lineTo(x, A.y + A.h + 4); ctx.stroke(); }
+    for (let y = A.y; y <= A.y + A.h; y += 27) { ctx.beginPath(); ctx.moveTo(A.x - 8, y); ctx.lineTo(A.x + A.w + 8, y); ctx.stroke(); }
+    if (state === "menu" || !q) return;
+    const shown = phase === "shown" || state !== "play";
+    if (diff.arrow || shown) arrow(words[q.B].x, words[q.B].y, words[q.A].x, words[q.A].y, ACC);
+    if (shown) {
+      arrow(words[q.C].x, words[q.C].y, q.t.x, q.t.y, ACC, true);
+      ctx.strokeStyle = "#f1eeff"; ctx.lineWidth = 2; ctx.beginPath(); ctx.moveTo(q.t.x - 6, q.t.y - 6); ctx.lineTo(q.t.x + 6, q.t.y + 6); ctx.moveTo(q.t.x + 6, q.t.y - 6); ctx.lineTo(q.t.x - 6, q.t.y + 6); ctx.stroke();
+      const w = words[q.ans]; ctx.strokeStyle = "#7ee0a0"; ctx.lineWidth = 2.5; ctx.beginPath(); ctx.arc(w.x, w.y, 11 + Math.sin(clock * 6) * 1.2, 0, TAU); ctx.stroke();
+      ctx.strokeStyle = "rgba(126,224,160,0.5)"; ctx.lineWidth = 1; ctx.setLineDash([2, 3]); ctx.beginPath(); ctx.moveTo(q.t.x, q.t.y); ctx.lineTo(w.x, w.y); ctx.stroke(); ctx.setLineDash([]);
+    }
+    ctx.textBaseline = "middle";
+    words.forEach((w, i) => {
+      const role = i === q.A ? CA : i === q.B ? CB : i === q.C ? CC : null, isSel = kbd && sel === i && phase === "ask", wrong = shown && i === pick && pick !== q.ans;
+      const r = role ? 5.5 : 4;
+      ctx.fillStyle = role || (wrong ? "#ff6b7d" : shown && i === q.ans ? "#7ee0a0" : "#e4dfff"); ctx.beginPath(); ctx.arc(w.x, w.y, r, 0, TAU); ctx.fill();
+      const L = labelX(w);
+      ctx.font = role ? "900 12px system-ui" : "800 11px system-ui"; ctx.textAlign = L.right ? "right" : "left";
+      const tx = L.right ? L.b : L.a;
+      if (isSel) { ctx.fillStyle = "rgba(255,159,159,0.25)"; ctx.fillRect(Math.min(L.a, L.b) - 3, w.y - 9, Math.abs(L.b - L.a) + 6, 18); }
+      ctx.lineWidth = 3.5; ctx.strokeStyle = "#120b2c"; ctx.lineJoin = "round"; ctx.strokeText(w.t, tx, w.y + 0.5);
+      ctx.fillStyle = role || (wrong ? "#ff6b7d" : shown && i === q.ans ? "#7ee0a0" : "#c9c3ec"); ctx.fillText(w.t, tx, w.y + 0.5);
+      if (wrong) { ctx.strokeStyle = "#ff6b7d"; ctx.lineWidth = 2; ctx.beginPath(); ctx.moveTo(w.x - 7, w.y - 7); ctx.lineTo(w.x + 7, w.y + 7); ctx.moveTo(w.x + 7, w.y - 7); ctx.lineTo(w.x - 7, w.y + 7); ctx.stroke(); }
+    });
+    ctx.textBaseline = "alphabetic";
+  }
+  function drawQuestion() {
+    if (!q) return;
+    ctx.textBaseline = "middle"; ctx.font = "900 17px system-ui";
+    const parts = [[words[q.A].t, CA], [" − ", "#f1eeff"], [words[q.B].t, CB], [" + ", "#f1eeff"], [words[q.C].t, CC], [" = ", "#f1eeff"], [phase === "shown" ? words[q.ans].t : "?", phase === "shown" ? "#7ee0a0" : "#f1eeff"]];
+    let size = 17; ctx.font = `900 ${size}px system-ui`;
+    let tw = parts.reduce((k, p) => k + ctx.measureText(p[0]).width, 0);
+    if (tw > W - 24) { size = Math.floor(17 * (W - 24) / tw); ctx.font = `900 ${size}px system-ui`; tw = parts.reduce((k, p) => k + ctx.measureText(p[0]).width, 0); }
+    let x = W / 2 - tw / 2; ctx.textAlign = "left";
+    for (const [t, c] of parts) { ctx.fillStyle = c; ctx.fillText(t, x, 82); x += ctx.measureText(t).width; }
+    ctx.textBaseline = "alphabetic";
+  }
+  function drawPanel() {
+    ctx.textAlign = "center"; ctx.textBaseline = "middle";
+    for (let i = 0; i < PER_LEVEL; i++) { const x = W / 2 + (i - (PER_LEVEL - 1) / 2) * 18; ctx.fillStyle = i < qi ? ACC : i === qi ? "#f1eeff" : "rgba(255,255,255,0.15)"; ctx.beginPath(); ctx.arc(x, 458, i === qi ? 5 : 4, 0, TAU); ctx.fill(); }
+    if (!q) { ctx.textBaseline = "alphabetic"; return; }
+    if (phase === "shown") {
+      const good = pick === q.ans, D = words[q.D].t, M = words[q.ans].t;
+      ctx.font = "900 15px system-ui"; ctx.fillStyle = good ? "#7ee0a0" : "#ff6b7d";
+      ctx.fillText(good ? `GIUSTO: IL MODELLO DICE «${M.toUpperCase()}»` : `IL MODELLO DICE «${M.toUpperCase()}»`, W / 2, 490);
+      ctx.font = "700 11px system-ui"; ctx.fillStyle = "#f1eeff";
+      ctx.fillText(q.sem ? `è la parola più vicina al punto d'arrivo, la croce bianca` : `e non «${D}»: sulla mappa «${M}» è più vicina alla croce`, W / 2, 512);
+      ctx.fillStyle = ACC; ctx.font = "900 11px system-ui"; ctx.globalAlpha = 0.6 + Math.sin(clock * 5) * 0.4;
+      ctx.fillText(lives > 0 ? (touchMode ? "TOCCA PER CONTINUARE" : "CLICCA O PREMI INVIO PER CONTINUARE") : "FINE DEGLI ERRORI CONCESSI", W / 2, 546); ctx.globalAlpha = 1;
+    } else if (state === "play") {
+      ctx.font = "700 11px system-ui"; ctx.fillStyle = "#a9a3cf";
+      ctx.fillText(`parti da «${words[q.C].t}» e sposta come da «${words[q.B].t}» a «${words[q.A].t}»`, W / 2, 490);
+      ctx.fillText("poi tocca la parola più vicina a dove arrivi", W / 2, 508);
+      if (!diff.arrow) { ctx.fillStyle = "#6a6490"; ctx.fillText("a Difficile la freccia non c'è: immaginala", W / 2, 530); }
+    }
+    ctx.textBaseline = "alphabetic";
+  }
+  function drawHud() {
+    ctx.fillStyle = "#0d0822"; ctx.fillRect(0, 0, W, TOP - 4);
+    ctx.textBaseline = "middle"; ctx.textAlign = "left";
+    ctx.fillStyle = "#f1eeff"; ctx.font = "900 18px system-ui"; ctx.fillText(nf(score), 12, 16);
+    ctx.fillStyle = "#a9a3cf"; ctx.font = "700 9px system-ui"; ctx.fillText(`REC ${nf(Math.max(bestCache, score))}`, 12, 36);
+    ctx.textAlign = "center"; ctx.fillStyle = ACC; ctx.font = "900 12px system-ui"; ctx.fillText(`LIVELLO ${level + 1}`, W / 2, 14);
+    ctx.fillStyle = "#ffd66b"; ctx.font = "800 11px system-ui"; ctx.fillText(`domanda ${Math.min(PER_LEVEL, qi + 1)} di ${PER_LEVEL} · ${words.length} parole`, W / 2, 34);
+    const ex = touchMode ? W - 62 : W - 12;
+    for (let i = 0; i < diff.lives; i++) { ctx.fillStyle = i < lives ? "#ffd66b" : "rgba(255,255,255,0.15)"; ctx.beginPath(); ctx.arc(ex - 6 - i * 13, 16, 4.5, 0, TAU); ctx.fill(); }
+    ctx.fillStyle = "rgba(255,255,255,0.12)"; ctx.fillRect(0, TOP - 4, W, 4);
+    ctx.fillStyle = "#ffd66b"; ctx.fillRect(0, TOP - 4, W * qi / PER_LEVEL, 4);
+    ctx.textBaseline = "alphabetic";
+  }
+  function draw() {
+    ctx.setTransform(pxRatio, 0, 0, pxRatio, 0, 0);
+    ctx.fillStyle = "#0d0822"; ctx.fillRect(0, 0, W, H);
+    drawMap();
+    if (state === "menu") return;
+    drawQuestion();
+    drawPanel();
+    drawHud();
+    for (const p of popups) {
+      ctx.globalAlpha = clamp((1.8 - p.t) * 2, 0, 1);
+      ctx.textAlign = "center"; ctx.font = "900 14px system-ui";
+      ctx.lineWidth = 4; ctx.strokeStyle = "#0d0822"; ctx.strokeText(p.text, p.x, p.y); ctx.fillStyle = p.color; ctx.fillText(p.text, p.x, p.y);
+    }
+    ctx.globalAlpha = 1;
+    if (message) {
+      ctx.globalAlpha = Math.min(1, (2.4 - message.t) * 2);
+      ctx.fillStyle = "rgba(13,8,34,0.92)"; ctx.fillRect(0, 248, W, 54);
+      ctx.textAlign = "center"; ctx.font = "900 19px system-ui"; ctx.fillStyle = message.bad ? "#ff6b7d" : ACC;
+      ctx.fillText(message.text, W / 2, 271);
+      if (message.sub) { ctx.font = "800 11px system-ui"; ctx.fillStyle = "#f1eeff"; ctx.fillText(message.sub, W / 2, 291); }
+      ctx.globalAlpha = 1;
+    }
+  }
+
+  // ---------- Loop ----------
+  let last = performance.now();
+  function frame(now) {
+    const dt = Math.min(0.1, (now - last) / 1000);
+    last = now;
+    update(dt);
+    draw();
+    requestAnimationFrame(frame);
+  }
+  buildLevel();
+  syncControls();
+  showTitle();
+  requestAnimationFrame(frame);
+})();
+</script>
+<script src="../../shared/iniziali.js" data-record="aritmetica-best-" data-kind="score"></script>
+</body>
+</html>
