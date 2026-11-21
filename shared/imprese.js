@@ -9,6 +9,11 @@
   "use strict";
   // record key prefix of the game (as in trofei.js) → its feats
   const LIST = {
+    "minato-best-": [   // campo-minato
+      { id: "pulito", name: "A mani nude", desc: "bonifica un campo senza mettere nemmeno una bandierina" },
+      { id: "lampo", name: "Lampo", desc: "bonifica un campo da 16×9 in meno di un minuto e mezzo" },
+      { id: "artificiere", name: "Artificiere", desc: "bonifica tre campi di fila senza far scoppiare nemmeno una mina" },
+    ],
     "solitario-best-": [   // solitario
       { id: "vittoria", name: "Vittoria", desc: "vinci una mano" },
       { id: "pulita", name: "Senza aiuti", desc: "vinci una mano senza annullare né chiedere aiuto" },

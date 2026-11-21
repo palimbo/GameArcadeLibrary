@@ -1,0 +1,652 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no, viewport-fit=cover">
+<title>Campo Minato</title>
+<style>
+  :root {
+    --bg: #0e1d10;
+    --fg: #f4f6ee;
+    --muted: #bcd6b2;
+    --gold: #ffd23a;
+    --red: #ff5a4a;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  html, body {
+    height: 100%;
+    background: var(--bg);
+    color: var(--fg);
+    font-family: system-ui, -apple-system, "Segoe UI", sans-serif;
+    overflow: hidden;
+    user-select: none;
+    -webkit-user-select: none;
+    touch-action: none;
+  }
+  #wrap { position: fixed; inset: 0; display: flex; align-items: center; justify-content: center; }
+  canvas { cursor: pointer; display: block; touch-action: none; border-radius: 6px; box-shadow: 0 0 0 2px #2f5a2a, 0 10px 40px rgba(0,0,0,0.6); }
+  #pauseBtn {
+    position: fixed; z-index: 3; display: none; right: 10px; top: calc(10px + env(safe-area-inset-top, 0px));
+    font: 700 13px system-ui, sans-serif; color: var(--fg);
+    background: rgba(0, 0, 0, 0.6); border: 1px solid rgba(244, 246, 238, 0.35);
+    border-radius: 8px; padding: 6px 10px; cursor: pointer;
+  }
+  #touch { display: none !important; }
+  #overlay {
+    position: fixed; inset: 0; z-index: 5;
+    display: flex; flex-direction: column; align-items: center; justify-content: flex-start;
+    gap: 14px; padding: 16px; text-align: center; overflow-y: auto;
+    background: rgba(14, 29, 16, 0.94);
+  }
+  #overlay > :first-child { margin-top: auto; }
+  #overlay > :last-child { margin-bottom: auto; }
+  #overlay.hidden { display: none; }
+  #homeLink {
+    position: fixed; top: calc(10px + env(safe-area-inset-top, 0px)); left: 10px; z-index: 6;
+    font: 600 13px/1 system-ui, sans-serif; color: #fff; text-decoration: none;
+    padding: 8px 12px; border-radius: 999px; background: rgba(0,0,0,.55);
+    border: 1px solid rgba(255,255,255,.25);
+  }
+  #homeLink:hover { background: rgba(0,0,0,.8); }
+  #overlay.hidden ~ #homeLink { display: none; }
+  @media (max-width: 700px) { #overlay { padding-top: calc(52px + env(safe-area-inset-top, 0px)); } }
+  #overlay h1 { font-size: clamp(32px, 10vw, 58px); font-weight: 900; font-style: italic; letter-spacing: 1px; color: var(--gold);
+    text-shadow: 3px 3px 0 #6a1a1a, 0 0 22px rgba(255,210,58,0.35); }
+  #overlay h1 span { color: #fff; }
+  #overlay h2 { font-size: clamp(26px, 7vw, 42px); font-weight: 900; letter-spacing: 2px; color: var(--gold); }
+  #overlay h2.lose { color: var(--red); }
+  #overlay p { max-width: 540px; font-size: clamp(13px, 3.4vw, 16px); line-height: 1.55; }
+  #overlay p.muted { color: var(--muted); }
+  #overlay .pts { display: grid; grid-template-columns: repeat(2, auto); gap: 4px 18px; font-size: 13px; color: var(--muted); text-align: left; max-width: 560px; }
+  #overlay .pts b { color: var(--fg); }
+  #overlay .diff { display: flex; gap: 10px; flex-wrap: wrap; justify-content: center; }
+  #overlay button {
+    font: 800 15px system-ui, sans-serif; letter-spacing: 1.5px; color: var(--fg);
+    background: transparent; cursor: pointer;
+    border: 2px solid rgba(244,246,238,0.3); border-radius: 10px; padding: 9px 16px;
+  }
+  #overlay .diff button.on { border-color: var(--c); color: var(--c); box-shadow: 0 0 12px var(--c); }
+  #overlay button.start { border-color: var(--gold); color: #2a1a02; background: var(--gold); padding: 11px 30px; box-shadow: 0 4px 0 #a87a0a; }
+  @media (max-height: 560px) {
+    #overlay { gap: 8px; }
+    #overlay h1 { font-size: 30px; }
+    #overlay p { font-size: 13px; line-height: 1.4; }
+    #overlay .help, #overlay .pts { display: none; }
+  }
+</style>
+</head>
+<body>
+<div id="wrap"><canvas id="game"></canvas></div>
+<div id="touch"></div>
+<button id="pauseBtn" type="button" aria-label="Pausa">❚❚</button>
+<div id="overlay"></div>
+<a id="homeLink" href="../../index.html">← Sala Giochi</a>
+
+
+<script>
+(() => {
+  "use strict";
+
+  const TAU = Math.PI * 2;
+  const DIFFICULTIES = {
+    facile:    { label: "FACILE",    color: "#7ee0a0", desc: "poche mine, campi sempre risolvibili senza tirare a indovinare · 2 sonde per campo · 4 vite", dens: 0.12, sure: true, probes: 2, lives: 4 },
+    normale:   { label: "NORMALE",   color: "#ffd66b", desc: "più mine, campi sempre risolvibili senza tirare a indovinare · 1 sonda per campo · 3 vite", dens: 0.15, sure: true, probes: 1, lives: 3 },
+    difficile: { label: "DIFFICILE", color: "#ff6b7d", desc: "tante mine e nessuna garanzia: a volte bisogna rischiare · 1 sonda per campo · 3 vite", dens: 0.17, sure: false, probes: 1, lives: 3 },
+  };
+  const DIFF_IDS = Object.keys(DIFFICULTIES);
+  const DIFF_KEY = "minato-difficulty";
+  const bestKey = (id) => `minato-best-${id}`;
+  function store(k, v) { try { localStorage.setItem(k, v); } catch { /* ignore */ } }
+  function load(k) { try { return localStorage.getItem(k); } catch { return null; } }
+  const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
+  const nf = (n) => n.toLocaleString("it-IT");
+  const feat = (id) => window.dispatchEvent(new CustomEvent("sala:impresa", { detail: id }));
+  const mmss = (t) => `${Math.floor(t / 60)}:${String(Math.floor(t % 60)).padStart(2, "0")}`;
+  // fields grow: long side × short side (they turn with the screen)
+  const SIZES = [[10, 7], [12, 8], [14, 9], [16, 9]];
+  const TOTAL = 10, LIFE_BONUS = 1000;   // ten fields make a day's work
+  const NUMC = ["", "#1d63c9", "#2a8a36", "#d0392b", "#6a2db0", "#8a3816", "#11807f", "#262626", "#6d6d6d"];
+
+  // ---------- Canvas: landscape or portrait, whichever fits the screen ----------
+  const canvas = document.getElementById("game"), ctx = canvas.getContext("2d");
+  const overlay = document.getElementById("overlay"), pauseBtn = document.getElementById("pauseBtn");
+  let W = 640, H = 360, portrait = false, pxRatio = 1, L = null;
+  let touchMode = !!(window.matchMedia && matchMedia("(pointer: coarse)").matches);
+  function layout() {
+    L = portrait
+      ? { area: { x: 6, y: 36, w: 348, h: 520 }, info: null, infoY: 572,
+          btns: [{ id: "probe", x: 8, y: 588, w: 168, h: 44 }, { id: "mode", x: 184, y: 588, w: 168, h: 44 }] }
+      : { area: { x: 8, y: 34, w: 500, h: 320 }, info: { x: 516, y: 34, w: 116, h: 164 },
+          btns: [{ id: "probe", x: 516, y: 206, w: 116, h: 46 }, { id: "mode", x: 516, y: 260, w: 116, h: 46 }] };
+  }
+  function resize() {
+    portrait = window.innerHeight > window.innerWidth * 1.15;
+    W = portrait ? 360 : 640; H = portrait ? 640 : 360;
+    layout();
+    const s = Math.max(0.2, Math.min((window.innerWidth - 8) / W, (window.innerHeight - 8) / H));
+    pxRatio = Math.min(3, s * (window.devicePixelRatio || 1));
+    canvas.style.width = W * s + "px"; canvas.style.height = H * s + "px";
+    canvas.width = Math.round(W * pxRatio); canvas.height = Math.round(H * pxRatio);
+  }
+  window.addEventListener("resize", () => syncControls());
+
+  // ---------- Audio ----------
+  let audioCtx = null;
+  function beep(freq, dur, type = "triangle", vol = 0.04, delay = 0) {
+    if (!audioCtx) return;
+    const t = audioCtx.currentTime + delay, o = audioCtx.createOscillator(), g = audioCtx.createGain();
+    o.type = type; o.frequency.setValueAtTime(freq, t);
+    g.gain.setValueAtTime(0.0001, t); g.gain.exponentialRampToValueAtTime(vol, t + 0.008); g.gain.exponentialRampToValueAtTime(0.0001, t + dur);
+    o.connect(g).connect(audioCtx.destination); o.start(t); o.stop(t + dur + 0.02);
+  }
+  function noise(dur, freq, vol, type = "lowpass") {
+    if (!audioCtx) return;
+    const t = audioCtx.currentTime, n = Math.floor(audioCtx.sampleRate * dur), b = audioCtx.createBuffer(1, n, audioCtx.sampleRate), d = b.getChannelData(0);
+    for (let i = 0; i < n; i++) d[i] = (Math.random() * 2 - 1) * Math.pow(1 - i / n, 2);
+    const s = audioCtx.createBufferSource(), f = audioCtx.createBiquadFilter(), g = audioCtx.createGain();
+    s.buffer = b; f.type = type; f.frequency.value = freq; g.gain.value = vol;
+    s.connect(f).connect(g).connect(audioCtx.destination); s.start(t);
+  }
+  const sfx = {
+    dig: (n) => { noise(0.06, 1800, 0.05, "bandpass"); if (n > 1) beep(520 + Math.min(n, 30) * 12, 0.08, "triangle", 0.025); },
+    flag: () => { beep(740, 0.05, "square", 0.025); beep(990, 0.06, "square", 0.02, 0.05); },
+    unflag: () => beep(440, 0.05, "square", 0.02),
+    boom: () => { noise(0.7, 500, 0.35); beep(70, 0.5, "sine", 0.12); },
+    probe: () => { [1200, 1200, 1200].forEach((f, i) => beep(f, 0.05, "sine", 0.04, i * 0.12)); },
+    bad: () => beep(160, 0.08, "square", 0.03),
+    clear: () => [523, 659, 784, 1047, 784, 1047, 1319].forEach((f, i) => beep(f, 0.18, "triangle", 0.05, i * 0.09)),
+    lose: () => [392, 330, 262, 196].forEach((f, i) => beep(f, 0.3, "triangle", 0.05, i * 0.16)),
+    pop: (i) => beep(660 + (i % 8) * 70, 0.06, "sine", 0.02),
+  };
+
+  // ---------- State ----------
+  let difficulty = DIFFICULTIES[load(DIFF_KEY)] ? load(DIFF_KEY) : "normale";
+  let diff = DIFFICULTIES[difficulty];
+  let state = "menu", menu = null, pausedFrom = null, clock = 0, stateT = 0;
+  let score = 0, lives = 0, level = 0, streak = 0, bestCache = 0;
+  let F = null;   // the field: { A, B, mines, cells, mined, safeLeft, flags, hits, probes, t, usedFlags }
+  let mode = "dig", probing = false, msg = null, shake = 0, parts = [], cursor = { c: 0, r: 0 }, kbd = false, press = null, bonus = null, hover = null;
+  const isPlaying = () => ["play", "clear", "boom"].includes(state);
+
+  // ---------- A field ----------
+  function newField(n) {
+    const [A, B] = SIZES[Math.min(n, SIZES.length) - 1];
+    const dens = diff.dens + 0.005 * Math.max(0, n - SIZES.length);
+    const cells = [];
+    for (let a = 0; a < A; a++) for (let b = 0; b < B; b++) cells.push({ a, b, mine: false, n: 0, open: false, flag: false, boom: false, at: 0, wrong: false });
+    F = { A, B, mines: Math.round(A * B * dens), cells, mined: false, safeLeft: 0, flags: 0, hits: 0, probes: diff.probes, t: 0, usedFlags: false, flowers: 0 };
+    F.safeLeft = A * B - F.mines;
+    probing = false; mode = "dig"; bonus = null; rings.length = 0;
+    cursor = { c: Math.floor(cols() / 2), r: Math.floor(rows() / 2) };
+  }
+  const cell = (a, b) => (a < 0 || b < 0 || a >= F.A || b >= F.B ? null : F.cells[a * F.B + b]);
+  function around(c) { const out = []; for (let da = -1; da <= 1; da++) for (let db = -1; db <= 1; db++) { if (!da && !db) continue; const o = cell(c.a + da, c.b + db); if (o) out.push(o); } return out; }
+  // mines go in after the first dig, never next to it; on Facile and Normale the field must be solvable by logic alone
+  function plant(first) {
+    const banned = new Set([first, ...around(first)]);
+    const free = F.cells.filter((c) => !banned.has(c));
+    let tries = 0;
+    for (;;) {
+      tries++;
+      for (const c of F.cells) { c.mine = false; c.n = 0; }
+      for (let i = free.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); [free[i], free[j]] = [free[j], free[i]]; }
+      for (let i = 0; i < F.mines; i++) free[i].mine = true;
+      for (const c of F.cells) c.n = around(c).filter((o) => o.mine).length;
+      if (!diff.sure || tries >= 400 || solvable(first)) break;
+    }
+    F.mined = true;
+  }
+  // ---------- Logic: what the numbers say for sure ----------
+  // known: which cells are open (with their numbers) and which are certainly mines; returns new safe cells and new mines
+  function deduce(isOpen, isMine) {
+    const N = F.cells.length, safe = new Set(), mines = new Set();
+    const cons = [];
+    for (let i = 0; i < N; i++) {
+      if (!isOpen(i)) continue;
+      const c = F.cells[i], u = []; let need = c.n;
+      for (const o of around(c)) { const j = o.a * F.B + o.b; if (isOpen(j)) continue; if (isMine(j)) need--; else u.push(j); }
+      if (u.length) cons.push({ u, need });
+    }
+    for (const k of cons) {
+      if (k.need === 0) k.u.forEach((j) => safe.add(j));
+      else if (k.need === k.u.length) k.u.forEach((j) => mines.add(j));
+    }
+    if (safe.size || mines.size) return { safe, mines };
+    // subsets: if one constraint's cells lie inside another's, the difference is known
+    for (const x of cons) for (const y of cons) {
+      if (x === y || x.u.length >= y.u.length) continue;
+      if (!x.u.every((j) => y.u.includes(j))) continue;
+      const rest = y.u.filter((j) => !x.u.includes(j)), need = y.need - x.need;
+      if (need === 0) rest.forEach((j) => safe.add(j));
+      else if (need === rest.length) rest.forEach((j) => mines.add(j));
+    }
+    if (safe.size || mines.size) return { safe, mines };
+    // overlaps: what x must put in the shared cells, and what y can hold there
+    for (const x of cons) for (const y of cons) {
+      if (x === y) continue;
+      const both = x.u.filter((j) => y.u.includes(j)); if (!both.length) continue;
+      const onlyX = x.u.filter((j) => !y.u.includes(j)), onlyY = y.u.filter((j) => !x.u.includes(j));
+      const minShared = x.need - onlyX.length, maxShared = Math.min(both.length, y.need);
+      if (minShared > 0 && minShared === y.need) onlyY.forEach((j) => safe.add(j));
+      if (onlyX.length && x.need - maxShared === onlyX.length) onlyX.forEach((j) => mines.add(j));
+    }
+    if (safe.size || mines.size) return { safe, mines };
+    // the mine count, at the very end
+    let hidden = 0, known = 0; for (let i = 0; i < N; i++) { if (isOpen(i)) continue; if (isMine(i)) known++; else hidden++; }
+    if (hidden && F.mines - known === 0) { for (let i = 0; i < N; i++) if (!isOpen(i) && !isMine(i)) safe.add(i); }
+    else if (hidden && F.mines - known === hidden) { for (let i = 0; i < N; i++) if (!isOpen(i) && !isMine(i)) mines.add(i); }
+    return { safe, mines };
+  }
+  function solvable(first) {
+    const N = F.cells.length, open = new Uint8Array(N), mine = new Uint8Array(N);
+    const openFrom = (i) => { const st = [i]; while (st.length) { const j = st.pop(); if (open[j]) continue; open[j] = 1; const c = F.cells[j]; if (c.n === 0) for (const o of around(c)) { const k = o.a * F.B + o.b; if (!open[k]) st.push(k); } } };
+    openFrom(first.a * F.B + first.b);
+    for (let guard = 0; guard < 400; guard++) {
+      let left = 0; for (let i = 0; i < N; i++) if (!open[i] && !F.cells[i].mine) left++;
+      if (!left) return true;
+      const r = deduce((i) => open[i] === 1, (i) => mine[i] === 1);
+      if (!r.safe.size && !r.mines.size) return false;
+      r.mines.forEach((i) => { mine[i] = 1; });
+      r.safe.forEach((i) => openFrom(i));
+    }
+    return false;
+  }
+
+  // ---------- Moves ----------
+  function dig(c, quiet) {
+    if (!c || c.open || c.flag || state !== "play") return 0;
+    if (!F.mined) plant(c);
+    if (c.mine) { explode(c); return 0; }
+    // open, flooding outward from empty cells, with a ripple
+    let n = 0; const q = [[c, 0]], seen = new Set([c]);
+    while (q.length) {
+      const [x, d] = q.shift();
+      if (x.flag) { x.flag = false; F.flags--; }
+      x.open = true; x.at = clock + d * 0.022; n++; F.safeLeft--;
+      if (x.n === 0) for (const o of around(x)) if (!o.open && !o.mine && !seen.has(o)) { seen.add(o); q.push([o, d + 1]); }
+    }
+    score += n * 5 * level;
+    if (!quiet) sfx.dig(n);
+    for (let i = 0; i < Math.min(n, 6); i++) puff(c, ["#7fc95a", "#a7d86a", "#c9a46a"][i % 3], 4);
+    if (F.safeLeft === 0) clearField();
+    return n;
+  }
+  function chord(c) {
+    if (!c.open || c.n === 0 || state !== "play") return false;
+    const ns = around(c), marked = ns.filter((o) => o.flag || o.boom).length;
+    if (marked !== c.n) { sfx.bad(); return false; }
+    const hiddenNs = ns.filter((o) => !o.open && !o.flag);
+    if (!hiddenNs.length) return false;
+    // a wrong flag sets off the mine it was hiding
+    const mine = hiddenNs.find((o) => o.mine);
+    if (mine) { explode(mine); return true; }
+    let n = 0; for (const o of hiddenNs) if (state === "play") n += dig(o, true);
+    if (n) sfx.dig(n);
+    return true;
+  }
+  function toggleFlag(c) {
+    if (!c || c.open || state !== "play") return;
+    if (!F.mined) { say("Prima scava una casella"); sfx.bad(); return; }
+    c.flag = !c.flag; F.flags += c.flag ? 1 : -1;
+    if (c.flag) { F.usedFlags = true; sfx.flag(); } else sfx.unflag();
+  }
+  function probe(c) {
+    if (!c || c.open || state !== "play") return;
+    if (!F.mined) { say("Prima scava una casella"); sfx.bad(); probing = false; return; }
+    if (F.probes <= 0) { sfx.bad(); probing = false; return; }
+    F.probes--; probing = false; sfx.probe();
+    rings.push({ c, t: 0 });
+    if (c.mine) { if (!c.flag) { c.flag = true; F.flags++; } c.sure = true; say("Mina trovata!"); }
+    else { if (c.flag) { c.flag = false; F.flags--; } dig(c); }
+  }
+  function act(c) {
+    if (!c) return;
+    if (probing) { probe(c); return; }
+    if (c.open) { chord(c); return; }
+    if (mode === "flag") toggleFlag(c); else dig(c);
+  }
+  function explode(c) {
+    c.open = true; c.boom = true; c.at = clock; if (c.flag) { c.flag = false; F.flags--; }
+    lives--; F.hits++; streak = 0; shake = 0.45; sfx.boom();
+    for (let i = 0; i < 26; i++) puff(c, ["#ffcf4a", "#ff7a2a", "#ff3a2a", "#3a2a1a"][i % 4], 9);
+    if (lives <= 0) {
+      state = "boom"; stateT = 0;
+      for (const o of F.cells) { if (o.mine && !o.flag && !o.open) { o.open = true; o.at = clock + 0.3 + Math.random() * 0.8; } if (o.flag && !o.mine) o.wrong = true; }
+      return;
+    }
+    say(lives === 1 ? "Boom! Ultima vita" : `Boom! Restano ${lives} vite`);
+  }
+  function clearField() {
+    state = "clear"; stateT = 0; streak = F.hits === 0 ? streak + 1 : 0;
+    const par = Math.round((F.A * F.B - F.mines) * 0.8);
+    const base = 300 * level, speed = Math.max(0, par - Math.floor(F.t)) * 5 * level, clean = F.hits === 0 ? 200 * level : 0, prob = F.probes * 100 * level;
+    bonus = { base, speed, clean, prob, par };
+    score += base + speed + clean + prob;
+    let k = 0;
+    for (const o of F.cells) if (o.mine && !o.boom) { if (!o.flag) { o.flag = true; F.flags++; } o.bloom = clock + 0.25 + (k++) * 0.05; }
+    sfx.clear();
+    if (!F.usedFlags) feat("pulito");
+    if (F.A * F.B >= 144 && F.t < 90) feat("lampo");
+    if (streak >= 3) feat("artificiere");
+  }
+  function say(text) { msg = { text, t: 0 }; }
+  const rings = [];
+  function puff(c, color, speed) {
+    const p = cellXY(c), g = geo();
+    const a = Math.random() * TAU, v = speed * (14 + Math.random() * 18);
+    parts.push({ x: p.x + g.cs / 2, y: p.y + g.cs / 2, vx: Math.cos(a) * v, vy: Math.sin(a) * v - 40, life: 0.5 + Math.random() * 0.5, t: 0, color, s: 2 + Math.random() * 3 });
+  }
+
+  // ---------- Geometry: the field turns with the screen ----------
+  const cols = () => (portrait ? F.B : F.A), rows = () => (portrait ? F.A : F.B);
+  function geo() {
+    const ar = L.area, c = cols(), r = rows();
+    const cs = Math.floor(Math.min(ar.w / c, ar.h / r));
+    return { cs, c, r, x: Math.round(ar.x + (ar.w - cs * c) / 2), y: Math.round(ar.y + (ar.h - cs * r) / 2) };
+  }
+  const toAB = (c, r) => (portrait ? cell(r, c) : cell(c, r));
+  function cellXY(c) { const g = geo(), col = portrait ? c.b : c.a, row = portrait ? c.a : c.b; return { x: g.x + col * g.cs, y: g.y + row * g.cs }; }
+  function cellAt(p) { const g = geo(); const c = Math.floor((p.x - g.x) / g.cs), r = Math.floor((p.y - g.y) / g.cs); if (c < 0 || r < 0 || c >= g.c || r >= g.r) return null; return toAB(c, r); }
+
+  // ---------- Flow ----------
+  function startGame() {
+    if (!audioCtx) { try { audioCtx = new (window.AudioContext || window.webkitAudioContext)(); } catch { audioCtx = null; } }
+    if (audioCtx && audioCtx.state === "suspended") audioCtx.resume();
+    score = 0; lives = diff.lives; level = 1; streak = 0; parts = []; rings.length = 0;
+    bestCache = parseInt(load(bestKey(difficulty)), 10) || 0;
+    newField(level); state = "play"; menu = null; overlay.classList.add("hidden");
+    syncControls(); last = performance.now();
+  }
+  function nextField() { if (level >= TOTAL) { gameOver(true); return; } level++; newField(level); state = "play"; parts = []; say(`Campo ${level}: ${F.A}×${F.B}, ${F.mines} mine`); syncControls(); }
+  function gameOver(victory) {
+    state = "over";
+    let lifeBonus = 0;
+    if (victory) { lifeBonus = lives * LIFE_BONUS * (DIFF_IDS.indexOf(difficulty) + 1); score += lifeBonus; }
+    const prev = parseInt(load(bestKey(difficulty)), 10) || 0, record = score > prev;
+    if (record) store(bestKey(difficulty), String(score));
+    const done = victory ? TOTAL : level - 1;
+    menu = () => showOverlay(
+      (victory ? `<h2>TUTTO BONIFICATO!</h2>
+       <p>Tutti e dieci i campi sono puliti. ${lives} ${lives === 1 ? "vita rimasta" : "vite rimaste"}: +${nf(lifeBonus)} punti.</p>
+       <p>Punteggio: <b>${nf(score)}</b> · ${diff.label}</p>` : `<h2 class="lose">CAMPO SALTATO</h2>
+       <p>Punteggio: <b>${nf(score)}</b> · ${done} ${done === 1 ? "campo bonificato" : "campi bonificati"} su ${TOTAL} · ${diff.label}</p>`) +
+      `${record ? "<p style='color:var(--gold)'>★ NUOVO RECORD! ★</p>" : ""}
+       ${difficultyHTML()}
+       <button class="start" data-start>RIPROVA</button>`
+    );
+    menu(); syncControls();
+  }
+  function togglePause() {
+    if (isPlaying()) { pausedFrom = state; state = "paused"; press = null; showOverlay(`<h2>PAUSA</h2><button class="start" data-resume>CONTINUA</button><p class="muted">Premi P per continuare</p>`); }
+    else if (state === "paused") { state = pausedFrom; overlay.classList.add("hidden"); last = performance.now(); }
+    syncControls();
+  }
+  window.addEventListener("sala:termina", () => { if (state !== "paused") return; overlay.classList.add("hidden"); gameOver(); });
+  function syncControls() { pauseBtn.style.display = isPlaying() && touchMode ? "block" : "none"; resize(); }
+  pauseBtn.addEventListener("click", () => togglePause());
+  function showOverlay(html) { overlay.innerHTML = html; overlay.classList.remove("hidden"); }
+  function difficultyHTML() {
+    const buttons = DIFF_IDS.map((id) => { const d = DIFFICULTIES[id]; return `<button type="button" data-diff="${id}" class="${id === difficulty ? "on" : ""}" style="--c:${d.color}">${d.label}</button>`; }).join("");
+    const best = parseInt(load(bestKey(difficulty)), 10);
+    return `<div class="diff">${buttons}</div><p class="muted">${diff.desc}${best ? ` · Record: ${nf(best)}` : ""}</p>`;
+  }
+  function setDifficulty(id) { if (!DIFFICULTIES[id]) return; difficulty = id; diff = DIFFICULTIES[id]; store(DIFF_KEY, id); if (menu) menu(); }
+  function showTitle() {
+    menu = showTitle;
+    showOverlay(
+      `<h1>CAMPO <span>MINATO</span></h1>
+       <p>Sotto l'erba ci sono le mine. Ogni casella che scavi dice quante mine la toccano, contando anche quelle in diagonale: con quei numeri capisci dove sono e le segni con una bandierina. Scava tutte le caselle libere e il campo è bonificato; il prossimo è più grande. Sono dieci campi: arrivare in fondo vale un premio per ogni vita rimasta.</p>
+       <div class="pts">
+         <span><b>Scava</b></span><span>${touchMode ? "tocca una casella" : "clic sinistro"}; la prima non è mai una mina</span>
+         <span><b>Bandiera</b></span><span>${touchMode ? "tieni premuto, oppure passa al modo BANDIERA" : "clic destro, o F"}</span>
+         <span><b>Numero</b></span><span>${touchMode ? "tocca" : "clicca"} un numero con tutte le sue bandiere e scavi il resto intorno</span>
+         <span><b>Sonda</b></span><span>controlla una casella senza rischi; si ricarica a ogni campo</span>
+         <span><b>Punti</b></span><span>5 per casella (per il numero del campo) · bonus a fine campo per velocità, senza scoppi e per le sonde avanzate</span>
+       </div>
+       ${touchMode ? `<p class="muted help">Ogni mina che scoppia costa una vita</p>` : `<p class="muted help">Mouse, oppure frecce · Spazio scava · F bandiera · S sonda · P pausa · ogni mina che scoppia costa una vita</p>`}
+       ${difficultyHTML()}
+       <button class="start" data-start>AL CAMPO</button>`
+    );
+  }
+  overlay.addEventListener("click", (e) => {
+    const d = e.target.closest("[data-diff]");
+    if (d) { setDifficulty(d.dataset.diff); return; }
+    if (e.target.closest("[data-start]")) startGame();
+    if (e.target.closest("[data-resume]")) togglePause();
+  });
+
+  // ---------- Input ----------
+  const toWorld = (e) => { const rc = canvas.getBoundingClientRect(); return { x: ((e.clientX - rc.left) / rc.width) * W, y: ((e.clientY - rc.top) / rc.height) * H }; };
+  const inR = (r, p) => p.x >= r.x && p.x <= r.x + r.w && p.y >= r.y && p.y <= r.y + r.h;
+  function pressButton(id) {
+    if (state !== "play") return;
+    if (id === "probe") { if (!F.mined) { say("Prima scava una casella"); sfx.bad(); return; } if (F.probes <= 0) { sfx.bad(); return; } probing = !probing; if (probing) say("Tocca la casella da sondare"); }
+    else if (id === "mode") { mode = mode === "dig" ? "flag" : "dig"; probing = false; sfx.unflag(); }
+  }
+  canvas.addEventListener("contextmenu", (e) => e.preventDefault());
+  canvas.addEventListener("pointerdown", (e) => {
+    e.preventDefault();
+    if (state === "clear") { if (stateT > 1) nextField(); return; }
+    if (state !== "play") return;
+    kbd = false;
+    const p = toWorld(e);
+    for (const b of L.btns) if (inR(b, p)) { pressButton(b.id); return; }
+    const c = cellAt(p); if (!c) return;
+    if (e.pointerType === "mouse") {
+      if (e.button === 2) { if (probing) probing = false; else if (c.open) chord(c); else toggleFlag(c); }
+      else if (e.button === 1) chord(c);
+      else if (e.button === 0) act(c);
+      return;
+    }
+    // touch: a tap acts, a long press flags
+    press = { c, x: p.x, y: p.y, t: 0, id: e.pointerId, done: false };
+  });
+  canvas.addEventListener("pointermove", (e) => {
+    const p = toWorld(e);
+    if (e.pointerType === "mouse") hover = F && state === "play" ? cellAt(p) : null;
+    if (press && e.pointerId === press.id && Math.hypot(p.x - press.x, p.y - press.y) > 10) press = null;
+  });
+  canvas.addEventListener("pointerleave", () => { hover = null; });
+  canvas.addEventListener("pointerup", (e) => {
+    if (!press || e.pointerId !== press.id) return;
+    const pr = press; press = null;
+    if (!pr.done) act(pr.c);
+  });
+  canvas.addEventListener("pointercancel", () => { press = null; });
+
+  window.addEventListener("keydown", (e) => {
+    const k = e.key.toLowerCase();
+    if ([" ", "arrowup", "arrowdown", "arrowleft", "arrowright"].includes(k)) e.preventDefault();
+    if (state === "menu" || state === "over") { if (e.key === "Enter") startGame(); else if (["1", "2", "3"].includes(k)) setDifficulty(DIFF_IDS[+k - 1]); return; }
+    if (k === "p" || k === "escape") { if (!e.repeat) togglePause(); return; }
+    if (state === "paused") { if (e.key === "Enter") togglePause(); return; }
+    if (state === "clear") { if ((k === "enter" || k === " ") && stateT > 1) nextField(); return; }
+    if (state !== "play") return;
+    kbd = true; hover = null;
+    const g = geo();
+    if (k === "arrowleft" || k === "a") cursor.c = clamp(cursor.c - 1, 0, g.c - 1);
+    else if (k === "arrowright" || k === "d") cursor.c = clamp(cursor.c + 1, 0, g.c - 1);
+    else if (k === "arrowup" || k === "w") cursor.r = clamp(cursor.r - 1, 0, g.r - 1);
+    else if (k === "arrowdown") cursor.r = clamp(cursor.r + 1, 0, g.r - 1);
+    else if (e.repeat) return;
+    else if (k === " " || k === "enter") { const c = toAB(cursor.c, cursor.r); if (probing) probe(c); else if (c.open) chord(c); else dig(c); }
+    else if (k === "f" || k === "x") { const c = toAB(cursor.c, cursor.r); if (c.open) chord(c); else toggleFlag(c); }
+    else if (k === "s") { const c = toAB(cursor.c, cursor.r); if (!F.mined) { say("Prima scava una casella"); sfx.bad(); } else probe(c); }
+  });
+  window.addEventListener("blur", () => { if (isPlaying()) togglePause(); });
+  window.addEventListener("pointerdown", (e) => { if (e.pointerType === "touch" && !touchMode) { touchMode = true; syncControls(); if (menu) menu(); } }, true);
+
+  // ---------- Update ----------
+  function update(dt) {
+    clock += dt; stateT += dt;
+    if (msg) { msg.t += dt; if (msg.t > 1.8) msg = null; }
+    if (shake > 0) shake = Math.max(0, shake - dt);
+    if (state === "play") F.t += dt;
+    if (press && state === "play") { press.t += dt; if (!press.done && press.t > 0.38) { press.done = true; if (press.c.open) chord(press.c); else toggleFlag(press.c); if (navigator.vibrate) try { navigator.vibrate(20); } catch { /* ignore */ } } }
+    for (const p of parts) { p.t += dt; p.vy += 300 * dt; p.x += p.vx * dt; p.y += p.vy * dt; p.vx *= 0.97; }
+    parts = parts.filter((p) => p.t < p.life);
+    for (const r of rings) r.t += dt;
+    while (rings.length && rings[0].t > 1) rings.shift();
+    if (state === "clear" && F) {
+      for (const o of F.cells) if (o.bloom && !o.popped && clock >= o.bloom) { o.popped = true; sfx.pop(F.flowers++); for (let i = 0; i < 4; i++) puff(o, ["#ff8ac8", "#ffd23a", "#fff"][i % 3], 3); }
+    }
+    if (state === "boom" && stateT > 2) gameOver();
+  }
+
+  // ---------- Drawing ----------
+  function rr(x, y, w, h, r) { ctx.beginPath(); ctx.roundRect(x, y, w, h, r); }
+  function drawMine(x, y, s, t) {
+    const r = s * 0.24;
+    ctx.strokeStyle = "#1a1a1a"; ctx.lineWidth = Math.max(1.5, s * 0.07); ctx.lineCap = "round";
+    for (let i = 0; i < 4; i++) { const a = (i * TAU) / 8; ctx.beginPath(); ctx.moveTo(x - Math.cos(a) * r * 1.5, y - Math.sin(a) * r * 1.5); ctx.lineTo(x + Math.cos(a) * r * 1.5, y + Math.sin(a) * r * 1.5); ctx.stroke(); }
+    ctx.fillStyle = "#1a1a1a"; ctx.beginPath(); ctx.arc(x, y, r, 0, TAU); ctx.fill();
+    ctx.fillStyle = "rgba(255,255,255,0.7)"; ctx.beginPath(); ctx.arc(x - r * 0.35, y - r * 0.35, r * 0.28, 0, TAU); ctx.fill();
+  }
+  function drawFlag(x, y, s, wave) {
+    const h = s * 0.56, px = x - s * 0.12, top = y - h / 2;
+    ctx.fillStyle = "rgba(0,0,0,0.25)"; ctx.beginPath(); ctx.ellipse(px, top + h, s * 0.2, s * 0.06, 0, 0, TAU); ctx.fill();
+    ctx.strokeStyle = "#3a2a1a"; ctx.lineWidth = Math.max(1.5, s * 0.06); ctx.beginPath(); ctx.moveTo(px, top + h); ctx.lineTo(px, top); ctx.stroke();
+    const w = Math.sin(clock * 6 + wave) * s * 0.03;
+    ctx.fillStyle = "#e8322a"; ctx.beginPath(); ctx.moveTo(px, top); ctx.lineTo(px + s * 0.36, top + s * 0.12 + w); ctx.lineTo(px, top + s * 0.26); ctx.closePath(); ctx.fill();
+  }
+  function drawFlower(x, y, s, k, grow) {
+    const r = Math.max(0.1, s * 0.13 * grow), cols2 = ["#ff7ab8", "#ffd23a", "#8ac8ff", "#ffffff", "#c49aff"], col = cols2[k % cols2.length];
+    ctx.fillStyle = col;
+    for (let i = 0; i < 5; i++) { const a = (i * TAU) / 5 + k; ctx.beginPath(); ctx.arc(x + Math.cos(a) * r * 1.3, y + Math.sin(a) * r * 1.3, r, 0, TAU); ctx.fill(); }
+    ctx.fillStyle = "#ffb02a"; ctx.beginPath(); ctx.arc(x, y, r * 0.9, 0, TAU); ctx.fill();
+  }
+  function drawField() {
+    const g = geo(), s = g.cs;
+    // a frame of earth around the field
+    ctx.fillStyle = "#2b4a22"; rr(g.x - 4, g.y - 4, g.c * s + 8, g.r * s + 8, 6); ctx.fill();
+    for (let r = 0; r < g.r; r++) for (let c = 0; c < g.c; c++) {
+      const o = toAB(c, r), x = g.x + c * s, y = g.y + r * s, odd = (c + r) % 2;
+      const shown = o.open && clock >= o.at;
+      if (!shown) {
+        ctx.fillStyle = odd ? "#5aa844" : "#66b84e"; ctx.fillRect(x, y, s, s);
+        ctx.fillStyle = "rgba(255,255,255,0.10)"; ctx.fillRect(x, y, s, Math.max(2, s * 0.12));
+        ctx.fillStyle = "rgba(0,0,0,0.10)"; ctx.fillRect(x, y + s - Math.max(2, s * 0.1), s, Math.max(2, s * 0.1));
+        // a few blades of grass
+        ctx.strokeStyle = odd ? "#4b9638" : "#56a541"; ctx.lineWidth = 1;
+        const h = ((o.a * 7 + o.b * 13) % 5) / 5;
+        ctx.beginPath(); ctx.moveTo(x + s * (0.25 + h * 0.2), y + s * 0.75); ctx.lineTo(x + s * (0.28 + h * 0.2), y + s * 0.55); ctx.moveTo(x + s * (0.62 - h * 0.1), y + s * 0.8); ctx.lineTo(x + s * (0.58 - h * 0.1), y + s * 0.6); ctx.stroke();
+        if (o.flag) {
+          if (o.bloom && o.popped) drawFlower(x + s / 2, y + s / 2, s, o.a * 3 + o.b, Math.min(1, (clock - o.bloom) * 5));
+          else drawFlag(x + s / 2, y + s / 2, s, o.a + o.b);
+          if (o.wrong) { ctx.strokeStyle = "#ff2a2a"; ctx.lineWidth = 3; ctx.beginPath(); ctx.moveTo(x + s * 0.2, y + s * 0.2); ctx.lineTo(x + s * 0.8, y + s * 0.8); ctx.moveTo(x + s * 0.8, y + s * 0.2); ctx.lineTo(x + s * 0.2, y + s * 0.8); ctx.stroke(); }
+        }
+      } else {
+        ctx.fillStyle = o.boom ? "#e8442a" : odd ? "#dcc08e" : "#e6cc9c"; ctx.fillRect(x, y, s, s);
+        const age = clock - o.at;
+        if (age < 0.25 && !o.mine) { ctx.fillStyle = `rgba(120,200,80,${0.5 * (1 - age / 0.25)})`; ctx.fillRect(x, y, s, s); }
+        if (o.mine) drawMine(x + s / 2, y + s / 2, s);
+        else if (o.n) {
+          ctx.fillStyle = NUMC[o.n]; ctx.font = `900 ${Math.round(s * 0.6)}px system-ui, sans-serif`; ctx.textAlign = "center"; ctx.textBaseline = "middle";
+          ctx.fillText(o.n, x + s / 2, y + s / 2 + 1);
+        }
+      }
+    }
+    // a light grid
+    ctx.strokeStyle = "rgba(0,0,0,0.08)"; ctx.lineWidth = 1; ctx.beginPath();
+    for (let c = 1; c < g.c; c++) { ctx.moveTo(g.x + c * s + 0.5, g.y); ctx.lineTo(g.x + c * s + 0.5, g.y + g.r * s); }
+    for (let r = 1; r < g.r; r++) { ctx.moveTo(g.x, g.y + r * s + 0.5); ctx.lineTo(g.x + g.c * s, g.y + r * s + 0.5); }
+    ctx.stroke();
+    // the sonar rings of a probe
+    for (const rg of rings) { const p = cellXY(rg.c); ctx.strokeStyle = `rgba(120,220,255,${1 - rg.t})`; ctx.lineWidth = 2; ctx.beginPath(); ctx.arc(p.x + s / 2, p.y + s / 2, s * (0.3 + rg.t * 1.6), 0, TAU); ctx.stroke(); }
+    // the cell under the mouse, the keyboard cursor, a long press
+    const mark = (o, color, w) => { if (!o) return; const p = cellXY(o); ctx.strokeStyle = color; ctx.lineWidth = w; rr(p.x + 1.5, p.y + 1.5, s - 3, s - 3, 3); ctx.stroke(); };
+    if (state === "play") {
+      if (hover) mark(hover, probing ? "#7ad8ff" : "rgba(255,255,255,0.75)", 2);
+      if (kbd) mark(toAB(cursor.c, cursor.r), probing ? "#7ad8ff" : "#ffd23a", 3);
+      if (press && !press.done && press.t > 0.08) { const p = cellXY(press.c), k = Math.min(1, press.t / 0.38); ctx.strokeStyle = "#ffd23a"; ctx.lineWidth = 3; ctx.beginPath(); ctx.arc(p.x + s / 2, p.y + s / 2, s * 0.42, -Math.PI / 2, -Math.PI / 2 + k * TAU); ctx.stroke(); }
+    }
+  }
+  function button(b, label, sub, on, lit) {
+    ctx.fillStyle = lit ? "rgba(122,216,255,0.22)" : on ? "rgba(255,255,255,0.08)" : "rgba(255,255,255,0.03)";
+    rr(b.x, b.y, b.w, b.h, 9); ctx.fill();
+    ctx.strokeStyle = lit ? "#7ad8ff" : on ? "rgba(255,210,58,0.7)" : "rgba(255,255,255,0.15)"; ctx.lineWidth = 2; ctx.stroke();
+    ctx.fillStyle = on ? "#f4f6ee" : "rgba(244,246,238,0.35)"; ctx.textAlign = "center"; ctx.textBaseline = "middle";
+    ctx.font = "800 14px system-ui, sans-serif"; ctx.fillText(label, b.x + b.w / 2, b.y + b.h / 2 - (sub ? 7 : 0));
+    if (sub) { ctx.font = "600 10px system-ui, sans-serif"; ctx.fillStyle = on ? "#bcd6b2" : "rgba(188,214,178,0.35)"; ctx.fillText(sub, b.x + b.w / 2, b.y + b.h / 2 + 10); }
+  }
+  function draw() {
+    ctx.setTransform(pxRatio, 0, 0, pxRatio, 0, 0);
+    const bg = ctx.createLinearGradient(0, 0, 0, H); bg.addColorStop(0, "#17301a"); bg.addColorStop(1, "#0c1a0e");
+    ctx.fillStyle = bg; ctx.fillRect(0, 0, W, H);
+    if (!F) return;
+    ctx.save();
+    if (shake > 0) ctx.translate((Math.random() - 0.5) * shake * 18, (Math.random() - 0.5) * shake * 18);
+    drawField();
+    for (const p of parts) { ctx.globalAlpha = 1 - p.t / p.life; ctx.fillStyle = p.color; ctx.fillRect(p.x - p.s / 2, p.y - p.s / 2, p.s, p.s); }
+    ctx.globalAlpha = 1;
+    ctx.restore();
+
+    // top bar
+    ctx.fillStyle = "rgba(0,0,0,0.35)"; ctx.fillRect(0, 0, W, portrait ? 30 : 28);
+    const right = touchMode ? W - 62 : W - 12, mid = portrait && touchMode ? W * 0.42 : W / 2, ty = portrait ? 15 : 14;
+    ctx.textBaseline = "middle"; ctx.font = "800 14px system-ui, sans-serif";
+    ctx.textAlign = "left"; ctx.fillStyle = "#f4f6ee"; ctx.fillText(`${nf(score)} punti`, 10, ty);
+    ctx.textAlign = "center"; ctx.fillStyle = "#ffd23a"; ctx.fillText(`CAMPO ${level}/${TOTAL}${portrait ? "" : ` · ${F.A}×${F.B}`} · ${mmss(F.t)}`, mid, ty);
+    for (let i = 0; i < diff.lives; i++) { ctx.fillStyle = i < lives ? "#ff5a4a" : "rgba(255,255,255,0.18)"; heart(right - i * 13 - 5, ty, 5); }
+    if (!portrait || !touchMode) { ctx.textAlign = "right"; ctx.font = "700 11px system-ui, sans-serif"; ctx.fillStyle = "#bcd6b2"; ctx.fillText(`REC ${nf(Math.max(bestCache, score))}`, right - diff.lives * 13 - 4, ty); }
+
+    // info and buttons
+    const minesLeft = F.mines - F.flags - F.cells.filter((o) => o.boom).length;
+    if (L.info) {
+      const I = L.info; ctx.fillStyle = "rgba(0,0,0,0.28)"; rr(I.x, I.y, I.w, I.h, 9); ctx.fill();
+      const rows2 = [["Mine", String(minesLeft)], ["Sonde", String(F.probes)], ["Senza scoppi", `${streak} ${streak === 1 ? "campo" : "campi"}`], ["Tempo bonus", mmss(Math.max(0, Math.round((F.A * F.B - F.mines) * 0.8) - F.t))]];
+      rows2.forEach(([a, b], i) => { const y = I.y + 22 + i * 38; ctx.textAlign = "left"; ctx.font = "600 11px system-ui, sans-serif"; ctx.fillStyle = "#bcd6b2"; ctx.fillText(a, I.x + 10, y); ctx.font = "800 17px system-ui, sans-serif"; ctx.fillStyle = "#f4f6ee"; ctx.fillText(b, I.x + 10, y + 16); });
+      drawMine(I.x + I.w - 24, I.y + 30, 34);
+    } else {
+      ctx.textAlign = "center"; ctx.font = "700 12px system-ui, sans-serif"; ctx.fillStyle = "#bcd6b2";
+      ctx.fillText(`${F.A}×${F.B} · mine ${minesLeft} · sonde ${F.probes} · senza scoppi ${streak} · REC ${nf(Math.max(bestCache, score))}`, W / 2, L.infoY);
+    }
+    const B = Object.fromEntries(L.btns.map((b) => [b.id, b])), canProbe = state === "play" && F.mined && F.probes > 0;
+    button(B.probe, probing ? "SONDA…" : "SONDA", probing ? "scegli la casella" : `${F.probes} ${F.probes === 1 ? "rimasta" : "rimaste"}`, canProbe || probing, probing);
+    button(B.mode, mode === "flag" ? "🚩 BANDIERA" : "⛏ SCAVA", touchMode ? "tocca per cambiare" : "clic destro: bandiera", state === "play", mode === "flag");
+
+    // messages
+    if (msg && state === "play") {
+      const a = Math.min(1, (1.8 - msg.t) * 3); ctx.globalAlpha = a;
+      ctx.font = "800 15px system-ui, sans-serif"; const w = ctx.measureText(msg.text).width + 28, g = geo();
+      const y = portrait ? 50 : 46; ctx.fillStyle = "rgba(10,20,10,0.85)"; rr(g.x + (g.c * g.cs - w) / 2, y - 14, w, 28, 14); ctx.fill();
+      ctx.fillStyle = "#ffd23a"; ctx.textAlign = "center"; ctx.fillText(msg.text, g.x + (g.c * g.cs) / 2, y); ctx.globalAlpha = 1;
+    }
+    if (state === "clear" && bonus && stateT > 0.6) {
+      const g = geo(), cx = g.x + (g.c * g.cs) / 2, cy = g.y + (g.r * g.cs) / 2, w = 270, h = 168;
+      const a = Math.min(1, (stateT - 0.6) * 4); ctx.globalAlpha = a;
+      ctx.fillStyle = "rgba(10,24,12,0.92)"; rr(cx - w / 2, cy - h / 2, w, h, 14); ctx.fill(); ctx.strokeStyle = "#ffd23a"; ctx.lineWidth = 2; ctx.stroke();
+      ctx.textAlign = "center"; ctx.fillStyle = "#ffd23a"; ctx.font = "900 20px system-ui, sans-serif"; ctx.fillText("CAMPO BONIFICATO!", cx, cy - h / 2 + 24);
+      const lines = [["Campo", bonus.base], ["Velocità", bonus.speed], ["Senza scoppi", bonus.clean], ["Sonde avanzate", bonus.prob]];
+      ctx.font = "600 13px system-ui, sans-serif";
+      lines.forEach(([t, v], i) => { const y = cy - h / 2 + 54 + i * 21; ctx.textAlign = "left"; ctx.fillStyle = "#bcd6b2"; ctx.fillText(t, cx - w / 2 + 26, y); ctx.textAlign = "right"; ctx.fillStyle = v ? "#f4f6ee" : "rgba(244,246,238,0.35)"; ctx.fillText(`+${nf(v)}`, cx + w / 2 - 26, y); });
+      if (stateT > 1) { ctx.textAlign = "center"; ctx.fillStyle = "#f4f6ee"; ctx.font = "700 12px system-ui, sans-serif"; ctx.globalAlpha = a * (0.6 + 0.4 * Math.sin(clock * 5)); ctx.fillText(level >= TOTAL ? (touchMode ? "tocca per finire" : "clic o Invio per finire") : touchMode ? "tocca per il prossimo campo" : "clic o Invio per il prossimo campo", cx, cy + h / 2 - 16); }
+      ctx.globalAlpha = 1;
+    }
+  }
+  function heart(x, y, r) { ctx.beginPath(); ctx.moveTo(x, y + r); ctx.bezierCurveTo(x - r * 1.8, y - r * 0.2, x - r * 0.6, y - r * 1.5, x, y - r * 0.4); ctx.bezierCurveTo(x + r * 0.6, y - r * 1.5, x + r * 1.8, y - r * 0.2, x, y + r); ctx.fill(); }
+
+  // ---------- Loop ----------
+  let last = performance.now();
+  function frame(now) {
+    const dt = Math.min(0.05, (now - last) / 1000); last = now;
+    if (state !== "paused") update(dt);
+    draw();
+    requestAnimationFrame(frame);
+  }
+  // behind the title: a field half dug
+  function demoField() {
+    level = 1; lives = diff.lives; newField(3);
+    const mid = cell(Math.floor(F.A / 2), Math.floor(F.B / 2)); state = "play"; dig(mid, true);
+    for (const o of F.cells) { o.at = 0; if (o.mine && around(o).some((x) => x.open)) { o.flag = true; F.flags++; } }
+    state = "menu"; score = 0; F.t = 0;
+  }
+  layout(); resize(); demoField();
+  syncControls();
+  showTitle();
+  requestAnimationFrame(frame);
+})();
+</script>
+<script src="../../shared/iniziali.js" data-record="minato-best-" data-kind="score"></script>
+</body>
+</html>
