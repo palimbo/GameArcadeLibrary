@@ -1,0 +1,652 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no, viewport-fit=cover">
+<title>Solitario</title>
+<style>
+  :root {
+    --bg: #0a1a2a;
+    --fg: #f4f6ee;
+    --muted: #b8cce0;
+    --gold: #ffd23a;
+    --red: #ff5a4a;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  html, body {
+    height: 100%;
+    background: var(--bg);
+    color: var(--fg);
+    font-family: system-ui, -apple-system, "Segoe UI", sans-serif;
+    overflow: hidden;
+    user-select: none;
+    -webkit-user-select: none;
+    touch-action: none;
+  }
+  #wrap { position: fixed; inset: 0; display: flex; align-items: center; justify-content: center; }
+  canvas { cursor: pointer; display: block; touch-action: none; border-radius: 6px; box-shadow: 0 0 0 2px #2a4a6a, 0 10px 40px rgba(0,0,0,0.6); }
+  #pauseBtn {
+    position: fixed; z-index: 3; display: none; right: 10px; top: calc(10px + env(safe-area-inset-top, 0px));
+    font: 700 13px system-ui, sans-serif; color: var(--fg);
+    background: rgba(0, 0, 0, 0.6); border: 1px solid rgba(244, 246, 238, 0.35);
+    border-radius: 8px; padding: 6px 10px; cursor: pointer;
+  }
+  #touch { display: none !important; }
+  #overlay {
+    position: fixed; inset: 0; z-index: 5;
+    display: flex; flex-direction: column; align-items: center; justify-content: flex-start;
+    gap: 14px; padding: 16px; text-align: center; overflow-y: auto;
+    background: rgba(10, 26, 42, 0.94);
+  }
+  #overlay > :first-child { margin-top: auto; }
+  #overlay > :last-child { margin-bottom: auto; }
+  #overlay.hidden { display: none; }
+  #homeLink {
+    position: fixed; top: calc(10px + env(safe-area-inset-top, 0px)); left: 10px; z-index: 6;
+    font: 600 13px/1 system-ui, sans-serif; color: #fff; text-decoration: none;
+    padding: 8px 12px; border-radius: 999px; background: rgba(0,0,0,.55);
+    border: 1px solid rgba(255,255,255,.25);
+  }
+  #homeLink:hover { background: rgba(0,0,0,.8); }
+  #overlay.hidden ~ #homeLink { display: none; }
+  @media (max-width: 700px) { #overlay { padding-top: calc(52px + env(safe-area-inset-top, 0px)); } }
+  #overlay h1 { font-size: clamp(32px, 10vw, 58px); font-weight: 900; font-style: italic; letter-spacing: 1px; color: var(--gold);
+    text-shadow: 3px 3px 0 #6a1a1a, 0 0 22px rgba(255,210,58,0.35); }
+  #overlay h1 span { color: #fff; }
+  #overlay h2 { font-size: clamp(26px, 7vw, 42px); font-weight: 900; letter-spacing: 2px; color: var(--gold); }
+  #overlay h2.lose { color: var(--red); }
+  #overlay p { max-width: 540px; font-size: clamp(13px, 3.4vw, 16px); line-height: 1.55; }
+  #overlay p.muted { color: var(--muted); }
+  #overlay .pts { display: grid; grid-template-columns: repeat(2, auto); gap: 4px 18px; font-size: 13px; color: var(--muted); text-align: left; max-width: 560px; }
+  #overlay .pts b { color: var(--fg); }
+  #overlay .diff { display: flex; gap: 10px; flex-wrap: wrap; justify-content: center; }
+  #overlay button {
+    font: 800 15px system-ui, sans-serif; letter-spacing: 1.5px; color: var(--fg);
+    background: transparent; cursor: pointer;
+    border: 2px solid rgba(244,246,238,0.3); border-radius: 10px; padding: 9px 16px;
+  }
+  #overlay .diff button.on { border-color: var(--c); color: var(--c); box-shadow: 0 0 12px var(--c); }
+  #overlay button.start { border-color: var(--gold); color: #2a1a02; background: var(--gold); padding: 11px 30px; box-shadow: 0 4px 0 #a87a0a; }
+  @media (max-height: 560px) {
+    #overlay { gap: 8px; }
+    #overlay h1 { font-size: 30px; }
+    #overlay p { font-size: 13px; line-height: 1.4; }
+    #overlay .help, #overlay .pts { display: none; }
+  }
+</style>
+</head>
+<body>
+<div id="wrap"><canvas id="game"></canvas></div>
+<div id="touch"></div>
+<button id="pauseBtn" type="button" aria-label="Pausa">❚❚</button>
+<div id="overlay"></div>
+<a id="homeLink" href="../../index.html">← Sala Giochi</a>
+
+
+<script>
+(() => {
+  "use strict";
+
+  const TAU = Math.PI * 2;
+  const SUITS = ["♠", "♥", "♦", "♣"], RANKS = ["", "A", "2", "3", "4", "5", "6", "7", "8", "9", "10", "J", "Q", "K"];
+  const isRed = (s) => s === 1 || s === 2;
+  const DIFFICULTIES = {
+    facile:    { label: "FACILE",    color: "#7ee0a0", desc: "si pesca una carta alla volta, giri del mazzo illimitati · 4 mani da poter lasciare", draw: 1, passes: 99, lives: 4 },
+    normale:   { label: "NORMALE",   color: "#ffd66b", desc: "si pescano tre carte alla volta, giri illimitati · 3 mani da poter lasciare", draw: 3, passes: 99, lives: 3 },
+    difficile: { label: "DIFFICILE", color: "#ff6b7d", desc: "tre carte alla volta e solo tre giri del mazzo · 3 mani da poter lasciare", draw: 3, passes: 3, lives: 3 },
+  };
+  const DIFF_IDS = Object.keys(DIFFICULTIES);
+  const DIFF_KEY = "solitario-difficulty";
+  const bestKey = (id) => `solitario-best-${id}`;
+  function store(k, v) { try { localStorage.setItem(k, v); } catch { /* ignore */ } }
+  function load(k) { try { return localStorage.getItem(k); } catch { return null; } }
+  const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
+  const nf = (n) => n.toLocaleString("it-IT");
+  const feat = (id) => window.dispatchEvent(new CustomEvent("sala:impresa", { detail: id }));
+  const mmss = (t) => `${Math.floor(t / 60)}:${String(Math.floor(t % 60)).padStart(2, "0")}`;
+
+  // ---------- Canvas: landscape or portrait, whichever fits the screen ----------
+  const canvas = document.getElementById("game"), ctx = canvas.getContext("2d");
+  let G = ctx;   // where the card drawing goes (the table, or the trail of the winning cascade)
+  const overlay = document.getElementById("overlay"), pauseBtn = document.getElementById("pauseBtn");
+  let W = 640, H = 360, portrait = false, pxRatio = 1, L = null;
+  let touchMode = !!(window.matchMedia && matchMedia("(pointer: coarse)").matches);
+  function layout() {
+    L = portrait
+      ? { cw: 47, ch: 66, gap: 4, x0: 5, top: 36, tab: 114, maxY: 582, du: 24, dd: 8, fan: 12,
+          btns: [{ id: "undo", x: 8, y: 592, w: 110, h: 40 }, { id: "hint", x: 125, y: 592, w: 110, h: 40 }, { id: "quit", x: 242, y: 592, w: 110, h: 40 }], info: null }
+      : { cw: 56, ch: 78, gap: 12, x0: 14, top: 34, tab: 124, maxY: 352, du: 20, dd: 7, fan: 15,
+          btns: [{ id: "undo", x: 492, y: 210, w: 136, h: 40 }, { id: "hint", x: 492, y: 256, w: 136, h: 40 }, { id: "quit", x: 492, y: 302, w: 136, h: 40 }], info: { x: 492, y: 34, w: 136, h: 168 } };
+    L.colX = (i) => L.x0 + i * (L.cw + L.gap);
+  }
+  function resize() {
+    portrait = window.innerHeight > window.innerWidth * 1.15;
+    W = portrait ? 360 : 640; H = portrait ? 640 : 360;
+    layout(); if (piles) relayout(true);
+    const s = Math.max(0.2, Math.min((window.innerWidth - 8) / W, (window.innerHeight - 8) / H));
+    pxRatio = Math.min(3, s * (window.devicePixelRatio || 1));
+    canvas.style.width = W * s + "px"; canvas.style.height = H * s + "px";
+    canvas.width = Math.round(W * pxRatio); canvas.height = Math.round(H * pxRatio);
+    trailC = null;
+  }
+  window.addEventListener("resize", () => syncControls());
+
+  // ---------- Audio ----------
+  let audioCtx = null;
+  function beep(freq, dur, type = "triangle", vol = 0.04, delay = 0) {
+    if (!audioCtx) return;
+    const t = audioCtx.currentTime + delay, o = audioCtx.createOscillator(), g = audioCtx.createGain();
+    o.type = type; o.frequency.setValueAtTime(freq, t);
+    g.gain.setValueAtTime(0.0001, t); g.gain.exponentialRampToValueAtTime(vol, t + 0.008); g.gain.exponentialRampToValueAtTime(0.0001, t + dur);
+    o.connect(g).connect(audioCtx.destination); o.start(t); o.stop(t + dur + 0.02);
+  }
+  function swish(vol = 0.03) {
+    if (!audioCtx) return;
+    const t = audioCtx.currentTime, n = audioCtx.sampleRate * 0.08, b = audioCtx.createBuffer(1, n, audioCtx.sampleRate), d = b.getChannelData(0);
+    for (let i = 0; i < n; i++) d[i] = (Math.random() * 2 - 1) * (1 - i / n);
+    const s = audioCtx.createBufferSource(), f = audioCtx.createBiquadFilter(), g = audioCtx.createGain();
+    s.buffer = b; f.type = "bandpass"; f.frequency.value = 2400; g.gain.value = vol;
+    s.connect(f).connect(g).connect(audioCtx.destination); s.start(t);
+  }
+  const sfx = {
+    place: () => { swish(0.035); beep(300, 0.04, "triangle", 0.02); },
+    found: (r) => beep(392 * Math.pow(1.06, r), 0.12, "triangle", 0.045),
+    flip: () => swish(0.025),
+    draw: () => swish(0.03),
+    bad: () => { beep(180, 0.08, "square", 0.03); beep(140, 0.1, "square", 0.03, 0.06); },
+    undo: () => beep(260, 0.06, "sine", 0.03),
+    hint: () => { beep(660, 0.06, "sine", 0.03); beep(880, 0.08, "sine", 0.03, 0.06); },
+    win: () => [523, 659, 784, 1047, 1319, 1568].forEach((f, i) => beep(f, 0.22, "triangle", 0.05, i * 0.1)),
+    lose: () => [392, 330, 262].forEach((f, i) => beep(f, 0.25, "triangle", 0.05, i * 0.15)),
+  };
+
+  // ---------- State ----------
+  let difficulty = DIFFICULTIES[load(DIFF_KEY)] ? load(DIFF_KEY) : "normale";
+  let diff = DIFFICULTIES[difficulty];
+  let state = "menu", menu = null, pausedFrom = null, clock = 0, stateT = 0;
+  let score = 0, lives = 0, hand = 0, won = 0, bestCache = 0;
+  let piles = null, passes = 0, handT = 0, moves = 0, history = [], usedHelp = false, hint = null, msg = null, drag = null, shake = null, autoT = 0, cursor = { i: 7 }, kbd = false, lastWin = null;
+  let trailC = null, bouncers = [], bounceT = 0;
+  const isPlaying = () => ["play", "auto", "won"].includes(state);
+  // piles: stock, waste, f0..f3 (foundations), t0..t6 (tableau)
+  const P = { stock: 0, waste: 1, f: (i) => 2 + i, t: (i) => 6 + i };
+  const isF = (p) => p >= 2 && p <= 5, isT = (p) => p >= 6;
+  const top = (p) => piles[p][piles[p].length - 1];
+
+  // ---------- A hand ----------
+  function deal() {
+    const deck = [];
+    for (let s = 0; s < 4; s++) for (let r = 1; r <= 13; r++) deck.push({ r, s, up: false, x: 0, y: 0, tx: 0, ty: 0, fly: 0 });
+    for (let i = deck.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); [deck[i], deck[j]] = [deck[j], deck[i]]; }
+    piles = Array.from({ length: 13 }, () => []);
+    for (let i = 0; i < 7; i++) for (let k = 0; k <= i; k++) { const c = deck.pop(); c.up = k === i; piles[P.t(i)].push(c); }
+    piles[P.stock] = deck;
+    passes = 0; handT = 0; moves = 0; history = []; usedHelp = false; hint = null; drag = null; bouncers = []; trailC = null;
+    layout(); relayout(true);
+    // the cards fly out from the stock
+    const sx = L.colX(0), sy = L.top;
+    let k = 0; for (let i = 0; i < 7; i++) for (const c of piles[P.t(i)]) { c.x = sx; c.y = sy; c.fly = -k++ * 0.025; }
+    for (const c of piles[P.stock]) { c.x = c.tx; c.y = c.ty; }
+  }
+  // where every card should be
+  function pileXY(p) {
+    if (p === P.stock) return { x: L.colX(0), y: L.top };
+    if (p === P.waste) return { x: L.colX(1), y: L.top };
+    if (isF(p)) return { x: L.colX(3 + p - 2), y: L.top };
+    return { x: L.colX(p - 6), y: L.tab };
+  }
+  function tabSteps(p) {
+    const pile = piles[p], n = pile.length; let dd = L.dd, du = L.du;
+    const need = () => pile.reduce((s, c, i) => s + (i < n - 1 ? (c.up ? du : dd) : 0), 0);
+    while (L.tab + need() + L.ch > L.maxY && du > 8) du -= 1;
+    return { dd, du };
+  }
+  function relayout(snap) {
+    for (let p = 0; p < 13; p++) {
+      const pile = piles[p], o = pileXY(p);
+      if (isT(p)) {
+        const { dd, du } = tabSteps(p); let y = o.y;
+        pile.forEach((c) => { c.tx = o.x; c.ty = y; y += c.up ? du : dd; });
+      } else if (p === P.waste) {
+        const n = pile.length, show = diff.draw === 3 ? Math.min(3, n) : 1;
+        pile.forEach((c, i) => { const k = i - (n - show); c.tx = o.x + Math.max(0, k) * L.fan; c.ty = o.y; });
+      } else pile.forEach((c, i) => { c.tx = o.x + (p === P.stock ? -Math.min(4, Math.floor(i / 8)) : 0); c.ty = o.y - (p === P.stock ? Math.min(4, Math.floor(i / 8)) : 0); });
+      if (snap) for (const c of pile) { c.x = c.tx; c.y = c.ty; }
+    }
+  }
+
+  // ---------- Rules ----------
+  function canTab(c, p) { const t = top(p); return t ? t.up && isRed(t.s) !== isRed(c.s) && t.r === c.r + 1 : c.r === 13; }
+  function canFound(c, p) { const t = top(p); return t ? t.s === c.s && c.r === t.r + 1 : c.r === 1; }
+  function save() { history.push({ piles: piles.map((pl) => pl.map((c) => ({ c, up: c.up }))), score, passes }); if (history.length > 200) history.shift(); }
+  function undo() {
+    if (state !== "play" || !history.length) { sfx.bad(); return; }
+    const h = history.pop();
+    piles = h.piles.map((pl) => pl.map((o) => { o.c.up = o.up; return o.c; }));
+    score = Math.max(0, h.score - 10); passes = h.passes; usedHelp = true; hint = null;
+    relayout(false); sfx.undo();
+  }
+  // move the cards from index i of pile a onto pile b (already checked)
+  function move(a, i, b, quiet) {
+    save();
+    const run = piles[a].splice(i);
+    piles[b].push(...run);
+    if (isF(b)) { score += 10; sfx.found(run[0].r); }
+    else { if (a === P.waste) score += 5; if (isF(a)) score = Math.max(0, score - 15); if (!quiet) sfx.place(); }
+    // the card left uncovered turns over by itself
+    const t = top(a); if (isT(a) && t && !t.up) { t.up = true; score += 5; setTimeout(() => sfx.flip(), 90); }
+    moves++; hint = null;
+    relayout(false);
+    checkEnd();
+  }
+  function drawStock() {
+    if (state !== "play") return;
+    const st = piles[P.stock];
+    if (!st.length) {
+      if (!piles[P.waste].length) return;
+      if (passes + 1 >= diff.passes) { say("Il mazzo è finito: niente più giri"); sfx.bad(); return; }
+      save(); passes++;
+      piles[P.stock] = piles[P.waste].reverse().map((c) => { c.up = false; return c; }); piles[P.waste] = [];
+      if (diff.draw === 1) score = Math.max(0, score - 20);
+      sfx.draw(); relayout(false); hint = null; return;
+    }
+    save();
+    for (let k = 0; k < diff.draw && st.length; k++) { const c = st.pop(); c.up = true; piles[P.waste].push(c); }
+    moves++; hint = null; sfx.draw(); relayout(false);
+  }
+  // every legal move, with how useful it looks
+  function legalMoves() {
+    const out = [];
+    const sources = [];
+    if (piles[P.waste].length) sources.push([P.waste, piles[P.waste].length - 1]);
+    for (let i = 0; i < 4; i++) if (piles[P.f(i)].length) sources.push([P.f(i), piles[P.f(i)].length - 1]);
+    for (let t = 0; t < 7; t++) { const pl = piles[P.t(t)]; for (let i = 0; i < pl.length; i++) if (pl[i].up) sources.push([P.t(t), i]); }
+    for (const [a, i] of sources) {
+      const c = piles[a][i], single = i === piles[a].length - 1;
+      if (single && !isF(a)) for (let f = 0; f < 4; f++) if (canFound(c, P.f(f))) { out.push({ a, i, b: P.f(f), v: 100 + (isT(a) && i > 0 && !piles[a][i - 1].up ? 50 : 0) }); break; }
+      for (let t = 0; t < 7; t++) {
+        const b = P.t(t); if (b === a || !canTab(c, b)) continue;
+        if (!piles[b].length && isT(a) && i === 0) continue;              // a king already at the bottom: pointless
+        let v = a === P.waste ? 40 : isF(a) ? 1 : 20;
+        if (isT(a) && i > 0 && !piles[a][i - 1].up) v += 60;               // uncovers a hidden card
+        else if (isT(a) && i > 0) v -= 25;                                  // just shuffles face-up cards
+        if (!piles[b].length) v -= 5;
+        if (v > 0) out.push({ a, i, b, v });
+      }
+    }
+    return out.sort((x, y) => y.v - x.v);
+  }
+  // a tap: the best place for that card (and what lies on it)
+  function autoMove(a, i) {
+    if (state !== "play") return false;
+    const c = piles[a][i]; if (!c || !c.up) return false;
+    const single = i === piles[a].length - 1;
+    if (single && !isF(a)) for (let f = 0; f < 4; f++) if (canFound(c, P.f(f))) { move(a, i, P.f(f)); return true; }
+    let best = -1, bv = -1e9;
+    for (let t = 0; t < 7; t++) {
+      const b = P.t(t); if (b === a || !canTab(c, b)) continue;
+      if (!piles[b].length && isT(a) && i === 0) continue;
+      const v = piles[b].length ? 10 + piles[b].length : 0;
+      if (v > bv) { bv = v; best = b; }
+    }
+    if (best >= 0) { move(a, i, best); return true; }
+    shake = { p: a, i, t: 0.3 }; sfx.bad(); return false;
+  }
+  function giveHint() {
+    if (state !== "play") return;
+    const m = legalMoves()[0];
+    if (!diff.freeHint) score = Math.max(0, score - 5);
+    usedHelp = true;
+    if (m) { hint = { a: m.a, i: m.i, b: m.b, t: 2 }; sfx.hint(); }
+    else if (piles[P.stock].length || (piles[P.waste].length && passes + 1 < diff.passes)) { hint = { a: P.stock, i: -1, b: -1, t: 2 }; sfx.hint(); }
+    else { say("Nessuna mossa: puoi lasciare la mano"); sfx.bad(); }
+  }
+  function checkEnd() {
+    if (piles.slice(2, 6).every((f) => f.length === 13)) { winHand(); return; }
+    // everything face up and the stock gone: the rest goes up by itself
+    if (!piles[P.stock].length && !piles[P.waste].length && piles.slice(6).every((pl) => pl.every((c) => c.up))) { state = "auto"; autoT = 0.35; say("Completamento automatico"); }
+  }
+  function autoStep() {
+    for (let t = 0; t < 7; t++) { const c = top(P.t(t)); if (!c) continue; for (let f = 0; f < 4; f++) if (canFound(c, P.f(f))) { state = "play"; move(P.t(t), piles[P.t(t)].length - 1, P.f(f)); if (state === "play") state = "auto"; return; } }
+  }
+  function winHand() {
+    state = "won"; stateT = 0; won++;
+    const time = Math.max(0, Math.round((420 - handT) * 3)), bonus = 700 + time;
+    score += bonus; lastWin = { bonus, time, t: handT, moves };
+    sfx.win(); feat("vittoria");
+    if (!usedHelp) feat("pulita");
+    if (diff.draw === 3 && handT < 180) feat("lampo");
+    // the cards jump off the foundations, one after another
+    bouncers = []; bounceT = 0; trailC = null;
+    let k = 0;
+    for (let r = 13; r >= 1; r--) for (let f = 0; f < 4; f++) { const c = piles[P.f(f)].find((q) => q.r === r); if (c) bouncers.push({ c, x: c.x, y: c.y, vx: (Math.random() < 0.5 ? -1 : 1) * (60 + Math.random() * 120), vy: -Math.random() * 120, t0: k++ * 0.09, on: false }); }
+    syncControls();
+  }
+  function quitHand() {
+    if (state !== "play") return;
+    lives--; sfx.lose();
+    if (lives <= 0) { gameOver(); return; }
+    say(`Mano lasciata: ne restano ${lives}`);
+    hand++; deal();
+  }
+  function say(text) { msg = { text, t: 0 }; }
+
+  // ---------- Flow ----------
+  function startGame() {
+    if (!audioCtx) { try { audioCtx = new (window.AudioContext || window.webkitAudioContext)(); } catch { audioCtx = null; } }
+    if (audioCtx && audioCtx.state === "suspended") audioCtx.resume();
+    score = 0; lives = diff.lives; hand = 1; won = 0;
+    bestCache = parseInt(load(bestKey(difficulty)), 10) || 0;
+    deal(); state = "play"; menu = null; overlay.classList.add("hidden");
+    syncControls(); last = performance.now();
+  }
+  function nextHand() { hand++; deal(); state = "play"; syncControls(); }
+  function gameOver() {
+    state = "over";
+    const prev = parseInt(load(bestKey(difficulty)), 10) || 0, record = score > prev;
+    if (record) store(bestKey(difficulty), String(score));
+    menu = () => showOverlay(
+      `<h2 class="lose">FINE DELLA SERATA</h2>
+       <p>Punteggio: <b>${nf(score)}</b> · ${won} ${won === 1 ? "mano vinta" : "mani vinte"} su ${hand} · ${diff.label}</p>
+       ${record ? "<p style='color:var(--gold)'>★ NUOVO RECORD! ★</p>" : ""}
+       ${difficultyHTML()}
+       <button class="start" data-start>RIPROVA</button>`
+    );
+    menu(); syncControls();
+  }
+  function togglePause() {
+    if (isPlaying()) { pausedFrom = state; state = "paused"; drag = null; showOverlay(`<h2>PAUSA</h2><button class="start" data-resume>CONTINUA</button><p class="muted">Premi P per continuare</p>`); }
+    else if (state === "paused") { state = pausedFrom; overlay.classList.add("hidden"); last = performance.now(); }
+    syncControls();
+  }
+  window.addEventListener("sala:termina", () => { if (state !== "paused") return; overlay.classList.add("hidden"); gameOver(); });
+  function syncControls() { pauseBtn.style.display = isPlaying() && touchMode ? "block" : "none"; resize(); }
+  pauseBtn.addEventListener("click", () => togglePause());
+  function showOverlay(html) { overlay.innerHTML = html; overlay.classList.remove("hidden"); }
+  function difficultyHTML() {
+    const buttons = DIFF_IDS.map((id) => { const d = DIFFICULTIES[id]; return `<button type="button" data-diff="${id}" class="${id === difficulty ? "on" : ""}" style="--c:${d.color}">${d.label}</button>`; }).join("");
+    const best = parseInt(load(bestKey(difficulty)), 10);
+    return `<div class="diff">${buttons}</div><p class="muted">${diff.desc}${best ? ` · Record: ${nf(best)}` : ""}</p>`;
+  }
+  function setDifficulty(id) { if (!DIFFICULTIES[id]) return; difficulty = id; diff = DIFFICULTIES[id]; store(DIFF_KEY, id); if (state === "menu") { deal(); for (const c of piles.flat()) { c.x = c.tx; c.y = c.ty; c.fly = 0; } } if (menu) menu(); }
+  function showTitle() {
+    menu = showTitle;
+    showOverlay(
+      `<h1>SOLITARIO</h1>
+       <p>Il solitario di sempre, con le carte francesi. Metti in fila sulle quattro basi ogni seme dall'asso al re. Sul tavolo le carte scendono di uno alternando rosso e nero, e solo un re può andare in una colonna vuota. Le carte coperte si scoprono quando le liberi.</p>
+       <div class="pts">
+         <span><b>Mossa</b></span><span>trascina una carta (con quelle sopra), oppure toccala: va da sola nel posto migliore</span>
+         <span><b>Mazzo</b></span><span>tocca il mazzo per pescare; finito, toccalo ancora per rigirarlo</span>
+         <span><b>Aiuto</b></span><span>ANNULLA torna indietro di una mossa, AIUTO suggerisce; costano qualche punto</span>
+         <span><b>Punti</b></span><span>10 per carta sulle basi · 5 per carta scoperta · 700 per mano vinta, più un premio se sei veloce</span>
+       </div>
+       ${touchMode ? `<p class="muted help">Tocca o trascina le carte · tocca il mazzo per pescare</p>` : `<p class="muted help">Trascina o clicca le carte · Spazio pesca · Z annulla · H aiuto · frecce e Invio per giocare da tastiera · P pausa</p>`}
+       ${difficultyHTML()}
+       <button class="start" data-start>DAI LE CARTE</button>`
+    );
+  }
+  overlay.addEventListener("click", (e) => {
+    const d = e.target.closest("[data-diff]");
+    if (d) { setDifficulty(d.dataset.diff); return; }
+    if (e.target.closest("[data-start]")) startGame();
+    if (e.target.closest("[data-resume]")) togglePause();
+  });
+
+  // ---------- Input ----------
+  const toWorld = (e) => { const rc = canvas.getBoundingClientRect(); return { x: ((e.clientX - rc.left) / rc.width) * W, y: ((e.clientY - rc.top) / rc.height) * H }; };
+  const inR = (r, p) => p.x >= r.x && p.x <= r.x + r.w && p.y >= r.y && p.y <= r.y + r.h;
+  // which card is under a point: the pile and the index (topmost first)
+  function cardAt(p) {
+    for (let a = 12; a >= 0; a--) {
+      const pl = piles[a];
+      for (let i = pl.length - 1; i >= 0; i--) { const c = pl[i]; if (p.x >= c.tx && p.x <= c.tx + L.cw && p.y >= c.ty && p.y <= c.ty + L.ch) return { a, i }; }
+      const o = pileXY(a); if (!pl.length && p.x >= o.x && p.x <= o.x + L.cw && p.y >= o.y && p.y <= o.y + L.ch) return { a, i: -1 };
+    }
+    return null;
+  }
+  function pressButton(id) { if (id === "undo") undo(); else if (id === "hint") giveHint(); else if (id === "quit") quitHand(); }
+  canvas.addEventListener("pointerdown", (e) => {
+    e.preventDefault();
+    if (state === "won") { if (stateT > 1.2) nextHand(); return; }
+    if (state !== "play") return;
+    kbd = false;
+    const p = toWorld(e);
+    for (const b of L.btns) if (inR(b, p)) { pressButton(b.id); return; }
+    const hit = cardAt(p);
+    if (!hit) return;
+    if (hit.a === P.stock) { drawStock(); return; }
+    if (hit.i < 0) return;
+    const pl = piles[hit.a];
+    if (hit.a === P.waste || isF(hit.a)) hit.i = pl.length - 1;
+    const c = pl[hit.i]; if (!c.up) return;
+    drag = { a: hit.a, i: hit.i, sx: p.x, sy: p.y, ox: p.x - c.x, oy: p.y - c.y, moved: false, id: e.pointerId };
+    try { canvas.setPointerCapture(e.pointerId); } catch { /* ignore */ }
+  });
+  canvas.addEventListener("pointermove", (e) => {
+    if (!drag || e.pointerId !== drag.id) return;
+    const p = toWorld(e);
+    if (!drag.moved && Math.hypot(p.x - drag.sx, p.y - drag.sy) > 6) drag.moved = true;
+    if (!drag.moved) return;
+    const run = piles[drag.a].slice(drag.i), du = isT(drag.a) ? tabSteps(drag.a).du : L.du;
+    run.forEach((c, k) => { c.x = p.x - drag.ox; c.y = p.y - drag.oy + k * du; });
+  });
+  function endDrag(e) {
+    if (!drag || e.pointerId !== drag.id) return;
+    const d = drag; drag = null;
+    if (state !== "play") return;
+    if (!d.moved) { autoMove(d.a, d.i); return; }
+    // the pile under the middle of the dragged card that takes it
+    const c = piles[d.a][d.i], cx = c.x + L.cw / 2, cy = c.y + L.ch / 2, single = d.i === piles[d.a].length - 1;
+    let best = -1, bd = 1e9;
+    for (let b = 2; b < 13; b++) {
+      if (b === d.a) continue;
+      const t = top(b), o = t ? { x: t.tx, y: t.ty } : pileXY(b);
+      const dist = Math.hypot(o.x + L.cw / 2 - cx, o.y + L.ch / 2 - cy);
+      if (dist > L.cw * 1.1 || dist >= bd) continue;
+      if (isF(b) ? single && canFound(c, b) : canTab(c, b)) { best = b; bd = dist; }
+    }
+    if (best >= 0) move(d.a, d.i, best); else { sfx.bad(); relayout(false); }
+  }
+  canvas.addEventListener("pointerup", endDrag);
+  canvas.addEventListener("pointercancel", (e) => { if (drag && e.pointerId === drag.id) { drag = null; relayout(false); } });
+  // the keyboard: a cursor over the piles; Enter plays the card as a tap would
+  const ORDER = [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12];
+  window.addEventListener("keydown", (e) => {
+    const k = e.key.toLowerCase();
+    if ([" ", "arrowup", "arrowdown", "arrowleft", "arrowright"].includes(k)) e.preventDefault();
+    if (state === "menu" || state === "over") { if (e.key === "Enter") startGame(); else if (["1", "2", "3"].includes(k)) setDifficulty(DIFF_IDS[+k - 1]); return; }
+    if (k === "p" || k === "escape") { if (!e.repeat) togglePause(); return; }
+    if (state === "paused") { if (e.key === "Enter") togglePause(); return; }
+    if (state === "won") { if ((k === "enter" || k === " ") && stateT > 1.2) nextHand(); return; }
+    if (state !== "play") return;
+    kbd = true;
+    // top row: stock, waste, (gap), four foundations; bottom row: seven columns
+    const col = (p) => (p === 0 ? 0 : p === 1 ? 1 : p <= 5 ? p + 1 : p - 6), row = (p) => (p <= 5 ? 0 : 1);
+    const at = (r, c) => (r === 1 ? 6 + c : c === 0 ? 0 : c === 1 ? 1 : c === 2 ? 2 : c - 1);
+    const p = cursor.i;
+    if (k === "arrowleft") cursor.i = at(row(p), clamp(col(p) - 1, 0, 6));
+    else if (k === "arrowright") cursor.i = at(row(p), clamp(col(p) + 1, 0, 6));
+    else if (k === "arrowup") cursor.i = at(0, col(p));
+    else if (k === "arrowdown") cursor.i = at(1, col(p));
+    else if (k === " ") drawStock();
+    else if (k === "z" || k === "backspace" || k === "u") undo();
+    else if (k === "h") giveHint();
+    else if (k === "enter" && !e.repeat) {
+      if (p === P.stock) { drawStock(); return; }
+      const pl = piles[p]; if (!pl.length) return;
+      if (!isT(p)) { autoMove(p, pl.length - 1); return; }
+      // the top card to a foundation, otherwise the longest run that has somewhere to go
+      const tc = pl.length - 1;
+      for (let f = 0; f < 4; f++) if (canFound(pl[tc], P.f(f))) { move(p, tc, P.f(f)); return; }
+      const first = pl.findIndex((c) => c.up);
+      for (let i = first; i < pl.length; i++) { for (let t = 0; t < 7; t++) { const b = P.t(t); if (b !== p && canTab(pl[i], b) && !(i === 0 && !piles[b].length)) { move(p, i, b); return; } } }
+      shake = { p, i: tc, t: 0.3 }; sfx.bad();
+    }
+  });
+  window.addEventListener("blur", () => { if (isPlaying()) togglePause(); });
+  window.addEventListener("pointerdown", (e) => { if (e.pointerType === "touch" && !touchMode) { touchMode = true; syncControls(); if (menu) menu(); } }, true);
+
+  // ---------- Update ----------
+  function update(dt) {
+    clock += dt;
+    if (msg) msg.t += dt;
+    if (hint) { hint.t -= dt; if (hint.t <= 0) hint = null; }
+    if (shake) { shake.t -= dt; if (shake.t <= 0) shake = null; }
+    if (!piles) return;
+    if (state === "play" || state === "auto") handT += dt;
+    // cards glide to their place
+    for (const pl of piles) for (const c of pl) {
+      if (drag && drag.moved && piles[drag.a].indexOf(c) >= drag.i && pl === piles[drag.a]) continue;
+      if (c.fly < 0) { c.fly += dt; continue; }
+      c.x += (c.tx - c.x) * Math.min(1, dt * 16); c.y += (c.ty - c.y) * Math.min(1, dt * 16);
+    }
+    if (state === "auto") { autoT -= dt; if (autoT <= 0) { autoT = 0.09; autoStep(); } }
+    if (state === "won") {
+      stateT += dt; bounceT += dt;
+      for (const b of bouncers) {
+        if (bounceT < b.t0) continue; b.on = true;
+        b.vy += 900 * dt; b.x += b.vx * dt; b.y += b.vy * dt;
+        if (b.y + L.ch > H) { b.y = H - L.ch; b.vy *= -0.72; }
+      }
+    }
+  }
+
+  // ---------- Drawing ----------
+  function rr(x, y, w, h, r) { G.beginPath(); G.roundRect(x, y, w, h, r); }
+  function drawBack(x, y, w, h) {
+    rr(x, y, w, h, Math.max(2, w * 0.1)); G.fillStyle = "#fffdf6"; G.fill();
+    rr(x + 2, y + 2, w - 4, h - 4, Math.max(1, w * 0.07)); G.fillStyle = "#1e4a8a"; G.fill();
+    G.save(); G.clip();
+    G.strokeStyle = "rgba(255,255,255,0.3)"; G.lineWidth = 1;
+    for (let k = -h; k < w + h; k += 6) { G.beginPath(); G.moveTo(x + k, y); G.lineTo(x + k + h, y + h); G.moveTo(x + k + h, y); G.lineTo(x + k, y + h); G.stroke(); }
+    G.fillStyle = "#ffd23a"; G.beginPath(); G.arc(x + w / 2, y + h / 2, w * 0.14, 0, TAU); G.fill();
+    G.restore();
+  }
+  function drawCard(c, x, y, glow) {
+    const w = L.cw, h = L.ch;
+    G.fillStyle = "rgba(0,0,0,0.3)"; rr(x + 1, y + 2, w, h, Math.max(2, w * 0.1)); G.fill();
+    if (!c.up) { drawBack(x, y, w, h); }
+    else {
+      rr(x, y, w, h, Math.max(2, w * 0.1)); G.fillStyle = "#fffdf6"; G.fill();
+      G.strokeStyle = "rgba(0,0,0,0.35)"; G.lineWidth = 0.8; G.stroke();
+      const col = isRed(c.s) ? "#d8202a" : "#1a1a2a", fs = Math.max(8, w * 0.27), rank = RANKS[c.r];
+      G.fillStyle = col; G.textAlign = "left"; G.textBaseline = "alphabetic";
+      G.font = `900 ${rank === "10" ? fs * 0.82 : fs}px system-ui`; G.fillText(rank, x + w * 0.07, y + fs * 0.98);
+      G.font = `${fs * 0.9}px system-ui`; G.textAlign = "right"; G.fillText(SUITS[c.s], x + w * 0.94, y + fs * 0.95);
+      G.textAlign = "center";
+      if (c.r >= 11) {
+        G.strokeStyle = col; G.lineWidth = 1; G.strokeRect(x + w * 0.2, y + h * 0.34, w * 0.6, h * 0.56);
+        G.font = `900 ${w * 0.34}px Georgia, serif`; G.fillText(rank, x + w / 2, y + h * 0.66);
+        G.font = `${w * 0.22}px system-ui`; G.fillText(SUITS[c.s], x + w / 2, y + h * 0.86);
+      } else { G.font = `${w * 0.52}px system-ui`; G.fillText(SUITS[c.s], x + w / 2, y + h * 0.8); }
+    }
+    if (glow) { G.strokeStyle = glow; G.lineWidth = 2.5; rr(x - 1, y - 1, w + 2, h + 2, Math.max(2, w * 0.1)); G.stroke(); }
+  }
+  function slot(x, y, label) {
+    rr(x, y, L.cw, L.ch, Math.max(2, L.cw * 0.1)); ctx.strokeStyle = "rgba(255,255,255,0.22)"; ctx.lineWidth = 1.5; ctx.stroke();
+    ctx.fillStyle = "rgba(0,0,0,0.12)"; ctx.fill();
+    if (label) { ctx.fillStyle = "rgba(255,255,255,0.22)"; ctx.font = `${L.cw * 0.45}px system-ui`; ctx.textAlign = "center"; ctx.textBaseline = "middle"; ctx.fillText(label, x + L.cw / 2, y + L.ch / 2); ctx.textBaseline = "alphabetic"; }
+  }
+  function drawFelt() {
+    const g = ctx.createRadialGradient(W / 2, H / 2, 40, W / 2, H / 2, Math.max(W, H) * 0.7);
+    g.addColorStop(0, "#1e5a7a"); g.addColorStop(1, "#0a2a40");
+    ctx.fillStyle = g; ctx.fillRect(0, 0, W, H);
+    ctx.globalAlpha = 0.05; ctx.fillStyle = "#000"; for (let i = 0; i < 140; i++) ctx.fillRect((i * 137) % W, (i * 89) % H, 2, 2); ctx.globalAlpha = 1;
+  }
+  function button(b, label, sub, on = true) {
+    ctx.globalAlpha = on ? 1 : 0.4;
+    ctx.fillStyle = "rgba(0,0,0,0.3)"; rr(b.x, b.y, b.w, b.h, 9); ctx.fill();
+    ctx.strokeStyle = "rgba(255,210,58,0.6)"; ctx.lineWidth = 1.5; ctx.stroke();
+    ctx.fillStyle = "#fff6d8"; ctx.textAlign = "center"; ctx.textBaseline = "middle"; ctx.font = "800 13px system-ui";
+    ctx.fillText(label, b.x + b.w / 2, b.y + b.h / 2 - (sub ? 6 : 0));
+    if (sub) { ctx.font = "700 9px system-ui"; ctx.fillStyle = "#b8cce0"; ctx.fillText(sub, b.x + b.w / 2, b.y + b.h / 2 + 9); }
+    ctx.textBaseline = "alphabetic"; ctx.globalAlpha = 1;
+  }
+  function draw() {
+    ctx.setTransform(pxRatio, 0, 0, pxRatio, 0, 0);
+    drawFelt();
+    if (!piles) return;
+    // the top bar
+    ctx.fillStyle = "rgba(0,0,0,0.3)"; ctx.fillRect(0, 0, W, 26);
+    ctx.textBaseline = "middle"; ctx.font = "800 12px system-ui"; ctx.textAlign = "left"; ctx.fillStyle = "#fff6d8";
+    ctx.fillText(`${nf(score)} punti`, 10, 13);
+    ctx.textAlign = "center"; ctx.fillStyle = "#ffd23a"; ctx.fillText(`MANO ${hand} · ${mmss(handT)}`, portrait && touchMode ? W * 0.42 : W / 2, 13);
+    // on touch screens the pause button sits in the top right corner: keep clear of it
+    const right = touchMode ? W - 62 : W - 12;
+    for (let i = 0; i < diff.lives; i++) { ctx.fillStyle = i < lives ? "#ffd23a" : "rgba(255,255,255,0.15)"; ctx.beginPath(); ctx.arc(right - i * 11, 13, 3.8, 0, TAU); ctx.fill(); }
+    ctx.textAlign = "right"; ctx.fillStyle = "#b8cce0"; ctx.font = "700 10px system-ui"; ctx.fillText(`REC ${nf(Math.max(bestCache, score))}`, right - diff.lives * 11 - 2, 13);
+    ctx.textBaseline = "alphabetic";
+    // the empty places
+    const so = pileXY(P.stock);
+    slot(so.x, so.y, piles[P.waste].length && (diff.passes > 90 || passes + 1 < diff.passes) ? "↻" : "");
+    slot(pileXY(P.waste).x, pileXY(P.waste).y);
+    for (let f = 0; f < 4; f++) { const o = pileXY(P.f(f)); slot(o.x, o.y, "A"); }
+    for (let t = 0; t < 7; t++) { const o = pileXY(P.t(t)); slot(o.x, o.y, "K"); }
+    // the cards, pile by pile; the moving ones last
+    const flying = [], dragging = drag && drag.moved ? piles[drag.a].slice(drag.i) : [];
+    const glowOf = (a, i) => (hint && ((hint.a === a && (hint.i === i || (hint.i === -1 && a === P.stock))) || (hint.b === a && i === piles[a].length - 1)) ? `rgba(255,210,58,${0.5 + 0.5 * Math.sin(clock * 10)})` : kbd && cursor.i === a && i === piles[a].length - 1 && state === "play" ? "#7ad8ff" : null);
+    for (let a = 0; a < 13; a++) {
+      const pl = piles[a];
+      pl.forEach((c, i) => {
+        if (state === "won" && bouncers.some((b) => b.c === c && b.on)) return;
+        if (dragging.includes(c)) return;
+        if (Math.abs(c.x - c.tx) + Math.abs(c.y - c.ty) > 3 || c.fly < 0) { flying.push([c, a, i]); return; }
+        const sx = shake && shake.p === a && i >= shake.i ? Math.sin(clock * 60) * 3 : 0;
+        drawCard(c, c.x + sx, c.y, glowOf(a, i));
+      });
+      if (!pl.length && glowOf(a, -1)) { const o = pileXY(a); ctx.strokeStyle = glowOf(a, -1); ctx.lineWidth = 2.5; rr(o.x - 1, o.y - 1, L.cw + 2, L.ch + 2, 5); ctx.stroke(); }
+    }
+    if (hint && hint.b >= 0 && !piles[hint.b].length) { const o = pileXY(hint.b); ctx.strokeStyle = `rgba(255,210,58,${0.5 + 0.5 * Math.sin(clock * 10)})`; ctx.lineWidth = 2.5; rr(o.x - 1, o.y - 1, L.cw + 2, L.ch + 2, 5); ctx.stroke(); }
+    for (const [c] of flying) if (c.fly >= 0) drawCard(c, c.x, c.y);
+    for (const c of dragging) drawCard(c, c.x, c.y);
+    // the winning cascade, leaving its trail
+    if (state === "won") {
+      if (!trailC) { trailC = document.createElement("canvas"); trailC.width = canvas.width; trailC.height = canvas.height; }
+      const tg = trailC.getContext("2d");
+      tg.setTransform(pxRatio, 0, 0, pxRatio, 0, 0);
+      // the moving cards are drawn onto the trail canvas, never cleared, and the trail onto the table
+      G = tg;
+      for (const b of bouncers) if (b.on && b.x > -L.cw && b.x < W + L.cw) drawCard(b.c, b.x, b.y);
+      G = ctx;
+      ctx.setTransform(1, 0, 0, 1, 0, 0); ctx.drawImage(trailC, 0, 0); ctx.setTransform(pxRatio, 0, 0, pxRatio, 0, 0);
+      if (stateT > 1.2) {
+        ctx.fillStyle = "rgba(10,26,42,0.82)"; ctx.fillRect(0, H / 2 - 44, W, 88);
+        ctx.textAlign = "center"; ctx.textBaseline = "middle"; ctx.font = "900 italic 26px system-ui"; ctx.fillStyle = "#ffd23a"; ctx.fillText("MANO VINTA!", W / 2, H / 2 - 18);
+        ctx.font = "800 12px system-ui"; ctx.fillStyle = "#fff6d8"; ctx.fillText(`in ${mmss(lastWin.t)} e ${lastWin.moves} mosse · +700 · velocità +${nf(lastWin.time)}`, W / 2, H / 2 + 6);
+        ctx.fillStyle = "#b8cce0"; ctx.globalAlpha = 0.6 + Math.sin(clock * 5) * 0.4; ctx.fillText(touchMode ? "tocca per la mano dopo" : "clic o Spazio per la mano dopo", W / 2, H / 2 + 26); ctx.globalAlpha = 1; ctx.textBaseline = "alphabetic";
+      }
+    }
+    // info and buttons
+    if (L.info) {
+      const r = L.info; ctx.fillStyle = "rgba(0,0,0,0.22)"; rr(r.x, r.y, r.w, r.h, 9); ctx.fill();
+      ctx.textAlign = "left"; ctx.textBaseline = "middle"; ctx.font = "700 10px system-ui"; ctx.fillStyle = "#b8cce0";
+      const rows = [["Mani vinte", `${won}`], ["Mosse", `${moves}`], ["Nel mazzo", `${piles[P.stock].length}`], ["Giri", diff.passes > 90 ? `${passes}` : `${passes + 1} di ${diff.passes}`], ["Sulle basi", `${piles.slice(2, 6).reduce((s, f) => s + f.length, 0)} / 52`], ["Pesca", diff.draw === 1 ? "1 carta" : "3 carte"]];
+      rows.forEach(([a, b], i) => { ctx.fillStyle = "#b8cce0"; ctx.fillText(a, r.x + 10, r.y + 18 + i * 26); ctx.textAlign = "right"; ctx.fillStyle = "#fff6d8"; ctx.font = "800 12px system-ui"; ctx.fillText(b, r.x + r.w - 10, r.y + 18 + i * 26); ctx.textAlign = "left"; ctx.font = "700 10px system-ui"; });
+      ctx.textBaseline = "alphabetic";
+    }
+    const pl = state === "play";
+    button(L.btns[0], "ANNULLA", "−10 punti", pl && history.length > 0);
+    button(L.btns[1], "AIUTO", "−5 punti", pl);
+    button(L.btns[2], "LASCIA", `la mano · ${lives} ${lives === 1 ? "rimasta" : "rimaste"}`, pl);
+    if (msg && msg.t < 2.4) {
+      ctx.globalAlpha = Math.min(1, (2.4 - msg.t) * 2); ctx.textAlign = "center"; ctx.font = "800 13px system-ui";
+      const y = portrait ? 570 : 112; ctx.lineWidth = 4; ctx.strokeStyle = "#0a1a2a"; ctx.strokeText(msg.text, portrait ? W / 2 : 245, y); ctx.fillStyle = "#ffd23a"; ctx.fillText(msg.text, portrait ? W / 2 : 245, y); ctx.globalAlpha = 1;
+    }
+  }
+
+  // ---------- Loop ----------
+  let last = performance.now();
+  function frame(now) {
+    const dt = Math.min(0.05, (now - last) / 1000); last = now;
+    update(dt); draw();
+    requestAnimationFrame(frame);
+  }
+  layout(); deal(); for (const c of piles.flat()) { c.x = c.tx; c.y = c.ty; c.fly = 0; }
+  syncControls();
+  showTitle();
+  requestAnimationFrame(frame);
+})();
+</script>
+<script src="../../shared/iniziali.js" data-record="solitario-best-" data-kind="score"></script>
+</body>
+</html>

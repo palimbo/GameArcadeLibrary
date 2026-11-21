@@ -9,6 +9,11 @@
   "use strict";
   // record key prefix of the game (as in trofei.js) → its feats
   const LIST = {
+    "solitario-best-": [   // solitario
+      { id: "vittoria", name: "Vittoria", desc: "vinci una mano" },
+      { id: "pulita", name: "Senza aiuti", desc: "vinci una mano senza annullare né chiedere aiuto" },
+      { id: "lampo", name: "Lampo", desc: "vinci una mano pescando tre carte in meno di 3 minuti" },
+    ],
     "corridoi-best-": [   // corridoi-di-ferro
       { id: "pulizia", name: "Pulizia", desc: "elimina tutti i nemici di un piano" },
       { id: "intatta", name: "Senza un graffio", desc: "finisci un piano senza subire danni" },
