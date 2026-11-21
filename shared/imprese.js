@@ -9,6 +9,11 @@
   "use strict";
   // record key prefix of the game (as in trofei.js) → its feats
   const LIST = {
+    "corridoi-best-": [   // corridoi-di-ferro
+      { id: "pulizia", name: "Pulizia", desc: "elimina tutti i nemici di un piano" },
+      { id: "intatta", name: "Senza un graffio", desc: "finisci un piano senza subire danni" },
+      { id: "reattore", name: "Il reattore", desc: "raggiungi l'ascensore del quinto piano, il reattore" },
+    ],
     "bocce-best-": [   // bocce
       { id: "bacio", name: "A bacio", desc: "ferma una boccia attaccata al pallino" },
       { id: "poker", name: "Quattro su quattro", desc: "segna 4 punti in una sola giocata" },
