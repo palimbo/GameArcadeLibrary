@@ -9,6 +9,11 @@
   "use strict";
   // record key prefix of the game (as in trofei.js) → its feats
   const LIST = {
+    "reversi-best-": [   // reversi
+      { id: "angoli", name: "Quattro angoli", desc: "vinci una partita con tutti e quattro gli angoli tuoi" },
+      { id: "schiacciante", name: "Schiacciante", desc: "vinci una partita con almeno 40 pedine di scarto" },
+      { id: "campione", name: "Campione del circolo", desc: "batti la Campionessa, l'ultima avversaria del torneo" },
+    ],
     "minato-best-": [   // campo-minato
       { id: "pulito", name: "A mani nude", desc: "bonifica un campo senza mettere nemmeno una bandierina" },
       { id: "lampo", name: "Lampo", desc: "bonifica un campo da 16×9 in meno di un minuto e mezzo" },

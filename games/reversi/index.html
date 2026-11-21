@@ -1,0 +1,597 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no, viewport-fit=cover">
+<title>Reversi</title>
+<style>
+  :root {
+    --bg: #10161c;
+    --fg: #f4f6ee;
+    --muted: #c4ccd4;
+    --gold: #ffd23a;
+    --red: #ff5a4a;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  html, body {
+    height: 100%;
+    background: var(--bg);
+    color: var(--fg);
+    font-family: system-ui, -apple-system, "Segoe UI", sans-serif;
+    overflow: hidden;
+    user-select: none;
+    -webkit-user-select: none;
+    touch-action: none;
+  }
+  #wrap { position: fixed; inset: 0; display: flex; align-items: center; justify-content: center; }
+  canvas { cursor: pointer; display: block; touch-action: none; border-radius: 6px; box-shadow: 0 0 0 2px #2e3a46, 0 10px 40px rgba(0,0,0,0.6); }
+  #pauseBtn {
+    position: fixed; z-index: 3; display: none; right: 10px; top: calc(10px + env(safe-area-inset-top, 0px));
+    font: 700 13px system-ui, sans-serif; color: var(--fg);
+    background: rgba(0, 0, 0, 0.6); border: 1px solid rgba(244, 246, 238, 0.35);
+    border-radius: 8px; padding: 6px 10px; cursor: pointer;
+  }
+  #touch { display: none !important; }
+  #overlay {
+    position: fixed; inset: 0; z-index: 5;
+    display: flex; flex-direction: column; align-items: center; justify-content: flex-start;
+    gap: 14px; padding: 16px; text-align: center; overflow-y: auto;
+    background: rgba(16, 22, 28, 0.94);
+  }
+  #overlay > :first-child { margin-top: auto; }
+  #overlay > :last-child { margin-bottom: auto; }
+  #overlay.hidden { display: none; }
+  #homeLink {
+    position: fixed; top: calc(10px + env(safe-area-inset-top, 0px)); left: 10px; z-index: 6;
+    font: 600 13px/1 system-ui, sans-serif; color: #fff; text-decoration: none;
+    padding: 8px 12px; border-radius: 999px; background: rgba(0,0,0,.55);
+    border: 1px solid rgba(255,255,255,.25);
+  }
+  #homeLink:hover { background: rgba(0,0,0,.8); }
+  #overlay.hidden ~ #homeLink { display: none; }
+  @media (max-width: 700px) { #overlay { padding-top: calc(52px + env(safe-area-inset-top, 0px)); } }
+  #overlay h1 { font-size: clamp(32px, 10vw, 58px); font-weight: 900; font-style: italic; letter-spacing: 1px; color: var(--gold);
+    text-shadow: 3px 3px 0 #6a1a1a, 0 0 22px rgba(255,210,58,0.35); }
+  #overlay h1 span { color: #fff; }
+  #overlay h2 { font-size: clamp(26px, 7vw, 42px); font-weight: 900; letter-spacing: 2px; color: var(--gold); }
+  #overlay h2.lose { color: var(--red); }
+  #overlay p { max-width: 540px; font-size: clamp(13px, 3.4vw, 16px); line-height: 1.55; }
+  #overlay p.muted { color: var(--muted); }
+  #overlay .pts { display: grid; grid-template-columns: repeat(2, auto); gap: 4px 18px; font-size: 13px; color: var(--muted); text-align: left; max-width: 560px; }
+  #overlay .pts b { color: var(--fg); }
+  #overlay .diff { display: flex; gap: 10px; flex-wrap: wrap; justify-content: center; }
+  #overlay button {
+    font: 800 15px system-ui, sans-serif; letter-spacing: 1.5px; color: var(--fg);
+    background: transparent; cursor: pointer;
+    border: 2px solid rgba(244,246,238,0.3); border-radius: 10px; padding: 9px 16px;
+  }
+  #overlay .diff button.on { border-color: var(--c); color: var(--c); box-shadow: 0 0 12px var(--c); }
+  #overlay button.start { border-color: var(--gold); color: #2a1a02; background: var(--gold); padding: 11px 30px; box-shadow: 0 4px 0 #a87a0a; }
+  @media (max-height: 560px) {
+    #overlay { gap: 8px; }
+    #overlay h1 { font-size: 30px; }
+    #overlay p { font-size: 13px; line-height: 1.4; }
+    #overlay .help, #overlay .pts { display: none; }
+  }
+</style>
+</head>
+<body>
+<div id="wrap"><canvas id="game"></canvas></div>
+<div id="touch"></div>
+<button id="pauseBtn" type="button" aria-label="Pausa">❚❚</button>
+<div id="overlay"></div>
+<a id="homeLink" href="../../index.html">← Sala Giochi</a>
+
+
+<script>
+(() => {
+  "use strict";
+
+  const TAU = Math.PI * 2;
+  const DIFFICULTIES = {
+    facile:    { label: "FACILE",    color: "#7ee0a0", desc: "avversari più distratti · le mosse possibili sono segnate · 4 partite da poter perdere", dd: -1, de: -2, nm: 1.8, lives: 4 },
+    normale:   { label: "NORMALE",   color: "#ffd66b", desc: "avversari come sono · 3 partite da poter perdere", dd: 0, de: 0, nm: 1, lives: 3 },
+    difficile: { label: "DIFFICILE", color: "#ff6b7d", desc: "avversari che pensano più avanti e non si distraggono · 2 partite da poter perdere", dd: 1, de: 2, nm: 0.4, lives: 2 },
+  };
+  const DIFF_IDS = Object.keys(DIFFICULTIES);
+  const DIFF_KEY = "reversi-difficulty";
+  const bestKey = (id) => `reversi-best-${id}`;
+  function store(k, v) { try { localStorage.setItem(k, v); } catch { /* ignore */ } }
+  function load(k) { try { return localStorage.getItem(k); } catch { return null; } }
+  const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
+  const nf = (n) => n.toLocaleString("it-IT");
+  const feat = (id) => window.dispatchEvent(new CustomEvent("sala:impresa", { detail: id }));
+
+  // the six opponents of the club tournament
+  const RIVALS = [
+    { name: "Gigi il Distratto", init: "G", color: "#6ec6ff", line: "Ah, tocca a me? Scusa, stavo guardando le nuvole.", kind: "random", depth: 0, end: 0, noise: 0 },
+    { name: "Zia Carla", init: "C", color: "#ff9ec4", line: "Io giro tutte le pedine che posso, sempre. Mi piace vederle cambiare colore.", kind: "greedy", depth: 1, end: 0, noise: 3 },
+    { name: "Il Professore", init: "P", color: "#b7e07a", line: "Gli angoli, caro mio. Tutto si decide negli angoli.", kind: "search", depth: 2, end: 6, noise: 14 },
+    { name: "La Volpe", init: "V", color: "#ffb05a", line: "Fai pure le tue mosse... finché ne hai.", kind: "search", depth: 3, end: 8, noise: 8 },
+    { name: "Il Notaio", init: "N", color: "#c9a6ff", line: "Calcolo ogni cosa con cura. Anche quanto ti resta da perdere.", kind: "search", depth: 4, end: 10, noise: 3 },
+    { name: "La Campionessa", init: "R", color: "#ffd23a", line: "Ho vinto il torneo del circolo sette anni di fila. Prego, inizia tu.", kind: "search", depth: 5, end: 12, noise: 0 },
+  ];
+
+  // ---------- Canvas: landscape or portrait, whichever fits the screen ----------
+  const canvas = document.getElementById("game"), ctx = canvas.getContext("2d");
+  const overlay = document.getElementById("overlay"), pauseBtn = document.getElementById("pauseBtn");
+  let W = 640, H = 360, portrait = false, pxRatio = 1, L = null;
+  let touchMode = !!(window.matchMedia && matchMedia("(pointer: coarse)").matches);
+  function layout() {
+    L = portrait
+      ? { bx: 8, by: 126, cs: 43, card: { x: 8, y: 36, w: 344, h: 80 }, counts: { x: 8, y: 478, w: 344, h: 50 }, turnY: 546,
+          btns: [{ id: "hints", x: 8, y: 578, w: 168, h: 50 }, { id: "help", x: 184, y: 578, w: 168, h: 50 }] }
+      : { bx: 16, by: 34, cs: 40, card: { x: 352, y: 34, w: 280, h: 100 }, counts: { x: 352, y: 142, w: 280, h: 62 }, turnY: 226,
+          btns: [{ id: "hints", x: 352, y: 302, w: 136, h: 50 }, { id: "help", x: 496, y: 302, w: 136, h: 50 }] };
+  }
+  function resize() {
+    portrait = window.innerHeight > window.innerWidth * 1.15;
+    W = portrait ? 360 : 640; H = portrait ? 640 : 360;
+    layout();
+    const s = Math.max(0.2, Math.min((window.innerWidth - 8) / W, (window.innerHeight - 8) / H));
+    pxRatio = Math.min(3, s * (window.devicePixelRatio || 1));
+    canvas.style.width = W * s + "px"; canvas.style.height = H * s + "px";
+    canvas.width = Math.round(W * pxRatio); canvas.height = Math.round(H * pxRatio);
+  }
+  window.addEventListener("resize", () => syncControls());
+
+  // ---------- Audio ----------
+  let audioCtx = null;
+  function beep(freq, dur, type = "triangle", vol = 0.04, delay = 0) {
+    if (!audioCtx) return;
+    const t = audioCtx.currentTime + delay, o = audioCtx.createOscillator(), g = audioCtx.createGain();
+    o.type = type; o.frequency.setValueAtTime(freq, t);
+    g.gain.setValueAtTime(0.0001, t); g.gain.exponentialRampToValueAtTime(vol, t + 0.008); g.gain.exponentialRampToValueAtTime(0.0001, t + dur);
+    o.connect(g).connect(audioCtx.destination); o.start(t); o.stop(t + dur + 0.02);
+  }
+  function knock(vol = 0.06, delay = 0) {
+    if (!audioCtx) return;
+    const t = audioCtx.currentTime + delay, n = Math.floor(audioCtx.sampleRate * 0.05), b = audioCtx.createBuffer(1, n, audioCtx.sampleRate), d = b.getChannelData(0);
+    for (let i = 0; i < n; i++) d[i] = (Math.random() * 2 - 1) * Math.pow(1 - i / n, 4);
+    const s = audioCtx.createBufferSource(), f = audioCtx.createBiquadFilter(), g = audioCtx.createGain();
+    s.buffer = b; f.type = "lowpass"; f.frequency.value = 1400; g.gain.value = vol;
+    s.connect(f).connect(g).connect(audioCtx.destination); s.start(t);
+  }
+  const sfx = {
+    place: () => { knock(0.09); beep(220, 0.05, "sine", 0.03); },
+    flip: (k) => beep(600 + k * 40, 0.04, "sine", 0.018, 0.1 + k * 0.06),
+    bad: () => beep(160, 0.08, "square", 0.03),
+    pass: () => { beep(330, 0.1, "sine", 0.03); beep(262, 0.14, "sine", 0.03, 0.1); },
+    win: () => [523, 659, 784, 1047, 1319].forEach((f, i) => beep(f, 0.22, "triangle", 0.05, i * 0.1)),
+    lose: () => [392, 330, 262, 196].forEach((f, i) => beep(f, 0.3, "triangle", 0.05, i * 0.16)),
+    hint: () => { beep(660, 0.06, "sine", 0.03); beep(880, 0.08, "sine", 0.03, 0.06); },
+  };
+
+  // ---------- Rules ----------
+  const DIRS = [[-1, -1], [-1, 0], [-1, 1], [0, -1], [0, 1], [1, -1], [1, 0], [1, 1]];
+  function flipsFor(b, i, p) {
+    if (b[i]) return null;
+    const r0 = i >> 3, c0 = i & 7; let out = null;
+    for (const [dr, dc] of DIRS) {
+      let r = r0 + dr, c = c0 + dc, n = 0;
+      while (r >= 0 && r < 8 && c >= 0 && c < 8 && b[r * 8 + c] === -p) { r += dr; c += dc; n++; }
+      if (n && r >= 0 && r < 8 && c >= 0 && c < 8 && b[r * 8 + c] === p) {
+        if (!out) out = [];
+        for (let k = 1; k <= n; k++) out.push((r0 + dr * k) * 8 + c0 + dc * k);
+      }
+    }
+    return out;
+  }
+  function movesFor(b, p) { const m = []; for (let i = 0; i < 64; i++) if (!b[i] && flipsFor(b, i, p)) m.push(i); return m; }
+  function play(b, i, p) { const nb = b.slice(), f = flipsFor(b, i, p); nb[i] = p; for (const j of f) nb[j] = p; return nb; }
+  const count = (b, p) => { let n = 0; for (let i = 0; i < 64; i++) if (b[i] === p) n++; return n; };
+
+  // ---------- The opponents' thinking ----------
+  const WT = [
+    100, -20, 10, 5, 5, 10, -20, 100,
+    -20, -50, -2, -2, -2, -2, -50, -20,
+    10, -2, 1, 1, 1, 1, -2, 10,
+    5, -2, 1, 0, 0, 1, -2, 5,
+    5, -2, 1, 0, 0, 1, -2, 5,
+    10, -2, 1, 1, 1, 1, -2, 10,
+    -20, -50, -2, -2, -2, -2, -50, -20,
+    100, -20, 10, 5, 5, 10, -20, 100,
+  ];
+  const CORNERS = [[0, 1, 8, 9], [7, 6, 15, 14], [56, 57, 48, 49], [63, 62, 55, 54]];
+  function evaluate(b, p) {
+    let s = 0;
+    for (let i = 0; i < 64; i++) if (b[i]) s += WT[i] * b[i];
+    // once a corner is taken, the squares next to it are no longer dangerous
+    for (const [c, a1, a2, x] of CORNERS) if (b[c]) { for (const j of [a1, a2]) if (b[j]) s -= WT[j] * b[j]; if (b[x]) s -= WT[x] * b[x]; }
+    const mob = movesFor(b, 1).length - movesFor(b, -1).length;
+    return (s + mob * 6) * p;
+  }
+  let nodes = 0;
+  function negamax(b, p, depth, alpha, beta, passed, exact) {
+    nodes++;
+    if (!exact && depth === 0) return evaluate(b, p);
+    const ms = movesFor(b, p);
+    if (!ms.length) {
+      if (passed) { const d = count(b, p) - count(b, -p); return d * 10000; }
+      return -negamax(b, -p, depth, -beta, -alpha, true, exact);
+    }
+    ms.sort((x, y) => WT[y] - WT[x]);
+    let best = -Infinity;
+    for (const i of ms) {
+      const v = -negamax(play(b, i, p), -p, depth - 1, -beta, -alpha, false, exact);
+      if (v > best) best = v;
+      if (v > alpha) alpha = v;
+      if (alpha >= beta) break;
+    }
+    return best;
+  }
+  function empties(b) { let n = 0; for (let i = 0; i < 64; i++) if (!b[i]) n++; return n; }
+  // the move a rival (or the help button) chooses for side p
+  function choose(b, p, rv) {
+    const ms = movesFor(b, p);
+    if (!ms.length) return -1;
+    if (rv.kind === "random") {
+      // mostly random, with a weak liking for flipping many
+      const w = ms.map((i) => 1 + flipsFor(b, i, p).length * 0.5 + (WT[i] > 50 ? 2 : 0));
+      let r = Math.random() * w.reduce((a, x) => a + x, 0);
+      for (let k = 0; k < ms.length; k++) { r -= w[k]; if (r <= 0) return ms[k]; }
+      return ms[ms.length - 1];
+    }
+    if (rv.kind === "greedy") {
+      let best = -1, bv = -Infinity;
+      for (const i of ms) { const v = flipsFor(b, i, p).length + Math.random() * rv.noise; if (v > bv) { bv = v; best = i; } }
+      return best;
+    }
+    const exact = empties(b) <= rv.end;
+    let best = ms[0], bv = -Infinity;
+    for (const i of ms) {
+      const v = -negamax(play(b, i, p), -p, exact ? 64 : Math.max(0, rv.depth - 1), -Infinity, Infinity, false, exact) + (exact ? 0 : (Math.random() * 2 - 1) * rv.noise);
+      if (v > bv) { bv = v; best = i; }
+    }
+    return best;
+  }
+  function rivalFor(n) {
+    const r = RIVALS[n], d = diff;
+    if (r.kind !== "search") return { ...r, noise: r.noise * d.nm };
+    return { ...r, depth: Math.max(1, r.depth + d.dd), end: clamp(r.end + d.de, 0, 12), noise: r.noise * d.nm };
+  }
+
+  // ---------- State ----------
+  let difficulty = DIFFICULTIES[load(DIFF_KEY)] ? load(DIFF_KEY) : "normale";
+  let diff = DIFFICULTIES[difficulty];
+  let state = "menu", menu = null, pausedFrom = null, clock = 0, stateT = 0;
+  let score = 0, lives = 0, round = 0, bestCache = 0, beaten = 0;
+  let board = null, turn = 1, anim = [], animT = 0, thinkT = 0, last = -1, msg = null, hints = true, helpAt = -1, helpT = 0, cursor = 27, kbd = false, hover = -1, result = null, rival = null, helps = 0;
+  const isPlaying = () => ["intro", "play", "result"].includes(state);
+  function freshBoard() { const b = new Array(64).fill(0); b[27] = -1; b[36] = -1; b[28] = 1; b[35] = 1; return b; }
+
+  // ---------- Moves ----------
+  // every disc remembers when it changed, for the flip
+  let shown = null;   // what each square shows now, and since when
+  function place(i, p) {
+    const f = flipsFor(board, i, p);
+    if (!f) return false;
+    board = play(board, i, p); last = i; helpAt = -1;
+    const r0 = i >> 3, c0 = i & 7;
+    shown[i] = { v: p, at: clock, from: 0 };
+    for (const j of f) { const dist = Math.max(Math.abs((j >> 3) - r0), Math.abs((j & 7) - c0)); shown[j] = { v: p, at: clock + 0.08 + dist * 0.07, from: -p }; }
+    animT = 0.32 + Math.max(...f.map((j) => Math.max(Math.abs((j >> 3) - r0), Math.abs((j & 7) - c0)))) * 0.07;
+    sfx.place(); f.forEach((j, k) => { if (k < 10) beepLater(k); });
+    return true;
+  }
+  function beepLater(k) { if (audioCtx) sfx.flip(k); }
+  function nextTurn() {
+    const other = -turn;
+    if (movesFor(board, other).length) { turn = other; if (turn === -1) thinkT = 0.45 + Math.random() * 0.4; return; }
+    if (movesFor(board, turn).length) { say(turn === 1 ? `${rival.name} passa: tocca ancora a te` : "Non hai mosse: passi"); sfx.pass(); if (turn === -1) thinkT = 1.1; return; }
+    endMatch();
+  }
+  function playerMove(i) {
+    if (state !== "play" || turn !== 1 || animT > 0) return;
+    if (!place(i, 1)) { sfx.bad(); return; }
+    turn = 0; // waiting for the flips
+  }
+  function aiMove() {
+    const i = choose(board, -1, rival);
+    if (i < 0) { nextTurnFrom(-1); return; }
+    place(i, -1); turn = 0;
+  }
+  function nextTurnFrom(p) { turn = p; nextTurn(); }
+  function help() {
+    if (state !== "play" || turn !== 1 || animT > 0) return;
+    const i = choose(board, 1, { kind: "search", depth: 3, end: 8, noise: 0 });
+    if (i < 0) return;
+    helpAt = i; helpT = 2.5; helps++; score = Math.max(0, score - 50); sfx.hint();
+  }
+  function endMatch() {
+    const me = count(board, 1), them = count(board, -1);
+    const n = round + 1;
+    if (me > them) {
+      // empty squares go to the winner, as in the rules of the game
+      const meAll = me + (64 - me - them);
+      const pts = 400 * n + (meAll - them) * 20 * n;
+      score += pts; beaten = Math.max(beaten, n);
+      result = { win: true, me: meAll, them, pts };
+      sfx.win();
+      if (CORNERS.every(([c]) => board[c] === 1)) feat("angoli");
+      if (meAll - them >= 40) feat("schiacciante");
+      if (n === RIVALS.length) feat("campione");
+    } else if (me === them) {
+      score += 100 * n; result = { draw: true, me, them, pts: 100 * n }; sfx.pass();
+    } else {
+      lives--; result = { win: false, me, them: them + (64 - me - them), pts: 0 }; sfx.lose();
+    }
+    state = "result"; stateT = 0;
+  }
+  function afterResult() {
+    if (result.win) { if (round + 1 >= RIVALS.length) { gameOver(true); return; } round++; }
+    else if (!result.draw && lives <= 0) { gameOver(false); return; }
+    startMatch();
+  }
+  function say(text) { msg = { text, t: 0 }; }
+
+  // ---------- Flow ----------
+  function startMatch() {
+    rival = rivalFor(round);
+    board = freshBoard(); shown = board.map((v) => ({ v, at: -9, from: 0 }));
+    turn = 1; last = -1; anim = []; animT = 0; helpAt = -1; result = null; cursor = 19;
+    state = "intro"; stateT = 0;
+  }
+  function startGame() {
+    if (!audioCtx) { try { audioCtx = new (window.AudioContext || window.webkitAudioContext)(); } catch { audioCtx = null; } }
+    if (audioCtx && audioCtx.state === "suspended") audioCtx.resume();
+    score = 0; lives = diff.lives; round = 0; beaten = 0; helps = 0; hints = difficulty !== "difficile";
+    bestCache = parseInt(load(bestKey(difficulty)), 10) || 0;
+    startMatch(); menu = null; overlay.classList.add("hidden");
+    syncControls(); lastT = performance.now();
+  }
+  function gameOver(victory) {
+    state = "over";
+    let lifeBonus = 0;
+    if (victory) { lifeBonus = lives * 1000 * (DIFF_IDS.indexOf(difficulty) + 1); score += lifeBonus; }
+    const prev = parseInt(load(bestKey(difficulty)), 10) || 0, record = score > prev;
+    if (record) store(bestKey(difficulty), String(score));
+    menu = () => showOverlay(
+      (victory ? `<h2>CAMPIONE!</h2>
+       <p>Hai battuto tutti e sei gli avversari. ${lives} ${lives === 1 ? "partita di scorta rimasta" : "partite di scorta rimaste"}: +${nf(lifeBonus)} punti.</p>
+       <p>Punteggio: <b>${nf(score)}</b> · ${diff.label}</p>` : `<h2 class="lose">FUORI DAL TORNEO</h2>
+       <p>Punteggio: <b>${nf(score)}</b> · ${beaten} ${beaten === 1 ? "avversario battuto" : "avversari battuti"} su ${RIVALS.length} · ${diff.label}</p>`) +
+      `${record ? "<p style='color:var(--gold)'>★ NUOVO RECORD! ★</p>" : ""}
+       ${difficultyHTML()}
+       <button class="start" data-start>RIPROVA</button>`
+    );
+    menu(); syncControls();
+  }
+  function togglePause() {
+    if (isPlaying()) { pausedFrom = state; state = "paused"; showOverlay(`<h2>PAUSA</h2><button class="start" data-resume>CONTINUA</button><p class="muted">Premi P per continuare</p>`); }
+    else if (state === "paused") { state = pausedFrom; overlay.classList.add("hidden"); lastT = performance.now(); }
+    syncControls();
+  }
+  window.addEventListener("sala:termina", () => { if (state !== "paused") return; overlay.classList.add("hidden"); gameOver(false); });
+  function syncControls() { pauseBtn.style.display = isPlaying() && touchMode ? "block" : "none"; resize(); }
+  pauseBtn.addEventListener("click", () => togglePause());
+  function showOverlay(html) { overlay.innerHTML = html; overlay.classList.remove("hidden"); }
+  function difficultyHTML() {
+    const buttons = DIFF_IDS.map((id) => { const d = DIFFICULTIES[id]; return `<button type="button" data-diff="${id}" class="${id === difficulty ? "on" : ""}" style="--c:${d.color}">${d.label}</button>`; }).join("");
+    const best = parseInt(load(bestKey(difficulty)), 10);
+    return `<div class="diff">${buttons}</div><p class="muted">${diff.desc}${best ? ` · Record: ${nf(best)}` : ""}</p>`;
+  }
+  function setDifficulty(id) { if (!DIFFICULTIES[id]) return; difficulty = id; diff = DIFFICULTIES[id]; store(DIFF_KEY, id); if (menu) menu(); }
+  function showTitle() {
+    menu = showTitle;
+    showOverlay(
+      `<h1>REVERSI</h1>
+       <p>Il torneo del circolo: sei avversari, uno più bravo dell'altro. Metti una pedina nera in modo da chiudere tra lei e un'altra tua una fila di pedine bianche, in qualsiasi direzione: tutte quelle chiuse diventano nere. Quando la scacchiera è piena, o nessuno può più muovere, vince chi ha più pedine.</p>
+       <div class="pts">
+         <span><b>Mossa</b></span><span>${touchMode ? "tocca" : "clicca"} una casella dove giri almeno una pedina; se non ne hai, passi</span>
+         <span><b>Consiglio</b></span><span>gli angoli non si perdono mai; le caselle accanto agli angoli li regalano all'avversario</span>
+         <span><b>Aiuto</b></span><span>AIUTO suggerisce una buona mossa, al costo di 50 punti</span>
+         <span><b>Punti</b></span><span>per ogni vittoria 400 più 20 per pedina di scarto, moltiplicati per il numero dell'avversario</span>
+       </div>
+       ${touchMode ? `<p class="muted help">Una sconfitta costa una partita di scorta e si rigioca</p>` : `<p class="muted help">Mouse, oppure frecce e Invio · M mostra le mosse · H aiuto · P pausa · una sconfitta costa una partita di scorta e si rigioca</p>`}
+       ${difficultyHTML()}
+       <button class="start" data-start>AL TAVOLO</button>`
+    );
+  }
+  overlay.addEventListener("click", (e) => {
+    const d = e.target.closest("[data-diff]");
+    if (d) { setDifficulty(d.dataset.diff); return; }
+    if (e.target.closest("[data-start]")) startGame();
+    if (e.target.closest("[data-resume]")) togglePause();
+  });
+
+  // ---------- Input ----------
+  const toWorld = (e) => { const rc = canvas.getBoundingClientRect(); return { x: ((e.clientX - rc.left) / rc.width) * W, y: ((e.clientY - rc.top) / rc.height) * H }; };
+  const inR = (r, p) => p.x >= r.x && p.x <= r.x + r.w && p.y >= r.y && p.y <= r.y + r.h;
+  function squareAt(p) { const c = Math.floor((p.x - L.bx) / L.cs), r = Math.floor((p.y - L.by) / L.cs); return c < 0 || r < 0 || c > 7 || r > 7 ? -1 : r * 8 + c; }
+  function pressButton(id) { if (id === "hints") { hints = !hints; sfx.hint(); } else if (id === "help") help(); }
+  canvas.addEventListener("pointerdown", (e) => {
+    e.preventDefault();
+    if (state === "intro") { if (stateT > 0.5) { state = "play"; stateT = 0; } return; }
+    if (state === "result") { if (stateT > 1.2) afterResult(); return; }
+    if (state !== "play") return;
+    kbd = false;
+    const p = toWorld(e);
+    for (const b of L.btns) if (inR(b, p)) { pressButton(b.id); return; }
+    const i = squareAt(p); if (i >= 0) playerMove(i);
+  });
+  canvas.addEventListener("pointermove", (e) => { if (e.pointerType === "mouse") hover = squareAt(toWorld(e)); });
+  canvas.addEventListener("pointerleave", () => { hover = -1; });
+  window.addEventListener("keydown", (e) => {
+    const k = e.key.toLowerCase();
+    if ([" ", "arrowup", "arrowdown", "arrowleft", "arrowright"].includes(k)) e.preventDefault();
+    if (state === "menu" || state === "over") { if (e.key === "Enter") startGame(); else if (["1", "2", "3"].includes(k)) setDifficulty(DIFF_IDS[+k - 1]); return; }
+    if (k === "p" || k === "escape") { if (!e.repeat) togglePause(); return; }
+    if (state === "paused") { if (e.key === "Enter") togglePause(); return; }
+    if (state === "intro") { if ((k === "enter" || k === " ") && stateT > 0.5) { state = "play"; stateT = 0; } return; }
+    if (state === "result") { if ((k === "enter" || k === " ") && stateT > 1.2) afterResult(); return; }
+    if (state !== "play") return;
+    kbd = true; hover = -1;
+    const r = cursor >> 3, c = cursor & 7;
+    if (k === "arrowleft") cursor = r * 8 + clamp(c - 1, 0, 7);
+    else if (k === "arrowright") cursor = r * 8 + clamp(c + 1, 0, 7);
+    else if (k === "arrowup") cursor = clamp(r - 1, 0, 7) * 8 + c;
+    else if (k === "arrowdown") cursor = clamp(r + 1, 0, 7) * 8 + c;
+    else if (e.repeat) return;
+    else if (k === "enter" || k === " ") playerMove(cursor);
+    else if (k === "m") pressButton("hints");
+    else if (k === "h") help();
+  });
+  window.addEventListener("blur", () => { if (isPlaying()) togglePause(); });
+  window.addEventListener("pointerdown", (e) => { if (e.pointerType === "touch" && !touchMode) { touchMode = true; syncControls(); if (menu) menu(); } }, true);
+
+  // ---------- Update ----------
+  function update(dt) {
+    clock += dt; stateT += dt;
+    if (msg) { msg.t += dt; if (msg.t > 2) msg = null; }
+    if (helpT > 0) { helpT -= dt; if (helpT <= 0) helpAt = -1; }
+    if (state !== "play") return;
+    if (animT > 0) { animT -= dt; if (animT <= 0) { animT = 0; if (turn === 0) { turn = board[last]; nextTurn(); } } return; }
+    if (turn === -1) { thinkT -= dt; if (thinkT <= 0) aiMove(); }
+  }
+
+  // ---------- Drawing ----------
+  function rr(x, y, w, h, r) { ctx.beginPath(); ctx.roundRect(x, y, w, h, r); }
+  function disc(x, y, r, v, sx = 1) {
+    if (sx <= 0.02) return;
+    ctx.save(); ctx.translate(x, y); ctx.scale(sx, 1);
+    ctx.fillStyle = "rgba(0,0,0,0.35)"; ctx.beginPath(); ctx.arc(1.5, 2.5, r, 0, TAU); ctx.fill();
+    const g = ctx.createRadialGradient(-r * 0.35, -r * 0.4, r * 0.1, 0, 0, r);
+    if (v === 1) { g.addColorStop(0, "#5a5f66"); g.addColorStop(1, "#141619"); } else { g.addColorStop(0, "#ffffff"); g.addColorStop(1, "#cfd2c8"); }
+    ctx.fillStyle = g; ctx.beginPath(); ctx.arc(0, 0, r, 0, TAU); ctx.fill();
+    ctx.strokeStyle = v === 1 ? "rgba(255,255,255,0.12)" : "rgba(0,0,0,0.12)"; ctx.lineWidth = 1; ctx.beginPath(); ctx.arc(0, 0, r * 0.72, 0, TAU); ctx.stroke();
+    ctx.restore();
+  }
+  function avatar(x, y, r, rv) {
+    ctx.fillStyle = rv.color; ctx.beginPath(); ctx.arc(x, y, r, 0, TAU); ctx.fill();
+    ctx.fillStyle = "rgba(0,0,0,0.18)"; ctx.beginPath(); ctx.arc(x, y + r * 0.15, r * 0.82, 0, Math.PI); ctx.fill();
+    ctx.fillStyle = "#1a1f26"; ctx.font = `900 ${Math.round(r * 1.05)}px system-ui, sans-serif`; ctx.textAlign = "center"; ctx.textBaseline = "middle"; ctx.fillText(rv.init, x, y + 2);
+    if (rv.name === "La Campionessa") { ctx.fillStyle = "#ffd23a"; ctx.strokeStyle = "#7a5a00"; ctx.lineWidth = 1.5; ctx.beginPath(); const t = y - r - 2; ctx.moveTo(x - r * 0.6, t + 8); ctx.lineTo(x - r * 0.6, t - 4); ctx.lineTo(x - r * 0.3, t + 2); ctx.lineTo(x, t - 7); ctx.lineTo(x + r * 0.3, t + 2); ctx.lineTo(x + r * 0.6, t - 4); ctx.lineTo(x + r * 0.6, t + 8); ctx.closePath(); ctx.fill(); ctx.stroke(); }
+  }
+  function wrap(text, maxW) { const words = text.split(" "), lines = []; let cur = ""; for (const w of words) { const t = cur ? cur + " " + w : w; if (ctx.measureText(t).width > maxW && cur) { lines.push(cur); cur = w; } else cur = t; } if (cur) lines.push(cur); return lines; }
+  function drawBoard() {
+    const { bx, by, cs } = L, S = cs * 8;
+    ctx.fillStyle = "#3a2a1c"; rr(bx - 6, by - 6, S + 12, S + 12, 8); ctx.fill();
+    const felt = ctx.createLinearGradient(bx, by, bx + S, by + S); felt.addColorStop(0, "#23905a"); felt.addColorStop(1, "#1a7448");
+    ctx.fillStyle = felt; ctx.fillRect(bx, by, S, S);
+    ctx.strokeStyle = "rgba(0,0,0,0.35)"; ctx.lineWidth = 1; ctx.beginPath();
+    for (let k = 0; k <= 8; k++) { ctx.moveTo(bx + k * cs + 0.5, by); ctx.lineTo(bx + k * cs + 0.5, by + S); ctx.moveTo(bx, by + k * cs + 0.5); ctx.lineTo(bx + S, by + k * cs + 0.5); }
+    ctx.stroke();
+    ctx.fillStyle = "rgba(0,0,0,0.45)"; for (const [r, c] of [[2, 2], [2, 6], [6, 2], [6, 6]]) { ctx.beginPath(); ctx.arc(bx + c * cs, by + r * cs, 3, 0, TAU); ctx.fill(); }
+    const myTurn = state === "play" && turn === 1 && animT <= 0;
+    const moves = myTurn ? movesFor(board, 1) : [];
+    for (let i = 0; i < 64; i++) {
+      const x = bx + (i & 7) * cs + cs / 2, y = by + (i >> 3) * cs + cs / 2, sh = shown[i];
+      if (!sh || !sh.v) continue;
+      const t = clock - sh.at, R = cs * 0.4;
+      if (t < 0) { disc(x, y, R, sh.from || sh.v); continue; }
+      if (!sh.from) { const k = Math.min(1, t / 0.15); disc(x, y - (1 - k) * 8, R * (0.6 + 0.4 * k), sh.v); continue; }
+      const f = Math.min(1, t / 0.22);
+      if (f < 0.5) disc(x, y - Math.sin(f * Math.PI) * 6, R, sh.from, 1 - f * 2); else disc(x, y - Math.sin(f * Math.PI) * 6, R, sh.v, f * 2 - 1);
+    }
+    if (last >= 0) { const x = bx + (last & 7) * cs + cs / 2, y = by + (last >> 3) * cs + cs / 2; ctx.fillStyle = "#ff5a4a"; ctx.beginPath(); ctx.arc(x, y, 3.5, 0, TAU); ctx.fill(); }
+    if (myTurn && hints) for (const i of moves) { const x = bx + (i & 7) * cs + cs / 2, y = by + (i >> 3) * cs + cs / 2; ctx.fillStyle = "rgba(0,0,0,0.28)"; ctx.beginPath(); ctx.arc(x, y, cs * 0.12, 0, TAU); ctx.fill(); }
+    const ghost = myTurn ? (kbd ? cursor : hover) : -1;
+    if (ghost >= 0 && moves.includes(ghost)) { ctx.globalAlpha = 0.45; disc(bx + (ghost & 7) * cs + cs / 2, by + (ghost >> 3) * cs + cs / 2, cs * 0.4, 1); ctx.globalAlpha = 1; }
+    if (kbd && state === "play") { ctx.strokeStyle = "#ffd23a"; ctx.lineWidth = 2.5; rr(bx + (cursor & 7) * cs + 2, by + (cursor >> 3) * cs + 2, cs - 4, cs - 4, 4); ctx.stroke(); }
+    if (helpAt >= 0) { const x = bx + (helpAt & 7) * cs + cs / 2, y = by + (helpAt >> 3) * cs + cs / 2, a = 0.5 + 0.5 * Math.sin(clock * 10); ctx.strokeStyle = `rgba(122,216,255,${0.4 + 0.6 * a})`; ctx.lineWidth = 3; ctx.beginPath(); ctx.arc(x, y, cs * 0.36, 0, TAU); ctx.stroke(); }
+  }
+  function button(b, label, sub, on, lit) {
+    ctx.fillStyle = lit ? "rgba(122,216,255,0.18)" : on ? "rgba(255,255,255,0.08)" : "rgba(255,255,255,0.03)";
+    rr(b.x, b.y, b.w, b.h, 9); ctx.fill();
+    ctx.strokeStyle = lit ? "#7ad8ff" : on ? "rgba(255,210,58,0.7)" : "rgba(255,255,255,0.15)"; ctx.lineWidth = 2; ctx.stroke();
+    ctx.fillStyle = on ? "#f4f6ee" : "rgba(244,246,238,0.35)"; ctx.textAlign = "center"; ctx.textBaseline = "middle";
+    ctx.font = "800 14px system-ui, sans-serif"; ctx.fillText(label, b.x + b.w / 2, b.y + b.h / 2 - 7);
+    ctx.font = "600 10px system-ui, sans-serif"; ctx.fillStyle = on ? "#c4ccd4" : "rgba(196,204,212,0.35)"; ctx.fillText(sub, b.x + b.w / 2, b.y + b.h / 2 + 10);
+  }
+  function draw() {
+    ctx.setTransform(pxRatio, 0, 0, pxRatio, 0, 0);
+    const bg = ctx.createLinearGradient(0, 0, 0, H); bg.addColorStop(0, "#1c2630"); bg.addColorStop(1, "#0d1217");
+    ctx.fillStyle = bg; ctx.fillRect(0, 0, W, H);
+    if (!board) return;
+    drawBoard();
+
+    // top bar
+    ctx.fillStyle = "rgba(0,0,0,0.35)"; ctx.fillRect(0, 0, W, portrait ? 30 : 28);
+    const right = touchMode ? W - 62 : W - 12, mid = portrait && touchMode ? W * 0.44 : W / 2, ty = portrait ? 15 : 14;
+    ctx.textBaseline = "middle"; ctx.font = "800 14px system-ui, sans-serif";
+    ctx.textAlign = "left"; ctx.fillStyle = "#f4f6ee"; ctx.fillText(`${nf(score)} punti`, 10, ty);
+    ctx.textAlign = "center"; ctx.fillStyle = "#ffd23a"; ctx.fillText(`AVVERSARIO ${round + 1}/${RIVALS.length}`, mid, ty);
+    for (let i = 0; i < diff.lives; i++) { const x = right - i * 13 - 5; if (i < lives) disc(x, ty, 5, 1); else { ctx.strokeStyle = "rgba(255,255,255,0.25)"; ctx.lineWidth = 1; ctx.beginPath(); ctx.arc(x, ty, 5, 0, TAU); ctx.stroke(); } }
+    if (!(portrait && touchMode)) { ctx.textAlign = "right"; ctx.font = "700 11px system-ui, sans-serif"; ctx.fillStyle = "#c4ccd4"; ctx.fillText(`REC ${nf(Math.max(bestCache, score))}`, right - diff.lives * 13 - 4, ty); }
+
+    // the rival
+    const C = L.card; ctx.fillStyle = "rgba(255,255,255,0.05)"; rr(C.x, C.y, C.w, C.h, 10); ctx.fill();
+    const ar = portrait ? 26 : 28; avatar(C.x + ar + 12, C.y + C.h / 2 + (portrait ? 0 : -8), ar, rival);
+    const tx = C.x + ar * 2 + 24, tw = C.x + C.w - tx - 10;
+    ctx.textAlign = "left"; ctx.textBaseline = "alphabetic"; ctx.fillStyle = rival.color; ctx.font = "800 15px system-ui, sans-serif"; ctx.fillText(rival.name, tx, C.y + 22);
+    ctx.font = "italic 500 11.5px system-ui, sans-serif"; ctx.fillStyle = "#c4ccd4";
+    wrap(`«${rival.line}»`, tw).slice(0, portrait ? 3 : 5).forEach((ln, k) => ctx.fillText(ln, tx, C.y + 40 + k * 14));
+
+    // the counts
+    const K = L.counts, me = count(board, 1), them = count(board, -1), half = K.w / 2;
+    for (const [k, v, n, who] of [[0, 1, me, "TU"], [1, -1, them, rival.name.split(" ").slice(-1)[0].toUpperCase()]]) {
+      const x0 = K.x + k * half, active = state === "play" && (turn === v || (turn === 0 && board[last] === -v));
+      ctx.fillStyle = active ? "rgba(255,210,58,0.12)" : "rgba(255,255,255,0.04)"; rr(x0 + (k ? 4 : 0), K.y, half - 4, K.h, 10); ctx.fill();
+      if (active) { ctx.strokeStyle = "rgba(255,210,58,0.6)"; ctx.lineWidth = 2; ctx.stroke(); }
+      disc(x0 + (k ? 4 : 0) + 24, K.y + K.h / 2, 13, v);
+      ctx.textAlign = "left"; ctx.textBaseline = "middle"; ctx.fillStyle = "#f4f6ee"; ctx.font = "900 24px system-ui, sans-serif"; ctx.fillText(String(n), x0 + (k ? 4 : 0) + 46, K.y + K.h / 2 - (portrait ? 0 : 6));
+      if (!portrait) { ctx.font = "700 10px system-ui, sans-serif"; ctx.fillStyle = "#c4ccd4"; ctx.fillText(who, x0 + (k ? 4 : 0) + 46, K.y + K.h / 2 + 16); }
+    }
+    let ttext = "";
+    if (state === "play") ttext = turn === 1 && animT <= 0 ? "Tocca a te" : turn === -1 ? `${rival.name} ci pensa…` : "";
+    ctx.textAlign = "center"; ctx.font = "700 14px system-ui, sans-serif"; ctx.fillStyle = turn === 1 ? "#ffd23a" : "#c4ccd4";
+    if (ttext) ctx.fillText(ttext + (turn === -1 ? "" : ""), K.x + K.w / 2, L.turnY);
+    if (!portrait && state === "play") { ctx.font = "500 11px system-ui, sans-serif"; ctx.fillStyle = "rgba(196,204,212,0.7)"; const e = empties(board); ctx.fillText(`${e} ${e === 1 ? "casella libera" : "caselle libere"}`, K.x + K.w / 2, L.turnY + 22); }
+    const B = Object.fromEntries(L.btns.map((b) => [b.id, b])), canAct = state === "play" && turn === 1 && animT <= 0;
+    button(B.hints, hints ? "MOSSE: SÌ" : "MOSSE: NO", "segna le caselle buone", state === "play", false);
+    button(B.help, "AIUTO", "−50 punti", canAct, helpAt >= 0);
+
+    if (msg && state === "play") {
+      const a = Math.min(1, (2 - msg.t) * 3); ctx.globalAlpha = a;
+      ctx.font = "800 14px system-ui, sans-serif"; const w = ctx.measureText(msg.text).width + 28, cx = L.bx + L.cs * 4, y = L.by + L.cs * 4;
+      ctx.fillStyle = "rgba(10,14,18,0.88)"; rr(cx - w / 2, y - 16, w, 32, 16); ctx.fill();
+      ctx.fillStyle = "#ffd23a"; ctx.textAlign = "center"; ctx.textBaseline = "middle"; ctx.fillText(msg.text, cx, y); ctx.globalAlpha = 1;
+    }
+    if (state === "intro") card(() => {
+      const cx = L.bx + L.cs * 4, cy = L.by + L.cs * 4;
+      ctx.fillStyle = "#c4ccd4"; ctx.font = "700 12px system-ui, sans-serif"; ctx.fillText(`AVVERSARIO ${round + 1} DI ${RIVALS.length}`, cx, cy - 70);
+      avatar(cx, cy - 26, 26, rival);
+      ctx.fillStyle = rival.color; ctx.font = "900 20px system-ui, sans-serif"; ctx.fillText(rival.name, cx, cy + 20);
+      ctx.fillStyle = "#f4f6ee"; ctx.font = "600 12px system-ui, sans-serif"; ctx.fillText("Tu hai il nero e inizi tu", cx, cy + 44);
+      if (stateT > 0.5) { ctx.globalAlpha = 0.6 + 0.4 * Math.sin(clock * 5); ctx.fillStyle = "#ffd23a"; ctx.font = "700 12px system-ui, sans-serif"; ctx.fillText(touchMode ? "tocca per cominciare" : "clic o Invio per cominciare", cx, cy + 72); ctx.globalAlpha = 1; }
+    });
+    if (state === "result" && stateT > 0.5) card(() => {
+      const cx = L.bx + L.cs * 4, cy = L.by + L.cs * 4, R = result;
+      ctx.fillStyle = R.win ? "#ffd23a" : R.draw ? "#c4ccd4" : "#ff6b7d"; ctx.font = "900 24px system-ui, sans-serif";
+      ctx.fillText(R.win ? "HAI VINTO!" : R.draw ? "PAREGGIO" : "HAI PERSO", cx, cy - 52);
+      ctx.fillStyle = "#f4f6ee"; ctx.font = "800 30px system-ui, sans-serif"; ctx.fillText(`${R.me} – ${R.them}`, cx, cy - 10);
+      ctx.font = "600 12px system-ui, sans-serif"; ctx.fillStyle = "#c4ccd4";
+      ctx.fillText(R.win ? `+${nf(R.pts)} punti` : R.draw ? `+${nf(R.pts)} punti · si rigioca` : lives > 0 ? `si rigioca · ${lives} ${lives === 1 ? "partita di scorta" : "partite di scorta"}` : "nessuna partita di scorta", cx, cy + 22);
+      if (stateT > 1.2) { ctx.globalAlpha = 0.6 + 0.4 * Math.sin(clock * 5); ctx.fillStyle = "#ffd23a"; ctx.font = "700 12px system-ui, sans-serif"; ctx.fillText(touchMode ? "tocca per continuare" : "clic o Invio per continuare", cx, cy + 58); ctx.globalAlpha = 1; }
+    });
+  }
+  function card(fn) {
+    const cx = L.bx + L.cs * 4, cy = L.by + L.cs * 4, w = Math.min(L.cs * 8 - 24, 290), h = 190;
+    ctx.fillStyle = "rgba(12,16,20,0.92)"; rr(cx - w / 2, cy - h / 2, w, h, 14); ctx.fill(); ctx.strokeStyle = "rgba(255,210,58,0.7)"; ctx.lineWidth = 2; ctx.stroke();
+    ctx.textAlign = "center"; ctx.textBaseline = "middle"; fn();
+  }
+
+  // ---------- Loop ----------
+  let lastT = performance.now();
+  function frame(now) {
+    const dt = Math.min(0.05, (now - lastT) / 1000); lastT = now;
+    if (state !== "paused") update(dt);
+    draw();
+    requestAnimationFrame(frame);
+  }
+  // behind the title: a game in the middle
+  function demo() {
+    rival = rivalFor(2); board = freshBoard();
+    let p = 1; for (let k = 0; k < 18; k++) { const ms = movesFor(board, p); if (!ms.length) break; const i = ms[(k * 7) % ms.length]; board = play(board, i, p); last = i; p = -p; }
+    shown = board.map((v) => ({ v, at: -9, from: 0 }));
+  }
+  layout(); resize(); demo();
+  syncControls();
+  showTitle();
+  requestAnimationFrame(frame);
+})();
+</script>
+<script src="../../shared/iniziali.js" data-record="reversi-best-" data-kind="score"></script>
+</body>
+</html>

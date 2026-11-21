@@ -9,6 +9,7 @@
   "use strict";
   // record key prefix → [bronzo, argento, oro] (and t for times)
   const DATA = {
+    "reversi-best-": [10000, 15000, 8000],   // reversi (bot)
     "minato-best-": [50000, 70000, 45000],   // campo-minato (bot)
     "solitario-best-": [2500, 3000, 2500],   // solitario (bot)
     "corridoi-best-": [10000, 25000, 30000],   // corridoi-di-ferro (bot)
