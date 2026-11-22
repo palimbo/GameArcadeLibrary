@@ -1,0 +1,573 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no, viewport-fit=cover">
+<title>Disegni Nascosti</title>
+<style>
+  :root {
+    --bg: #161a26;
+    --fg: #f4f6ee;
+    --muted: #c8d0dc;
+    --gold: #ffd23a;
+    --red: #ff5a4a;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  html, body {
+    height: 100%;
+    background: var(--bg);
+    color: var(--fg);
+    font-family: system-ui, -apple-system, "Segoe UI", sans-serif;
+    overflow: hidden;
+    user-select: none;
+    -webkit-user-select: none;
+    -webkit-tap-highlight-color: transparent;
+    touch-action: none;
+  }
+  #wrap { position: fixed; inset: 0; display: flex; align-items: center; justify-content: center; }
+  canvas { cursor: pointer; display: block; touch-action: none; border-radius: 6px; box-shadow: 0 0 0 2px #2e3a4e, 0 10px 40px rgba(0,0,0,0.6); }
+  #pauseBtn {
+    position: fixed; z-index: 3; display: none; right: 10px; top: calc(10px + env(safe-area-inset-top, 0px));
+    font: 700 13px system-ui, sans-serif; color: var(--fg);
+    background: rgba(0, 0, 0, 0.6); border: 1px solid rgba(244, 246, 238, 0.35);
+    border-radius: 8px; padding: 6px 10px; cursor: pointer;
+  }
+  #touch { display: none !important; }
+  #overlay {
+    position: fixed; inset: 0; z-index: 5;
+    display: flex; flex-direction: column; align-items: center; justify-content: flex-start;
+    gap: 14px; padding: 16px; text-align: center; overflow-y: auto;
+    background: rgba(20, 26, 36, 0.94);
+  }
+  #overlay > :first-child { margin-top: auto; }
+  #overlay > :last-child { margin-bottom: auto; }
+  #overlay.hidden { display: none; }
+  #homeLink {
+    position: fixed; top: calc(10px + env(safe-area-inset-top, 0px)); left: 10px; z-index: 6;
+    font: 600 13px/1 system-ui, sans-serif; color: #fff; text-decoration: none;
+    padding: 8px 12px; border-radius: 999px; background: rgba(0,0,0,.55);
+    border: 1px solid rgba(255,255,255,.25);
+  }
+  #homeLink:hover { background: rgba(0,0,0,.8); }
+  #overlay.hidden ~ #homeLink { display: none; }
+  @media (max-width: 700px) { #overlay { padding-top: calc(52px + env(safe-area-inset-top, 0px)); } }
+  #overlay h1 { font-size: clamp(32px, 10vw, 58px); font-weight: 900; font-style: italic; letter-spacing: 1px; color: var(--gold);
+    text-shadow: 3px 3px 0 #6a1a1a, 0 0 22px rgba(255,210,58,0.35); }
+  #overlay h1 span { color: #fff; }
+  #overlay h2 { font-size: clamp(26px, 7vw, 42px); font-weight: 900; letter-spacing: 2px; color: var(--gold); }
+  #overlay h2.lose { color: var(--red); }
+  #overlay p { max-width: 540px; font-size: clamp(13px, 3.4vw, 16px); line-height: 1.55; }
+  #overlay p.muted { color: var(--muted); }
+  #overlay .pts { display: grid; grid-template-columns: repeat(2, auto); gap: 4px 18px; font-size: 13px; color: var(--muted); text-align: left; max-width: 560px; }
+  #overlay .pts b { color: var(--fg); }
+  #overlay .diff { display: flex; gap: 10px; flex-wrap: wrap; justify-content: center; }
+  #overlay button {
+    font: 800 15px system-ui, sans-serif; letter-spacing: 1.5px; color: var(--fg);
+    background: transparent; cursor: pointer;
+    border: 2px solid rgba(244,246,238,0.3); border-radius: 10px; padding: 9px 16px;
+  }
+  #overlay .diff button.on { border-color: var(--c); color: var(--c); box-shadow: 0 0 12px var(--c); }
+  #overlay button.start { border-color: var(--gold); color: #2a1a02; background: var(--gold); padding: 11px 30px; box-shadow: 0 4px 0 #a87a0a; }
+  @media (max-height: 560px) {
+    #overlay { gap: 8px; }
+    #overlay h1 { font-size: 30px; }
+    #overlay p { font-size: 13px; line-height: 1.4; }
+    #overlay .help, #overlay .pts { display: none; }
+  }
+</style>
+</head>
+<body>
+<div id="wrap"><canvas id="game"></canvas></div>
+<div id="touch"></div>
+<button id="pauseBtn" type="button" aria-label="Pausa">❚❚</button>
+<div id="overlay"></div>
+<a id="homeLink" href="../../index.html">← Sala Giochi</a>
+
+
+<script>
+(() => {
+  "use strict";
+
+  const TAU = Math.PI * 2;
+  const PICS = {
+    8: {
+      Cuore: [".rr..rr.", "rrrrrrrr", "rrrrrrrr", "rrrrrrrr", ".rrrrrr.", "..rrrr..", "...rr...", "........"],
+      Fungo: ["..rrrr..", ".rwrrwr.", "rrrrrrrr", "rwrrrrwr", ".wwwwww.", "...ww...", "...ww...", "..wwww.."],
+      Casa: ["...rr...", "..rrrr..", ".rrrrrr.", "rrrrrrrr", ".wwwwww.", ".wbwwnw.", ".wwwwnw.", ".wwwwnw."],
+      Albero: ["...gg...", "..gggg..", ".gggggg.", "..gggg..", ".gggggg.", "gggggggg", "...tt...", "...tt..."],
+      Gatto: [".k....k.", ".kk..kk.", ".kkkkkk.", ".gkkkkg.", ".kkppkk.", "..kkkk..", ".kkkkkk.", "kkkkkkkk"],
+      Barca: ["...w....", "...ww...", "...www..", "...wwww.", "...n....", "nnnnnnnn", ".nnnnnn.", "..nnnn.."],
+    },
+    10: {
+      Stella: ["....yy....", "...yyyy...", "yyyyyyyyyy", ".yyyyyyyy.", "..yyyyyy..", "..yyyyyy..", ".yyyyyyyy.", ".yyy..yyy.", "yy......yy", ".........."],
+      Nota: ["....kkkkkk", "....kkkkkk", "....k....k", "....k....k", "....k....k", "....k....k", "..kkk..kkk", ".kkkk.kkkk", ".kkkk.kkkk", "..kk...kk."],
+      Tazza: [".s..s..s..", "..s..s..s.", ".s..s..s..", "nnnnnnnn..", "wwwwwwwwww", "wwwwwwww.w", "wwwwwwww.w", "wwwwwwwwww", ".wwwwww...", "..wwww...."],
+      Mela: ["......n...", ".....n.gg.", "....nggg..", "..rrrrrr..", ".rrrrrrrr.", "rrrrrrrrrr", "rrrrrrrrrr", "rrrrrrrrrr", ".rrrrrrrr.", "..rrr.rrr."],
+      Razzo: ["....rr....", "...rrrr...", "...wwww...", "...wbbw...", "...wbbw...", "...wwww...", "..rwwwwr..", ".rrwwwwrr.", ".rr.oo.rr.", "....oo...."],
+      Gelato: ["...pppp...", "..pppppp..", ".pppppppp.", ".pppppppp.", "..pppppp..", "..yyyyyy..", "...yyyy...", "...yyyy...", "....yy....", "....yy...."],
+    },
+    12: {
+      Farfalla: ["....k..k....", ".....kk.....", "ppp..kk..ppp", "pppp.kk.pppp", "pppppkkppppp", "pyyppkkppyyp", "pppppkkppppp", ".ppppkkpppp.", "..pp.kk.pp..", ".ppp.kk.ppp.", ".pp..kk..pp.", "............"],
+      Ombrello: [".....rr.....", "...rrrrrr...", "..rrrrrrrr..", ".rrrrrrrrrr.", "rrrrrrrrrrrr", "r.rr.rr.rr.r", "......k.....", "......k.....", "......k.....", "......k.....", "...k..k.....", "....kk......"],
+      Cactus: [".....pp.....", ".....gg.....", "....gggg....", ".g..gggg....", ".g..gggg..g.", ".gg.gggg..g.", "..gggggg.gg.", "....gggggg..", "....gggg....", "..nnnnnnnn..", "...nnnnnn...", "...nnnnnn..."],
+      Faro: [".....yy.....", "....yyyy....", ".....kk.....", "....rrrr....", "....wwww....", "....rrrr....", "...wwwwww...", "...rrrrrr...", "...wwwwww...", "..rrrrrrrr..", "bbbbbbbbbbbb", "b.bbb.bbb.bb"],
+      Anatra: ["...yyy......", "..yyyyy.....", "..ykyyyoo...", "..yyyyy.....", "...yyy......", "...yyy....y.", ".yyyyyyyyyy.", "yyyyyyyyyyy.", "yyyyyyyyyy..", ".yyyyyyyy...", "bbbbbbbbbbbb", ".bb.bbb.bbb."],
+      Pesce: ["............", "....ooooo...", "..oooooooo.o", ".okooooooooo", "oooooooooooo", "oooooooooooo", ".oooooooooo.", "..oooooooo.o", "....ooooo...", "......oo....", "g..g....g..g", "g.gg..g.gg.g"],
+    },
+  };
+  const ARTICLE = { Cuore: "un cuore", Fungo: "un fungo", Casa: "una casa", Albero: "un albero", Gatto: "un gatto", Barca: "una barca", Stella: "una stella", Nota: "una nota", Tazza: "una tazza", Mela: "una mela", Razzo: "un razzo", Gelato: "un gelato", Farfalla: "una farfalla", Ombrello: "un ombrello", Cactus: "un cactus", Faro: "un faro", Anatra: "un'anatra", Pesce: "un pesce" };
+  const PAL = { r: "#e8423a", w: "#f6f3ea", k: "#26262c", g: "#4cb85a", t: "#8a5a32", n: "#9a6438", o: "#ff9a2a", y: "#ffd23a", p: "#ff8ac0", b: "#3a8ae0", s: "#b8c0cc", v: "#9a5ae0" };
+  const DIFFICULTIES = {
+    facile:    { label: "FACILE",    color: "#7ee0a0", desc: "griglie 8×8 · 5 errori concessi", size: 8, par: 150, lives: 5 },
+    normale:   { label: "NORMALE",   color: "#ffd66b", desc: "griglie 10×10 · 3 errori concessi", size: 10, par: 300, lives: 3 },
+    difficile: { label: "DIFFICILE", color: "#ff6b7d", desc: "griglie 12×12 · 3 errori concessi", size: 12, par: 480, lives: 3 },
+  };
+  const DIFF_IDS = Object.keys(DIFFICULTIES);
+  const DIFF_KEY = "disegni-difficulty";
+  const bestKey = (id) => `disegni-best-${id}`;
+  const TOTAL = 5;
+  function store(k, v) { try { localStorage.setItem(k, v); } catch { /* ignore */ } }
+  function load(k) { try { return localStorage.getItem(k); } catch { return null; } }
+  const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
+  const nf = (n) => n.toLocaleString("it-IT");
+  const feat = (id) => window.dispatchEvent(new CustomEvent("sala:impresa", { detail: id }));
+  const mmss = (t) => `${Math.floor(t / 60)}:${String(Math.floor(t % 60)).padStart(2, "0")}`;
+  function shuffle(a) { for (let i = a.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); [a[i], a[j]] = [a[j], a[i]]; } return a; }
+
+  // ---------- Lines: clues and logic ----------
+  function cluesOf(line) { const out = []; let n = 0; for (const v of line) { if (v) n++; else if (n) { out.push(n); n = 0; } } if (n) out.push(n); return out; }
+  // every way to lay the clues on a line of n cells
+  function arrangements(cl, n) {
+    const res = [];
+    const rec = (i, pos, cur) => {
+      if (i === cl.length) { res.push(cur.concat(Array(n - cur.length).fill(0))); return; }
+      let rest = 0; for (let k = i + 1; k < cl.length; k++) rest += cl[k] + 1;
+      for (let s = pos; s + cl[i] + rest <= n; s++) {
+        let nxt = cur.concat(Array(s - cur.length).fill(0), Array(cl[i]).fill(1));
+        if (i < cl.length - 1) nxt = nxt.concat([0]);
+        rec(i + 1, nxt.length, nxt);
+      }
+    };
+    rec(0, 0, []); return res;
+  }
+  // what a line forces, given what is known (-1 unknown, 0 empty, 1 full)
+  function forced(cl, known) {
+    const n = known.length, ok = arrangements(cl, n).filter((a) => a.every((v, j) => known[j] < 0 || known[j] === v));
+    return known.map((v, j) => (v >= 0 || !ok.length ? -1 : ok.every((a) => a[j] === ok[0][j]) ? ok[0][j] : -1));
+  }
+
+  // ---------- Canvas: landscape or portrait, whichever fits the screen ----------
+  const canvas = document.getElementById("game"), ctx = canvas.getContext("2d");
+  const overlay = document.getElementById("overlay"), pauseBtn = document.getElementById("pauseBtn");
+  let W = 640, H = 360, portrait = false, pxRatio = 1, L = null;
+  let touchMode = !!(window.matchMedia && matchMedia("(pointer: coarse)").matches);
+  function layout() {
+    const n = N || 10, maxR = rowClues ? Math.max(1, ...rowClues.map((c) => c.length)) : 3, maxC = colClues ? Math.max(1, ...colClues.map((c) => c.length)) : 3;
+    const area = portrait ? { x: 6, y: 54, w: 348, h: 430 } : { x: 8, y: 30, w: 440, h: 324 };
+    const cw = portrait ? 13 : 12, ch = 13;
+    const rcw = maxR * cw + 6, cch = maxC * ch + 6;
+    const cs = Math.min(36, Math.floor(Math.min((area.w - rcw) / n, (area.h - cch) / n)));
+    const gx = Math.round(area.x + (area.w - rcw - cs * n) / 2 + rcw), gy = Math.round(area.y + (area.h - cch - cs * n) / 2 + cch);
+    L = { cs, gx, gy, cw, ch, rcw, cch,
+      tools: portrait
+        ? [{ id: "fill", x: 9, y: 500, w: 108, h: 58 }, { id: "cross", x: 126, y: 500, w: 108, h: 58 }, { id: "hint", x: 243, y: 500, w: 108, h: 58 }]
+        : [{ id: "fill", x: 462, y: 150, w: 170, h: 44 }, { id: "cross", x: 462, y: 200, w: 170, h: 44 }, { id: "hint", x: 462, y: 250, w: 170, h: 44 }],
+      thumb: portrait ? { x: 154, y: 580, s: 52 } : { x: 462, y: 40, s: 80 } };
+  }
+  function resize() {
+    portrait = window.innerHeight > window.innerWidth * 1.15;
+    W = portrait ? 360 : 640; H = portrait ? 640 : 360;
+    layout();
+    const s = Math.max(0.2, Math.min((window.innerWidth - 8) / W, (window.innerHeight - 8) / H));
+    pxRatio = Math.min(3, s * (window.devicePixelRatio || 1));
+    canvas.style.width = W * s + "px"; canvas.style.height = H * s + "px";
+    canvas.width = Math.round(W * pxRatio); canvas.height = Math.round(H * pxRatio);
+  }
+  window.addEventListener("resize", () => syncControls());
+
+  // ---------- Audio ----------
+  let audioCtx = null;
+  function beep(freq, dur, type = "triangle", vol = 0.04, delay = 0) {
+    if (!audioCtx) return;
+    const t = audioCtx.currentTime + delay, o = audioCtx.createOscillator(), g = audioCtx.createGain();
+    o.type = type; o.frequency.setValueAtTime(freq, t);
+    g.gain.setValueAtTime(0.0001, t); g.gain.exponentialRampToValueAtTime(vol, t + 0.008); g.gain.exponentialRampToValueAtTime(0.0001, t + dur);
+    o.connect(g).connect(audioCtx.destination); o.start(t); o.stop(t + dur + 0.02);
+  }
+  let paintNote = 0;
+  const sfx = {
+    fill: () => { beep([523, 587, 659, 784, 880][paintNote++ % 5], 0.06, "triangle", 0.03); },
+    cross: () => beep(300, 0.03, "square", 0.012),
+    tap: () => beep(700, 0.03, "sine", 0.02),
+    wrong: () => { beep(180, 0.12, "square", 0.035); beep(140, 0.16, "square", 0.03, 0.08); },
+    line: () => [784, 988, 1175].forEach((f, i) => beep(f, 0.09, "sine", 0.03, i * 0.05)),
+    hint: () => { beep(660, 0.06, "sine", 0.03); beep(880, 0.08, "sine", 0.03, 0.06); },
+    win: () => [523, 659, 784, 1047, 1319, 1568].forEach((f, i) => beep(f, 0.22, "triangle", 0.05, i * 0.09)),
+  };
+
+  // ---------- State ----------
+  let difficulty = DIFFICULTIES[load(DIFF_KEY)] ? load(DIFF_KEY) : "normale";
+  let diff = DIFFICULTIES[difficulty];
+  let state = "menu", menu = null, pausedFrom = null, clock = 0, stateT = 0;
+  let score = 0, lives = 0, round = 0, bestCache = 0, done = 0, order = [];
+  let N = 0, name = "", sol = null, colors = null, cells = null, rowClues = null, colClues = null, rowDone = null, colDone = null;
+  let tool = "fill", cursor = 0, kbd = false, drag = null, mistakes = 0, hints = 0, puzT = 0, msg = null, result = null, revealAt = 0, lineFlash = [], hintCell = -1, held = null;
+  const isPlaying = () => ["play", "result"].includes(state);
+
+  function newPuzzle() {
+    const pics = PICS[diff.size];
+    name = order[round]; const art = pics[name];
+    N = diff.size; sol = []; colors = [];
+    for (const row of art) for (const ch of row) { sol.push(ch === "." ? 0 : 1); colors.push(PAL[ch] || null); }
+    cells = sol.map(() => ({ s: 0, bad: 0, at: -9 }));
+    rowClues = [...Array(N)].map((_, r) => cluesOf(sol.slice(r * N, r * N + N)));
+    colClues = [...Array(N)].map((_, c) => cluesOf([...Array(N)].map((_, r) => sol[r * N + c])));
+    rowDone = Array(N).fill(false); colDone = Array(N).fill(false);
+    mistakes = 0; hints = 0; puzT = 0; result = null; lineFlash = []; hintCell = -1; drag = null; cursor = 0;
+    for (let k = 0; k < N; k++) { checkLine("r", k, true); checkLine("c", k, true); }
+    layout();
+  }
+
+  // ---------- Moves ----------
+  function lineCells(kind, k) { return [...Array(N)].map((_, j) => (kind === "r" ? k * N + j : j * N + k)); }
+  function checkLine(kind, k, quiet) {
+    const done2 = kind === "r" ? rowDone : colDone; if (done2[k]) return;
+    const ids = lineCells(kind, k);
+    if (ids.every((i) => !sol[i] || cells[i].s === 1)) {
+      done2[k] = true;
+      // the rest of a finished line is certainly empty
+      for (const i of ids) if (cells[i].s === 0) { cells[i].s = 2; cells[i].at = clock; }
+      if (!quiet) { lineFlash.push({ kind, k, at: clock }); sfx.line(); }
+    }
+  }
+  function apply(i, t) {
+    if (state !== "play" || i < 0) return true;
+    const c = cells[i]; if (c.s) return true;
+    if (t === "fill") {
+      if (sol[i]) { c.s = 1; c.at = clock; sfx.fill(); }
+      else { c.s = 2; c.bad = clock; return wrong(); }
+    } else {
+      if (!sol[i]) { c.s = 2; c.at = clock; sfx.cross(); }
+      else { c.s = 1; c.bad = clock; return wrong(); }
+    }
+    afterChange(i);
+    return true;
+  }
+  function afterChange(i) {
+    checkLine("r", Math.floor(i / N)); checkLine("c", i % N);
+    // a line finished by a column may finish other rows, and so on
+    for (let k = 0; k < N; k++) { checkLine("r", k); checkLine("c", k); }
+    if (sol.every((v, j) => !v || cells[j].s === 1)) solved();
+  }
+  function wrong() {
+    mistakes++; lives--; sfx.wrong(); drag = null;
+    say(lives > 0 ? `Sbagliato · ${lives} ${lives === 1 ? "errore" : "errori"} ancora` : "Niente più errori concessi");
+    if (lives <= 0) { state = "lost"; stateT = 0; }
+    return false;
+  }
+  // a hint: the next cell that the numbers force, worked out line by line
+  function hint() {
+    if (state !== "play") return;
+    const known = (i) => (cells[i].s === 1 ? 1 : cells[i].s === 2 ? 0 : -1);
+    for (const kind of ["r", "c"]) for (let k = 0; k < N; k++) {
+      const ids = lineCells(kind, k), f = forced(kind === "r" ? rowClues[k] : colClues[k], ids.map(known));
+      const j = f.findIndex((v) => v >= 0);
+      if (j >= 0) { const i = ids[j]; hints++; hintCell = i; cursor = i; apply(i, f[j] ? "fill" : "cross"); sfx.hint(); say(`Casella sicura: guarda ${kind === "r" ? "la riga" : "la colonna"}`); return; }
+    }
+  }
+  function solved() {
+    state = "result"; stateT = 0; done++; revealAt = clock;
+    const n = round + 1;
+    const base = 400 * n, speed = Math.max(0, Math.floor(diff.par - puzT)) * 2 * n, perfect = !mistakes && !hints ? 300 * n : 0, help = Math.min(base, hints * 100 * n);
+    const pts = base + speed + perfect - help; score += pts;
+    result = { base, speed, perfect, help, pts, t: puzT };
+    sfx.win();
+    if (!mistakes && !hints) feat("perfetto");
+    if (puzT < 60) feat("lampo");
+    if (n === TOTAL) feat("galleria");
+  }
+  function afterResult() { if (round + 1 >= TOTAL) { gameOver(true); return; } round++; newPuzzle(); state = "play"; say(`Disegno ${round + 1} di ${TOTAL}`); }
+  function say(text) { msg = { text, t: 0 }; }
+
+  // ---------- Flow ----------
+  function startGame() {
+    if (!audioCtx) { try { audioCtx = new (window.AudioContext || window.webkitAudioContext)(); } catch { audioCtx = null; } }
+    if (audioCtx && audioCtx.state === "suspended") audioCtx.resume();
+    score = 0; lives = diff.lives; round = 0; done = 0; tool = "fill";
+    order = shuffle(Object.keys(PICS[diff.size])).slice(0, TOTAL);
+    bestCache = parseInt(load(bestKey(difficulty)), 10) || 0;
+    newPuzzle(); state = "play"; menu = null; overlay.classList.add("hidden");
+    say(`Disegno 1 di ${TOTAL}`);
+    syncControls(); lastT = performance.now();
+  }
+  function gameOver(victory) {
+    state = "over";
+    let bonus = 0;
+    if (victory) { bonus = lives * 1000 * (DIFF_IDS.indexOf(difficulty) + 1); score += bonus; }
+    const prev = parseInt(load(bestKey(difficulty)), 10) || 0, record = score > prev;
+    if (record) store(bestKey(difficulty), String(score));
+    menu = () => showOverlay(
+      (victory ? `<h2>GALLERIA COMPLETA!</h2>
+       <p>Tutti e cinque i disegni scoperti. ${lives} ${lives === 1 ? "errore concesso avanzato" : "errori concessi avanzati"}: +${nf(bonus)} punti.</p>
+       <p>Punteggio: <b>${nf(score)}</b> · ${diff.label}</p>` : `<h2 class="lose">TROPPI ERRORI</h2>
+       <p>Punteggio: <b>${nf(score)}</b> · ${done} ${done === 1 ? "disegno scoperto" : "disegni scoperti"} su ${TOTAL} · ${diff.label}</p>`) +
+      `${record ? "<p style='color:var(--gold)'>★ NUOVO RECORD! ★</p>" : ""}
+       ${difficultyHTML()}
+       <button class="start" data-start>RIPROVA</button>`
+    );
+    menu(); syncControls();
+  }
+  function togglePause() {
+    if (isPlaying()) { pausedFrom = state; state = "paused"; drag = null; showOverlay(`<h2>PAUSA</h2><p class="muted">Il disegno è nascosto e il tempo è fermo.</p><button class="start" data-resume>CONTINUA</button><p class="muted">Premi P per continuare</p>`); }
+    else if (state === "paused") { state = pausedFrom; overlay.classList.add("hidden"); lastT = performance.now(); }
+    syncControls();
+  }
+  window.addEventListener("sala:termina", () => { if (state !== "paused") return; overlay.classList.add("hidden"); gameOver(false); });
+  function syncControls() { pauseBtn.style.display = isPlaying() && touchMode ? "block" : "none"; resize(); }
+  pauseBtn.addEventListener("click", () => togglePause());
+  function showOverlay(html) { overlay.innerHTML = html; overlay.classList.remove("hidden"); }
+  function difficultyHTML() {
+    const buttons = DIFF_IDS.map((id) => { const d = DIFFICULTIES[id]; return `<button type="button" data-diff="${id}" class="${id === difficulty ? "on" : ""}" style="--c:${d.color}">${d.label}</button>`; }).join("");
+    const best = parseInt(load(bestKey(difficulty)), 10);
+    return `<div class="diff">${buttons}</div><p class="muted">${diff.desc}${best ? ` · Record: ${nf(best)}` : ""}</p>`;
+  }
+  function setDifficulty(id) { if (!DIFFICULTIES[id]) return; difficulty = id; diff = DIFFICULTIES[id]; store(DIFF_KEY, id); if (menu) menu(); }
+  function showTitle() {
+    menu = showTitle;
+    showOverlay(
+      `<h1>DISEGNI <span>NASCOSTI</span></h1>
+       <p>Nella griglia c'è un disegno nascosto. I numeri accanto a ogni riga e sopra ogni colonna dicono quante caselle di fila vanno annerite, e in che ordine: «3 1» vuol dire tre caselle di fila, almeno uno spazio, poi una. Incrociando righe e colonne si capisce tutto, senza tirare a indovinare; alla fine il disegno si colora.</p>
+       <div class="pts">
+         <span><b>Riempi</b></span><span>${touchMode ? "tocca una casella, o trascina lungo una riga" : "clic o trascina lungo una riga"}</span>
+         <span><b>Croce</b></span><span>${touchMode ? "con CROCE segni le caselle vuote" : "clic destro, o CROCE, per segnare le caselle vuote"}</span>
+         <span><b>Errori</b></span><span>una casella sbagliata si corregge da sola e costa uno degli errori concessi</span>
+         <span><b>Punti</b></span><span>per ogni disegno 400, un premio per la velocità e uno se non sbagli e non chiedi aiuto, moltiplicati per il numero del disegno</span>
+       </div>
+       ${touchMode ? "" : `<p class="muted help">Frecce per muoversi · Spazio riempie · X croce (tienili premuti mentre ti muovi) · T cambia strumento · H aiuto · P pausa</p>`}
+       ${difficultyHTML()}
+       <button class="start" data-start>COMINCIA</button>`
+    );
+  }
+  overlay.addEventListener("click", (e) => {
+    const d = e.target.closest("[data-diff]");
+    if (d) { setDifficulty(d.dataset.diff); return; }
+    if (e.target.closest("[data-start]")) startGame();
+    if (e.target.closest("[data-resume]")) togglePause();
+  });
+
+  // ---------- Input ----------
+  const toWorld = (e) => { const rc = canvas.getBoundingClientRect(); return { x: ((e.clientX - rc.left) / rc.width) * W, y: ((e.clientY - rc.top) / rc.height) * H }; };
+  const inR = (r, p) => p.x >= r.x && p.x <= r.x + r.w && p.y >= r.y && p.y <= r.y + r.h;
+  function cellAt(p, clampIt) {
+    let c = Math.floor((p.x - L.gx) / L.cs), r = Math.floor((p.y - L.gy) / L.cs);
+    if (clampIt) { c = clamp(c, 0, N - 1); r = clamp(r, 0, N - 1); }
+    return c < 0 || r < 0 || c >= N || r >= N ? -1 : r * N + c;
+  }
+  function pressTool(id) { if (id === "fill" || id === "cross") { tool = id; sfx.tap(); } else if (id === "hint") hint(); }
+  canvas.addEventListener("contextmenu", (e) => e.preventDefault());
+  canvas.addEventListener("pointerdown", (e) => {
+    e.preventDefault();
+    if (state === "result") { if (stateT > 1.6) afterResult(); return; }
+    if (state !== "play") return;
+    kbd = false;
+    const p = toWorld(e);
+    for (const b of L.tools) if (inR(b, p)) { pressTool(b.id); return; }
+    const i = cellAt(p); if (i < 0) return;
+    const t = e.button === 2 ? "cross" : tool;
+    drag = { start: i, last: i, axis: null, t, id: e.pointerId };
+    paintNote = 0; cursor = i;
+    try { canvas.setPointerCapture(e.pointerId); } catch { /* ignore */ }
+    if (!apply(i, t)) drag = null;
+  });
+  canvas.addEventListener("pointermove", (e) => {
+    if (!drag || e.pointerId !== drag.id || state !== "play") return;
+    let i = cellAt(toWorld(e), true); if (i === drag.last) return;
+    const r0 = Math.floor(drag.start / N), c0 = drag.start % N;
+    if (!drag.axis) { const r = Math.floor(i / N), c = i % N; if (r === r0 && c === c0) return; drag.axis = Math.abs(c - c0) >= Math.abs(r - r0) ? "r" : "c"; }
+    // the stroke stays on the line where it started
+    i = drag.axis === "r" ? r0 * N + (i % N) : Math.floor(i / N) * N + c0;
+    const step = drag.axis === "r" ? 1 : N, a = drag.last, dir = Math.sign(i - a);
+    for (let j = a + dir * step; dir && (dir > 0 ? j <= i : j >= i); j += dir * step) { cursor = j; if (!apply(j, drag.t)) return; if (!drag) return; }
+    drag.last = i;
+  });
+  const endDrag = () => { drag = null; };
+  canvas.addEventListener("pointerup", endDrag); canvas.addEventListener("pointercancel", endDrag);
+  window.addEventListener("keydown", (e) => {
+    const k = e.key.toLowerCase();
+    if ([" ", "arrowup", "arrowdown", "arrowleft", "arrowright"].includes(k)) e.preventDefault();
+    if (state === "menu" || state === "over") { if (e.key === "Enter") startGame(); else if (["1", "2", "3"].includes(k)) setDifficulty(DIFF_IDS[+k - 1]); return; }
+    if (k === "p" || k === "escape") { if (!e.repeat) togglePause(); return; }
+    if (state === "paused") { if (e.key === "Enter") togglePause(); return; }
+    if (state === "result") { if ((k === "enter" || k === " ") && stateT > 1.6) afterResult(); return; }
+    if (state !== "play") return;
+    kbd = true;
+    const r = Math.floor(cursor / N), c = cursor % N;
+    let moved = true;
+    if (k === "arrowleft") cursor = r * N + Math.max(0, c - 1);
+    else if (k === "arrowright") cursor = r * N + Math.min(N - 1, c + 1);
+    else if (k === "arrowup") cursor = Math.max(0, r - 1) * N + c;
+    else if (k === "arrowdown") cursor = Math.min(N - 1, r + 1) * N + c;
+    else moved = false;
+    if (moved) { if (held) apply(cursor, held); return; }
+    if (e.repeat) return;
+    if (k === " " || k === "z" || k === "enter") { held = "fill"; paintNote = 0; apply(cursor, "fill"); }
+    else if (k === "x") { held = "cross"; apply(cursor, "cross"); }
+    else if (k === "t") pressTool(tool === "fill" ? "cross" : "fill");
+    else if (k === "h") hint();
+  });
+  window.addEventListener("keyup", (e) => { const k = e.key.toLowerCase(); if ((k === " " || k === "z" || k === "enter") && held === "fill") held = null; if (k === "x" && held === "cross") held = null; });
+  window.addEventListener("blur", () => { held = null; if (isPlaying()) togglePause(); });
+  window.addEventListener("pointerdown", (e) => { if (e.pointerType === "touch" && !touchMode) { touchMode = true; syncControls(); if (menu) menu(); } }, true);
+
+  // ---------- Update ----------
+  function update(dt) {
+    clock += dt; stateT += dt;
+    if (msg) { msg.t += dt; if (msg.t > 2.4) msg = null; }
+    if (state === "play") puzT += dt;
+    if (state === "lost" && stateT > 1.4) gameOver(false);
+    lineFlash = lineFlash.filter((f) => clock - f.at < 0.7);
+  }
+
+  // ---------- Drawing ----------
+  function rr(x, y, w, h, r) { ctx.beginPath(); ctx.roundRect(x, y, w, h, r); }
+  function drawPuzzle() {
+    const { cs, gx, gy, cw, ch } = L, S = cs * N, rev = state === "result" || (state === "over" && result);
+    const cr = cursor >= 0 ? Math.floor(cursor / N) : -1, cc = cursor >= 0 ? cursor % N : -1;
+    // clue strips
+    ctx.textAlign = "center"; ctx.textBaseline = "middle";
+    for (let k = 0; k < N; k++) {
+      const y = gy + k * cs + cs / 2, cl = rowClues[k], dn = rowDone[k];
+      if (k === cr && state === "play") { ctx.fillStyle = "rgba(122,180,255,0.14)"; ctx.fillRect(gx - L.rcw, gy + k * cs, L.rcw - 2, cs); }
+      ctx.font = `700 ${Math.min(13, Math.max(10, cs * 0.5))}px system-ui, sans-serif`;
+      (cl.length ? cl : [0]).forEach((v, j, arr) => { ctx.fillStyle = dn ? "rgba(200,208,220,0.32)" : "#e8edf4"; ctx.fillText(v, gx - 6 - (arr.length - 1 - j) * cw - cw / 2 + 2, y + 1); });
+      const x = gx + k * cs + cs / 2, cl2 = colClues[k], dn2 = colDone[k];
+      if (k === cc && state === "play") { ctx.fillStyle = "rgba(122,180,255,0.14)"; ctx.fillRect(gx + k * cs, gy - L.cch, cs, L.cch - 2); }
+      (cl2.length ? cl2 : [0]).forEach((v, j, arr) => { ctx.fillStyle = dn2 ? "rgba(200,208,220,0.32)" : "#e8edf4"; ctx.fillText(v, x, gy - 6 - (arr.length - 1 - j) * ch - ch / 2 + 2); });
+    }
+    // the grid
+    ctx.fillStyle = rev ? "#cfd8e3" : "#eef1f5"; ctx.fillRect(gx, gy, S, S);
+    for (let i = 0; i < N * N; i++) {
+      const r = Math.floor(i / N), c = i % N, x = gx + c * cs, y = gy + r * cs, cl = cells[i];
+      if (state === "play" && (r === cr || c === cc) && !cl.s) { ctx.fillStyle = "#dde6f2"; ctx.fillRect(x, y, cs, cs); }
+      for (const f of lineFlash) if ((f.kind === "r" ? r : c) === f.k) { const k = (clock - f.at) / 0.7; ctx.fillStyle = `rgba(255,214,90,${0.7 * (1 - k)})`; ctx.fillRect(x, y, cs, cs); }
+      if (rev) {
+        // the picture appears in a diagonal wave
+        const t = clock - revealAt - (r + c) * 0.035;
+        if (sol[i]) { ctx.fillStyle = t > 0 ? colors[i] : "#2a3448"; const pad = t > 0 ? 0 : 1; ctx.fillRect(x + pad, y + pad, cs - pad * 2, cs - pad * 2); }
+        continue;
+      }
+      if (cl.s === 1) {
+        const pop = Math.min(1, (clock - cl.at) / 0.12), pad = 1 + (1 - pop) * cs * 0.25;
+        ctx.fillStyle = cl.bad && clock - cl.bad < 0.8 ? "#d0352b" : "#2a3448"; ctx.fillRect(x + pad, y + pad, cs - pad * 2, cs - pad * 2);
+      } else if (cl.s === 2) {
+        const bad = cl.bad && clock - cl.bad < 0.8;
+        if (bad) { ctx.fillStyle = "#ffc9c4"; ctx.fillRect(x, y, cs, cs); }
+        ctx.strokeStyle = bad ? "#d0352b" : "rgba(42,52,72,0.4)"; ctx.lineWidth = bad ? 2.5 : 1.5; const m = cs * 0.3;
+        ctx.beginPath(); ctx.moveTo(x + m, y + m); ctx.lineTo(x + cs - m, y + cs - m); ctx.moveTo(x + cs - m, y + m); ctx.lineTo(x + m, y + cs - m); ctx.stroke();
+      }
+      if (i === hintCell && clock - cl.at < 1.5) { ctx.strokeStyle = "#7ab4ff"; ctx.lineWidth = 3; ctx.strokeRect(x + 1.5, y + 1.5, cs - 3, cs - 3); }
+    }
+    if (!rev) {
+      ctx.strokeStyle = "rgba(42,52,72,0.22)"; ctx.lineWidth = 1; ctx.beginPath();
+      for (let k = 1; k < N; k++) { ctx.moveTo(gx + k * cs + 0.5, gy); ctx.lineTo(gx + k * cs + 0.5, gy + S); ctx.moveTo(gx, gy + k * cs + 0.5); ctx.lineTo(gx + S, gy + k * cs + 0.5); }
+      ctx.stroke();
+      ctx.strokeStyle = "rgba(42,52,72,0.6)"; ctx.lineWidth = 1.5; ctx.beginPath();
+      const step = N % 5 === 0 ? 5 : 4;
+      for (let k = step; k < N; k += step) { ctx.moveTo(gx + k * cs, gy); ctx.lineTo(gx + k * cs, gy + S); ctx.moveTo(gx, gy + k * cs); ctx.lineTo(gx + S, gy + k * cs); }
+      ctx.stroke();
+    }
+    ctx.strokeStyle = "#7a8aa0"; ctx.lineWidth = 2; ctx.strokeRect(gx - 1, gy - 1, S + 2, S + 2);
+    if (kbd && state === "play" && cursor >= 0) { ctx.strokeStyle = "#ffd23a"; ctx.lineWidth = 2.5; ctx.strokeRect(gx + cc * cs + 1.5, gy + cr * cs + 1.5, cs - 3, cs - 3); }
+  }
+  function drawThumb() {
+    const T = L.thumb, s = T.s / N;
+    ctx.fillStyle = "rgba(255,255,255,0.06)"; rr(T.x - 6, T.y - 6, T.s + 12, T.s + 12, 8); ctx.fill();
+    ctx.fillStyle = "#eef1f5"; ctx.fillRect(T.x, T.y, T.s, T.s);
+    for (let i = 0; i < N * N; i++) if (cells[i].s === 1) { ctx.fillStyle = state === "result" ? colors[i] : "#2a3448"; ctx.fillRect(T.x + (i % N) * s, T.y + Math.floor(i / N) * s, Math.ceil(s), Math.ceil(s)); }
+  }
+  function button(b, label, sub, on, lit) {
+    ctx.fillStyle = lit ? "rgba(122,180,255,0.25)" : on ? "rgba(255,255,255,0.09)" : "rgba(255,255,255,0.03)";
+    rr(b.x, b.y, b.w, b.h, 9); ctx.fill();
+    ctx.strokeStyle = lit ? "#7ab4ff" : on ? "rgba(255,255,255,0.22)" : "rgba(255,255,255,0.08)"; ctx.lineWidth = lit ? 2.5 : 1.5; ctx.stroke();
+    ctx.textAlign = "center"; ctx.textBaseline = "middle"; ctx.fillStyle = on ? "#f4f6ee" : "rgba(244,246,238,0.25)";
+    const ox = b.icon ? 12 : 0;
+    ctx.font = "800 13px system-ui, sans-serif"; ctx.fillText(label, b.x + b.w / 2 + ox, b.y + b.h / 2 - (sub ? 7 : 0));
+    if (sub) { ctx.font = "600 10px system-ui, sans-serif"; ctx.fillStyle = on ? "#c8d0dc" : "rgba(200,208,220,0.3)"; ctx.fillText(sub, b.x + b.w / 2 + ox, b.y + b.h / 2 + 10); }
+  }
+  function wrap(text, maxW) { const words = text.split(" "), lines = []; let cur = ""; for (const w of words) { const t = cur ? cur + " " + w : w; if (ctx.measureText(t).width > maxW && cur) { lines.push(cur); cur = w; } else cur = t; } if (cur) lines.push(cur); return lines; }
+  function toolIcon(b, kind) {
+    const x = b.x + (b.w > 140 ? 40 : 18), y = b.y + b.h / 2;
+    if (kind === "fill") { ctx.fillStyle = "#2a3448"; ctx.strokeStyle = "#eef1f5"; ctx.lineWidth = 1.5; ctx.fillRect(x - 7, y - 7, 14, 14); ctx.strokeRect(x - 7, y - 7, 14, 14); }
+    else { ctx.strokeStyle = "#eef1f5"; ctx.lineWidth = 2; ctx.beginPath(); ctx.moveTo(x - 6, y - 6); ctx.lineTo(x + 6, y + 6); ctx.moveTo(x + 6, y - 6); ctx.lineTo(x - 6, y + 6); ctx.stroke(); }
+  }
+  function draw() {
+    ctx.setTransform(pxRatio, 0, 0, pxRatio, 0, 0);
+    const bg = ctx.createLinearGradient(0, 0, 0, H); bg.addColorStop(0, "#202838"); bg.addColorStop(1, "#11151e");
+    ctx.fillStyle = bg; ctx.fillRect(0, 0, W, H);
+    if (!cells || state === "paused") return;
+    drawPuzzle();
+
+    // top bar
+    ctx.fillStyle = "rgba(0,0,0,0.35)"; ctx.fillRect(0, 0, W, portrait ? 30 : 24);
+    const right = touchMode ? W - 62 : W - 12, mid = portrait && touchMode ? W * 0.44 : W / 2, ty = portrait ? 15 : 12;
+    ctx.textBaseline = "middle"; ctx.font = "800 13px system-ui, sans-serif";
+    ctx.textAlign = "left"; ctx.fillStyle = "#f4f6ee"; ctx.fillText(`${nf(score)} punti`, 10, ty);
+    ctx.textAlign = "center"; ctx.fillStyle = "#ffd23a"; ctx.fillText(`DISEGNO ${round + 1}/${TOTAL} · ${mmss(puzT)}`, mid, ty);
+    for (let i = 0; i < diff.lives; i++) { const x = right - i * 12 - 5; if (i < lives) { ctx.fillStyle = "#ff6b7d"; ctx.beginPath(); ctx.arc(x, ty, 4, 0, TAU); ctx.fill(); } else { ctx.strokeStyle = "rgba(255,255,255,0.2)"; ctx.lineWidth = 2; ctx.beginPath(); ctx.moveTo(x - 3, ty - 3); ctx.lineTo(x + 3, ty + 3); ctx.moveTo(x + 3, ty - 3); ctx.lineTo(x - 3, ty + 3); ctx.stroke(); } }
+    if (!(portrait && touchMode)) { ctx.textAlign = "right"; ctx.font = "700 11px system-ui, sans-serif"; ctx.fillStyle = "#c8d0dc"; ctx.fillText(`REC ${nf(Math.max(bestCache, score))}`, right - diff.lives * 12 - 4, ty); }
+
+    drawThumb();
+    ctx.textAlign = "left"; ctx.font = "600 12px system-ui, sans-serif"; ctx.fillStyle = "#c8d0dc";
+    if (portrait) { ctx.textAlign = "center"; ctx.fillText(`${N}×${N} · tempo premio ${mmss(Math.max(0, diff.par - puzT))} · errori ${mistakes} · aiuti ${hints}`, W / 2, 42); }
+    else {
+      const x = L.thumb.x + L.thumb.s + 14;
+      ctx.fillText(`${N}×${N}`, x, 50); ctx.fillText("tempo premio", x, 74); ctx.fillStyle = "#f4f6ee"; ctx.font = "800 15px system-ui, sans-serif"; ctx.fillText(mmss(Math.max(0, diff.par - puzT)), x, 92);
+      ctx.font = "600 12px system-ui, sans-serif"; ctx.fillStyle = "#c8d0dc"; ctx.fillText(`errori ${mistakes}`, x, 116); ctx.fillText(`aiuti ${hints}`, x, 134);
+    }
+    const T = Object.fromEntries(L.tools.map((b) => [b.id, b])), on = state === "play";
+    T.fill.icon = T.cross.icon = true;
+    button(T.fill, "RIEMPI", touchMode ? "" : "Spazio", on, tool === "fill"); toolIcon(T.fill, "fill");
+    button(T.cross, "CROCE", touchMode ? "" : "X · clic destro", on, tool === "cross"); toolIcon(T.cross, "cross");
+    button(T.hint, "AIUTO", portrait ? `−${100 * (round + 1)} punti` : `una casella sicura · −${100 * (round + 1)}`, on, false);
+
+    if (msg && state === "play") {
+      const a = Math.min(1, (2.4 - msg.t) * 3); ctx.globalAlpha = a; ctx.font = "800 13px system-ui, sans-serif";
+      // under the grid in portrait, in the side panel in landscape
+      const lines = portrait ? [msg.text] : wrap(msg.text, 160), w = portrait ? ctx.measureText(msg.text).width + 26 : 170;
+      const cx = portrait ? W / 2 : 547, y = portrait ? L.gy + L.cs * N + 18 : 318, h = 12 + lines.length * 16;
+      ctx.fillStyle = "rgba(16,20,28,0.92)"; rr(cx - w / 2, y - h / 2, w, h, 12); ctx.fill();
+      ctx.fillStyle = "#ffd23a"; ctx.textAlign = "center"; lines.forEach((ln, k) => ctx.fillText(ln, cx, y - (lines.length - 1) * 8 + k * 16)); ctx.globalAlpha = 1;
+    }
+    if (state === "result" && stateT > 1.3) {
+      const R = result, w = portrait ? 300 : 170, x0 = portrait ? (W - w) / 2 : 462, y0 = portrait ? 494 : 136, h = portrait ? 140 : 216;
+      ctx.globalAlpha = Math.min(1, (stateT - 1.3) * 4);
+      ctx.fillStyle = "rgba(16,20,28,0.96)"; rr(x0, y0, w, h, 12); ctx.fill(); ctx.strokeStyle = "rgba(255,210,58,0.7)"; ctx.lineWidth = 2; ctx.stroke();
+      ctx.textAlign = "center"; ctx.textBaseline = "middle"; ctx.fillStyle = "#ffd23a"; ctx.font = "900 17px system-ui, sans-serif"; ctx.fillText(`È ${ARTICLE[name] || name}!`, x0 + w / 2, y0 + 20);
+      ctx.fillStyle = "#c8d0dc"; ctx.font = "600 11px system-ui, sans-serif"; ctx.fillText(`in ${mmss(R.t)} · ${mistakes} ${mistakes === 1 ? "errore" : "errori"} · ${hints} ${hints === 1 ? "aiuto" : "aiuti"}`, x0 + w / 2, y0 + 40);
+      const rows = [["Disegno", `+${nf(R.base)}`], ["Velocità", `+${nf(R.speed)}`], ["Perfetto", `+${nf(R.perfect)}`], ["Aiuti", R.help ? `−${nf(R.help)}` : "0"]];
+      ctx.font = "600 12px system-ui, sans-serif";
+      rows.forEach(([t, v], k) => { const y = y0 + 62 + k * (portrait ? 15 : 22); ctx.textAlign = "left"; ctx.fillStyle = "#c8d0dc"; ctx.fillText(t, x0 + 16, y); ctx.textAlign = "right"; ctx.fillStyle = "#f4f6ee"; ctx.fillText(v, x0 + w - 16, y); });
+      if (stateT > 1.6) { ctx.textAlign = "center"; ctx.globalAlpha = 0.6 + 0.4 * Math.sin(clock * 5); ctx.fillStyle = "#ffd23a"; ctx.font = "700 11px system-ui, sans-serif"; ctx.fillText(round + 1 >= TOTAL ? (touchMode ? "tocca per finire" : "clic o Invio per finire") : touchMode ? "tocca per il prossimo disegno" : "clic o Invio: prossimo disegno", x0 + w / 2, y0 + h - 14); }
+      ctx.globalAlpha = 1;
+    }
+  }
+
+  // ---------- Loop ----------
+  let lastT = performance.now();
+  function frame(now) {
+    const dt = Math.min(0.05, (now - lastT) / 1000); lastT = now;
+    if (state !== "paused") update(dt);
+    draw();
+    requestAnimationFrame(frame);
+  }
+  // behind the title: a picture half found
+  function demo() { order = Object.keys(PICS[diff.size]); round = 0; newPuzzle(); for (let i = 0; i < N * N; i++) if ((i * 7) % 5 < 2) cells[i].s = sol[i] ? 1 : 2; cursor = -1; }
+  resize(); demo(); resize();
+  syncControls();
+  showTitle();
+  requestAnimationFrame(frame);
+})();
+</script>
+<script src="../../shared/iniziali.js" data-record="disegni-best-" data-kind="score"></script>
+</body>
+</html>

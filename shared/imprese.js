@@ -9,6 +9,11 @@
   "use strict";
   // record key prefix of the game (as in trofei.js) → its feats
   const LIST = {
+    "disegni-best-": [   // disegni-nascosti
+      { id: "perfetto", name: "Perfetto", desc: "scopri un disegno senza errori e senza aiuti" },
+      { id: "lampo", name: "Lampo", desc: "scopri un disegno in meno di un minuto" },
+      { id: "galleria", name: "Galleria", desc: "scopri tutti e cinque i disegni di una partita" },
+    ],
     "sudoku-best-": [   // sudoku
       { id: "perfetto", name: "Perfetto", desc: "risolvi uno schema senza errori e senza aiuti" },
       { id: "lampo", name: "Lampo", desc: "risolvi uno schema in meno di 4 minuti" },

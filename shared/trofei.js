@@ -9,6 +9,7 @@
   "use strict";
   // record key prefix → [bronzo, argento, oro] (and t for times)
   const DATA = {
+    "disegni-best-": [8000, 14000, 14000],   // disegni-nascosti (stima)
     "sudoku-best-": [8000, 15000, 15000],   // sudoku (stima)
     "pecore-best-": [40000, 70000, 60000],   // pecore-testarde (bot)
     "reversi-best-": [10000, 15000, 8000],   // reversi (bot)
