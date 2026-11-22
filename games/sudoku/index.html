@@ -1,0 +1,542 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no, viewport-fit=cover">
+<title>Sudoku</title>
+<style>
+  :root {
+    --bg: #141a24;
+    --fg: #f4f6ee;
+    --muted: #c8d0dc;
+    --gold: #ffd23a;
+    --red: #ff5a4a;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  html, body {
+    height: 100%;
+    background: var(--bg);
+    color: var(--fg);
+    font-family: system-ui, -apple-system, "Segoe UI", sans-serif;
+    overflow: hidden;
+    user-select: none;
+    -webkit-user-select: none;
+    -webkit-tap-highlight-color: transparent;
+    touch-action: none;
+  }
+  #wrap { position: fixed; inset: 0; display: flex; align-items: center; justify-content: center; }
+  canvas { cursor: pointer; display: block; touch-action: none; border-radius: 6px; box-shadow: 0 0 0 2px #2e3a4e, 0 10px 40px rgba(0,0,0,0.6); }
+  #pauseBtn {
+    position: fixed; z-index: 3; display: none; right: 10px; top: calc(10px + env(safe-area-inset-top, 0px));
+    font: 700 13px system-ui, sans-serif; color: var(--fg);
+    background: rgba(0, 0, 0, 0.6); border: 1px solid rgba(244, 246, 238, 0.35);
+    border-radius: 8px; padding: 6px 10px; cursor: pointer;
+  }
+  #touch { display: none !important; }
+  #overlay {
+    position: fixed; inset: 0; z-index: 5;
+    display: flex; flex-direction: column; align-items: center; justify-content: flex-start;
+    gap: 14px; padding: 16px; text-align: center; overflow-y: auto;
+    background: rgba(20, 26, 36, 0.94);
+  }
+  #overlay > :first-child { margin-top: auto; }
+  #overlay > :last-child { margin-bottom: auto; }
+  #overlay.hidden { display: none; }
+  #homeLink {
+    position: fixed; top: calc(10px + env(safe-area-inset-top, 0px)); left: 10px; z-index: 6;
+    font: 600 13px/1 system-ui, sans-serif; color: #fff; text-decoration: none;
+    padding: 8px 12px; border-radius: 999px; background: rgba(0,0,0,.55);
+    border: 1px solid rgba(255,255,255,.25);
+  }
+  #homeLink:hover { background: rgba(0,0,0,.8); }
+  #overlay.hidden ~ #homeLink { display: none; }
+  @media (max-width: 700px) { #overlay { padding-top: calc(52px + env(safe-area-inset-top, 0px)); } }
+  #overlay h1 { font-size: clamp(32px, 10vw, 58px); font-weight: 900; font-style: italic; letter-spacing: 1px; color: var(--gold);
+    text-shadow: 3px 3px 0 #6a1a1a, 0 0 22px rgba(255,210,58,0.35); }
+  #overlay h1 span { color: #fff; }
+  #overlay h2 { font-size: clamp(26px, 7vw, 42px); font-weight: 900; letter-spacing: 2px; color: var(--gold); }
+  #overlay h2.lose { color: var(--red); }
+  #overlay p { max-width: 540px; font-size: clamp(13px, 3.4vw, 16px); line-height: 1.55; }
+  #overlay p.muted { color: var(--muted); }
+  #overlay .pts { display: grid; grid-template-columns: repeat(2, auto); gap: 4px 18px; font-size: 13px; color: var(--muted); text-align: left; max-width: 560px; }
+  #overlay .pts b { color: var(--fg); }
+  #overlay .diff { display: flex; gap: 10px; flex-wrap: wrap; justify-content: center; }
+  #overlay button {
+    font: 800 15px system-ui, sans-serif; letter-spacing: 1.5px; color: var(--fg);
+    background: transparent; cursor: pointer;
+    border: 2px solid rgba(244,246,238,0.3); border-radius: 10px; padding: 9px 16px;
+  }
+  #overlay .diff button.on { border-color: var(--c); color: var(--c); box-shadow: 0 0 12px var(--c); }
+  #overlay button.start { border-color: var(--gold); color: #2a1a02; background: var(--gold); padding: 11px 30px; box-shadow: 0 4px 0 #a87a0a; }
+  @media (max-height: 560px) {
+    #overlay { gap: 8px; }
+    #overlay h1 { font-size: 30px; }
+    #overlay p { font-size: 13px; line-height: 1.4; }
+    #overlay .help, #overlay .pts { display: none; }
+  }
+</style>
+</head>
+<body>
+<div id="wrap"><canvas id="game"></canvas></div>
+<div id="touch"></div>
+<button id="pauseBtn" type="button" aria-label="Pausa">❚❚</button>
+<div id="overlay"></div>
+<a id="homeLink" href="../../index.html">← Sala Giochi</a>
+
+
+<script>
+(() => {
+  "use strict";
+
+  const TAU = Math.PI * 2;
+  const DIFFICULTIES = {
+    facile:    { label: "FACILE",    color: "#7ee0a0", desc: "tanti numeri già scritti, schemi che si risolvono a colpo d'occhio · 5 errori concessi", clues: [44, 42, 40, 39, 38], grade: 1, par: 300, lives: 5 },
+    normale:   { label: "NORMALE",   color: "#ffd66b", desc: "meno numeri, a volte bisogna cercare dove può andare una cifra · 3 errori concessi", clues: [36, 34, 33, 32, 31], grade: 2, par: 540, lives: 3 },
+    difficile: { label: "DIFFICILE", color: "#ff6b7d", desc: "pochi numeri e ragionamenti più lunghi · 3 errori concessi", clues: [30, 28, 27, 26, 25], grade: 3, par: 840, lives: 3 },
+  };
+  const DIFF_IDS = Object.keys(DIFFICULTIES);
+  const DIFF_KEY = "sudoku-difficulty";
+  const bestKey = (id) => `sudoku-best-${id}`;
+  const TOTAL = 5;
+  function store(k, v) { try { localStorage.setItem(k, v); } catch { /* ignore */ } }
+  function load(k) { try { return localStorage.getItem(k); } catch { return null; } }
+  const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
+  const nf = (n) => n.toLocaleString("it-IT");
+  const feat = (id) => window.dispatchEvent(new CustomEvent("sala:impresa", { detail: id }));
+  const mmss = (t) => `${Math.floor(t / 60)}:${String(Math.floor(t % 60)).padStart(2, "0")}`;
+
+  // ---------- The puzzle maker ----------
+  const ROW = (i) => Math.floor(i / 9), COL = (i) => i % 9, BOX = (i) => Math.floor(ROW(i) / 3) * 3 + Math.floor(COL(i) / 3);
+  const PEERS = [], UNITS = [];
+  for (let k = 0; k < 9; k++) { UNITS.push([...Array(9)].map((_, j) => k * 9 + j)); UNITS.push([...Array(9)].map((_, j) => j * 9 + k)); UNITS.push([...Array(9)].map((_, j) => (Math.floor(k / 3) * 3 + Math.floor(j / 3)) * 9 + (k % 3) * 3 + (j % 3))); }
+  for (let i = 0; i < 81; i++) { const s = new Set(); for (let j = 0; j < 81; j++) if (j !== i && (ROW(j) === ROW(i) || COL(j) === COL(i) || BOX(j) === BOX(i))) s.add(j); PEERS.push([...s]); }
+  const bits = (m) => { let n = 0; while (m) { m &= m - 1; n++; } return n; };
+  function candidates(g, i) { let m = 0x3fe; for (const j of PEERS[i]) if (g[j]) m &= ~(1 << g[j]); return m; }
+  function shuffle(a) { for (let i = a.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); [a[i], a[j]] = [a[j], a[i]]; } return a; }
+  // counts solutions up to a limit (backtracking on the emptiest cell)
+  function countSolutions(g, limit = 2) {
+    let best = -1, bm = 0, bc = 10;
+    for (let i = 0; i < 81; i++) if (!g[i]) { const m = candidates(g, i), c = bits(m); if (c === 0) return 0; if (c < bc) { bc = c; best = i; bm = m; if (c === 1) break; } }
+    if (best < 0) return 1;
+    let n = 0;
+    for (let d = 1; d <= 9 && n < limit; d++) if (bm & (1 << d)) { g[best] = d; n += countSolutions(g, limit - n); g[best] = 0; }
+    return n;
+  }
+  function fullGrid() {
+    const g = new Array(81).fill(0);
+    const fill = () => {
+      let best = -1, bm = 0, bc = 10;
+      for (let i = 0; i < 81; i++) if (!g[i]) { const m = candidates(g, i), c = bits(m); if (c === 0) return false; if (c < bc) { bc = c; best = i; bm = m; } }
+      if (best < 0) return true;
+      for (const d of shuffle([1, 2, 3, 4, 5, 6, 7, 8, 9])) if (bm & (1 << d)) { g[best] = d; if (fill()) return true; g[best] = 0; }
+      return false;
+    };
+    fill(); return g;
+  }
+  // how hard is it by logic? 1 = naked singles are enough, 2 = also hidden singles,
+  // 3 = also pointing pairs, box/line reduction and naked pairs, 4 = something beyond that
+  const BOXES = UNITS.filter((_, k) => k % 3 === 2), LINES = UNITS.filter((_, k) => k % 3 !== 2);
+  function grade(puzzle) {
+    const g = puzzle.slice(), elim = new Array(81).fill(0);
+    const cand = (i) => candidates(g, i) & ~elim[i];
+    let level = 1;
+    for (;;) {
+      let empty = 0, moved = false;
+      for (let i = 0; i < 81; i++) if (!g[i]) { empty++; const m = cand(i); if (bits(m) === 1) { g[i] = 31 - Math.clz32(m); moved = true; } }
+      if (!empty) return level;
+      if (moved) continue;
+      for (const u of UNITS) {
+        for (let d = 1; d <= 9 && !moved; d++) {
+          if (u.some((i) => g[i] === d)) continue;
+          const spots = u.filter((i) => !g[i] && cand(i) & (1 << d));
+          if (spots.length === 1) { g[spots[0]] = d; moved = true; }
+        }
+        if (moved) break;
+      }
+      if (moved) { level = Math.max(level, 2); continue; }
+      let cut = false;
+      const remove = (cells2, d) => { for (const i of cells2) if (!g[i] && cand(i) & (1 << d)) { elim[i] |= 1 << d; cut = true; } };
+      // pointing: inside a box a digit sits on one line only, so the rest of that line loses it (and the other way round)
+      for (const box of BOXES) for (const line of LINES) {
+        const both = box.filter((i) => line.includes(i)); if (both.length !== 3) continue;
+        for (let d = 1; d <= 9; d++) {
+          const inBox = box.filter((i) => !g[i] && cand(i) & (1 << d)), inLine = line.filter((i) => !g[i] && cand(i) & (1 << d));
+          if (inBox.length && inBox.every((i) => both.includes(i))) remove(line.filter((i) => !both.includes(i)), d);
+          if (inLine.length && inLine.every((i) => both.includes(i))) remove(box.filter((i) => !both.includes(i)), d);
+        }
+      }
+      // naked pairs
+      for (const u of UNITS) {
+        const open = u.filter((i) => !g[i] && bits(cand(i)) === 2);
+        for (let x = 0; x < open.length; x++) for (let y = x + 1; y < open.length; y++) {
+          const m = cand(open[x]); if (m !== cand(open[y])) continue;
+          for (let d = 1; d <= 9; d++) if (m & (1 << d)) remove(u.filter((i) => i !== open[x] && i !== open[y]), d);
+        }
+      }
+      if (cut) { level = 3; continue; }
+      return 4;
+    }
+  }
+  function makePuzzle(clues, want) {
+    let bestP = null, bestScore = -1;
+    for (let attempt = 0; attempt < (want === 3 ? 40 : 12); attempt++) {
+      const sol = fullGrid(), p = sol.slice();
+      const order = shuffle([...Array(41)].map((_, i) => i));   // symmetric pairs: i and 80 - i
+      let count = 81;
+      for (const i of order) {
+        if (count <= clues) break;
+        const j = 80 - i, a = p[i], b = p[j];
+        p[i] = 0; p[j] = 0;
+        const gd = countSolutions(p.slice()) === 1 ? grade(p) : 99;
+        if (gd > want) { p[i] = a; p[j] = b; continue; }
+        count -= i === j ? 1 : 2;
+      }
+      const gd = grade(p), ok = count <= clues + 1 && gd <= want && (want < 3 || gd >= 2);
+      const score = (ok ? 100 : 0) - count + (gd === want ? 50 : 0);
+      if (score > bestScore) { bestScore = score; bestP = { puzzle: p, solution: sol, clues: count, grade: gd }; }
+      if (ok && (gd === want || want === 1)) break;
+    }
+    return bestP;
+  }
+
+  // ---------- Canvas: landscape or portrait, whichever fits the screen ----------
+  const canvas = document.getElementById("game"), ctx = canvas.getContext("2d");
+  const overlay = document.getElementById("overlay"), pauseBtn = document.getElementById("pauseBtn");
+  let W = 640, H = 360, portrait = false, pxRatio = 1, L = null;
+  let touchMode = !!(window.matchMedia && matchMedia("(pointer: coarse)").matches);
+  function layout() {
+    if (portrait) {
+      const cs = 38, gx = 9, gy = 76;
+      L = { cs, gx, gy, info: { x: 10, y: 50 },
+        pad: [...Array(9)].map((_, k) => ({ id: "d" + (k + 1), d: k + 1, x: 9 + k * 38, y: 444, w: 35, h: 64 })),
+        tools: [{ id: "notes", x: 9, y: 522, w: 108, h: 58 }, { id: "erase", x: 126, y: 522, w: 108, h: 58 }, { id: "hint", x: 243, y: 522, w: 108, h: 58 }] };
+    } else {
+      const cs = 36, gx = 14, gy = 30;
+      L = { cs, gx, gy, info: { x: 356, y: 46 },
+        pad: [...Array(9)].map((_, k) => ({ id: "d" + (k + 1), d: k + 1, x: 356 + (k % 3) * 62, y: 92 + Math.floor(k / 3) * 56, w: 56, h: 50 })),
+        tools: [{ id: "notes", x: 548, y: 92, w: 80, h: 50 }, { id: "erase", x: 548, y: 148, w: 80, h: 50 }, { id: "hint", x: 548, y: 204, w: 80, h: 50 }] };
+    }
+  }
+  function resize() {
+    portrait = window.innerHeight > window.innerWidth * 1.15;
+    W = portrait ? 360 : 640; H = portrait ? 640 : 360;
+    layout();
+    const s = Math.max(0.2, Math.min((window.innerWidth - 8) / W, (window.innerHeight - 8) / H));
+    pxRatio = Math.min(3, s * (window.devicePixelRatio || 1));
+    canvas.style.width = W * s + "px"; canvas.style.height = H * s + "px";
+    canvas.width = Math.round(W * pxRatio); canvas.height = Math.round(H * pxRatio);
+  }
+  window.addEventListener("resize", () => syncControls());
+
+  // ---------- Audio ----------
+  let audioCtx = null;
+  function beep(freq, dur, type = "triangle", vol = 0.04, delay = 0) {
+    if (!audioCtx) return;
+    const t = audioCtx.currentTime + delay, o = audioCtx.createOscillator(), g = audioCtx.createGain();
+    o.type = type; o.frequency.setValueAtTime(freq, t);
+    g.gain.setValueAtTime(0.0001, t); g.gain.exponentialRampToValueAtTime(vol, t + 0.008); g.gain.exponentialRampToValueAtTime(0.0001, t + dur);
+    o.connect(g).connect(audioCtx.destination); o.start(t); o.stop(t + dur + 0.02);
+  }
+  const SCALE = [0, 523, 587, 659, 698, 784, 880, 988, 1047, 1175];
+  const sfx = {
+    tap: () => beep(700, 0.03, "sine", 0.02),
+    place: (d) => beep(SCALE[d], 0.09, "triangle", 0.04),
+    note: () => beep(1200, 0.03, "sine", 0.015),
+    wrong: () => { beep(180, 0.12, "square", 0.035); beep(140, 0.16, "square", 0.03, 0.08); },
+    unit: (k) => [784, 988, 1175].forEach((f, i) => beep(f * (1 + k * 0.05), 0.1, "sine", 0.03, i * 0.05)),
+    hint: () => { beep(660, 0.06, "sine", 0.03); beep(880, 0.08, "sine", 0.03, 0.06); },
+    win: () => [523, 659, 784, 1047, 1319, 1568].forEach((f, i) => beep(f, 0.22, "triangle", 0.05, i * 0.09)),
+    lose: () => [392, 330, 262, 196].forEach((f, i) => beep(f, 0.3, "triangle", 0.05, i * 0.16)),
+  };
+
+  // ---------- State ----------
+  let difficulty = DIFFICULTIES[load(DIFF_KEY)] ? load(DIFF_KEY) : "normale";
+  let diff = DIFFICULTIES[difficulty];
+  let state = "menu", menu = null, pausedFrom = null, clock = 0, stateT = 0;
+  let score = 0, lives = 0, round = 0, bestCache = 0, done = 0;
+  let P = null, cells = null, sel = 40, notesMode = false, mistakes = 0, hints = 0, usedNotes = false, puzT = 0, msg = null, wave = null, flash = [], result = null;
+  const isPlaying = () => ["play", "result"].includes(state);
+
+  function newPuzzle() {
+    P = makePuzzle(diff.clues[round], diff.grade);
+    cells = P.puzzle.map((v) => ({ v, given: !!v, notes: 0, bad: 0, at: -9 }));
+    sel = cells.findIndex((c) => !c.given); notesMode = false; mistakes = 0; hints = 0; usedNotes = false; puzT = 0; wave = null; flash = []; result = null;
+  }
+
+  // ---------- Moves ----------
+  function place(i, d) {
+    if (state !== "play" || i < 0) return;
+    const c = cells[i]; if (c.given || (c.v && c.v === P.solution[i])) return;
+    if (notesMode) {
+      if (c.v) return;
+      c.notes ^= 1 << d; usedNotes = true; sfx.note(); return;
+    }
+    if (d === P.solution[i]) {
+      c.v = d; c.notes = 0; c.at = clock; c.bad = 0; sfx.place(d);
+      for (const j of PEERS[i]) cells[j].notes &= ~(1 << d);
+      // a finished row, column or box shines
+      let k = 0; for (const u of UNITS) if (u.includes(i) && u.every((j) => cells[j].v === P.solution[j])) { flash.push({ u, at: clock + k * 0.08 }); k++; }
+      if (k) sfx.unit(k);
+      if (cells.every((x, j) => x.v === P.solution[j])) solved();
+    } else {
+      c.v = d; c.bad = clock; mistakes++; lives--; sfx.wrong();
+      say(lives > 0 ? `${d} non va qui · ${lives} ${lives === 1 ? "errore" : "errori"} ancora` : "Niente più errori concessi");
+      if (lives <= 0) { state = "lost"; stateT = 0; }
+    }
+  }
+  function erase(i) { if (state !== "play" || i < 0) return; const c = cells[i]; if (c.given || (c.v && c.v === P.solution[i])) return; c.v = 0; c.notes = 0; c.bad = 0; sfx.tap(); }
+  function hint() {
+    if (state !== "play") return;
+    // the selected cell if it is open, otherwise the open cell with fewest candidates
+    let i = sel >= 0 && cells[sel].v !== P.solution[sel] ? sel : -1;
+    if (i < 0) { let bc = 10; const g = cells.map((c, j) => (c.v === P.solution[j] ? c.v : 0)); for (let j = 0; j < 81; j++) if (!g[j]) { const n = bits(candidates(g, j)); if (n < bc) { bc = n; i = j; } } }
+    if (i < 0) return;
+    hints++; sel = i; const keep = notesMode; notesMode = false; cells[i].v = 0; place(i, P.solution[i]); notesMode = keep; sfx.hint();
+  }
+  function solved() {
+    state = "result"; stateT = 0; done++;
+    const n = round + 1;
+    const base = 500 * n, speed = Math.max(0, Math.floor(diff.par - puzT)) * 2 * n, perfect = !mistakes && !hints ? 300 * n : 0, help = Math.min(base, hints * 100 * n);
+    const pts = base + speed + perfect - help; score += pts;
+    result = { base, speed, perfect, help, pts, t: puzT };
+    wave = { at: clock, from: sel };
+    sfx.win();
+    if (!mistakes && !hints) feat("perfetto");
+    if (puzT < 240) feat("lampo");
+    if (n === TOTAL) feat("maratona");
+  }
+  function afterResult() { if (round + 1 >= TOTAL) { gameOver(true); return; } round++; newPuzzle(); state = "play"; say(`Schema ${round + 1} di ${TOTAL}`); }
+  function say(text) { msg = { text, t: 0 }; }
+
+  // ---------- Flow ----------
+  function startGame() {
+    if (!audioCtx) { try { audioCtx = new (window.AudioContext || window.webkitAudioContext)(); } catch { audioCtx = null; } }
+    if (audioCtx && audioCtx.state === "suspended") audioCtx.resume();
+    score = 0; lives = diff.lives; round = 0; done = 0;
+    bestCache = parseInt(load(bestKey(difficulty)), 10) || 0;
+    newPuzzle(); state = "play"; menu = null; overlay.classList.add("hidden");
+    say(`Schema 1 di ${TOTAL}`);
+    syncControls(); lastT = performance.now();
+  }
+  function gameOver(victory) {
+    state = "over";
+    let bonus = 0;
+    if (victory) { bonus = lives * 1000 * (DIFF_IDS.indexOf(difficulty) + 1); score += bonus; }
+    const prev = parseInt(load(bestKey(difficulty)), 10) || 0, record = score > prev;
+    if (record) store(bestKey(difficulty), String(score));
+    menu = () => showOverlay(
+      (victory ? `<h2>CINQUE SU CINQUE!</h2>
+       <p>Tutti gli schemi risolti. ${lives} ${lives === 1 ? "errore concesso avanzato" : "errori concessi avanzati"}: +${nf(bonus)} punti.</p>
+       <p>Punteggio: <b>${nf(score)}</b> · ${diff.label}</p>` : `<h2 class="lose">TROPPI ERRORI</h2>
+       <p>Punteggio: <b>${nf(score)}</b> · ${done} ${done === 1 ? "schema risolto" : "schemi risolti"} su ${TOTAL} · ${diff.label}</p>`) +
+      `${record ? "<p style='color:var(--gold)'>★ NUOVO RECORD! ★</p>" : ""}
+       ${difficultyHTML()}
+       <button class="start" data-start>RIPROVA</button>`
+    );
+    menu(); syncControls();
+  }
+  function togglePause() {
+    if (isPlaying()) { pausedFrom = state; state = "paused"; showOverlay(`<h2>PAUSA</h2><p class="muted">Lo schema è nascosto e il tempo è fermo.</p><button class="start" data-resume>CONTINUA</button><p class="muted">Premi P per continuare</p>`); }
+    else if (state === "paused") { state = pausedFrom; overlay.classList.add("hidden"); lastT = performance.now(); }
+    syncControls();
+  }
+  window.addEventListener("sala:termina", () => { if (state !== "paused") return; overlay.classList.add("hidden"); gameOver(false); });
+  function syncControls() { pauseBtn.style.display = isPlaying() && touchMode ? "block" : "none"; resize(); }
+  pauseBtn.addEventListener("click", () => togglePause());
+  function showOverlay(html) { overlay.innerHTML = html; overlay.classList.remove("hidden"); }
+  function difficultyHTML() {
+    const buttons = DIFF_IDS.map((id) => { const d = DIFFICULTIES[id]; return `<button type="button" data-diff="${id}" class="${id === difficulty ? "on" : ""}" style="--c:${d.color}">${d.label}</button>`; }).join("");
+    const best = parseInt(load(bestKey(difficulty)), 10);
+    return `<div class="diff">${buttons}</div><p class="muted">${diff.desc}${best ? ` · Record: ${nf(best)}` : ""}</p>`;
+  }
+  function setDifficulty(id) { if (!DIFFICULTIES[id]) return; difficulty = id; diff = DIFFICULTIES[id]; store(DIFF_KEY, id); if (menu) menu(); }
+  function showTitle() {
+    menu = showTitle;
+    showOverlay(
+      `<h1>SUDOKU</h1>
+       <p>Riempi la griglia in modo che ogni riga, ogni colonna e ogni riquadro 3×3 contengano tutte le cifre da 1 a 9, una volta sola. Cinque schemi, nuovi a ogni partita, ognuno con una sola soluzione che si trova ragionando.</p>
+       <div class="pts">
+         <span><b>Scrivi</b></span><span>${touchMode ? "tocca una casella e poi una cifra" : "clicca una casella e poi una cifra, o premi 1–9"}</span>
+         <span><b>Note</b></span><span>con NOTE le cifre diventano promemoria piccoli; si cancellano da sole quando servono</span>
+         <span><b>Tasti</b></span><span>sotto ogni cifra c'è quante ne mancano da mettere</span>
+         <span><b>Errori</b></span><span>una cifra sbagliata si vede subito in rosso e costa uno degli errori concessi</span>
+         <span><b>Punti</b></span><span>per ogni schema 500, un premio per la velocità e uno se non sbagli e non chiedi aiuto, moltiplicati per il numero dello schema</span>
+       </div>
+       ${touchMode ? "" : `<p class="muted help">Frecce per muoversi · 1–9 scrive · N note · Canc cancella · H aiuto · P pausa</p>`}
+       ${difficultyHTML()}
+       <button class="start" data-start>COMINCIA</button>`
+    );
+  }
+  overlay.addEventListener("click", (e) => {
+    const d = e.target.closest("[data-diff]");
+    if (d) { setDifficulty(d.dataset.diff); return; }
+    if (e.target.closest("[data-start]")) startGame();
+    if (e.target.closest("[data-resume]")) togglePause();
+  });
+
+  // ---------- Input ----------
+  const toWorld = (e) => { const rc = canvas.getBoundingClientRect(); return { x: ((e.clientX - rc.left) / rc.width) * W, y: ((e.clientY - rc.top) / rc.height) * H }; };
+  const inR = (r, p) => p.x >= r.x && p.x <= r.x + r.w && p.y >= r.y && p.y <= r.y + r.h;
+  function cellAt(p) { const c = Math.floor((p.x - L.gx) / L.cs), r = Math.floor((p.y - L.gy) / L.cs); return c < 0 || r < 0 || c > 8 || r > 8 ? -1 : r * 9 + c; }
+  function pressTool(id) {
+    if (id === "notes") { notesMode = !notesMode; sfx.tap(); }
+    else if (id === "erase") erase(sel);
+    else if (id === "hint") hint();
+  }
+  canvas.addEventListener("pointerdown", (e) => {
+    e.preventDefault();
+    if (state === "result") { if (stateT > 1.5) afterResult(); return; }
+    if (state !== "play") return;
+    const p = toWorld(e);
+    for (const b of L.pad) if (inR(b, p)) { place(sel, b.d); return; }
+    for (const b of L.tools) if (inR(b, p)) { pressTool(b.id); return; }
+    const i = cellAt(p); if (i >= 0) { sel = i; sfx.tap(); }
+  });
+  window.addEventListener("keydown", (e) => {
+    const k = e.key.toLowerCase();
+    if ([" ", "arrowup", "arrowdown", "arrowleft", "arrowright"].includes(k)) e.preventDefault();
+    if (state === "menu" || state === "over") { if (e.key === "Enter") startGame(); else if (["1", "2", "3"].includes(k)) setDifficulty(DIFF_IDS[+k - 1]); return; }
+    if (k === "p" || k === "escape") { if (!e.repeat) togglePause(); return; }
+    if (state === "paused") { if (e.key === "Enter") togglePause(); return; }
+    if (state === "result") { if ((k === "enter" || k === " ") && stateT > 1.5) afterResult(); return; }
+    if (state !== "play") return;
+    const r = Math.floor(sel / 9), c = sel % 9;
+    if (k === "arrowleft") sel = r * 9 + (c + 8) % 9;
+    else if (k === "arrowright") sel = r * 9 + (c + 1) % 9;
+    else if (k === "arrowup") sel = ((r + 8) % 9) * 9 + c;
+    else if (k === "arrowdown") sel = ((r + 1) % 9) * 9 + c;
+    else if (e.repeat) return;
+    else if (/^[1-9]$/.test(k)) place(sel, +k);
+    else if (k === "n") pressTool("notes");
+    else if (k === "backspace" || k === "delete" || k === "0") erase(sel);
+    else if (k === "h") hint();
+  });
+  window.addEventListener("blur", () => { if (isPlaying()) togglePause(); });
+  window.addEventListener("pointerdown", (e) => { if (e.pointerType === "touch" && !touchMode) { touchMode = true; syncControls(); if (menu) menu(); } }, true);
+
+  // ---------- Update ----------
+  function update(dt) {
+    clock += dt; stateT += dt;
+    if (msg) { msg.t += dt; if (msg.t > 2.2) msg = null; }
+    if (state === "play") {
+      puzT += dt;
+      // a wrong digit fades away after a moment
+      for (const c of cells) if (c.bad && clock - c.bad > 0.9) { c.v = 0; c.bad = 0; }
+    }
+    if (state === "lost" && stateT > 1.4) gameOver(false);
+    flash = flash.filter((f) => clock - f.at < 0.8);
+  }
+
+  // ---------- Drawing ----------
+  function rr(x, y, w, h, r) { ctx.beginPath(); ctx.roundRect(x, y, w, h, r); }
+  function drawGrid() {
+    const { cs, gx, gy } = L, S = cs * 9;
+    ctx.fillStyle = "rgba(0,0,0,0.35)"; rr(gx - 2, gy + 3, S + 4, S + 4, 8); ctx.fill();
+    ctx.fillStyle = "#f7f2e6"; rr(gx - 2, gy - 2, S + 4, S + 4, 8); ctx.fill();
+    const sv = sel >= 0 && cells[sel].v && !cells[sel].bad ? cells[sel].v : 0;
+    for (let i = 0; i < 81; i++) {
+      const x = gx + COL(i) * cs, y = gy + ROW(i) * cs, c = cells[i];
+      let bg = null;
+      if (sel >= 0 && (ROW(i) === ROW(sel) || COL(i) === COL(sel) || BOX(i) === BOX(sel))) bg = "#e8e2d2";
+      if (sv && c.v === sv && !c.bad) bg = "#cfe0f5";
+      if (i === sel) bg = "#9fc4ef";
+      if (c.bad) bg = "#ffc9c4";
+      for (const f of flash) if (f.u.includes(i) && clock >= f.at) { const k = (clock - f.at) / 0.8; bg = `rgba(255,214,90,${0.9 * (1 - k)})`; }
+      if (wave) { const d = Math.hypot(ROW(i) - ROW(wave.from), COL(i) - COL(wave.from)), t = clock - wave.at - d * 0.06; if (t > 0 && t < 0.5) bg = `hsla(${(d * 30 + 40) % 360},80%,72%,${1 - t * 2})`; }
+      if (bg) { ctx.fillStyle = bg; ctx.fillRect(x, y, cs, cs); }
+      ctx.textAlign = "center"; ctx.textBaseline = "middle";
+      if (c.v) {
+        const pop = c.at > 0 ? Math.min(1, (clock - c.at) / 0.15) : 1, sz = Math.round(cs * 0.62 * (0.7 + 0.3 * pop));
+        ctx.font = `${c.given ? 800 : 600} ${sz}px system-ui, sans-serif`;
+        ctx.fillStyle = c.given ? "#1d2533" : c.bad ? "#d0352b" : "#2a62c9";
+        ctx.fillText(c.v, x + cs / 2, y + cs / 2 + 1);
+      } else if (c.notes) {
+        ctx.font = `600 ${Math.round(cs * 0.26)}px system-ui, sans-serif`; ctx.fillStyle = "#6b7280";
+        for (let d = 1; d <= 9; d++) if (c.notes & (1 << d)) ctx.fillText(d, x + ((d - 1) % 3 + 0.5) * cs / 3, y + (Math.floor((d - 1) / 3) + 0.5) * cs / 3 + 0.5);
+      }
+    }
+    ctx.strokeStyle = "rgba(29,37,51,0.25)"; ctx.lineWidth = 1; ctx.beginPath();
+    for (let k = 1; k < 9; k++) if (k % 3) { ctx.moveTo(gx + k * cs + 0.5, gy); ctx.lineTo(gx + k * cs + 0.5, gy + S); ctx.moveTo(gx, gy + k * cs + 0.5); ctx.lineTo(gx + S, gy + k * cs + 0.5); }
+    ctx.stroke();
+    ctx.strokeStyle = "#1d2533"; ctx.lineWidth = 2.2; ctx.beginPath();
+    for (let k = 0; k <= 9; k += 3) { ctx.moveTo(gx + k * cs, gy - 1); ctx.lineTo(gx + k * cs, gy + S + 1); ctx.moveTo(gx - 1, gy + k * cs); ctx.lineTo(gx + S + 1, gy + k * cs); }
+    ctx.stroke();
+  }
+  function button(b, label, sub, on, lit, big) {
+    ctx.fillStyle = lit ? "rgba(122,180,255,0.25)" : on ? "rgba(255,255,255,0.09)" : "rgba(255,255,255,0.03)";
+    rr(b.x, b.y, b.w, b.h, 9); ctx.fill();
+    ctx.strokeStyle = lit ? "#7ab4ff" : on ? "rgba(255,255,255,0.22)" : "rgba(255,255,255,0.08)"; ctx.lineWidth = lit ? 2.5 : 1.5; ctx.stroke();
+    ctx.textAlign = "center"; ctx.textBaseline = "middle"; ctx.fillStyle = on ? "#f4f6ee" : "rgba(244,246,238,0.25)";
+    ctx.font = big ? "800 24px system-ui, sans-serif" : "800 13px system-ui, sans-serif"; ctx.fillText(label, b.x + b.w / 2, b.y + b.h / 2 - (sub ? (big ? 6 : 7) : 0));
+    if (sub) { ctx.font = "600 10px system-ui, sans-serif"; ctx.fillStyle = on ? "#c8d0dc" : "rgba(200,208,220,0.3)"; ctx.fillText(sub, b.x + b.w / 2, b.y + b.h / 2 + (big ? 15 : 10)); }
+  }
+  function draw() {
+    ctx.setTransform(pxRatio, 0, 0, pxRatio, 0, 0);
+    const bg = ctx.createLinearGradient(0, 0, 0, H); bg.addColorStop(0, "#1e2636"); bg.addColorStop(1, "#10141c");
+    ctx.fillStyle = bg; ctx.fillRect(0, 0, W, H);
+    if (!cells) return;
+    if (state === "paused") return;
+    drawGrid();
+
+    // top bar
+    ctx.fillStyle = "rgba(0,0,0,0.35)"; ctx.fillRect(0, 0, W, portrait ? 30 : 24);
+    const right = touchMode ? W - 62 : W - 12, mid = portrait && touchMode ? W * 0.44 : W / 2, ty = portrait ? 15 : 12;
+    ctx.textBaseline = "middle"; ctx.font = "800 13px system-ui, sans-serif";
+    ctx.textAlign = "left"; ctx.fillStyle = "#f4f6ee"; ctx.fillText(`${nf(score)} punti`, 10, ty);
+    ctx.textAlign = "center"; ctx.fillStyle = "#ffd23a"; ctx.fillText(`SCHEMA ${round + 1}/${TOTAL} · ${mmss(puzT)}`, mid, ty);
+    for (let i = 0; i < diff.lives; i++) { const x = right - i * 12 - 5; ctx.strokeStyle = i < lives ? "#ff6b7d" : "rgba(255,255,255,0.2)"; ctx.lineWidth = 2; ctx.beginPath(); if (i < lives) { ctx.fillStyle = "#ff6b7d"; ctx.arc(x, ty, 4, 0, TAU); ctx.fill(); } else { ctx.moveTo(x - 3, ty - 3); ctx.lineTo(x + 3, ty + 3); ctx.moveTo(x + 3, ty - 3); ctx.lineTo(x - 3, ty + 3); ctx.stroke(); } }
+    if (!(portrait && touchMode)) { ctx.textAlign = "right"; ctx.font = "700 11px system-ui, sans-serif"; ctx.fillStyle = "#c8d0dc"; ctx.fillText(`REC ${nf(Math.max(bestCache, score))}`, right - diff.lives * 12 - 4, ty); }
+
+    // info line
+    const left = cells.filter((c, j) => c.v !== P.solution[j]).length;
+    ctx.textAlign = "left"; ctx.font = "600 12px system-ui, sans-serif"; ctx.fillStyle = "#c8d0dc";
+    ctx.fillText(`${left} ${left === 1 ? "casella" : "caselle"} da riempire · tempo premio ${mmss(Math.max(0, diff.par - puzT))}`, L.info.x, L.info.y);
+    if (!portrait) { ctx.fillStyle = notesMode ? "#7ab4ff" : "rgba(200,208,220,0.6)"; ctx.fillText(notesMode ? "Modo note: le cifre sono promemoria" : `${diff.label} · errori ${mistakes} · aiuti ${hints}`, L.info.x, L.info.y + 22); }
+
+    // the digit pad: digits used up are dimmed
+    const placed = (d) => cells.filter((c, j) => c.v === d && c.v === P.solution[j]).length;
+    for (const b of L.pad) { const n = 9 - placed(b.d); button(b, String(b.d), n ? String(n) : "✓", n > 0 && state === "play", false, true); }
+    const T = Object.fromEntries(L.tools.map((b) => [b.id, b]));
+    button(T.notes, "NOTE", notesMode ? "accese" : "spente", state === "play", notesMode);
+    button(T.erase, "CANCELLA", "", state === "play", false);
+    button(T.hint, "AIUTO", `−${100 * (round + 1)}`, state === "play", false);
+
+    if (msg && state === "play") {
+      const a = Math.min(1, (2.2 - msg.t) * 3); ctx.globalAlpha = a; ctx.font = "800 14px system-ui, sans-serif";
+      const w = ctx.measureText(msg.text).width + 28, cx = L.gx + L.cs * 4.5, y = L.gy + L.cs * 4.5;
+      ctx.fillStyle = "rgba(16,20,28,0.9)"; rr(cx - w / 2, y - 16, w, 32, 16); ctx.fill();
+      ctx.fillStyle = "#ffd23a"; ctx.textAlign = "center"; ctx.fillText(msg.text, cx, y); ctx.globalAlpha = 1;
+    }
+    if (state === "result" && stateT > 0.9) {
+      const cx = L.gx + L.cs * 4.5, cy = L.gy + L.cs * 4.5, w = Math.min(L.cs * 9 - 16, 300), h = 200, R = result;
+      ctx.globalAlpha = Math.min(1, (stateT - 0.9) * 4);
+      ctx.fillStyle = "rgba(16,20,28,0.93)"; rr(cx - w / 2, cy - h / 2, w, h, 14); ctx.fill(); ctx.strokeStyle = "rgba(255,210,58,0.7)"; ctx.lineWidth = 2; ctx.stroke();
+      ctx.textAlign = "center"; ctx.textBaseline = "middle"; ctx.fillStyle = "#ffd23a"; ctx.font = "900 22px system-ui, sans-serif"; ctx.fillText("RISOLTO!", cx, cy - h / 2 + 26);
+      ctx.fillStyle = "#c8d0dc"; ctx.font = "600 12px system-ui, sans-serif"; ctx.fillText(`in ${mmss(R.t)} · ${mistakes} ${mistakes === 1 ? "errore" : "errori"} · ${hints} ${hints === 1 ? "aiuto" : "aiuti"}`, cx, cy - h / 2 + 50);
+      const rows = [["Schema", `+${nf(R.base)}`], ["Velocità", `+${nf(R.speed)}`], ["Senza errori né aiuti", `+${nf(R.perfect)}`], ["Aiuti", R.help ? `−${nf(R.help)}` : "0"]];
+      ctx.font = "600 13px system-ui, sans-serif";
+      rows.forEach(([t, v], k) => { const y = cy - h / 2 + 80 + k * 21; ctx.textAlign = "left"; ctx.fillStyle = "#c8d0dc"; ctx.fillText(t, cx - w / 2 + 22, y); ctx.textAlign = "right"; ctx.fillStyle = "#f4f6ee"; ctx.fillText(v, cx + w / 2 - 22, y); });
+      if (stateT > 1.5) { ctx.textAlign = "center"; ctx.globalAlpha = 0.6 + 0.4 * Math.sin(clock * 5); ctx.fillStyle = "#ffd23a"; ctx.font = "700 12px system-ui, sans-serif"; ctx.fillText(round + 1 >= TOTAL ? (touchMode ? "tocca per finire" : "clic o Invio per finire") : touchMode ? "tocca per il prossimo schema" : "clic o Invio per il prossimo schema", cx, cy + h / 2 - 18); }
+      ctx.globalAlpha = 1;
+    }
+  }
+
+  // ---------- Loop ----------
+  let lastT = performance.now();
+  function frame(now) {
+    const dt = Math.min(0.05, (now - lastT) / 1000); lastT = now;
+    if (state !== "paused") update(dt);
+    draw();
+    requestAnimationFrame(frame);
+  }
+  // behind the title: a puzzle half done
+  function demo() { round = 0; newPuzzle(); let k = 0; for (let i = 0; i < 81; i++) if (!cells[i].given && (i * 7) % 3 === 0 && k++ < 14) cells[i].v = P.solution[i]; sel = -1; }
+  resize(); demo();
+  syncControls();
+  showTitle();
+  requestAnimationFrame(frame);
+})();
+</script>
+<script src="../../shared/iniziali.js" data-record="sudoku-best-" data-kind="score"></script>
+</body>
+</html>

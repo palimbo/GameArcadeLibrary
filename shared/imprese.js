@@ -9,6 +9,11 @@
   "use strict";
   // record key prefix of the game (as in trofei.js) → its feats
   const LIST = {
+    "sudoku-best-": [   // sudoku
+      { id: "perfetto", name: "Perfetto", desc: "risolvi uno schema senza errori e senza aiuti" },
+      { id: "lampo", name: "Lampo", desc: "risolvi uno schema in meno di 4 minuti" },
+      { id: "maratona", name: "Maratona", desc: "risolvi tutti e cinque gli schemi di una partita" },
+    ],
     "pecore-best-": [   // pecore-testarde
       { id: "tutte", name: "Tutte a casa", desc: "porta all'ovile tutte le pecore di un livello" },
       { id: "risparmio", name: "Risparmio", desc: "supera un livello da almeno dieci pecore usando al massimo due compiti" },
