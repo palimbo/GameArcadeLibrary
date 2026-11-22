@@ -9,6 +9,11 @@
   "use strict";
   // record key prefix of the game (as in trofei.js) → its feats
   const LIST = {
+    "pecore-best-": [   // pecore-testarde
+      { id: "tutte", name: "Tutte a casa", desc: "porta all'ovile tutte le pecore di un livello" },
+      { id: "risparmio", name: "Risparmio", desc: "supera un livello da almeno dieci pecore usando al massimo due compiti" },
+      { id: "pastore", name: "Pastore", desc: "supera tutti e dieci i livelli" },
+    ],
     "reversi-best-": [   // reversi
       { id: "angoli", name: "Quattro angoli", desc: "vinci una partita con tutti e quattro gli angoli tuoi" },
       { id: "schiacciante", name: "Schiacciante", desc: "vinci una partita con almeno 40 pedine di scarto" },

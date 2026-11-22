@@ -1,0 +1,697 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no, viewport-fit=cover">
+<title>Pecore Testarde</title>
+<style>
+  :root {
+    --bg: #12202e;
+    --fg: #f4f6ee;
+    --muted: #c8d8e4;
+    --gold: #ffd23a;
+    --red: #ff5a4a;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  html, body {
+    height: 100%;
+    background: var(--bg);
+    color: var(--fg);
+    font-family: system-ui, -apple-system, "Segoe UI", sans-serif;
+    overflow: hidden;
+    user-select: none;
+    -webkit-user-select: none;
+    -webkit-tap-highlight-color: transparent;
+    touch-action: none;
+  }
+  #wrap { position: fixed; inset: 0; display: flex; align-items: center; justify-content: center; }
+  canvas { cursor: pointer; display: block; touch-action: none; border-radius: 6px; box-shadow: 0 0 0 2px #2e4a5e, 0 10px 40px rgba(0,0,0,0.6); }
+  #pauseBtn {
+    position: fixed; z-index: 3; display: none; right: 10px; top: calc(10px + env(safe-area-inset-top, 0px));
+    font: 700 13px system-ui, sans-serif; color: var(--fg);
+    background: rgba(0, 0, 0, 0.6); border: 1px solid rgba(244, 246, 238, 0.35);
+    border-radius: 8px; padding: 6px 10px; cursor: pointer;
+  }
+  #touch { display: none !important; }
+  #overlay {
+    position: fixed; inset: 0; z-index: 5;
+    display: flex; flex-direction: column; align-items: center; justify-content: flex-start;
+    gap: 14px; padding: 16px; text-align: center; overflow-y: auto;
+    background: rgba(18, 32, 46, 0.94);
+  }
+  #overlay > :first-child { margin-top: auto; }
+  #overlay > :last-child { margin-bottom: auto; }
+  #overlay.hidden { display: none; }
+  #homeLink {
+    position: fixed; top: calc(10px + env(safe-area-inset-top, 0px)); left: 10px; z-index: 6;
+    font: 600 13px/1 system-ui, sans-serif; color: #fff; text-decoration: none;
+    padding: 8px 12px; border-radius: 999px; background: rgba(0,0,0,.55);
+    border: 1px solid rgba(255,255,255,.25);
+  }
+  #homeLink:hover { background: rgba(0,0,0,.8); }
+  #overlay.hidden ~ #homeLink { display: none; }
+  @media (max-width: 700px) { #overlay { padding-top: calc(52px + env(safe-area-inset-top, 0px)); } }
+  #overlay h1 { font-size: clamp(32px, 10vw, 58px); font-weight: 900; font-style: italic; letter-spacing: 1px; color: var(--gold);
+    text-shadow: 3px 3px 0 #6a1a1a, 0 0 22px rgba(255,210,58,0.35); }
+  #overlay h1 span { color: #fff; }
+  #overlay h2 { font-size: clamp(26px, 7vw, 42px); font-weight: 900; letter-spacing: 2px; color: var(--gold); }
+  #overlay h2.lose { color: var(--red); }
+  #overlay p { max-width: 540px; font-size: clamp(13px, 3.4vw, 16px); line-height: 1.55; }
+  #overlay p.muted { color: var(--muted); }
+  #overlay .pts { display: grid; grid-template-columns: repeat(2, auto); gap: 4px 18px; font-size: 13px; color: var(--muted); text-align: left; max-width: 560px; }
+  #overlay .pts b { color: var(--fg); }
+  #overlay .diff { display: flex; gap: 10px; flex-wrap: wrap; justify-content: center; }
+  #overlay button {
+    font: 800 15px system-ui, sans-serif; letter-spacing: 1.5px; color: var(--fg);
+    background: transparent; cursor: pointer;
+    border: 2px solid rgba(244,246,238,0.3); border-radius: 10px; padding: 9px 16px;
+  }
+  #overlay .diff button.on { border-color: var(--c); color: var(--c); box-shadow: 0 0 12px var(--c); }
+  #overlay button.start { border-color: var(--gold); color: #2a1a02; background: var(--gold); padding: 11px 30px; box-shadow: 0 4px 0 #a87a0a; }
+  @media (max-height: 560px) {
+    #overlay { gap: 8px; }
+    #overlay h1 { font-size: 30px; }
+    #overlay p { font-size: 13px; line-height: 1.4; }
+    #overlay .help, #overlay .pts { display: none; }
+  }
+</style>
+</head>
+<body>
+<div id="wrap"><canvas id="game"></canvas></div>
+<div id="touch"></div>
+<button id="pauseBtn" type="button" aria-label="Pausa">❚❚</button>
+<div id="overlay"></div>
+<a id="homeLink" href="../../index.html">← Sala Giochi</a>
+
+
+<script>
+(() => {
+  "use strict";
+
+  const TAU = Math.PI * 2;
+  const DIFFICULTIES = {
+    facile:    { label: "FACILE",    color: "#7ee0a0", desc: "due compiti in più di ogni tipo · serve salvare una pecora in meno · 5 tentativi", extra: 2, need: -1, time: 1.25, lives: 5 },
+    normale:   { label: "NORMALE",   color: "#ffd66b", desc: "i compiti giusti e poco più · 3 tentativi", extra: 0, need: 0, time: 1, lives: 3 },
+    difficile: { label: "DIFFICILE", color: "#ff6b7d", desc: "serve salvare una pecora in più · meno tempo · 2 tentativi", extra: 0, need: 1, time: 0.75, lives: 2 },
+  };
+  const DIFF_IDS = Object.keys(DIFFICULTIES);
+  const DIFF_KEY = "pecore-difficulty";
+  const bestKey = (id) => `pecore-best-${id}`;
+  function store(k, v) { try { localStorage.setItem(k, v); } catch { /* ignore */ } }
+  function load(k) { try { return localStorage.getItem(k); } catch { return null; } }
+  const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
+  const nf = (n) => n.toLocaleString("it-IT");
+  const feat = (id) => window.dispatchEvent(new CustomEvent("sala:impresa", { detail: id }));
+  const mmss = (t) => `${Math.floor(t / 60)}:${String(Math.floor(t % 60)).padStart(2, "0")}`;
+
+  // ---------- The world: a grid of cells, two pixels each ----------
+  const GW = 320, GH = 160, CELL = 2, STEP = 1 / 30;
+  const AIR = 0, DIRT = 1, ROCK = 2, BRICK = 3, WATER = 4;
+  const SPLAT = 34;   // a fall longer than this, without an umbrella, is the end
+  const SKILLS = [
+    { id: "ferma", name: "FERMA", desc: "si pianta lì e fa girare le altre" },
+    { id: "ponte", name: "PONTE", desc: "costruisce dodici scalini in avanti" },
+    { id: "scava", name: "SCAVA", desc: "scava dritta verso il basso" },
+    { id: "sfonda", name: "SFONDA", desc: "scava un tunnel in avanti" },
+    { id: "ombrello", name: "OMBRELLO", desc: "apre l'ombrello e scende piano" },
+  ];
+
+  // the ten fields; every level is drawn with rectangles
+  const LEVELS = [
+    { name: "Il muretto", tip: "Un muro di terra taglia il prato: una pecora che sfonda apre la strada alle altre.",
+      total: 10, need: 8, time: 180, skills: { sfonda: 2 }, hatch: [30, 96], exit: [282, 119],
+      build: (S) => { S.dirt(0, 120, 320, 40); S.dirt(150, 76, 22, 44); } },
+    { name: "Il fosso", tip: "Il prato si interrompe. Una pecora che fa il ponte, partendo proprio dal bordo, lo scavalca.",
+      total: 10, need: 8, time: 180, skills: { ponte: 2 }, hatch: [30, 96], exit: [282, 119],
+      build: (S) => { S.dirt(0, 120, 142, 40); S.dirt(160, 120, 160, 40); S.rock(0, 150, 320, 10); S.water(142, 140, 18, 10); } },
+    { name: "Giù dalla rupe", tip: "La rupe è troppo alta per saltare. Ogni pecora ha bisogno del suo ombrello.",
+      total: 8, need: 6, time: 180, skills: { ombrello: 8 }, hatch: [24, 30], exit: [276, 139],
+      build: (S) => { S.rock(0, 52, 96, 108); S.dirt(96, 140, 224, 20); } },
+    { name: "Dentro la collina", tip: "Sulla collina non si scende vivi dai lati. Scava un pozzo, poi sfonda di lato.",
+      total: 10, need: 8, time: 210, skills: { scava: 1, sfonda: 1 }, hatch: [84, 80], exit: [286, 149],
+      build: (S) => { S.rock(0, 130, 220, 30); S.water(0, 124, 60, 6); S.dirt(60, 100, 160, 30); S.rock(220, 150, 100, 10); } },
+    { name: "Il gradino", tip: "Una parete di roccia, troppo alta per salire. Due ponti di fila fanno una scala.",
+      total: 10, need: 8, time: 210, skills: { ponte: 3 }, hatch: [24, 108], exit: [290, 107],
+      build: (S) => { S.dirt(0, 130, 160, 30); S.rock(160, 108, 160, 52); } },
+    { name: "Due strade", tip: "Le pecore escono da tutte e due le parti, e a sinistra c'è lo stagno. Fermane una e girano tutte.",
+      total: 12, need: 8, time: 210, skills: { ferma: 1, sfonda: 1 }, hatch: [120, 98], exit: [292, 121], dirs: "alt",
+      build: (S) => { S.rock(0, 150, 320, 10); S.water(0, 130, 64, 20); S.dirt(64, 122, 256, 28); S.dirt(196, 82, 18, 40); } },
+    { name: "La grotta", tip: "L'ovile è nella grotta, sotto il prato. Scava giù e poi apriti la strada.",
+      total: 10, need: 8, time: 210, skills: { scava: 1, sfonda: 1 }, hatch: [40, 62], exit: [288, 115],
+      build: (S) => { S.rock(0, 116, 320, 44); S.rock(0, 70, 8, 46); S.rock(312, 70, 8, 46); S.dirt(8, 84, 304, 16); S.dirt(200, 100, 16, 16); } },
+    { name: "Il lago", tip: "Un lago largo: un ponte solo non basta. Appena la prima pecora finisce gli scalini, falle fare il secondo ponte.",
+      total: 12, need: 9, time: 240, skills: { ponte: 3 }, hatch: [70, 98], exit: [296, 121], dirs: "alt",
+      build: (S) => { S.rock(0, 150, 320, 10); S.rock(0, 60, 6, 62); S.dirt(0, 122, 112, 28); S.water(112, 136, 46, 14); S.dirt(158, 122, 162, 28); } },
+    { name: "Il castello", tip: "Su per le mura con i ponti, poi giù nel cortile scavando.",
+      total: 10, need: 7, time: 240, skills: { ponte: 3, scava: 1 }, hatch: [24, 108], exit: [282, 129],
+      build: (S) => { S.rock(0, 130, 320, 30); S.dirt(0, 128, 140, 2); S.rock(140, 108, 24, 22); S.dirt(164, 108, 156, 2); S.dirt(164, 110, 156, 6); S.rock(316, 60, 4, 70); } },
+    { name: "La grande fuga", tip: "Un po' di tutto: ferma, sfonda, fai il ponte e alla fine apri gli ombrelli.",
+      total: 12, need: 9, time: 300, skills: { ferma: 1, sfonda: 1, ponte: 2, ombrello: 12 }, hatch: [60, 50], exit: [296, 149], dirs: "alt",
+      build: (S) => { S.rock(0, 150, 320, 10); S.water(0, 92, 30, 8); S.rock(0, 100, 30, 50); S.dirt(30, 72, 140, 78); S.dirt(100, 34, 16, 38); S.water(170, 130, 40, 20); S.dirt(210, 72, 50, 78); } },
+  ];
+
+  // ---------- Canvas ----------
+  const canvas = document.getElementById("game"), ctx = canvas.getContext("2d");
+  const overlay = document.getElementById("overlay"), pauseBtn = document.getElementById("pauseBtn");
+  const W = 640, H = 360, PH = GH * CELL;
+  let pxRatio = 1;
+  let touchMode = !!(window.matchMedia && matchMedia("(pointer: coarse)").matches);
+  const BTN = [...SKILLS.map((s, i) => ({ id: s.id, x: 4 + i * 82, y: PH + 3, w: 78, h: 34 })), { id: "fast", x: 418, y: PH + 3, w: 70, h: 34 }, { id: "retry", x: 492, y: PH + 3, w: 70, h: 34 }];
+  function resize() {
+    const s = Math.max(0.2, Math.min((window.innerWidth - 8) / W, (window.innerHeight - 8) / H));
+    pxRatio = Math.min(3, s * (window.devicePixelRatio || 1));
+    canvas.style.width = W * s + "px"; canvas.style.height = H * s + "px";
+    canvas.width = Math.round(W * pxRatio); canvas.height = Math.round(H * pxRatio);
+  }
+  window.addEventListener("resize", () => syncControls());
+
+  // ---------- Audio ----------
+  let audioCtx = null;
+  function beep(freq, dur, type = "triangle", vol = 0.04, delay = 0) {
+    if (!audioCtx) return;
+    const t = audioCtx.currentTime + delay, o = audioCtx.createOscillator(), g = audioCtx.createGain();
+    o.type = type; o.frequency.setValueAtTime(freq, t);
+    g.gain.setValueAtTime(0.0001, t); g.gain.exponentialRampToValueAtTime(vol, t + 0.008); g.gain.exponentialRampToValueAtTime(0.0001, t + dur);
+    o.connect(g).connect(audioCtx.destination); o.start(t); o.stop(t + dur + 0.02);
+  }
+  function baa(pitch = 1, vol = 0.035) {
+    if (!audioCtx) return;
+    const t = audioCtx.currentTime, o = audioCtx.createOscillator(), g = audioCtx.createGain(), lfo = audioCtx.createOscillator(), lg = audioCtx.createGain(), f = audioCtx.createBiquadFilter();
+    o.type = "sawtooth"; o.frequency.setValueAtTime(420 * pitch, t); o.frequency.linearRampToValueAtTime(380 * pitch, t + 0.4);
+    lfo.frequency.value = 22; lg.gain.value = 18 * pitch; lfo.connect(lg).connect(o.frequency);
+    f.type = "bandpass"; f.frequency.value = 1100; f.Q.value = 1.2;
+    g.gain.setValueAtTime(0.0001, t); g.gain.exponentialRampToValueAtTime(vol, t + 0.04); g.gain.exponentialRampToValueAtTime(0.0001, t + 0.45);
+    o.connect(f).connect(g).connect(audioCtx.destination); o.start(t); o.stop(t + 0.5); lfo.start(t); lfo.stop(t + 0.5);
+  }
+  function noise(dur, freq, vol) {
+    if (!audioCtx) return;
+    const t = audioCtx.currentTime, n = Math.floor(audioCtx.sampleRate * dur), b = audioCtx.createBuffer(1, n, audioCtx.sampleRate), d = b.getChannelData(0);
+    for (let i = 0; i < n; i++) d[i] = (Math.random() * 2 - 1) * Math.pow(1 - i / n, 2);
+    const s = audioCtx.createBufferSource(), f = audioCtx.createBiquadFilter(), g = audioCtx.createGain();
+    s.buffer = b; f.type = "lowpass"; f.frequency.value = freq; g.gain.value = vol;
+    s.connect(f).connect(g).connect(audioCtx.destination); s.start(t);
+  }
+  let lastBaa = 0;
+  const sfx = {
+    pick: () => beep(880, 0.05, "sine", 0.03),
+    assign: () => { beep(660, 0.05, "square", 0.025); beep(990, 0.07, "square", 0.02, 0.05); },
+    bad: () => beep(160, 0.08, "square", 0.03),
+    saved: () => { beep(1047, 0.08, "triangle", 0.035); beep(1568, 0.12, "triangle", 0.03, 0.06); },
+    lost: () => { noise(0.25, 900, 0.12); },
+    splash: () => noise(0.4, 2500, 0.08),
+    brick: () => beep(300, 0.03, "square", 0.012),
+    spawn: () => { if (clock - lastBaa > 0.9) { lastBaa = clock; baa(0.9 + Math.random() * 0.3, 0.03); } },
+    win: () => [523, 659, 784, 1047, 1319].forEach((f, i) => beep(f, 0.22, "triangle", 0.05, i * 0.1)),
+    lose: () => [392, 330, 262, 196].forEach((f, i) => beep(f, 0.3, "triangle", 0.05, i * 0.16)),
+  };
+
+  // ---------- State ----------
+  let difficulty = DIFFICULTIES[load(DIFF_KEY)] ? load(DIFF_KEY) : "normale";
+  let diff = DIFFICULTIES[difficulty];
+  let state = "menu", menu = null, pausedFrom = null, clock = 0, stateT = 0;
+  let score = 0, lives = 0, lvl = 0, bestCache = 0;
+  let grid = null, sheep = [], skills = {}, used = 0, chosen = "ferma", fast = false, timeLeft = 0, spawned = 0, spawnT = 0, saved = 0, lost = 0, need = 0, total = 0;
+  let parts = [], msg = null, hover = null, acc = 0, result = null, LV = null, terrainDirty = true, cursorSheep = -1, kbdSel = -1;
+  const isPlaying = () => ["intro", "play", "result"].includes(state);
+
+  // ---------- The terrain ----------
+  const terrain = document.createElement("canvas"); terrain.width = GW; terrain.height = GH;
+  const tctx = terrain.getContext("2d"), img = tctx.createImageData(GW, GH);
+  const at = (x, y) => (x < 0 || x >= GW ? ROCK : y < 0 || y >= GH ? AIR : grid[y * GW + x]);
+  const solid = (x, y) => { const v = at(x, y); return v === DIRT || v === ROCK || v === BRICK; };
+  const hash = (x, y) => { let h = (x * 374761393 + y * 668265263) | 0; h = (h ^ (h >> 13)) * 1274126177; return ((h ^ (h >> 16)) >>> 0) / 4294967295; };
+  function paint(x, y) {
+    if (x < 0 || y < 0 || x >= GW || y >= GH) return;
+    const v = grid[y * GW + x], k = (y * GW + x) * 4, n = hash(x, y);
+    let r = 0, g = 0, b = 0, a = 255;
+    if (v === AIR) a = 0;
+    else if (v === DIRT) {
+      const depth = topDepth(x, y);
+      if (depth < 2) { r = 92 + n * 20; g = 170 + n * 30; b = 70; }
+      else if (depth < 3) { r = 70; g = 130 + n * 20; b = 52; }
+      else { r = 128 + n * 26; g = 86 + n * 18; b = 52 + n * 10; if (n > 0.93) { r += 30; g += 26; b += 20; } }
+    } else if (v === ROCK) { const c = 108 + n * 22 + ((x + y * 3) % 9 === 0 ? 10 : 0); r = c; g = c + 4; b = c + 12; }
+    else if (v === BRICK) { const edge = (x % 4 === 0) ? -26 : 0; r = 214 + edge + n * 10; g = 150 + edge + n * 10; b = 86 + edge; }
+    else if (v === WATER) { r = 50; g = 120 + n * 20; b = 200; a = 210; }
+    img.data[k] = r; img.data[k + 1] = g; img.data[k + 2] = b; img.data[k + 3] = a;
+  }
+  function topDepth(x, y) { let d = 0; while (d < 3 && y - d - 1 >= 0 && grid[(y - d - 1) * GW + x] === DIRT) d++; return y - d - 1 < 0 || grid[(y - d - 1) * GW + x] !== DIRT ? d : 3; }
+  function setCell(x, y, v) {
+    if (x < 0 || y < 0 || x >= GW || y >= GH) return;
+    grid[y * GW + x] = v;
+    for (let k = 0; k <= 3; k++) paint(x, y + k);
+    terrainDirty = true;
+  }
+  function buildLevel(n) {
+    LV = LEVELS[n]; grid = new Uint8Array(GW * GH);
+    const fill = (v) => (x, y, w, h) => { for (let j = y; j < y + h; j++) for (let i = x; i < x + w; i++) if (i >= 0 && j >= 0 && i < GW && j < GH) grid[j * GW + i] = v; };
+    LV.build({ dirt: fill(DIRT), rock: fill(ROCK), water: fill(WATER) });
+    for (let y = 0; y < GH; y++) for (let x = 0; x < GW; x++) paint(x, y);
+    terrainDirty = true;
+  }
+
+  // ---------- Sheep ----------
+  function spawn() {
+    const [x, y] = LV.hatch, dir = LV.dirs === "alt" && spawned % 2 ? -1 : 1;
+    sheep.push({ id: spawned, x, y, dir, st: "fall", t: 0, fall: 0, umb: false, bricks: 0, anim: Math.random() * 10, work: 0 });
+    spawned++; sfx.spawn();
+  }
+  const blocking = (s) => s.st === "ferma" || s.st === "ponte" || s.st === "sfonda" || s.st === "shrug";
+  // a walker turns at a sheep standing in its way
+  function blockedBy(s, nx) {
+    for (const o of sheep) {
+      if (o === s || !blocking(o)) continue;
+      if (Math.abs(o.y - s.y) > 6) continue;
+      const dx = o.x - s.x;
+      if (Math.sign(dx) === s.dir && Math.abs(o.x - nx) <= 3) return true;
+    }
+    return false;
+  }
+  function walk(s) {
+    if (!solid(s.x, s.y + 1)) { s.st = "fall"; s.fall = 0; return; }
+    s.t++; if (s.t % 2) return;
+    const nx = s.x + s.dir;
+    if (blockedBy(s, nx)) { s.dir = -s.dir; return; }
+    if (solid(nx, s.y)) {
+      // a step up of a few cells, or a wall
+      let up = 0; while (up <= 5 && solid(nx, s.y - up)) up++;
+      if (up <= 4 && !solid(nx, s.y - up - 6)) { s.x = nx; s.y -= up; }
+      else s.dir = -s.dir;
+      return;
+    }
+    s.x = nx;
+    // a gentle slope down
+    if (!solid(s.x, s.y + 1)) for (let d = 1; d <= 3; d++) if (solid(s.x, s.y + 1 + d)) { s.y += d; break; }
+  }
+  function fall(s) {
+    const speed = s.umb && s.fall > 10 ? 1 : 2;
+    if (s.umb && s.fall > 10 && (s.t++ % 2)) return;
+    if (s.resume && s.fall > 12) s.resume = null;
+    for (let k = 0; k < speed; k++) {
+      if (solid(s.x, s.y + 1)) {
+        if (s.fall > SPLAT && !s.umb) { die(s, "poof"); return; }
+        s.st = s.resume || "walk"; s.resume = null; s.fall = 0; s.t = 0; return;
+      }
+      s.y++; s.fall++;
+      if (s.y >= GH + 4) { die(s, "out"); return; }
+      if (at(s.x, s.y) === WATER) { die(s, "water"); return; }
+    }
+  }
+  function dig(s) {
+    s.t++; if (s.t % 4) return;
+    let any = false, rockHit = false;
+    for (let i = s.x - 3; i <= s.x + 3; i++) { const v = at(i, s.y + 1); if (v === DIRT || v === BRICK) { setCell(i, s.y + 1, AIR); any = true; } else if (v === ROCK && Math.abs(i - s.x) <= 1) rockHit = true; }
+    if (rockHit && !any) { s.st = "walk"; s.t = 0; return; }
+    if (any) { s.y++; dust(s, 0, 1); }
+    if (!solid(s.x, s.y + 1) && !solid(s.x - 2, s.y + 1) && !solid(s.x + 2, s.y + 1)) { s.st = "fall"; s.fall = 0; }
+    else if (!any) { s.st = "walk"; s.t = 0; }
+  }
+  function bash(s) {
+    // the floor went away (a digger below): it falls, and goes back to work when it lands
+    if (!solid(s.x, s.y + 1)) { s.st = "fall"; s.fall = 0; s.resume = "sfonda"; return; }
+    s.t++; if (s.t % 3) return;
+    // is there still earth ahead to dig?
+    let ahead = false, rock = false;
+    for (let d = 1; d <= 6; d++) for (let h = 1; h <= 7; h++) { const v = at(s.x + s.dir * d, s.y - h + 1); if (v === DIRT || v === BRICK) ahead = true; if (v === ROCK && d <= 2 && h <= 6) rock = true; }
+    if (rock) { s.st = "walk"; s.t = 0; return; }
+    if (!ahead) {
+      // nothing to dig yet: it walks on, looking for earth (and gives up after a while, or once it has dug through)
+      if (s.work > 0 || solid(s.x + s.dir, s.y) || ++s.walked > 40) { s.st = "walk"; s.t = 0; return; }
+      s.x += s.dir; if (!solid(s.x, s.y + 1)) for (let d = 1; d <= 3; d++) if (solid(s.x, s.y + 1 + d)) { s.y += d; break; }
+      return;
+    }
+    s.work++;
+    for (let d = 1; d <= 3; d++) for (let h = 0; h <= 7; h++) { const v = at(s.x + s.dir * d, s.y - h); if (v === DIRT || v === BRICK) setCell(s.x + s.dir * d, s.y - h, AIR); }
+    s.x += s.dir; dust(s, s.dir, 0);
+  }
+  function buildStep(s) {
+    s.t++; if (s.t % 8) return;
+    if (s.bricks <= 0) { s.st = "shrug"; s.t = 0; return; }
+    // the head would hit something: stop and turn back
+    if (solid(s.x + s.dir * 2, s.y - 7) || solid(s.x + s.dir, s.y - 7)) { s.st = "walk"; s.dir = -s.dir; s.t = 0; return; }
+    for (let d = 1; d <= 4; d++) if (!solid(s.x + s.dir * d, s.y)) setCell(s.x + s.dir * d, s.y, BRICK);
+    s.bricks--; sfx.brick();
+    s.y--; s.x += 2 * s.dir;
+    if (s.bricks <= 0) { s.st = "shrug"; s.t = 0; }
+  }
+  function shrug(s) { s.t++; if (!solid(s.x, s.y + 1)) { s.st = "fall"; s.fall = 0; return; } if (s.t > 30) { s.st = "walk"; s.t = 0; } }
+  function die(s, how) {
+    s.st = "dead"; lost++;
+    if (how === "water") { sfx.splash(); for (let i = 0; i < 12; i++) puff(s.x, s.y, ["#8ac8ff", "#ffffff"][i % 2], 1.2); }
+    else if (how === "poof") { sfx.lost(); for (let i = 0; i < 18; i++) puff(s.x, s.y - 3, ["#ffffff", "#e8e8e8", "#cfd8dc"][i % 3], 1.6); }
+    else sfx.lost();
+  }
+  function home(s) { s.st = "saved"; saved++; sfx.saved(); for (let i = 0; i < 8; i++) puff(s.x, s.y - 4, ["#ffd23a", "#ffffff"][i % 2], 1); }
+  function updateSheep(s) {
+    if (s.st === "dead" || s.st === "saved") return;
+    s.anim += 1;
+    if (s.st === "walk") walk(s);
+    else if (s.st === "fall") fall(s);
+    else if (s.st === "scava") dig(s);
+    else if (s.st === "sfonda") bash(s);
+    else if (s.st === "ponte") buildStep(s);
+    else if (s.st === "shrug") shrug(s);
+    else if (s.st === "ferma") { if (!solid(s.x, s.y + 1)) { s.st = "fall"; s.fall = 0; } }
+    if (s.st === "dead") return;
+    if (s.y >= GH + 4) { die(s, "out"); return; }
+    if (at(s.x, s.y) === WATER || at(s.x, s.y - 1) === WATER) { die(s, "water"); return; }
+    const [ex, ey] = LV.exit;
+    if ((s.st === "walk" || s.st === "fall") && Math.abs(s.x - ex) <= 3 && s.y >= ey - 6 && s.y <= ey + 1) home(s);
+  }
+  // can this sheep take this skill now?
+  function canTake(s, id) {
+    if (s.st === "dead" || s.st === "saved") return false;
+    if (id === "ombrello") return !s.umb;
+    if (s.st === "ferma") return false;
+    if (id === "ponte") return s.st === "walk" || s.st === "shrug" || (s.st === "ponte" && s.bricks < 3);
+    return s.st === "walk" || s.st === "shrug" || ((id === "scava" || id === "ferma") && (s.st === "sfonda" || s.st === "ponte")) || (id === "sfonda" && s.st === "scava");
+  }
+  function assign(s, id) {
+    if (state !== "play" || !s || (skills[id] || 0) <= 0 || !canTake(s, id)) { sfx.bad(); return false; }
+    skills[id]--; used++;
+    if (id === "ombrello") s.umb = true;
+    else { s.st = id; s.t = 0; s.work = 0; s.walked = 0; if (id === "ponte") s.bricks = 12; }
+    sfx.assign();
+    return true;
+  }
+  function puff(x, y, color, sp) { const a = Math.random() * TAU, v = (20 + Math.random() * 40) * sp; parts.push({ x: x * CELL, y: y * CELL, vx: Math.cos(a) * v, vy: Math.sin(a) * v - 30, t: 0, life: 0.5 + Math.random() * 0.5, color, s: 2 + Math.random() * 2 }); }
+  function dust(s, dx, dy) { if (Math.random() < 0.7) parts.push({ x: (s.x + dx * 3) * CELL, y: (s.y + dy) * CELL, vx: (Math.random() - 0.5) * 40 + dx * 30, vy: -20 - Math.random() * 30, t: 0, life: 0.4, color: "#9a6a40", s: 2 }); }
+
+  // ---------- A level ----------
+  function startLevel() {
+    buildLevel(lvl);
+    total = LV.total; need = clamp(LV.need + diff.need, 1, total);
+    skills = {}; for (const k of SKILLS) skills[k.id] = LV.skills[k.id] ? LV.skills[k.id] + diff.extra : 0;
+    chosen = SKILLS.find((k) => skills[k.id] > 0).id;
+    sheep = []; parts = []; spawned = 0; spawnT = 1; saved = 0; lost = 0; used = 0; fast = false; acc = 0;
+    timeLeft = Math.round(LV.time * diff.time); result = null;
+    state = "intro"; stateT = 0;
+  }
+  function tick() {
+    // one step of the world
+    if (spawned < total) { spawnT -= STEP; if (spawnT <= 0) { spawn(); spawnT = 1.35; } }
+    for (const s of sheep) updateSheep(s);
+    timeLeft -= STEP;
+    const active = sheep.filter((s) => s.st !== "dead" && s.st !== "saved" && s.st !== "ferma");
+    if (timeLeft <= 0 || (spawned >= total && !active.length)) endLevel(timeLeft <= 0);
+  }
+  function endLevel(timeout) {
+    const ok = saved >= need, n = lvl + 1;
+    let pts = 0;
+    if (ok) {
+      const left = Object.values(skills).reduce((a, b) => a + b, 0);
+      const parts2 = { saved: saved * 100 * n, extra: (saved - need) * 100 * n, time: Math.max(0, Math.floor(timeLeft)) * 2 * n, skills: left * 20 * n };
+      pts = parts2.saved + parts2.extra + parts2.time + parts2.skills; score += pts;
+      result = { ok, timeout, ...parts2, pts };
+      sfx.win();
+      if (saved === total) feat("tutte");
+      if (used <= 2 && total >= 10) feat("risparmio");
+      if (n === LEVELS.length) feat("pastore");
+    } else { lives--; result = { ok, timeout, pts: 0 }; sfx.lose(); }
+    state = "result"; stateT = 0;
+  }
+  function afterResult() {
+    if (result.ok) { if (lvl + 1 >= LEVELS.length) { gameOver(true); return; } lvl++; }
+    else if (lives <= 0) { gameOver(false); return; }
+    startLevel();
+  }
+  function retry() {
+    if (state !== "play") return;
+    saved = Math.min(saved, need - 1); timeLeft = Math.max(timeLeft, 0);
+    lives--; result = { ok: false, gaveUp: true, pts: 0 }; sfx.lose(); state = "result"; stateT = 0;
+  }
+  function say(text) { msg = { text, t: 0 }; }
+
+  // ---------- Flow ----------
+  function startGame() {
+    if (!audioCtx) { try { audioCtx = new (window.AudioContext || window.webkitAudioContext)(); } catch { audioCtx = null; } }
+    if (audioCtx && audioCtx.state === "suspended") audioCtx.resume();
+    score = 0; lives = diff.lives; lvl = 0;
+    bestCache = parseInt(load(bestKey(difficulty)), 10) || 0;
+    startLevel(); menu = null; overlay.classList.add("hidden");
+    syncControls(); lastT = performance.now();
+  }
+  function gameOver(victory) {
+    state = "over";
+    let bonus = 0;
+    if (victory) { bonus = lives * 1000 * (DIFF_IDS.indexOf(difficulty) + 1); score += bonus; }
+    const prev = parseInt(load(bestKey(difficulty)), 10) || 0, record = score > prev;
+    if (record) store(bestKey(difficulty), String(score));
+    const done = victory ? LEVELS.length : lvl;
+    menu = () => showOverlay(
+      (victory ? `<h2>TUTTE ALL'OVILE!</h2>
+       <p>Dieci prati, dieci greggi. ${lives} ${lives === 1 ? "tentativo rimasto" : "tentativi rimasti"}: +${nf(bonus)} punti.</p>
+       <p>Punteggio: <b>${nf(score)}</b> · ${diff.label}</p>` : `<h2 class="lose">IL GREGGE SI È PERSO</h2>
+       <p>Punteggio: <b>${nf(score)}</b> · ${done} ${done === 1 ? "livello superato" : "livelli superati"} su ${LEVELS.length} · ${diff.label}</p>`) +
+      `${record ? "<p style='color:var(--gold)'>★ NUOVO RECORD! ★</p>" : ""}
+       ${difficultyHTML()}
+       <button class="start" data-start>RIPROVA</button>`
+    );
+    menu(); syncControls();
+  }
+  function togglePause() {
+    if (isPlaying()) { pausedFrom = state; state = "paused"; showOverlay(`<h2>PAUSA</h2><button class="start" data-resume>CONTINUA</button><p class="muted">Premi P per continuare</p>`); }
+    else if (state === "paused") { state = pausedFrom; overlay.classList.add("hidden"); lastT = performance.now(); }
+    syncControls();
+  }
+  window.addEventListener("sala:termina", () => { if (state !== "paused") return; overlay.classList.add("hidden"); gameOver(false); });
+  function syncControls() { pauseBtn.style.display = isPlaying() && touchMode ? "block" : "none"; resize(); }
+  pauseBtn.addEventListener("click", () => togglePause());
+  function showOverlay(html) { overlay.innerHTML = html; overlay.classList.remove("hidden"); }
+  function difficultyHTML() {
+    const buttons = DIFF_IDS.map((id) => { const d = DIFFICULTIES[id]; return `<button type="button" data-diff="${id}" class="${id === difficulty ? "on" : ""}" style="--c:${d.color}">${d.label}</button>`; }).join("");
+    const best = parseInt(load(bestKey(difficulty)), 10);
+    return `<div class="diff">${buttons}</div><p class="muted">${diff.desc}${best ? ` · Record: ${nf(best)}` : ""}</p>`;
+  }
+  function setDifficulty(id) { if (!DIFFICULTIES[id]) return; difficulty = id; diff = DIFFICULTIES[id]; store(DIFF_KEY, id); if (menu) menu(); }
+  function showTitle() {
+    menu = showTitle;
+    showOverlay(
+      `<h1>PECORE <span>TESTARDE</span></h1>
+       <p>Le pecore scendono dalla nuvola e camminano dritte, senza guardare dove vanno: girano solo davanti a un muro. Tu non le guidi, ma puoi dare a ognuna un compito. Portane abbastanza all'ovile prima che scada il tempo.</p>
+       <div class="pts">
+         <span><b>Ferma</b></span><span>si pianta lì e fa girare le altre</span>
+         <span><b>Ponte</b></span><span>costruisce dodici scalini in avanti</span>
+         <span><b>Scava</b></span><span>scava dritta verso il basso, nella terra</span>
+         <span><b>Sfonda</b></span><span>scava un tunnel in avanti</span>
+         <span><b>Ombrello</b></span><span>scende piano da qualsiasi altezza</span>
+       </div>
+       ${touchMode ? `<p class="muted help">Scegli un compito in basso e tocca una pecora · la roccia grigia non si scava</p>` : `<p class="muted help">Scegli un compito (1–5) e clicca una pecora · F veloce · R ricomincia il livello · P pausa · la roccia grigia non si scava</p>`}
+       ${difficultyHTML()}
+       <button class="start" data-start>AL PASCOLO</button>`
+    );
+  }
+  overlay.addEventListener("click", (e) => {
+    const d = e.target.closest("[data-diff]");
+    if (d) { setDifficulty(d.dataset.diff); return; }
+    if (e.target.closest("[data-start]")) startGame();
+    if (e.target.closest("[data-resume]")) togglePause();
+  });
+
+  // ---------- Input ----------
+  const toWorld = (e) => { const rc = canvas.getBoundingClientRect(); return { x: ((e.clientX - rc.left) / rc.width) * W, y: ((e.clientY - rc.top) / rc.height) * H }; };
+  const inR = (r, p) => p.x >= r.x && p.x <= r.x + r.w && p.y >= r.y && p.y <= r.y + r.h;
+  // the sheep under a point: the nearest that can take the chosen skill, otherwise the nearest
+  function sheepAt(p, radius = touchMode ? 15 : 10) {
+    const cx = p.x / CELL, cy = p.y / CELL; let best = null, bd = Infinity, any = null, ad = Infinity;
+    for (const s of sheep) {
+      if (s.st === "dead" || s.st === "saved") continue;
+      const d = Math.hypot(s.x - cx, s.y - 4 - cy); if (d > radius) continue;
+      if (d < ad) { ad = d; any = s; }
+      if (canTake(s, chosen) && d < bd) { bd = d; best = s; }
+    }
+    return best || any;
+  }
+  function pressButton(id) {
+    if (id === "fast") { fast = !fast; sfx.pick(); return; }
+    if (id === "retry") { retry(); return; }
+    if ((skills[id] || 0) > 0) { chosen = id; sfx.pick(); } else sfx.bad();
+  }
+  canvas.addEventListener("pointerdown", (e) => {
+    e.preventDefault();
+    if (state === "intro") { if (stateT > 0.5) { state = "play"; stateT = 0; } return; }
+    if (state === "result") { if (stateT > 1.2) afterResult(); return; }
+    if (state !== "play") return;
+    const p = toWorld(e);
+    for (const b of BTN) if (inR(b, p)) { pressButton(b.id); return; }
+    if (p.y < PH) { const s = sheepAt(p); if (s) assign(s, chosen); }
+  });
+  canvas.addEventListener("pointermove", (e) => { if (e.pointerType === "mouse") { const p = toWorld(e); hover = p.y < PH ? p : null; } });
+  canvas.addEventListener("pointerleave", () => { hover = null; });
+  window.addEventListener("keydown", (e) => {
+    const k = e.key.toLowerCase();
+    if ([" ", "arrowup", "arrowdown", "arrowleft", "arrowright"].includes(k)) e.preventDefault();
+    if (state === "menu" || state === "over") { if (e.key === "Enter") startGame(); else if (["1", "2", "3"].includes(k)) setDifficulty(DIFF_IDS[+k - 1]); return; }
+    if (k === "p" || k === "escape") { if (!e.repeat) togglePause(); return; }
+    if (state === "paused") { if (e.key === "Enter") togglePause(); return; }
+    if (state === "intro") { if ((k === "enter" || k === " ") && stateT > 0.5) { state = "play"; stateT = 0; } return; }
+    if (state === "result") { if ((k === "enter" || k === " ") && stateT > 1.2) afterResult(); return; }
+    if (state !== "play" || e.repeat) return;
+    if (["1", "2", "3", "4", "5"].includes(k)) pressButton(SKILLS[+k - 1].id);
+    else if (k === "f") pressButton("fast");
+    else if (k === "r") retry();
+    // the keyboard picks sheep in turn: Tab or arrows, Space gives the skill
+    else if (k === "tab" || k === "arrowright" || k === "arrowleft") {
+      e.preventDefault();
+      const live = sheep.filter((s) => s.st !== "dead" && s.st !== "saved").sort((a, b) => a.x - b.x);
+      if (!live.length) return;
+      let i = live.findIndex((s) => s.id === kbdSel);
+      i = k === "arrowleft" || (k === "tab" && e.shiftKey) ? (i <= 0 ? live.length - 1 : i - 1) : (i + 1) % live.length;
+      kbdSel = live[i].id;
+    } else if (k === " " || k === "enter") { const s = sheep.find((o) => o.id === kbdSel); if (s) assign(s, chosen); }
+  });
+  window.addEventListener("blur", () => { if (isPlaying()) togglePause(); });
+  window.addEventListener("pointerdown", (e) => { if (e.pointerType === "touch" && !touchMode) { touchMode = true; syncControls(); if (menu) menu(); } }, true);
+
+  // ---------- Update ----------
+  function update(dt) {
+    clock += dt; stateT += dt;
+    if (msg) { msg.t += dt; if (msg.t > 2.2) msg = null; }
+    for (const p of parts) { p.t += dt; p.vy += 200 * dt; p.x += p.vx * dt; p.y += p.vy * dt; }
+    parts = parts.filter((p) => p.t < p.life);
+    if (state !== "play") return;
+    acc += dt * (fast ? 3 : 1);
+    while (acc >= STEP && state === "play") { acc -= STEP; tick(); }
+    const ks = sheep.find((o) => o.id === kbdSel); if (ks && (ks.st === "dead" || ks.st === "saved")) kbdSel = -1;
+  }
+
+  // ---------- Drawing ----------
+  function rr(x, y, w, h, r) { ctx.beginPath(); ctx.roundRect(x, y, w, h, r); }
+  function drawSheep(s) {
+    const x = s.x * CELL, y = s.y * CELL + CELL, d = s.dir, step = Math.floor(s.anim / 4) % 2;
+    ctx.save(); ctx.translate(x, y); ctx.scale(1.25, 1.25);
+    if (s.st === "fall" && s.umb && s.fall > 10) {
+      ctx.strokeStyle = "#5a3a1a"; ctx.lineWidth = 1.2; ctx.beginPath(); ctx.moveTo(0, -12); ctx.lineTo(0, -26); ctx.stroke();
+      ctx.fillStyle = s.id % 2 ? "#ff5a7a" : "#ffb02a"; ctx.beginPath(); ctx.arc(0, -26, 10, Math.PI, 0); ctx.fill();
+      ctx.fillStyle = "rgba(255,255,255,0.35)"; ctx.beginPath(); ctx.arc(0, -26, 10, Math.PI, Math.PI * 1.35); ctx.lineTo(0, -26); ctx.fill();
+    }
+    // legs
+    ctx.strokeStyle = "#1f1f22"; ctx.lineWidth = 1.6; ctx.lineCap = "round";
+    const walking = s.st === "walk" || s.st === "sfonda", lg = walking ? (step ? 1.5 : -1.5) : 0;
+    const spread = s.st === "ferma" ? 2.5 : 0;
+    ctx.beginPath(); ctx.moveTo(-3, -4); ctx.lineTo(-3 - lg - spread, 0); ctx.moveTo(3, -4); ctx.lineTo(3 + lg + spread, 0); ctx.stroke();
+    // wool
+    const bob = walking && step ? -0.6 : 0;
+    ctx.fillStyle = "#fbfbf6";
+    for (const [ox, oy, r] of [[-3, -8, 3.6], [1, -9.5, 3.8], [4, -7.5, 3.2], [-0.5, -6, 3.6]]) { ctx.beginPath(); ctx.arc(ox * (s.st === "ferma" ? 0.8 : 1), oy + bob, r, 0, TAU); ctx.fill(); }
+    ctx.strokeStyle = "rgba(0,0,0,0.12)"; ctx.lineWidth = 0.8; ctx.beginPath(); ctx.arc(0, -7.5 + bob, 6, 0.3, Math.PI - 0.3); ctx.stroke();
+    // head
+    const hx = s.st === "ferma" ? 0 : d * 6.5, hy = s.st === "scava" ? -5 : -9;
+    ctx.fillStyle = "#1f1f22"; ctx.beginPath(); ctx.ellipse(hx, hy + bob, 2.8, 3.3, 0, 0, TAU); ctx.fill();
+    ctx.fillStyle = "#fff"; ctx.beginPath(); ctx.arc(hx + (s.st === "ferma" ? -1.1 : d * 1), hy - 0.8 + bob, 0.8, 0, TAU); ctx.fill();
+    if (s.st === "ferma") { ctx.beginPath(); ctx.arc(hx + 1.1, hy - 0.8, 0.8, 0, TAU); ctx.fill(); ctx.fillStyle = "#e8322a"; ctx.fillRect(-1, -22, 2, 8); ctx.beginPath(); ctx.arc(0, -23, 4, 0, TAU); ctx.fill(); ctx.fillStyle = "#fff"; ctx.fillRect(-2.5, -23.6, 5, 1.4); }
+    if (s.st === "ponte" || s.st === "shrug") { ctx.fillStyle = "#d8955a"; ctx.fillRect(d * 3 - 3, -15, 6, 3); }
+    if (s.st === "scava") { ctx.strokeStyle = "#8a8a8a"; ctx.lineWidth = 1.5; ctx.beginPath(); const a = Math.sin(s.anim * 0.8) * 0.5; ctx.moveTo(0, -6); ctx.lineTo(Math.sin(a) * 6, 2); ctx.stroke(); }
+    if (s.st === "sfonda") { ctx.strokeStyle = "#8a8a8a"; ctx.lineWidth = 1.5; ctx.beginPath(); const a = Math.sin(s.anim * 0.8); ctx.moveTo(d * 4, -8); ctx.lineTo(d * (9 + a * 2), -6 + a * 3); ctx.stroke(); }
+    ctx.restore();
+    if (s.umb && !(s.st === "fall" && s.fall > 10)) { ctx.fillStyle = s.id % 2 ? "#ff5a7a" : "#ffb02a"; ctx.beginPath(); ctx.arc(x - s.dir * 6, y - 18, 2.2, 0, TAU); ctx.fill(); }
+  }
+  function drawSky() {
+    const g = ctx.createLinearGradient(0, 0, 0, PH); g.addColorStop(0, "#7cc4ff"); g.addColorStop(1, "#d6efff");
+    ctx.fillStyle = g; ctx.fillRect(0, 0, W, PH);
+    ctx.fillStyle = "rgba(255,255,255,0.55)";
+    for (let i = 0; i < 5; i++) { const x = ((i * 157 + clock * 4) % (W + 120)) - 60, y = 24 + (i * 37) % 70; cloud(x, y, 0.8 + (i % 3) * 0.2); }
+    ctx.fillStyle = "rgba(100,170,120,0.35)"; ctx.beginPath(); ctx.moveTo(0, PH * 0.75); for (let x = 0; x <= W; x += 40) ctx.lineTo(x, PH * 0.62 + Math.sin(x * 0.012 + lvl) * 22); ctx.lineTo(W, PH); ctx.lineTo(0, PH); ctx.fill();
+  }
+  function cloud(x, y, s) { for (const [dx, dy, r] of [[0, 0, 12], [12, -6, 14], [26, 0, 11], [13, 4, 12]]) { ctx.beginPath(); ctx.arc(x + dx * s, y + dy * s, r * s, 0, TAU); ctx.fill(); } }
+  function drawHatchAndExit() {
+    const [hx, hy] = LV.hatch, x = hx * CELL, y = hy * CELL - 20;
+    ctx.fillStyle = "#ffffff"; cloud(x - 18, y, 1.05); ctx.fillStyle = "rgba(180,200,220,0.6)"; ctx.beginPath(); ctx.ellipse(x - 2, y + 9, 18, 4, 0, 0, TAU); ctx.fill();
+    const [ex, ey] = LV.exit, X = ex * CELL, Y = ey * CELL + CELL;
+    ctx.fillStyle = "#b5462e"; ctx.beginPath(); ctx.moveTo(X - 15, Y - 18); ctx.lineTo(X, Y - 30); ctx.lineTo(X + 15, Y - 18); ctx.closePath(); ctx.fill();
+    ctx.fillStyle = "#d8573a"; ctx.fillRect(X - 13, Y - 18, 26, 18);
+    ctx.fillStyle = "#3a2010"; rr(X - 5, Y - 13, 10, 13, 2); ctx.fill();
+    ctx.strokeStyle = "#f4e2c0"; ctx.lineWidth = 1.2; ctx.strokeRect(X - 13, Y - 18, 26, 18);
+    ctx.strokeStyle = "#e8d2a0"; ctx.lineWidth = 2; for (const sx of [-1, 1]) { ctx.beginPath(); ctx.moveTo(X + sx * 15, Y); ctx.lineTo(X + sx * 15, Y - 9); ctx.moveTo(X + sx * 15, Y - 5); ctx.lineTo(X + sx * 24, Y - 5); ctx.moveTo(X + sx * 24, Y); ctx.lineTo(X + sx * 24, Y - 9); ctx.stroke(); }
+  }
+  function button(b, label, sub, on, lit) {
+    ctx.fillStyle = lit ? "rgba(255,210,58,0.22)" : on ? "rgba(255,255,255,0.08)" : "rgba(255,255,255,0.03)";
+    rr(b.x, b.y, b.w, b.h, 7); ctx.fill();
+    ctx.strokeStyle = lit ? "#ffd23a" : on ? "rgba(255,255,255,0.3)" : "rgba(255,255,255,0.1)"; ctx.lineWidth = lit ? 2.5 : 1.5; ctx.stroke();
+    ctx.textAlign = "center"; ctx.textBaseline = "middle";
+    ctx.fillStyle = on ? "#f4f6ee" : "rgba(244,246,238,0.3)"; ctx.font = "800 11px system-ui, sans-serif"; ctx.fillText(label, b.x + b.w / 2, b.y + 11);
+    ctx.font = "900 14px system-ui, sans-serif"; ctx.fillStyle = on ? (lit ? "#ffd23a" : "#f4f6ee") : "rgba(244,246,238,0.3)"; ctx.fillText(sub, b.x + b.w / 2, b.y + 25);
+  }
+  function draw() {
+    ctx.setTransform(pxRatio, 0, 0, pxRatio, 0, 0);
+    if (!grid) { ctx.fillStyle = "#12202e"; ctx.fillRect(0, 0, W, H); return; }
+    drawSky();
+    if (terrainDirty) { tctx.putImageData(img, 0, 0); terrainDirty = false; }
+    ctx.imageSmoothingEnabled = false; ctx.drawImage(terrain, 0, 0, GW * CELL, GH * CELL); ctx.imageSmoothingEnabled = true;
+    drawHatchAndExit();
+    for (const s of sheep) if (s.st !== "dead" && s.st !== "saved") drawSheep(s);
+    for (const p of parts) { ctx.globalAlpha = 1 - p.t / p.life; ctx.fillStyle = p.color; ctx.fillRect(p.x - p.s / 2, p.y - p.s / 2, p.s, p.s); }
+    ctx.globalAlpha = 1;
+    // the sheep under the pointer, or picked with the keyboard
+    const hs = state === "play" ? (hover ? sheepAt(hover) : sheep.find((o) => o.id === kbdSel)) : null;
+    if (hs) { ctx.strokeStyle = canTake(hs, chosen) && skills[chosen] > 0 ? "#ffd23a" : "rgba(255,255,255,0.6)"; ctx.lineWidth = 1.5; rr(hs.x * CELL - 12, hs.y * CELL - 25, 24, 29, 4); ctx.stroke(); }
+
+    // top info
+    ctx.fillStyle = "rgba(10,20,30,0.55)"; rr(6, 5, touchMode ? 520 : 510, 22, 11); ctx.fill();
+    ctx.textBaseline = "middle"; ctx.font = "800 12px system-ui, sans-serif"; ctx.textAlign = "left";
+    const out = sheep.filter((s) => s.st !== "dead" && s.st !== "saved").length;
+    ctx.fillStyle = "#ffd23a"; ctx.fillText(`${lvl + 1}. ${LV.name}`, 16, 16);
+    ctx.fillStyle = "#f4f6ee";
+    ctx.fillText(`all'ovile ${saved}/${need}`, 170, 16);
+    ctx.fillText(`in giro ${out}`, 270, 16);
+    ctx.fillText(`da uscire ${total - spawned}`, 340, 16);
+    ctx.fillStyle = timeLeft < 30 ? "#ff6b7d" : "#f4f6ee"; ctx.fillText(`⏱ ${mmss(Math.max(0, timeLeft))}`, 440, 16);
+
+    // bottom bar
+    ctx.fillStyle = "#1a2a38"; ctx.fillRect(0, PH, W, H - PH);
+    for (const b of BTN) {
+      if (b.id === "fast") button(b, "VELOCE", fast ? "×3" : "×1", state === "play", fast);
+      else if (b.id === "retry") button(b, "DA CAPO", "↺", state === "play", false);
+      else { const sk = SKILLS.find((k) => k.id === b.id), n = skills[b.id] || 0; button(b, sk.name, String(n), n > 0, chosen === b.id && n > 0); }
+    }
+    ctx.textAlign = "left"; ctx.font = "700 10px system-ui, sans-serif"; ctx.fillStyle = "#c8d8e4";
+    ctx.fillText(`${nf(score)} pt`, 570, PH + 12);
+    for (let i = 0; i < diff.lives; i++) { ctx.fillStyle = i < lives ? "#fbfbf6" : "rgba(255,255,255,0.15)"; ctx.beginPath(); ctx.arc(574 + i * 12, PH + 27, 4, 0, TAU); ctx.fill(); }
+
+    if (state === "intro") panel(() => {
+      ctx.fillStyle = "#c8d8e4"; ctx.font = "700 12px system-ui, sans-serif"; ctx.fillText(`LIVELLO ${lvl + 1} DI ${LEVELS.length}`, W / 2, 112);
+      ctx.fillStyle = "#ffd23a"; ctx.font = "900 24px system-ui, sans-serif"; ctx.fillText(LV.name, W / 2, 140);
+      ctx.fillStyle = "#f4f6ee"; ctx.font = "500 13px system-ui, sans-serif";
+      wrap(LV.tip, 360).forEach((ln, k) => ctx.fillText(ln, W / 2, 168 + k * 18));
+      ctx.fillStyle = "#c8d8e4"; ctx.font = "700 12px system-ui, sans-serif"; ctx.fillText(`${total} pecore · portane all'ovile almeno ${need} · tempo ${mmss(timeLeft)}`, W / 2, 214);
+      if (stateT > 0.5) { ctx.globalAlpha = 0.6 + 0.4 * Math.sin(clock * 5); ctx.fillStyle = "#ffd23a"; ctx.fillText(touchMode ? "tocca per cominciare" : "clic o Invio per cominciare", W / 2, 240); ctx.globalAlpha = 1; }
+    });
+    if (state === "result" && stateT > 0.4) panel(() => {
+      const R = result;
+      ctx.fillStyle = R.ok ? "#ffd23a" : "#ff6b7d"; ctx.font = "900 24px system-ui, sans-serif";
+      ctx.fillText(R.ok ? (saved === total ? "TUTTE ALL'OVILE!" : "LIVELLO SUPERATO!") : R.gaveUp ? "SI RICOMINCIA" : R.timeout ? "TEMPO SCADUTO" : "TROPPO POCHE", W / 2, 116);
+      ctx.font = "600 13px system-ui, sans-serif"; ctx.fillStyle = "#f4f6ee";
+      if (R.ok) {
+        const rows = [["Pecore all'ovile", R.saved], ["Oltre il necessario", R.extra], ["Tempo avanzato", R.time], ["Compiti avanzati", R.skills]];
+        rows.forEach(([t, v], i) => { const y = 146 + i * 19; ctx.textAlign = "left"; ctx.fillStyle = "#c8d8e4"; ctx.fillText(t, W / 2 - 120, y); ctx.textAlign = "right"; ctx.fillStyle = v ? "#f4f6ee" : "rgba(244,246,238,0.35)"; ctx.fillText(`+${nf(v)}`, W / 2 + 120, y); });
+        ctx.textAlign = "center";
+      } else {
+        ctx.fillText(R.gaveUp ? "Il livello ricomincia da capo." : `Ne sono arrivate ${saved} su ${need}.`, W / 2, 150);
+        ctx.fillStyle = "#c8d8e4"; ctx.fillText(lives > 0 ? `${lives} ${lives === 1 ? "tentativo rimasto" : "tentativi rimasti"}` : "Nessun tentativo rimasto", W / 2, 176);
+      }
+      if (stateT > 1.2) { ctx.globalAlpha = 0.6 + 0.4 * Math.sin(clock * 5); ctx.fillStyle = "#ffd23a"; ctx.font = "700 12px system-ui, sans-serif"; ctx.fillText(touchMode ? "tocca per continuare" : "clic o Invio per continuare", W / 2, 240); ctx.globalAlpha = 1; }
+    });
+    if (msg && state === "play") { ctx.globalAlpha = Math.min(1, (2.2 - msg.t) * 3); ctx.font = "800 14px system-ui, sans-serif"; const w = ctx.measureText(msg.text).width + 28; ctx.fillStyle = "rgba(10,20,30,0.85)"; rr(W / 2 - w / 2, 40, w, 28, 14); ctx.fill(); ctx.fillStyle = "#ffd23a"; ctx.textAlign = "center"; ctx.fillText(msg.text, W / 2, 54); ctx.globalAlpha = 1; }
+  }
+  function wrap(text, maxW) { const words = text.split(" "), lines = []; let cur = ""; for (const w of words) { const t = cur ? cur + " " + w : w; if (ctx.measureText(t).width > maxW && cur) { lines.push(cur); cur = w; } else cur = t; } if (cur) lines.push(cur); return lines; }
+  function panel(fn) { ctx.fillStyle = "rgba(12,22,32,0.9)"; rr(W / 2 - 210, 90, 420, 168, 14); ctx.fill(); ctx.strokeStyle = "rgba(255,210,58,0.7)"; ctx.lineWidth = 2; ctx.stroke(); ctx.textAlign = "center"; ctx.textBaseline = "middle"; fn(); }
+
+  // ---------- Loop ----------
+  let lastT = performance.now();
+  function frame(now) {
+    const dt = Math.min(0.05, (now - lastT) / 1000); lastT = now;
+    if (state !== "paused") update(dt);
+    draw();
+    requestAnimationFrame(frame);
+  }
+  // behind the title: the first meadow, with a few sheep about
+  function demo() { lvl = 0; diff = DIFFICULTIES[difficulty]; startLevel(); state = "menu"; for (let i = 0; i < 160; i++) { if (spawned < 4) { spawnT -= STEP; if (spawnT <= 0) { spawn(); spawnT = 1.35; } } for (const s of sheep) updateSheep(s); } }
+  resize(); demo();
+  syncControls();
+  showTitle();
+  requestAnimationFrame(frame);
+})();
+</script>
+<script src="../../shared/iniziali.js" data-record="pecore-best-" data-kind="score"></script>
+</body>
+</html>
