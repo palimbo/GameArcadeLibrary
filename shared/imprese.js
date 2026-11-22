@@ -9,6 +9,11 @@
   "use strict";
   // record key prefix of the game (as in trofei.js) → its feats
   const LIST = {
+    "crucipuzzle-best-": [   // crucipuzzle
+      { id: "occhio", name: "Occhio di lince", desc: "risolvi uno schema senza aiuti" },
+      { id: "lampo", name: "Lampo", desc: "risolvi uno schema in meno di un minuto e mezzo" },
+      { id: "enigmista", name: "Enigmista", desc: "risolvi tutti e cinque gli schemi di una partita" },
+    ],
     "tende-best-": [   // tende-e-alberi
       { id: "perfetto", name: "Perfetto", desc: "sistema un prato senza errori e senza aiuti" },
       { id: "lampo", name: "Lampo", desc: "sistema un prato in meno di un minuto" },

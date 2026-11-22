@@ -1,0 +1,497 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no, viewport-fit=cover">
+<title>Crucipuzzle</title>
+<style>
+  :root {
+    --bg: #1a1830;
+    --fg: #f4f6ee;
+    --muted: #c8d0dc;
+    --gold: #ffd23a;
+    --red: #ff5a4a;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  html, body {
+    height: 100%;
+    background: var(--bg);
+    color: var(--fg);
+    font-family: system-ui, -apple-system, "Segoe UI", sans-serif;
+    overflow: hidden;
+    user-select: none;
+    -webkit-user-select: none;
+    -webkit-tap-highlight-color: transparent;
+    touch-action: none;
+  }
+  #wrap { position: fixed; inset: 0; display: flex; align-items: center; justify-content: center; }
+  canvas { cursor: pointer; display: block; touch-action: none; border-radius: 6px; box-shadow: 0 0 0 2px #2e3a4e, 0 10px 40px rgba(0,0,0,0.6); }
+  #pauseBtn {
+    position: fixed; z-index: 3; display: none; right: 10px; top: calc(10px + env(safe-area-inset-top, 0px));
+    font: 700 13px system-ui, sans-serif; color: var(--fg);
+    background: rgba(0, 0, 0, 0.6); border: 1px solid rgba(244, 246, 238, 0.35);
+    border-radius: 8px; padding: 6px 10px; cursor: pointer;
+  }
+  #touch { display: none !important; }
+  #overlay {
+    position: fixed; inset: 0; z-index: 5;
+    display: flex; flex-direction: column; align-items: center; justify-content: flex-start;
+    gap: 14px; padding: 16px; text-align: center; overflow-y: auto;
+    background: rgba(20, 26, 36, 0.94);
+  }
+  #overlay > :first-child { margin-top: auto; }
+  #overlay > :last-child { margin-bottom: auto; }
+  #overlay.hidden { display: none; }
+  #homeLink {
+    position: fixed; top: calc(10px + env(safe-area-inset-top, 0px)); left: 10px; z-index: 6;
+    font: 600 13px/1 system-ui, sans-serif; color: #fff; text-decoration: none;
+    padding: 8px 12px; border-radius: 999px; background: rgba(0,0,0,.55);
+    border: 1px solid rgba(255,255,255,.25);
+  }
+  #homeLink:hover { background: rgba(0,0,0,.8); }
+  #overlay.hidden ~ #homeLink { display: none; }
+  @media (max-width: 700px) { #overlay { padding-top: calc(52px + env(safe-area-inset-top, 0px)); } }
+  #overlay h1 { font-size: clamp(32px, 10vw, 58px); font-weight: 900; font-style: italic; letter-spacing: 1px; color: var(--gold);
+    text-shadow: 3px 3px 0 #6a1a1a, 0 0 22px rgba(255,210,58,0.35); }
+  #overlay h1 span { color: #fff; }
+  #overlay h2 { font-size: clamp(26px, 7vw, 42px); font-weight: 900; letter-spacing: 2px; color: var(--gold); }
+  #overlay h2.lose { color: var(--red); }
+  #overlay p { max-width: 540px; font-size: clamp(13px, 3.4vw, 16px); line-height: 1.55; }
+  #overlay p.muted { color: var(--muted); }
+  #overlay .pts { display: grid; grid-template-columns: repeat(2, auto); gap: 4px 18px; font-size: 13px; color: var(--muted); text-align: left; max-width: 560px; }
+  #overlay .pts b { color: var(--fg); }
+  #overlay .diff { display: flex; gap: 10px; flex-wrap: wrap; justify-content: center; }
+  #overlay button {
+    font: 800 15px system-ui, sans-serif; letter-spacing: 1.5px; color: var(--fg);
+    background: transparent; cursor: pointer;
+    border: 2px solid rgba(244,246,238,0.3); border-radius: 10px; padding: 9px 16px;
+  }
+  #overlay .diff button.on { border-color: var(--c); color: var(--c); box-shadow: 0 0 12px var(--c); }
+  #overlay button.start { border-color: var(--gold); color: #2a1a02; background: var(--gold); padding: 11px 30px; box-shadow: 0 4px 0 #a87a0a; }
+  @media (max-height: 560px) {
+    #overlay { gap: 8px; }
+    #overlay h1 { font-size: 30px; }
+    #overlay p { font-size: 13px; line-height: 1.4; }
+    #overlay .help, #overlay .pts { display: none; }
+  }
+</style>
+</head>
+<body>
+<div id="wrap"><canvas id="game"></canvas></div>
+<div id="touch"></div>
+<button id="pauseBtn" type="button" aria-label="Pausa">❚❚</button>
+<div id="overlay"></div>
+<a id="homeLink" href="../../index.html">← Sala Giochi</a>
+
+
+<script>
+// Word search maker: themed words, and the letters left over spell the key
+const CP = (() => {
+  const THEMES = {
+    "La frutta": { words: "MELA PERA BANANA ARANCIA LIMONE FRAGOLA CILIEGIA PESCA ALBICOCCA PRUGNA KIWI ANANAS MANGO FICO UVA MELONE ANGURIA LAMPONE MIRTILLO CACHI MANDARINO NOCE CASTAGNA DATTERO COCCO POMPELMO CEDRO MORA NESPOLA MELOGRANO RIBES AVOCADO MANDORLA NOCCIOLA PISTACCHIO PAPAYA LIME GIUGGIOLA SUSINA BERGAMOTTO CORBEZZOLO MELACOTOGNA FRUTTO BUCCIA NOCCIOLO SPICCHIO", keys: "MACEDONIA SPREMUTA FRULLATO MARMELLATA FRUTTIVENDOLO VITAMINE CROSTATA" },
+    "Gli animali": { words: "GATTO CANE LEONE TIGRE ZEBRA GIRAFFA ELEFANTE CAVALLO MUCCA PECORA CAPRA MAIALE CONIGLIO VOLPE LUPO ORSO CERVO RICCIO TALPA CASTORO SCOIATTOLO AQUILA GUFO PASSERO RANA LUCERTOLA DELFINO BALENA FOCA PINGUINO CAMMELLO CANGURO KOALA PANDA SCIMMIA GORILLA IENA BISONTE ALCE TASSO FALCO CORVO CIGNO ANATRA OCA GALLINA TACCHINO SERPENTE TARTARUGA CAMALEONTE", keys: "ZOOLOGICO FATTORIA SAVANA FORESTA ARCADINOE CUCCIOLI SAFARI" },
+    "In cucina": { words: "PENTOLA PADELLA FORNO COLTELLO FORCHETTA CUCCHIAIO PIATTO BICCHIERE TAZZA MESTOLO FRUSTA GRATTUGIA TEGAME COPERCHIO TOVAGLIA SALE PEPE OLIO ACETO FARINA ZUCCHERO BURRO UOVA LATTE PASTA RISO SUGO BASILICO AGLIO CIPOLLA FRIGORIFERO LAVELLO MESTOLINO TAGLIERE SCOLAPASTA COLINO IMBUTO ROMAIOLO CASSERUOLA BILANCIA TOSTAPANE MATTARELLO GREMBIULE PRESINA CREDENZA MOKA", keys: "BUONAPPETITO RICETTARIO LASAGNE TIRAMISU CUOCO PRANZO SPAGHETTATA" },
+    "Al mare": { words: "ONDA SPIAGGIA SABBIA CONCHIGLIA SCOGLIO BARCA VELA REMO ANCORA FARO PORTO MOLO GABBIANO MEDUSA GRANCHIO POLPO STELLA MAREA ISOLA BAIA COSTA OMBRELLONE ASCIUGAMANO CREMA SECCHIELLO PALETTA TUFFO NUOTO SURF PINNE ALGA CORALLO PESCE ORATA SPIGOLA SARDINA DELFINO PEDALO CANOA GOMMONE BOA BAGNINO PATTINO LIDO CABINA SCOGLIERA FONDALE MASCHERA BOCCAGLIO", keys: "VACANZE ABBRONZATURA LUNGOMARE ESTATE CASTELLODISABBIA SOLLEONE" },
+    "La musica": { words: "CHITARRA PIANO VIOLINO FLAUTO TROMBA TAMBURO ARPA BASSO BATTERIA ORGANO SAX NOTA RITMO MELODIA CORO CANTO OPERA CONCERTO ORCHESTRA MAESTRO BACCHETTA SPARTITO ACCORDO TENORE SOPRANO VALZER TANGO ROCK JAZZ BLUES CLARINETTO OBOE FAGOTTO CORNO TROMBONE TUBA VIOLA CONTRABBASSO MANDOLINO FISARMONICA XILOFONO TRIANGOLO PIATTI ARMONICA CHIAVE PAUSA TEMPO DISCO RADIO", keys: "SINFONIA CANZONE SOLFEGGIO MUSICISTA PENTAGRAMMA SERENATA" },
+    "Lo sport": { words: "CALCIO TENNIS NUOTO SCI VOLLEY BASKET RUGBY GOLF BOXE SCHERMA JUDO KARATE CICLISMO ATLETICA MARATONA SALTO CORSA PALLA RETE GOL ARBITRO SQUADRA CAMPO PISTA PODIO MEDAGLIA COPPA ALLENATORE TIFOSI STADIO PATTINAGGIO EQUITAZIONE CANOTTAGGIO VELA SURF TUFFI LOTTA HOCKEY BASEBALL BADMINTON PALLAMANO TRIATHLON PESI SPRINT STAFFETTA TRAMPOLINO PORTIERE ATTACCANTE", keys: "OLIMPIADI CAMPIONATO CAMPIONE VITTORIA FUORIGIOCO TRAGUARDO" },
+    "Le città": { words: "ROMA MILANO NAPOLI TORINO PALERMO GENOVA BOLOGNA FIRENZE BARI CATANIA VENEZIA VERONA MESSINA PADOVA TRIESTE BRESCIA PARMA MODENA PERUGIA LIVORNO CAGLIARI FOGGIA SALERNO PISA SIENA LECCE COMO BERGAMO TRENTO AOSTA ANCONA PESCARA POTENZA REGGIO RAVENNA RIMINI FERRARA UDINE BOLZANO LUCCA AREZZO VITERBO LATINA CASERTA TARANTO BRINDISI MATERA SASSARI NUORO ASTI", keys: "ITALIA CAPOLUOGO PENISOLA STIVALE BELPAESE MONUMENTI" },
+    "In giardino": { words: "ROSA TULIPANO MARGHERITA VIOLA GIGLIO GERANIO ORTENSIA LAVANDA SALVIA EDERA SIEPE PRATO ERBA ALBERO RAMO FOGLIA RADICE SEME VASO ANNAFFIATOIO PALA RASTRELLO FORBICI CESOIE TERRA CONCIME FARFALLA APE LOMBRICO LUMACA CAMELIA AZALEA MIMOSA ORCHIDEA PEONIA DALIA GIRASOLE PAPAVERO NARCISO GELSOMINO ROSMARINO TIMO MENTA PREZZEMOLO CANCELLO PANCHINA FONTANA STAGNO NIDO VIALE", keys: "PRIMAVERA GIARDINIERE FIORITURA SERRA AIUOLA PROFUMO" },
+  };
+  const ALL8 = [[1, 0], [0, 1], [1, 1], [1, -1], [-1, 0], [0, -1], [-1, -1], [-1, 1]];
+  const shuffle = (a) => { for (let i = a.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); [a[i], a[j]] = [a[j], a[i]]; } return a; };
+  function occurrences(g, n, w) {
+    let c = 0;
+    for (let y = 0; y < n; y++) for (let x = 0; x < n; x++) for (const [dx, dy] of ALL8) {
+      let ok = true; for (let k = 0; k < w.length; k++) { const X = x + dx * k, Y = y + dy * k; if (X < 0 || Y < 0 || X >= n || Y >= n || g[Y * n + X] !== w[k]) { ok = false; break; } }
+      if (ok) c++;
+    }
+    return c;
+  }
+  function make(n, dirs, keyRange, minWords, pairs, themeName) {
+    const names = Object.keys(THEMES);
+    for (let attempt = 0; attempt < 300; attempt++) {
+      const theme = themeName || names[Math.floor(Math.random() * names.length)], T = THEMES[theme];
+      // the possible keys: one word, or (on the big grids) two
+      const singles = T.keys.split(" "), keys = singles.slice();
+      if (pairs) for (const a of singles) for (const b of singles) if (a !== b) keys.push(a + b);
+      const ok = keys.filter((k) => k.length >= keyRange[0] && k.length <= keyRange[1]), lengths = new Set(ok.map((k) => k.length));
+      const pool = shuffle([...new Set(T.words.split(" "))].filter((w) => w.length >= 3 && w.length <= n && w !== w.split("").reverse().join("")));
+      const g = new Array(n * n).fill(null), placed = [];
+      let free = n * n;
+      for (let pass = 0; pass < 2 && !(lengths.has(free)); pass++) for (const w of pool) {
+        if (lengths.has(free) && placed.length >= minWords) break;
+        if (placed.some((p) => p.w === w)) continue;
+        for (let t = 0; t < 200; t++) {
+          const [dx, dy] = dirs[Math.floor(Math.random() * dirs.length)], x = Math.floor(Math.random() * n), y = Math.floor(Math.random() * n);
+          const ex = x + dx * (w.length - 1), ey = y + dy * (w.length - 1);
+          if (ex < 0 || ey < 0 || ex >= n || ey >= n) continue;
+          let good = true, fresh = 0; const cells = [];
+          for (let k = 0; k < w.length; k++) { const i = (y + dy * k) * n + x + dx * k; if (g[i] && g[i] !== w[k]) { good = false; break; } if (!g[i]) fresh++; cells.push(i); }
+          if (!good || fresh === 0 || free - fresh < keyRange[0]) continue;
+          cells.forEach((i, k) => { g[i] = w[k]; }); free -= fresh; placed.push({ w, cells }); break;
+        }
+      }
+      if (!lengths.has(free) || placed.length < minWords) continue;
+      const cands = ok.filter((k) => k.length === free), key = cands[Math.floor(Math.random() * cands.length)];
+      // the leftover cells, read row by row, spell the key
+      let k = 0; const left = []; for (let i = 0; i < n * n; i++) if (!g[i]) { g[i] = key[k++]; left.push(i); }
+      if (placed.some((p) => occurrences(g, n, p.w) !== 1)) continue;
+      const nice = singles.includes(key) ? key : singles.find((a) => key.startsWith(a) && singles.includes(key.slice(a.length))) + " " + singles.find((b) => key.endsWith(b) && singles.includes(key.slice(0, key.length - b.length)));
+      return { n, theme, key, keyText: nice, grid: g, words: placed.sort((a, b) => a.w.localeCompare(b.w)), left };
+    }
+    return null;
+  }
+  return { make, THEMES, ALL8 };
+})();
+
+(() => {
+  "use strict";
+
+  const TAU = Math.PI * 2;
+  const DIFFICULTIES = {
+    facile:    { label: "FACILE",    color: "#7ee0a0", desc: "griglie 8×8 · parole solo da sinistra a destra e dall'alto in basso", n: 8, dirs: [[1, 0], [0, 1]], keyRange: [5, 13], minWords: 7, pairs: false, par: 150 },
+    normale:   { label: "NORMALE",   color: "#ffd66b", desc: "griglie 10×10 · anche in diagonale", n: 10, dirs: [[1, 0], [0, 1], [1, 1], [1, -1]], keyRange: [6, 16], minWords: 10, pairs: true, par: 300 },
+    difficile: { label: "DIFFICILE", color: "#ff6b7d", desc: "griglie 12×12 · in tutte le direzioni, anche al contrario", n: 12, dirs: CP.ALL8, keyRange: [8, 24], minWords: 13, pairs: true, par: 480 },
+  };
+  const DIFF_IDS = Object.keys(DIFFICULTIES);
+  const DIFF_KEY = "crucipuzzle-difficulty";
+  const bestKey = (id) => `crucipuzzle-best-${id}`;
+  const TOTAL = 5;
+  const COLORS = ["#ff8a8a", "#ffc46a", "#ffe46a", "#9ee08a", "#7ad8c8", "#7ab4ff", "#b49aff", "#ff9ad8"];
+  function store(k, v) { try { localStorage.setItem(k, v); } catch { /* ignore */ } }
+  function load(k) { try { return localStorage.getItem(k); } catch { return null; } }
+  const nf = (n) => n.toLocaleString("it-IT");
+  const feat = (id) => window.dispatchEvent(new CustomEvent("sala:impresa", { detail: id }));
+  const mmss = (t) => `${Math.floor(t / 60)}:${String(Math.floor(t % 60)).padStart(2, "0")}`;
+  function shuffle(a) { for (let i = a.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); [a[i], a[j]] = [a[j], a[i]]; } return a; }
+  function makePuzzle(d, theme) { let p = null; while (!p) p = CP.make(d.n, d.dirs, d.keyRange, d.minWords, d.pairs, theme); return p; }
+
+  // ---------- Canvas: landscape or portrait, whichever fits the screen ----------
+  const canvas = document.getElementById("game"), ctx = canvas.getContext("2d");
+  const overlay = document.getElementById("overlay"), pauseBtn = document.getElementById("pauseBtn");
+  let W = 640, H = 360, portrait = false, pxRatio = 1, L = null;
+  let touchMode = !!(window.matchMedia && matchMedia("(pointer: coarse)").matches);
+  function layout() {
+    const n = P ? P.n : diff.n;
+    if (portrait) { const cs = Math.floor(344 / n); L = { cs, gx: Math.round((W - cs * n) / 2), gy: 66, list: { x: 12, y: 66 + cs * n + 20, cols: 3, colW: 112, row: 17 }, hint: { x: 90, y: 584, w: 180, h: 44 } }; }
+    else { const cs = Math.floor(328 / n); L = { cs, gx: 12 + Math.round((328 - cs * n) / 2), gy: 28 + Math.round((328 - cs * n) / 2), list: { x: 360, y: 82, cols: 2, colW: 136, row: 16 }, hint: { x: 360, y: 306, w: 270, h: 44 } }; }
+  }
+  function resize() {
+    portrait = window.innerHeight > window.innerWidth * 1.15;
+    W = portrait ? 360 : 640; H = portrait ? 640 : 360;
+    layout();
+    const s = Math.max(0.2, Math.min((window.innerWidth - 8) / W, (window.innerHeight - 8) / H));
+    pxRatio = Math.min(3, s * (window.devicePixelRatio || 1));
+    canvas.style.width = W * s + "px"; canvas.style.height = H * s + "px";
+    canvas.width = Math.round(W * pxRatio); canvas.height = Math.round(H * pxRatio);
+  }
+  window.addEventListener("resize", () => syncControls());
+
+  // ---------- Audio ----------
+  let audioCtx = null;
+  function beep(freq, dur, type = "triangle", vol = 0.04, delay = 0) {
+    if (!audioCtx) return;
+    const t = audioCtx.currentTime + delay, o = audioCtx.createOscillator(), g = audioCtx.createGain();
+    o.type = type; o.frequency.setValueAtTime(freq, t);
+    g.gain.setValueAtTime(0.0001, t); g.gain.exponentialRampToValueAtTime(vol, t + 0.008); g.gain.exponentialRampToValueAtTime(0.0001, t + dur);
+    o.connect(g).connect(audioCtx.destination); o.start(t); o.stop(t + dur + 0.02);
+  }
+  const sfx = {
+    tick: (k) => beep(600 + k * 40, 0.025, "sine", 0.015),
+    found: (len) => [0, 1, 2].forEach((i) => beep([659, 784, 988, 1175][Math.min(3, i + (len > 6 ? 1 : 0))], 0.1, "triangle", 0.035, i * 0.06)),
+    miss: () => beep(240, 0.08, "sine", 0.025),
+    hint: () => { beep(660, 0.06, "sine", 0.03); beep(880, 0.08, "sine", 0.03, 0.06); },
+    key: (k) => beep(523 * Math.pow(1.06, k), 0.08, "triangle", 0.03),
+    win: () => [523, 659, 784, 1047, 1319, 1568].forEach((f, i) => beep(f, 0.22, "triangle", 0.05, i * 0.09)),
+  };
+
+  // ---------- State ----------
+  let difficulty = DIFFICULTIES[load(DIFF_KEY)] ? load(DIFF_KEY) : "normale";
+  let diff = DIFFICULTIES[difficulty];
+  let state = "menu", menu = null, pausedFrom = null, clock = 0, stateT = 0;
+  let score = 0, round = 0, bestCache = 0, done = 0, themes = [];
+  let P = null, found = null, sel = null, anchor = -1, hints = 0, puzT = 0, msg = null, result = null, hintAt = null, keyAt = 0, cursor = 0, kbd = false, missAt = 0;
+  const isPlaying = () => ["play", "key", "result"].includes(state);
+
+  function usePuzzle(p) { P = p; found = p.words.map(() => null); sel = null; anchor = -1; hints = 0; puzT = 0; result = null; hintAt = null; cursor = 0; layout(); }
+
+  // ---------- Selecting a line of letters ----------
+  // from a start cell to wherever the pointer is, snapped to one of the eight directions
+  function lineTo(a, b) {
+    const n = P.n, ax = a % n, ay = Math.floor(a / n), bx = b % n, by = Math.floor(b / n);
+    let dx = bx - ax, dy = by - ay; if (!dx && !dy) return [a];
+    const ang = Math.round(Math.atan2(dy, dx) / (Math.PI / 4)), ux = Math.round(Math.cos(ang * Math.PI / 4)), uy = Math.round(Math.sin(ang * Math.PI / 4));
+    const len = Math.max(Math.abs(dx), Math.abs(dy)), out = [];
+    for (let k = 0; k <= len; k++) { const x = ax + ux * k, y = ay + uy * k; if (x < 0 || y < 0 || x >= n || y >= n) break; out.push(y * n + x); }
+    return out;
+  }
+  function tryWord(cells) {
+    if (state !== "play" || cells.length < 2) return false;
+    const key = cells.join(","), rev = cells.slice().reverse().join(",");
+    const k = P.words.findIndex((w, j) => !found[j] && (w.cells.join(",") === key || w.cells.join(",") === rev));
+    if (k < 0) { sfx.miss(); missAt = clock; return false; }
+    found[k] = { color: COLORS[found.filter(Boolean).length % COLORS.length], at: clock };
+    sfx.found(P.words[k].w.length);
+    if (found.every(Boolean)) { state = "key"; stateT = 0; keyAt = clock; }
+    return true;
+  }
+  function hint() {
+    if (state !== "play") return;
+    const open = P.words.map((w, j) => j).filter((j) => !found[j]); if (!open.length) return;
+    const j = open[Math.floor(Math.random() * open.length)];
+    hints++; hintAt = { cell: P.words[j].cells[0], word: j, at: clock }; sfx.hint();
+    say(`Cerca ${P.words[j].w}: comincia dalla casella che lampeggia`);
+  }
+  function solved() {
+    state = "result"; stateT = 0; done++;
+    const n = round + 1;
+    const base = 300 * n, speed = Math.max(0, Math.floor(diff.par - puzT)) * 2 * n, clean = hints ? 0 : 200 * n, help = Math.min(base, hints * 100 * n);
+    const pts = base + speed + clean - help; score += pts;
+    result = { base, speed, clean, help, pts, t: puzT };
+    sfx.win();
+    if (!hints) feat("occhio");
+    if (puzT < 90) feat("lampo");
+    if (n === TOTAL) feat("enigmista");
+  }
+  function afterResult() { if (round + 1 >= TOTAL) { gameOver(); return; } round++; usePuzzle(makePuzzle(diff, themes[round])); state = "play"; say(`Schema ${round + 1} di ${TOTAL}: ${P.theme.toLowerCase()}`); }
+  function say(text) { msg = { text, t: 0 }; }
+
+  // ---------- Flow ----------
+  function startGame() {
+    if (!audioCtx) { try { audioCtx = new (window.AudioContext || window.webkitAudioContext)(); } catch { audioCtx = null; } }
+    if (audioCtx && audioCtx.state === "suspended") audioCtx.resume();
+    score = 0; round = 0; done = 0; themes = shuffle(Object.keys(CP.THEMES)).slice(0, TOTAL);
+    bestCache = parseInt(load(bestKey(difficulty)), 10) || 0;
+    usePuzzle(makePuzzle(diff, themes[0])); state = "play"; menu = null; overlay.classList.add("hidden");
+    say(`Schema 1 di ${TOTAL}: ${P.theme.toLowerCase()}`);
+    syncControls(); lastT = performance.now();
+  }
+  function gameOver() {
+    state = "over";
+    const prev = parseInt(load(bestKey(difficulty)), 10) || 0, record = score > prev, quit = done < TOTAL;
+    if (record) store(bestKey(difficulty), String(score));
+    menu = () => showOverlay(
+      (quit ? `<h2>PARTITA FINITA</h2><p>Punteggio: <b>${nf(score)}</b> · ${done} ${done === 1 ? "schema risolto" : "schemi risolti"} su ${TOTAL} · ${diff.label}</p>`
+        : `<h2>CINQUE SU CINQUE!</h2><p>Tutte le parole trovate e tutte le chiavi scoperte.</p><p>Punteggio: <b>${nf(score)}</b> · ${diff.label}</p>`) +
+      `${record ? "<p style='color:var(--gold)'>★ NUOVO RECORD! ★</p>" : ""}
+       ${difficultyHTML()}
+       <button class="start" data-start>RIGIOCA</button>`
+    );
+    menu(); syncControls();
+  }
+  function togglePause() {
+    if (isPlaying()) { pausedFrom = state; state = "paused"; sel = null; showOverlay(`<h2>PAUSA</h2><p class="muted">La griglia è nascosta e il tempo è fermo.</p><button class="start" data-resume>CONTINUA</button><p class="muted">Premi P per continuare</p>`); }
+    else if (state === "paused") { state = pausedFrom; overlay.classList.add("hidden"); lastT = performance.now(); }
+    syncControls();
+  }
+  window.addEventListener("sala:termina", () => { if (state !== "paused") return; overlay.classList.add("hidden"); gameOver(); });
+  function syncControls() { pauseBtn.style.display = isPlaying() && touchMode ? "block" : "none"; resize(); }
+  pauseBtn.addEventListener("click", () => togglePause());
+  function showOverlay(html) { overlay.innerHTML = html; overlay.classList.remove("hidden"); }
+  function difficultyHTML() {
+    const buttons = DIFF_IDS.map((id) => { const d = DIFFICULTIES[id]; return `<button type="button" data-diff="${id}" class="${id === difficulty ? "on" : ""}" style="--c:${d.color}">${d.label}</button>`; }).join("");
+    const best = parseInt(load(bestKey(difficulty)), 10);
+    return `<div class="diff">${buttons}</div><p class="muted">${diff.desc}${best ? ` · Record: ${nf(best)}` : ""}</p>`;
+  }
+  function setDifficulty(id) { if (!DIFFICULTIES[id]) return; difficulty = id; diff = DIFFICULTIES[id]; store(DIFF_KEY, id); if (menu) menu(); }
+  function showTitle() {
+    menu = showTitle;
+    showOverlay(
+      `<h1>CRUCI<span>PUZZLE</span></h1>
+       <p>Nella griglia sono nascoste le parole dell'elenco, tutte su un tema: la frutta, il mare, la musica... Cercale e cerchiale. Quando le hai trovate tutte, le lettere che restano, lette riga per riga, formano la parola chiave.</p>
+       <div class="pts">
+         <span><b>Cerchia</b></span><span>${touchMode ? "trascina il dito" : "trascina il mouse"} dalla prima all'ultima lettera, oppure ${touchMode ? "tocca" : "clicca"} la prima e poi l'ultima</span>
+         <span><b>Direzioni</b></span><span>a Facile solo in orizzontale e in verticale; più avanti anche in diagonale, e a Difficile anche al contrario</span>
+         <span><b>Aiuto</b></span><span>AIUTO fa lampeggiare la prima lettera di una parola</span>
+         <span><b>Punti</b></span><span>per ogni schema 300, un premio per la velocità e uno se non chiedi aiuto, moltiplicati per il numero dello schema</span>
+       </div>
+       ${touchMode ? "" : `<p class="muted help">Frecce e Spazio per cerchiare da tastiera · H aiuto · P pausa</p>`}
+       ${difficultyHTML()}
+       <button class="start" data-start>COMINCIA</button>`
+    );
+  }
+  overlay.addEventListener("click", (e) => {
+    const d = e.target.closest("[data-diff]");
+    if (d) { setDifficulty(d.dataset.diff); return; }
+    if (e.target.closest("[data-start]")) startGame();
+    if (e.target.closest("[data-resume]")) togglePause();
+  });
+
+  // ---------- Input ----------
+  const toWorld = (e) => { const rc = canvas.getBoundingClientRect(); return { x: ((e.clientX - rc.left) / rc.width) * W, y: ((e.clientY - rc.top) / rc.height) * H }; };
+  const inR = (r, p) => p.x >= r.x && p.x <= r.x + r.w && p.y >= r.y && p.y <= r.y + r.h;
+  function cellAt(p) { const c = Math.floor((p.x - L.gx) / L.cs), r = Math.floor((p.y - L.gy) / L.cs); return c < 0 || r < 0 || c >= P.n || r >= P.n ? -1 : r * P.n + c; }
+  let drag = null;
+  canvas.addEventListener("pointerdown", (e) => {
+    e.preventDefault();
+    if (state === "result") { if (stateT > 1.5) afterResult(); return; }
+    if (state !== "play") return;
+    kbd = false;
+    const p = toWorld(e);
+    if (inR(L.hint, p)) { hint(); return; }
+    const i = cellAt(p); if (i < 0) { anchor = -1; sel = null; return; }
+    drag = { start: i, moved: false, id: e.pointerId };
+    sel = anchor >= 0 && anchor !== i ? lineTo(anchor, i) : [i];
+    try { canvas.setPointerCapture(e.pointerId); } catch { /* ignore */ }
+  });
+  canvas.addEventListener("pointermove", (e) => {
+    if (!drag || e.pointerId !== drag.id) return;
+    const p = toWorld(e), c = Math.floor((p.x - L.gx) / L.cs), r = Math.floor((p.y - L.gy) / L.cs);
+    const i = Math.max(0, Math.min(P.n - 1, r)) * P.n + Math.max(0, Math.min(P.n - 1, c));
+    if (i !== drag.start) { drag.moved = true; anchor = -1; }
+    const before = sel ? sel.length : 0;
+    sel = lineTo(drag.start, i); if (sel.length !== before) sfx.tick(sel.length);
+  });
+  canvas.addEventListener("pointerup", (e) => {
+    if (!drag || e.pointerId !== drag.id) return;
+    const d = drag; drag = null;
+    if (d.moved) { tryWord(sel); sel = null; return; }
+    // a tap: the first tap marks the start, the second the end
+    if (anchor >= 0 && anchor !== d.start) { tryWord(lineTo(anchor, d.start)); anchor = -1; sel = null; return; }
+    anchor = anchor === d.start ? -1 : d.start; sel = anchor >= 0 ? [anchor] : null;
+  });
+  canvas.addEventListener("pointercancel", () => { drag = null; sel = null; });
+  window.addEventListener("keydown", (e) => {
+    const k = e.key.toLowerCase();
+    if ([" ", "arrowup", "arrowdown", "arrowleft", "arrowright"].includes(k)) e.preventDefault();
+    if (state === "menu" || state === "over") { if (e.key === "Enter") startGame(); else if (["1", "2", "3"].includes(k)) setDifficulty(DIFF_IDS[+k - 1]); return; }
+    if (k === "p" || k === "escape") { if (!e.repeat) togglePause(); return; }
+    if (state === "paused") { if (e.key === "Enter") togglePause(); return; }
+    if (state === "result") { if ((k === "enter" || k === " ") && stateT > 1.5) afterResult(); return; }
+    if (state !== "play") return;
+    kbd = true;
+    const n = P.n, r = Math.floor(cursor / n), c = cursor % n;
+    if (k === "arrowleft") cursor = r * n + Math.max(0, c - 1); else if (k === "arrowright") cursor = r * n + Math.min(n - 1, c + 1);
+    else if (k === "arrowup") cursor = Math.max(0, r - 1) * n + c; else if (k === "arrowdown") cursor = Math.min(n - 1, r + 1) * n + c;
+    else if (e.repeat) return;
+    else if (k === " " || k === "enter") { if (anchor < 0) { anchor = cursor; } else { tryWord(lineTo(anchor, cursor)); anchor = -1; } }
+    else if (k === "h") hint();
+    if (anchor >= 0) sel = lineTo(anchor, cursor); else sel = null;
+  });
+  window.addEventListener("blur", () => { if (isPlaying()) togglePause(); });
+  window.addEventListener("pointerdown", (e) => { if (e.pointerType === "touch" && !touchMode) { touchMode = true; syncControls(); if (menu) menu(); } }, true);
+
+  // ---------- Update ----------
+  function update(dt) {
+    clock += dt; stateT += dt;
+    if (msg) { msg.t += dt; if (msg.t > 2.6) msg = null; }
+    if (state === "play") puzT += dt;
+    if (state === "key") {
+      // the leftover letters light up one by one and spell the key
+      const k = Math.floor((clock - keyAt - 0.4) / 0.12);
+      if (k >= 0 && k < P.left.length && k !== update.lastK) { update.lastK = k; sfx.key(k); }
+      if (clock - keyAt > 0.4 + P.left.length * 0.12 + 1.2) { update.lastK = -1; solved(); }
+    }
+  }
+
+  // ---------- Drawing ----------
+  function rr(x, y, w, h, r) { ctx.beginPath(); ctx.roundRect(x, y, w, h, r); }
+  function capsule(cells, color, width) {
+    const a = cells[0], b = cells[cells.length - 1], n = P.n, cs = L.cs;
+    const ax = L.gx + (a % n + 0.5) * cs, ay = L.gy + (Math.floor(a / n) + 0.5) * cs, bx = L.gx + (b % n + 0.5) * cs, by = L.gy + (Math.floor(b / n) + 0.5) * cs;
+    ctx.strokeStyle = color; ctx.lineWidth = width; ctx.lineCap = "round"; ctx.beginPath(); ctx.moveTo(ax, ay); ctx.lineTo(bx, by); ctx.stroke();
+  }
+  function draw() {
+    ctx.setTransform(pxRatio, 0, 0, pxRatio, 0, 0);
+    const bg = ctx.createLinearGradient(0, 0, 0, H); bg.addColorStop(0, "#262446"); bg.addColorStop(1, "#121124");
+    ctx.fillStyle = bg; ctx.fillRect(0, 0, W, H);
+    if (!P || state === "paused") return;
+    const { cs, gx, gy } = L, n = P.n, S = cs * n;
+    ctx.fillStyle = "rgba(0,0,0,0.35)"; rr(gx - 6, gy - 3, S + 12, S + 12, 10); ctx.fill();
+    ctx.fillStyle = "#f8f3e4"; rr(gx - 6, gy - 6, S + 12, S + 12, 10); ctx.fill();
+    // found words, then the current selection
+    ctx.globalAlpha = 0.55;
+    P.words.forEach((w, j) => { if (found[j]) capsule(w.cells, found[j].color, cs * 0.78 * Math.min(1, 0.6 + (clock - found[j].at) * 4)); });
+    ctx.globalAlpha = 1;
+    if (sel && sel.length) { ctx.globalAlpha = 0.5; capsule(sel, clock - missAt < 0.3 ? "#ff8a8a" : "#ffd23a", cs * 0.82); ctx.globalAlpha = 1; }
+    if (anchor >= 0 && (!sel || sel.length <= 1)) { const x = gx + (anchor % n + 0.5) * cs, y = gy + (Math.floor(anchor / n) + 0.5) * cs; ctx.strokeStyle = "#e0a000"; ctx.lineWidth = 2.5; ctx.beginPath(); ctx.arc(x, y, cs * 0.42, 0, TAU); ctx.stroke(); }
+    // letters
+    const leftIdx = new Map(P.left.map((c, k) => [c, k]));
+    ctx.textAlign = "center"; ctx.textBaseline = "middle"; ctx.font = `700 ${Math.round(cs * 0.56)}px system-ui, sans-serif`;
+    for (let i = 0; i < n * n; i++) {
+      const x = gx + (i % n + 0.5) * cs, y = gy + (Math.floor(i / n) + 0.5) * cs;
+      let color = "#2a2840";
+      if (state === "key" || state === "result") {
+        if (leftIdx.has(i)) { const k = leftIdx.get(i), t = clock - keyAt - 0.4 - k * 0.12; if (t > 0) { ctx.fillStyle = `rgba(255,210,58,${Math.min(0.9, t * 4)})`; rr(x - cs * 0.44, y - cs * 0.44, cs * 0.88, cs * 0.88, 6); ctx.fill(); color = "#3a2400"; } }
+        else color = "rgba(42,40,64,0.35)";
+      }
+      if (hintAt && i === hintAt.cell && !found[hintAt.word] && clock - hintAt.at < 3) { const a = 0.5 + 0.5 * Math.sin((clock - hintAt.at) * 12); ctx.strokeStyle = `rgba(122,180,255,${a})`; ctx.lineWidth = 3; ctx.beginPath(); ctx.arc(x, y, cs * 0.44, 0, TAU); ctx.stroke(); }
+      if (kbd && state === "play" && i === cursor) { ctx.strokeStyle = "#7a5aff"; ctx.lineWidth = 2; ctx.strokeRect(x - cs / 2 + 2, y - cs / 2 + 2, cs - 4, cs - 4); }
+      ctx.fillStyle = color; ctx.fillText(P.grid[i], x, y + 1);
+    }
+
+    // top bar
+    ctx.fillStyle = "rgba(0,0,0,0.35)"; ctx.fillRect(0, 0, W, portrait ? 30 : 24);
+    const right = touchMode ? W - 62 : W - 12, mid = portrait && touchMode ? W * 0.44 : W / 2, ty = portrait ? 15 : 12;
+    ctx.textBaseline = "middle"; ctx.font = "800 13px system-ui, sans-serif";
+    ctx.textAlign = "left"; ctx.fillStyle = "#f4f6ee"; ctx.fillText(`${nf(score)} punti`, 10, ty);
+    ctx.textAlign = "center"; ctx.fillStyle = "#ffd23a"; ctx.fillText(`SCHEMA ${round + 1}/${TOTAL} · ${mmss(puzT)}`, mid, ty);
+    if (!(portrait && touchMode)) { ctx.textAlign = "right"; ctx.font = "700 11px system-ui, sans-serif"; ctx.fillStyle = "#d4cfee"; ctx.fillText(`REC ${nf(Math.max(bestCache, score))}`, right, ty); }
+
+    // theme and word list
+    const Lt = L.list, nFound = found.filter(Boolean).length;
+    ctx.textAlign = "left"; ctx.font = "800 15px system-ui, sans-serif"; ctx.fillStyle = "#ffd23a";
+    const tx = portrait ? 12 : 360, tyy = portrait ? 46 : 46;
+    ctx.fillText(P.theme, tx, tyy);
+    ctx.font = "600 11.5px system-ui, sans-serif"; ctx.fillStyle = "#d4cfee"; ctx.textAlign = "right";
+    ctx.fillText(`${nFound}/${P.words.length} parole · premio ${mmss(Math.max(0, diff.par - puzT))}`, portrait ? W - 12 : 630, tyy);
+    ctx.textAlign = "left"; ctx.font = `700 ${portrait ? 12.5 : 12}px system-ui, sans-serif`;
+    const perCol = Math.ceil(P.words.length / Lt.cols);
+    P.words.forEach((w, j) => {
+      const col = Math.floor(j / perCol), row = j % perCol, x = Lt.x + col * Lt.colW, y = Lt.y + row * Lt.row;
+      if (found[j]) { ctx.fillStyle = found[j].color; ctx.beginPath(); ctx.arc(x + 4, y, 3.5, 0, TAU); ctx.fill(); ctx.fillStyle = "rgba(212,207,238,0.45)"; ctx.fillText(w.w, x + 12, y); const tw = ctx.measureText(w.w).width; ctx.strokeStyle = "rgba(212,207,238,0.6)"; ctx.lineWidth = 1.2; ctx.beginPath(); ctx.moveTo(x + 11, y); ctx.lineTo(x + 13 + tw, y); ctx.stroke(); }
+      else { ctx.fillStyle = hintAt && hintAt.word === j && clock - hintAt.at < 3 ? "#7ab4ff" : "#f4f2ff"; ctx.fillText(w.w, x + 12, y); }
+    });
+    // the key, letter by letter
+    if (state === "key" || state === "result") {
+      const shown = Math.max(0, Math.min(P.key.length, Math.floor((clock - keyAt - 0.4) / 0.12) + 1));
+      let txt = ""; let k = 0; for (const ch of P.keyText) { if (ch === " ") { txt += " "; continue; } txt += k < shown ? ch : "·"; k++; }
+      const y = portrait ? L.hint.y - 22 : 284, x = portrait ? W / 2 : 495;
+      ctx.textAlign = "center"; ctx.fillStyle = "#d4cfee"; ctx.font = "600 11px system-ui, sans-serif"; ctx.fillText("LA CHIAVE", x, y - 16);
+      ctx.fillStyle = "#ffd23a"; ctx.font = `900 ${txt.length > 18 ? 15 : 19}px system-ui, sans-serif`; ctx.fillText(txt, x, y + 2);
+    }
+    const B = L.hint, on = state === "play";
+    if (state !== "key" && state !== "result" || portrait) {
+      ctx.fillStyle = on ? "rgba(255,255,255,0.09)" : "rgba(255,255,255,0.03)"; rr(B.x, B.y, B.w, B.h, 10); ctx.fill(); ctx.strokeStyle = "rgba(255,255,255,0.22)"; ctx.lineWidth = 1.5; ctx.stroke();
+      ctx.textAlign = "center"; ctx.fillStyle = on ? "#f4f6ee" : "rgba(244,246,238,0.3)"; ctx.font = "800 14px system-ui, sans-serif"; ctx.fillText("AIUTO", B.x + B.w / 2, B.y + 16);
+      ctx.font = "600 10px system-ui, sans-serif"; ctx.fillStyle = "#d4cfee"; ctx.fillText(`la prima lettera di una parola · −${100 * (round + 1)}`, B.x + B.w / 2, B.y + 32);
+    }
+    if (msg && state === "play") {
+      const a = Math.min(1, (2.6 - msg.t) * 3); ctx.globalAlpha = a; ctx.font = "800 13px system-ui, sans-serif";
+      const w = Math.min(W - 20, ctx.measureText(msg.text).width + 26), cx = gx + S / 2, y = gy + S / 2;
+      ctx.fillStyle = "rgba(20,18,40,0.9)"; rr(cx - w / 2, y - 15, w, 30, 15); ctx.fill();
+      ctx.fillStyle = "#ffd23a"; ctx.textAlign = "center"; ctx.fillText(msg.text, cx, y, W - 40); ctx.globalAlpha = 1;
+    }
+    if (state === "result" && stateT > 0.6) {
+      const R = result, w = Math.min(S - 10, 290), h = 182, cx = gx + S / 2, cy = gy + S / 2;
+      ctx.globalAlpha = Math.min(1, (stateT - 0.6) * 4);
+      ctx.fillStyle = "rgba(20,18,40,0.95)"; rr(cx - w / 2, cy - h / 2, w, h, 14); ctx.fill(); ctx.strokeStyle = "rgba(255,210,58,0.7)"; ctx.lineWidth = 2; ctx.stroke();
+      ctx.textAlign = "center"; ctx.fillStyle = "#ffd23a"; ctx.font = "900 20px system-ui, sans-serif"; ctx.fillText(P.keyText, cx, cy - h / 2 + 24, w - 20);
+      ctx.fillStyle = "#d4cfee"; ctx.font = "600 11px system-ui, sans-serif"; ctx.fillText(`${P.words.length} parole in ${mmss(R.t)} · ${hints} ${hints === 1 ? "aiuto" : "aiuti"}`, cx, cy - h / 2 + 46);
+      const rows = [["Schema", `+${nf(R.base)}`], ["Velocità", `+${nf(R.speed)}`], ["Senza aiuti", `+${nf(R.clean)}`], ["Aiuti", R.help ? `−${nf(R.help)}` : "0"]];
+      ctx.font = "600 12px system-ui, sans-serif";
+      rows.forEach(([t, v], k) => { const y = cy - h / 2 + 70 + k * 20; ctx.textAlign = "left"; ctx.fillStyle = "#d4cfee"; ctx.fillText(t, cx - w / 2 + 18, y); ctx.textAlign = "right"; ctx.fillStyle = "#f4f6ee"; ctx.fillText(v, cx + w / 2 - 18, y); });
+      if (stateT > 1.5) { ctx.textAlign = "center"; ctx.globalAlpha = 0.6 + 0.4 * Math.sin(clock * 5); ctx.fillStyle = "#ffd23a"; ctx.font = "700 11px system-ui, sans-serif"; ctx.fillText(round + 1 >= TOTAL ? (touchMode ? "tocca per finire" : "clic o Invio per finire") : touchMode ? "tocca per il prossimo schema" : "clic o Invio: prossimo schema", cx, cy + h / 2 - 14); }
+      ctx.globalAlpha = 1;
+    }
+  }
+
+  // ---------- Loop ----------
+  let lastT = performance.now();
+  function frame(now) {
+    const dt = Math.min(0.05, (now - lastT) / 1000); lastT = now;
+    if (state !== "paused") update(dt);
+    draw();
+    requestAnimationFrame(frame);
+  }
+  // behind the title: a grid with a few words found
+  function demo() { usePuzzle(makePuzzle(DIFFICULTIES.normale)); found = found.map((_, j) => (j % 3 === 0 ? { color: COLORS[j % COLORS.length], at: -9 } : null)); }
+  resize(); demo(); resize();
+  syncControls();
+  showTitle();
+  requestAnimationFrame(frame);
+})();
+</script>
+<script src="../../shared/iniziali.js" data-record="crucipuzzle-best-" data-kind="score"></script>
+</body>
+</html>
