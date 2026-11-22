@@ -9,6 +9,11 @@
   "use strict";
   // record key prefix of the game (as in trofei.js) → its feats
   const LIST = {
+    "cinque-best-": [   // cinque-lettere
+      { id: "indue", name: "In due", desc: "indovina una parola in due tentativi o meno" },
+      { id: "lampo", name: "Lampo", desc: "indovina una parola in meno di 30 secondi" },
+      { id: "vocabolario", name: "Vocabolario", desc: "indovina tutte e cinque le parole di una partita" },
+    ],
     "crucipuzzle-best-": [   // crucipuzzle
       { id: "occhio", name: "Occhio di lince", desc: "risolvi uno schema senza aiuti" },
       { id: "lampo", name: "Lampo", desc: "risolvi uno schema in meno di un minuto e mezzo" },
