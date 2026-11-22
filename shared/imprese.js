@@ -9,6 +9,11 @@
   "use strict";
   // record key prefix of the game (as in trofei.js) → its feats
   const LIST = {
+    "tende-best-": [   // tende-e-alberi
+      { id: "perfetto", name: "Perfetto", desc: "sistema un prato senza errori e senza aiuti" },
+      { id: "lampo", name: "Lampo", desc: "sistema un prato in meno di un minuto" },
+      { id: "campeggio", name: "Campeggio pieno", desc: "sistema tutti e cinque i prati di una partita" },
+    ],
     "ponti-best-": [   // ponti
       { id: "perfetto", name: "Perfetto", desc: "collega un arcipelago senza errori e senza aiuti" },
       { id: "lampo", name: "Lampo", desc: "collega un arcipelago in meno di un minuto e mezzo" },

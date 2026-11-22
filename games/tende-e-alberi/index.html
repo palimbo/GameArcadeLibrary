@@ -1,0 +1,574 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no, viewport-fit=cover">
+<title>Tende e Alberi</title>
+<style>
+  :root {
+    --bg: #13241a;
+    --fg: #f4f6ee;
+    --muted: #c8d0dc;
+    --gold: #ffd23a;
+    --red: #ff5a4a;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  html, body {
+    height: 100%;
+    background: var(--bg);
+    color: var(--fg);
+    font-family: system-ui, -apple-system, "Segoe UI", sans-serif;
+    overflow: hidden;
+    user-select: none;
+    -webkit-user-select: none;
+    -webkit-tap-highlight-color: transparent;
+    touch-action: none;
+  }
+  #wrap { position: fixed; inset: 0; display: flex; align-items: center; justify-content: center; }
+  canvas { cursor: pointer; display: block; touch-action: none; border-radius: 6px; box-shadow: 0 0 0 2px #2e3a4e, 0 10px 40px rgba(0,0,0,0.6); }
+  #pauseBtn {
+    position: fixed; z-index: 3; display: none; right: 10px; top: calc(10px + env(safe-area-inset-top, 0px));
+    font: 700 13px system-ui, sans-serif; color: var(--fg);
+    background: rgba(0, 0, 0, 0.6); border: 1px solid rgba(244, 246, 238, 0.35);
+    border-radius: 8px; padding: 6px 10px; cursor: pointer;
+  }
+  #touch { display: none !important; }
+  #overlay {
+    position: fixed; inset: 0; z-index: 5;
+    display: flex; flex-direction: column; align-items: center; justify-content: flex-start;
+    gap: 14px; padding: 16px; text-align: center; overflow-y: auto;
+    background: rgba(20, 26, 36, 0.94);
+  }
+  #overlay > :first-child { margin-top: auto; }
+  #overlay > :last-child { margin-bottom: auto; }
+  #overlay.hidden { display: none; }
+  #homeLink {
+    position: fixed; top: calc(10px + env(safe-area-inset-top, 0px)); left: 10px; z-index: 6;
+    font: 600 13px/1 system-ui, sans-serif; color: #fff; text-decoration: none;
+    padding: 8px 12px; border-radius: 999px; background: rgba(0,0,0,.55);
+    border: 1px solid rgba(255,255,255,.25);
+  }
+  #homeLink:hover { background: rgba(0,0,0,.8); }
+  #overlay.hidden ~ #homeLink { display: none; }
+  @media (max-width: 700px) { #overlay { padding-top: calc(52px + env(safe-area-inset-top, 0px)); } }
+  #overlay h1 { font-size: clamp(32px, 10vw, 58px); font-weight: 900; font-style: italic; letter-spacing: 1px; color: var(--gold);
+    text-shadow: 3px 3px 0 #6a1a1a, 0 0 22px rgba(255,210,58,0.35); }
+  #overlay h1 span { color: #fff; }
+  #overlay h2 { font-size: clamp(26px, 7vw, 42px); font-weight: 900; letter-spacing: 2px; color: var(--gold); }
+  #overlay h2.lose { color: var(--red); }
+  #overlay p { max-width: 540px; font-size: clamp(13px, 3.4vw, 16px); line-height: 1.55; }
+  #overlay p.muted { color: var(--muted); }
+  #overlay .pts { display: grid; grid-template-columns: repeat(2, auto); gap: 4px 18px; font-size: 13px; color: var(--muted); text-align: left; max-width: 560px; }
+  #overlay .pts b { color: var(--fg); }
+  #overlay .diff { display: flex; gap: 10px; flex-wrap: wrap; justify-content: center; }
+  #overlay button {
+    font: 800 15px system-ui, sans-serif; letter-spacing: 1.5px; color: var(--fg);
+    background: transparent; cursor: pointer;
+    border: 2px solid rgba(244,246,238,0.3); border-radius: 10px; padding: 9px 16px;
+  }
+  #overlay .diff button.on { border-color: var(--c); color: var(--c); box-shadow: 0 0 12px var(--c); }
+  #overlay button.start { border-color: var(--gold); color: #2a1a02; background: var(--gold); padding: 11px 30px; box-shadow: 0 4px 0 #a87a0a; }
+  @media (max-height: 560px) {
+    #overlay { gap: 8px; }
+    #overlay h1 { font-size: 30px; }
+    #overlay p { font-size: 13px; line-height: 1.4; }
+    #overlay .help, #overlay .pts { display: none; }
+  }
+</style>
+</head>
+<body>
+<div id="wrap"><canvas id="game"></canvas></div>
+<div id="touch"></div>
+<button id="pauseBtn" type="button" aria-label="Pausa">❚❚</button>
+<div id="overlay"></div>
+<a id="homeLink" href="../../index.html">← Sala Giochi</a>
+
+
+<script>
+// Tents and trees: maker and solver (unique, solvable by reasoning)
+const TD = (() => {
+  const rnd = (n) => Math.floor(Math.random() * n);
+  const N4 = [[1, 0], [-1, 0], [0, 1], [0, -1]];
+  // a perfect pairing of trees and tents, each tent next to its own tree
+  function matches(n, trees, tents) {
+    if (trees.length !== tents.length) return false;
+    const T = trees.map((t) => tents.map((s, j) => (Math.abs(s % n - t % n) + Math.abs(Math.floor(s / n) - Math.floor(t / n)) === 1 ? j : -1)).filter((j) => j >= 0));
+    const own = tents.map(() => -1);
+    const aug = (i, seen) => { for (const j of T[i]) { if (seen[j]) continue; seen[j] = 1; if (own[j] < 0 || aug(own[j], seen)) { own[j] = i; return true; } } return false; };
+    return T.every((_, i) => aug(i, []));
+  }
+  // state: 0 unknown, 1 tent, 2 grass. Returns false on a contradiction
+  function reason(P, st, tries) {
+    const n = P.n, tree = P.tree, nb = (i) => N4.map(([dx, dy]) => [i % n + dx, Math.floor(i / n) + dy]).filter(([x, y]) => x >= 0 && y >= 0 && x < n && y < n).map(([x, y]) => y * n + x);
+    const nb8 = (i) => { const out = []; for (let dy = -1; dy <= 1; dy++) for (let dx = -1; dx <= 1; dx++) { if (!dx && !dy) continue; const x = i % n + dx, y = Math.floor(i / n) + dy; if (x >= 0 && y >= 0 && x < n && y < n) out.push(y * n + x); } return out; };
+    const set = (i, v) => { if (st[i] === v) return 0; if (st[i] && st[i] !== v) throw 0; st[i] = v; return 1; };
+    const lines = []; for (let k = 0; k < n; k++) { lines.push({ cells: [...Array(n)].map((_, j) => k * n + j), need: P.rows[k] }); lines.push({ cells: [...Array(n)].map((_, j) => j * n + k), need: P.cols[k] }); }
+    try {
+      for (let i = 0; i < n * n; i++) if (!tree[i] && !nb(i).some((j) => tree[j])) set(i, 2);
+      for (let i = 0; i < n * n; i++) if (tree[i]) st[i] = 2;
+      let changed = true;
+      while (changed) {
+        changed = false;
+        for (let i = 0; i < n * n; i++) if (st[i] === 1) for (const j of nb8(i)) { if (st[j] === 1) throw 0; changed |= set(j, 2); }
+        for (const L of lines) {
+          const t = L.cells.filter((i) => st[i] === 1).length, u = L.cells.filter((i) => !st[i]);
+          if (t > L.need || t + u.length < L.need) throw 0;
+          if (t === L.need) for (const i of u) changed |= set(i, 2);
+          else if (t + u.length === L.need) for (const i of u) changed |= set(i, 1);
+        }
+        for (let i = 0; i < n * n; i++) if (tree[i]) {
+          const c = nb(i).filter((j) => !tree[j] && st[j] !== 2);
+          if (!c.length) throw 0;
+          if (c.length === 1) changed |= set(c[0], 1);
+        }
+        // a cell next to no tree that still needs a tent is grass (trees already all served)
+        for (let i = 0; i < n * n; i++) if (!st[i]) { const ts = nb(i).filter((j) => tree[j]); if (ts.every((t) => nb(t).some((j) => j !== i && st[j] === 1 && nb(j).filter((x) => tree[x]).length === 1))) changed |= set(i, 2); }
+      }
+    } catch (e) { return false; }
+    if (st.every((v) => v)) { const tents = []; st.forEach((v, i) => { if (v === 1) tents.push(i); }); return matches(n, P.trees, tents); }
+    if (!tries) return true;
+    let progress = true;
+    while (progress) {
+      progress = false;
+      for (let i = 0; i < n * n; i++) if (!st[i]) for (const v of [1, 2]) {
+        const s2 = st.slice(); s2[i] = v;
+        if (!reason(P, s2, false)) { st[i] = 3 - v; progress = true; if (!reason(P, st, false)) return false; break; }
+      }
+    }
+    if (st.every((v) => v)) { const tents = []; st.forEach((v, i) => { if (v === 1) tents.push(i); }); return matches(n, P.trees, tents); }
+    return true;
+  }
+  function make(n, tries, budget = 2500) {
+    const t0 = Date.now(), target = Math.round(n * n * 0.19);
+    while (Date.now() - t0 < budget) {
+      const tent = new Array(n * n).fill(0), tree = new Array(n * n).fill(0), tents = [], trees = [];
+      for (let it = 0; it < 500 && tents.length < target; it++) {
+        const i = rnd(n * n), x = i % n, y = Math.floor(i / n);
+        if (tent[i] || tree[i]) continue;
+        let ok = true; for (let dy = -1; dy <= 1 && ok; dy++) for (let dx = -1; dx <= 1; dx++) { const X = x + dx, Y = y + dy; if (X >= 0 && Y >= 0 && X < n && Y < n && tent[Y * n + X]) { ok = false; break; } }
+        if (!ok) continue;
+        const spots = N4.map(([dx, dy]) => [x + dx, y + dy]).filter(([X, Y]) => X >= 0 && Y >= 0 && X < n && Y < n && !tent[Y * n + X] && !tree[Y * n + X]);
+        if (!spots.length) continue;
+        const [X, Y] = spots[rnd(spots.length)];
+        tent[i] = 1; tree[Y * n + X] = 1; tents.push(i); trees.push(Y * n + X);
+      }
+      if (tents.length < target) continue;
+      const rows = [...Array(n)].map((_, r) => tent.slice(r * n, r * n + n).reduce((a, b) => a + b, 0));
+      const cols = [...Array(n)].map((_, c) => [...Array(n)].reduce((a, _, r) => a + tent[r * n + c], 0));
+      const P = { n, tree, trees, rows, cols, sol: tent };
+      const st = new Array(n * n).fill(0);
+      if (!reason(P, st, tries)) continue;
+      if (st.every((v, i) => (v === 1) === !!tent[i])) return { ...P, ms: Date.now() - t0 };
+    }
+    return null;
+  }
+  return { make, reason, matches };
+})();
+
+(() => {
+  "use strict";
+
+  const TAU = Math.PI * 2;
+  const DIFFICULTIES = {
+    facile:    { label: "FACILE",    color: "#7ee0a0", desc: "prati 6×6 · 5 errori concessi", n: 6, tries: false, par: 120, lives: 5 },
+    normale:   { label: "NORMALE",   color: "#ffd66b", desc: "prati 8×8 · 3 errori concessi", n: 8, tries: false, par: 240, lives: 3 },
+    difficile: { label: "DIFFICILE", color: "#ff6b7d", desc: "prati 10×10 e ragionamenti più lunghi · 3 errori concessi", n: 10, tries: true, par: 420, lives: 3 },
+  };
+  const DIFF_IDS = Object.keys(DIFFICULTIES);
+  const DIFF_KEY = "tende-difficulty";
+  const bestKey = (id) => `tende-best-${id}`;
+  const TOTAL = 5;
+  function store(k, v) { try { localStorage.setItem(k, v); } catch { /* ignore */ } }
+  function load(k) { try { return localStorage.getItem(k); } catch { return null; } }
+  const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
+  const nf = (n) => n.toLocaleString("it-IT");
+  const feat = (id) => window.dispatchEvent(new CustomEvent("sala:impresa", { detail: id }));
+  const mmss = (t) => `${Math.floor(t / 60)}:${String(Math.floor(t % 60)).padStart(2, "0")}`;
+  function makePuzzle(d) { let p = null; while (!p) p = TD.make(d.n, d.tries, 3000); return p; }
+
+  // ---------- Canvas: landscape or portrait, whichever fits the screen ----------
+  const canvas = document.getElementById("game"), ctx = canvas.getContext("2d");
+  const overlay = document.getElementById("overlay"), pauseBtn = document.getElementById("pauseBtn");
+  let W = 640, H = 360, portrait = false, pxRatio = 1, L = null;
+  let touchMode = !!(window.matchMedia && matchMedia("(pointer: coarse)").matches);
+  function layout() {
+    const n = P ? P.n : diff.n, clue = 24;
+    if (portrait) {
+      const cs = Math.min(46, Math.floor((344 - clue) / n)), S = cs * n;
+      L = { cs, gx: Math.round((W - S - clue) / 2) + clue, gy: 60 + clue, clue,
+        tools: [{ id: "tent", x: 9, y: 520, w: 108, h: 58 }, { id: "grass", x: 126, y: 520, w: 108, h: 58 }, { id: "hint", x: 243, y: 520, w: 108, h: 58 }] };
+    } else {
+      const cs = Math.min(44, Math.floor((326 - clue) / n)), S = cs * n;
+      L = { cs, gx: 14 + clue + Math.round((326 - clue - S) / 2), gy: 28 + clue + Math.round((326 - clue - S) / 2), clue,
+        tools: [{ id: "tent", x: 400, y: 160, w: 210, h: 44 }, { id: "grass", x: 400, y: 210, w: 210, h: 44 }, { id: "hint", x: 400, y: 260, w: 210, h: 44 }] };
+    }
+  }
+  function resize() {
+    portrait = window.innerHeight > window.innerWidth * 1.15;
+    W = portrait ? 360 : 640; H = portrait ? 640 : 360;
+    layout();
+    const s = Math.max(0.2, Math.min((window.innerWidth - 8) / W, (window.innerHeight - 8) / H));
+    pxRatio = Math.min(3, s * (window.devicePixelRatio || 1));
+    canvas.style.width = W * s + "px"; canvas.style.height = H * s + "px";
+    canvas.width = Math.round(W * pxRatio); canvas.height = Math.round(H * pxRatio);
+  }
+  window.addEventListener("resize", () => syncControls());
+
+  // ---------- Audio ----------
+  let audioCtx = null;
+  function beep(freq, dur, type = "triangle", vol = 0.04, delay = 0) {
+    if (!audioCtx) return;
+    const t = audioCtx.currentTime + delay, o = audioCtx.createOscillator(), g = audioCtx.createGain();
+    o.type = type; o.frequency.setValueAtTime(freq, t);
+    g.gain.setValueAtTime(0.0001, t); g.gain.exponentialRampToValueAtTime(vol, t + 0.008); g.gain.exponentialRampToValueAtTime(0.0001, t + dur);
+    o.connect(g).connect(audioCtx.destination); o.start(t); o.stop(t + dur + 0.02);
+  }
+  const sfx = {
+    tent: () => { beep(523, 0.06, "triangle", 0.035); beep(784, 0.08, "triangle", 0.03, 0.05); },
+    grass: () => beep(1100 + Math.random() * 200, 0.025, "sine", 0.012),
+    tap: () => beep(700, 0.03, "sine", 0.02),
+    wrong: () => { beep(180, 0.12, "square", 0.035); beep(140, 0.16, "square", 0.03, 0.08); },
+    line: () => [784, 988, 1175].forEach((f, i) => beep(f, 0.09, "sine", 0.03, i * 0.05)),
+    hint: () => { beep(660, 0.06, "sine", 0.03); beep(880, 0.08, "sine", 0.03, 0.06); },
+    win: () => [523, 659, 784, 1047, 1319, 1568].forEach((f, i) => beep(f, 0.22, "triangle", 0.05, i * 0.09)),
+  };
+
+  // ---------- State ----------
+  let difficulty = DIFFICULTIES[load(DIFF_KEY)] ? load(DIFF_KEY) : "normale";
+  let diff = DIFFICULTIES[difficulty];
+  let state = "menu", menu = null, pausedFrom = null, clock = 0, stateT = 0;
+  let score = 0, lives = 0, round = 0, bestCache = 0, done = 0;
+  let P = null, st = null, at = null, bad = null, tool = "tent", cursor = 0, kbd = false, drag = null, mistakes = 0, hints = 0, puzT = 0, msg = null, result = null, lineFlash = [], hintCell = -1, held = null, wave = 0;
+  const isPlaying = () => ["play", "result"].includes(state);
+
+  function usePuzzle(p) {
+    P = p; layout();
+    st = p.tree.map((t) => (t ? 2 : 0)); at = st.map(() => -9); bad = st.map(() => 0);
+    mistakes = 0; hints = 0; puzT = 0; result = null; lineFlash = []; hintCell = -1; drag = null; cursor = p.tree.findIndex((t) => !t);
+    for (let k = 0; k < p.n; k++) { checkLine("r", k, true); checkLine("c", k, true); }
+  }
+
+  // ---------- Moves ----------
+  const lineCells = (kind, k) => [...Array(P.n)].map((_, j) => (kind === "r" ? k * P.n + j : j * P.n + k));
+  const tentsIn = (kind, k) => lineCells(kind, k).filter((i) => st[i] === 1).length;
+  function checkLine(kind, k, quiet) {
+    const need = kind === "r" ? P.rows[k] : P.cols[k], ids = lineCells(kind, k);
+    if (tentsIn(kind, k) !== need) return;
+    let any = false;
+    // every tent of the line is in place: the rest is grass
+    for (const i of ids) if (!st[i]) { st[i] = 2; at[i] = clock; any = true; }
+    if (any && !quiet) { lineFlash.push({ kind, k, at: clock }); sfx.line(); }
+  }
+  function apply(i, t) {
+    if (state !== "play" || i < 0 || P.tree[i] || st[i]) return true;
+    if (t === "tent") {
+      if (P.sol[i]) { st[i] = 1; at[i] = clock; sfx.tent(); }
+      else { st[i] = 2; bad[i] = clock; return wrong(); }
+    } else {
+      if (!P.sol[i]) { st[i] = 2; at[i] = clock; sfx.grass(); }
+      else { st[i] = 1; bad[i] = clock; return wrong(); }
+    }
+    afterChange(i);
+    return true;
+  }
+  function afterChange(i) {
+    checkLine("r", Math.floor(i / P.n)); checkLine("c", i % P.n);
+    if (P.sol.every((v, j) => !v || st[j] === 1)) solved();
+  }
+  function wrong() {
+    mistakes++; lives--; sfx.wrong(); drag = null;
+    say(lives > 0 ? `Sbagliato · ${lives} ${lives === 1 ? "errore" : "errori"} ancora` : "Niente più errori concessi");
+    if (lives <= 0) { state = "lost"; stateT = 0; }
+    return false;
+  }
+  // a hint: a cell the rules decide, from what is already on the field
+  function hint() {
+    if (state !== "play") return;
+    for (const tries of [false, true]) {
+      const s2 = st.slice(); TD.reason(P, s2, tries);
+      let i = -1; for (let j = 0; j < s2.length; j++) if (!st[j] && s2[j]) { if (s2[j] === 1) { i = j; break; } if (i < 0) i = j; }
+      if (i >= 0) { hints++; hintCell = i; cursor = i; apply(i, s2[i] === 1 ? "tent" : "grass"); sfx.hint(); return; }
+    }
+  }
+  function solved() {
+    state = "result"; stateT = 0; done++; wave = clock;
+    for (let i = 0; i < st.length; i++) if (!st[i]) { st[i] = 2; at[i] = clock; }
+    const n = round + 1;
+    const base = 400 * n, speed = Math.max(0, Math.floor(diff.par - puzT)) * 2 * n, perfect = !mistakes && !hints ? 300 * n : 0, help = Math.min(base, hints * 100 * n);
+    const pts = base + speed + perfect - help; score += pts;
+    result = { base, speed, perfect, help, pts, t: puzT };
+    sfx.win();
+    if (!mistakes && !hints) feat("perfetto");
+    if (puzT < 60) feat("lampo");
+    if (n === TOTAL) feat("campeggio");
+  }
+  function afterResult() { if (round + 1 >= TOTAL) { gameOver(true); return; } round++; usePuzzle(makePuzzle(diff)); state = "play"; say(`Prato ${round + 1} di ${TOTAL}`); }
+  function say(text) { msg = { text, t: 0 }; }
+
+  // ---------- Flow ----------
+  function startGame() {
+    if (!audioCtx) { try { audioCtx = new (window.AudioContext || window.webkitAudioContext)(); } catch { audioCtx = null; } }
+    if (audioCtx && audioCtx.state === "suspended") audioCtx.resume();
+    score = 0; lives = diff.lives; round = 0; done = 0; tool = "tent";
+    bestCache = parseInt(load(bestKey(difficulty)), 10) || 0;
+    usePuzzle(makePuzzle(diff)); state = "play"; menu = null; overlay.classList.add("hidden");
+    say(`Prato 1 di ${TOTAL}`);
+    syncControls(); lastT = performance.now();
+  }
+  function gameOver(victory) {
+    state = "over";
+    let bonus = 0;
+    if (victory) { bonus = lives * 1000 * (DIFF_IDS.indexOf(difficulty) + 1); score += bonus; }
+    const prev = parseInt(load(bestKey(difficulty)), 10) || 0, record = score > prev;
+    if (record) store(bestKey(difficulty), String(score));
+    menu = () => showOverlay(
+      (victory ? `<h2>CAMPEGGIO PIENO!</h2>
+       <p>Tutti e cinque i prati sistemati. ${lives} ${lives === 1 ? "errore concesso avanzato" : "errori concessi avanzati"}: +${nf(bonus)} punti.</p>
+       <p>Punteggio: <b>${nf(score)}</b> · ${diff.label}</p>` : `<h2 class="lose">TROPPI ERRORI</h2>
+       <p>Punteggio: <b>${nf(score)}</b> · ${done} ${done === 1 ? "prato sistemato" : "prati sistemati"} su ${TOTAL} · ${diff.label}</p>`) +
+      `${record ? "<p style='color:var(--gold)'>★ NUOVO RECORD! ★</p>" : ""}
+       ${difficultyHTML()}
+       <button class="start" data-start>RIPROVA</button>`
+    );
+    menu(); syncControls();
+  }
+  function togglePause() {
+    if (isPlaying()) { pausedFrom = state; state = "paused"; drag = null; showOverlay(`<h2>PAUSA</h2><p class="muted">Il prato è nascosto e il tempo è fermo.</p><button class="start" data-resume>CONTINUA</button><p class="muted">Premi P per continuare</p>`); }
+    else if (state === "paused") { state = pausedFrom; overlay.classList.add("hidden"); lastT = performance.now(); }
+    syncControls();
+  }
+  window.addEventListener("sala:termina", () => { if (state !== "paused") return; overlay.classList.add("hidden"); gameOver(false); });
+  function syncControls() { pauseBtn.style.display = isPlaying() && touchMode ? "block" : "none"; resize(); }
+  pauseBtn.addEventListener("click", () => togglePause());
+  function showOverlay(html) { overlay.innerHTML = html; overlay.classList.remove("hidden"); }
+  function difficultyHTML() {
+    const buttons = DIFF_IDS.map((id) => { const d = DIFFICULTIES[id]; return `<button type="button" data-diff="${id}" class="${id === difficulty ? "on" : ""}" style="--c:${d.color}">${d.label}</button>`; }).join("");
+    const best = parseInt(load(bestKey(difficulty)), 10);
+    return `<div class="diff">${buttons}</div><p class="muted">${diff.desc}${best ? ` · Record: ${nf(best)}` : ""}</p>`;
+  }
+  function setDifficulty(id) { if (!DIFFICULTIES[id]) return; difficulty = id; diff = DIFFICULTIES[id]; store(DIFF_KEY, id); if (menu) menu(); }
+  function showTitle() {
+    menu = showTitle;
+    showOverlay(
+      `<h1>TENDE <span>E ALBERI</span></h1>
+       <p>Nel campeggio ogni albero ha la sua tenda, piantata subito accanto: sopra, sotto, a destra o a sinistra. Due tende non si toccano mai, nemmeno in diagonale. I numeri ai bordi dicono quante tende ci sono in ogni riga e in ogni colonna. Trova dove vanno tutte.</p>
+       <div class="pts">
+         <span><b>Tenda</b></span><span>${touchMode ? "tocca una casella" : "clic su una casella"}; con ERBA segni le caselle dove non va niente${touchMode ? "" : " (o clic destro)"}, anche trascinando</span>
+         <span><b>Righe</b></span><span>quando una riga o una colonna ha tutte le sue tende, il resto diventa erba da solo</span>
+         <span><b>Errori</b></span><span>una casella sbagliata si corregge da sola e costa uno degli errori concessi</span>
+         <span><b>Punti</b></span><span>per ogni prato 400, un premio per la velocità e uno se non sbagli e non chiedi aiuto, moltiplicati per il numero del prato</span>
+       </div>
+       ${touchMode ? "" : `<p class="muted help">Frecce per muoversi · Spazio tenda · X erba (tieni premuto mentre ti muovi) · T cambia strumento · H aiuto · P pausa</p>`}
+       ${difficultyHTML()}
+       <button class="start" data-start>COMINCIA</button>`
+    );
+  }
+  overlay.addEventListener("click", (e) => {
+    const d = e.target.closest("[data-diff]");
+    if (d) { setDifficulty(d.dataset.diff); return; }
+    if (e.target.closest("[data-start]")) startGame();
+    if (e.target.closest("[data-resume]")) togglePause();
+  });
+
+  // ---------- Input ----------
+  const toWorld = (e) => { const rc = canvas.getBoundingClientRect(); return { x: ((e.clientX - rc.left) / rc.width) * W, y: ((e.clientY - rc.top) / rc.height) * H }; };
+  const inR = (r, p) => p.x >= r.x && p.x <= r.x + r.w && p.y >= r.y && p.y <= r.y + r.h;
+  function cellAt(p, clampIt) {
+    let c = Math.floor((p.x - L.gx) / L.cs), r = Math.floor((p.y - L.gy) / L.cs);
+    if (clampIt) { c = clamp(c, 0, P.n - 1); r = clamp(r, 0, P.n - 1); }
+    return c < 0 || r < 0 || c >= P.n || r >= P.n ? -1 : r * P.n + c;
+  }
+  function pressTool(id) { if (id === "tent" || id === "grass") { tool = id; sfx.tap(); } else if (id === "hint") hint(); }
+  canvas.addEventListener("contextmenu", (e) => e.preventDefault());
+  canvas.addEventListener("pointerdown", (e) => {
+    e.preventDefault();
+    if (state === "result") { if (stateT > 1.6) afterResult(); return; }
+    if (state !== "play") return;
+    kbd = false;
+    const p = toWorld(e);
+    for (const b of L.tools) if (inR(b, p)) { pressTool(b.id); return; }
+    const i = cellAt(p); if (i < 0) return;
+    const t = e.button === 2 ? "grass" : tool;
+    cursor = i;
+    // tents go one by one; grass can be painted along a line
+    drag = t === "grass" ? { start: i, last: i, axis: null, id: e.pointerId } : null;
+    if (drag) try { canvas.setPointerCapture(e.pointerId); } catch { /* ignore */ }
+    if (!apply(i, t)) drag = null;
+  });
+  canvas.addEventListener("pointermove", (e) => {
+    if (!drag || e.pointerId !== drag.id || state !== "play") return;
+    let i = cellAt(toWorld(e), true); if (i === drag.last) return;
+    const n = P.n, r0 = Math.floor(drag.start / n), c0 = drag.start % n;
+    if (!drag.axis) { const r = Math.floor(i / n), c = i % n; if (r === r0 && c === c0) return; drag.axis = Math.abs(c - c0) >= Math.abs(r - r0) ? "r" : "c"; }
+    i = drag.axis === "r" ? r0 * n + (i % n) : Math.floor(i / n) * n + c0;
+    const step = drag.axis === "r" ? 1 : n, a = drag.last, dir = Math.sign(i - a);
+    for (let j = a + dir * step; dir && (dir > 0 ? j <= i : j >= i); j += dir * step) { cursor = j; if (!apply(j, "grass")) return; if (!drag) return; }
+    drag.last = i;
+  });
+  const endDrag = () => { drag = null; };
+  canvas.addEventListener("pointerup", endDrag); canvas.addEventListener("pointercancel", endDrag);
+  window.addEventListener("keydown", (e) => {
+    const k = e.key.toLowerCase();
+    if ([" ", "arrowup", "arrowdown", "arrowleft", "arrowright"].includes(k)) e.preventDefault();
+    if (state === "menu" || state === "over") { if (e.key === "Enter") startGame(); else if (["1", "2", "3"].includes(k)) setDifficulty(DIFF_IDS[+k - 1]); return; }
+    if (k === "p" || k === "escape") { if (!e.repeat) togglePause(); return; }
+    if (state === "paused") { if (e.key === "Enter") togglePause(); return; }
+    if (state === "result") { if ((k === "enter" || k === " ") && stateT > 1.6) afterResult(); return; }
+    if (state !== "play") return;
+    kbd = true;
+    const n = P.n, r = Math.floor(cursor / n), c = cursor % n;
+    let moved = true;
+    if (k === "arrowleft") cursor = r * n + Math.max(0, c - 1);
+    else if (k === "arrowright") cursor = r * n + Math.min(n - 1, c + 1);
+    else if (k === "arrowup") cursor = Math.max(0, r - 1) * n + c;
+    else if (k === "arrowdown") cursor = Math.min(n - 1, r + 1) * n + c;
+    else moved = false;
+    if (moved) { if (held === "grass") apply(cursor, "grass"); return; }
+    if (e.repeat) return;
+    if (k === " " || k === "enter") apply(cursor, "tent");
+    else if (k === "x" || k === "z") { held = "grass"; apply(cursor, "grass"); }
+    else if (k === "t") pressTool(tool === "tent" ? "grass" : "tent");
+    else if (k === "h") hint();
+  });
+  window.addEventListener("keyup", (e) => { const k = e.key.toLowerCase(); if (k === "x" || k === "z") held = null; });
+  window.addEventListener("blur", () => { held = null; if (isPlaying()) togglePause(); });
+  window.addEventListener("pointerdown", (e) => { if (e.pointerType === "touch" && !touchMode) { touchMode = true; syncControls(); if (menu) menu(); } }, true);
+
+  // ---------- Update ----------
+  function update(dt) {
+    clock += dt; stateT += dt;
+    if (msg) { msg.t += dt; if (msg.t > 2.2) msg = null; }
+    if (state === "play") puzT += dt;
+    if (state === "lost" && stateT > 1.4) gameOver(false);
+    lineFlash = lineFlash.filter((f) => clock - f.at < 0.7);
+  }
+
+  // ---------- Drawing ----------
+  function rr(x, y, w, h, r) { ctx.beginPath(); ctx.roundRect(x, y, w, h, r); }
+  function tree(x, y, s) {
+    ctx.fillStyle = "#7a4a26"; ctx.fillRect(x - s * 0.06, y + s * 0.05, s * 0.12, s * 0.3);
+    ctx.fillStyle = "#2f8a3e"; for (const [dx, dy, r] of [[0, -0.12, 0.26], [-0.15, 0.02, 0.2], [0.15, 0.02, 0.2]]) { ctx.beginPath(); ctx.arc(x + dx * s, y + dy * s, r * s, 0, TAU); ctx.fill(); }
+    ctx.fillStyle = "rgba(255,255,255,0.18)"; ctx.beginPath(); ctx.arc(x - s * 0.08, y - s * 0.2, s * 0.09, 0, TAU); ctx.fill();
+  }
+  function tent(x, y, s, k, color) {
+    const h = s * 0.34 * k, w = s * 0.4 * k;
+    ctx.fillStyle = "rgba(0,0,0,0.18)"; ctx.beginPath(); ctx.ellipse(x, y + h * 0.95, w * 1.1, s * 0.06, 0, 0, TAU); ctx.fill();
+    ctx.fillStyle = color; ctx.beginPath(); ctx.moveTo(x, y - h); ctx.lineTo(x + w, y + h * 0.9); ctx.lineTo(x - w, y + h * 0.9); ctx.closePath(); ctx.fill();
+    ctx.fillStyle = "rgba(0,0,0,0.25)"; ctx.beginPath(); ctx.moveTo(x, y - h); ctx.lineTo(x + w, y + h * 0.9); ctx.lineTo(x, y + h * 0.9); ctx.closePath(); ctx.fill();
+    ctx.fillStyle = "#3a2010"; ctx.beginPath(); ctx.moveTo(x, y - h * 0.15); ctx.lineTo(x + w * 0.3, y + h * 0.9); ctx.lineTo(x - w * 0.3, y + h * 0.9); ctx.closePath(); ctx.fill();
+  }
+  function drawField() {
+    const { cs, gx, gy } = L, n = P.n, S = cs * n;
+    const cr = Math.floor(cursor / n), cc = cursor % n;
+    // the clues
+    ctx.textAlign = "center"; ctx.textBaseline = "middle"; ctx.font = `800 ${Math.min(16, Math.round(cs * 0.45))}px system-ui, sans-serif`;
+    for (let k = 0; k < n; k++) {
+      const rd = tentsIn("r", k) === P.rows[k], cd = tentsIn("c", k) === P.cols[k];
+      if (state === "play" && k === cr) { ctx.fillStyle = "rgba(255,210,58,0.14)"; ctx.fillRect(gx - L.clue, gy + k * cs, L.clue - 2, cs); }
+      if (state === "play" && k === cc) { ctx.fillStyle = "rgba(255,210,58,0.14)"; ctx.fillRect(gx + k * cs, gy - L.clue, cs, L.clue - 2); }
+      ctx.fillStyle = rd ? "rgba(220,235,210,0.35)" : "#eef6e6"; ctx.fillText(P.rows[k], gx - L.clue / 2 - 2, gy + k * cs + cs / 2 + 1);
+      ctx.fillStyle = cd ? "rgba(220,235,210,0.35)" : "#eef6e6"; ctx.fillText(P.cols[k], gx + k * cs + cs / 2, gy - L.clue / 2);
+    }
+    ctx.fillStyle = "#4f3a22"; rr(gx - 4, gy - 4, S + 8, S + 8, 6); ctx.fill();
+    for (let i = 0; i < n * n; i++) {
+      const r = Math.floor(i / n), c = i % n, x = gx + c * cs, y = gy + r * cs, odd = (r + c) % 2;
+      const v = st[i], isBad = bad[i] && clock - bad[i] < 0.8;
+      ctx.fillStyle = v === 0 ? (odd ? "#e9efdc" : "#f1f5e6") : odd ? "#86c45e" : "#8fcd66";
+      if (P.tree[i]) ctx.fillStyle = odd ? "#86c45e" : "#8fcd66";
+      if (isBad) ctx.fillStyle = "#ffb4ac";
+      ctx.fillRect(x, y, cs, cs);
+      for (const f of lineFlash) if ((f.kind === "r" ? r : c) === f.k) { const k2 = (clock - f.at) / 0.7; ctx.fillStyle = `rgba(255,224,110,${0.7 * (1 - k2)})`; ctx.fillRect(x, y, cs, cs); }
+      if (P.tree[i]) { tree(x + cs / 2, y + cs / 2, cs); continue; }
+      if (v === 2 && !isBad) { ctx.strokeStyle = "rgba(40,100,30,0.5)"; ctx.lineWidth = 1.2; const h = (i * 7) % 3; ctx.beginPath(); for (const ox of [0.32, 0.5, 0.68]) { ctx.moveTo(x + cs * (ox + h * 0.02), y + cs * 0.68); ctx.lineTo(x + cs * (ox - 0.04 + h * 0.03), y + cs * 0.46); } ctx.stroke(); }
+      if (v === 1) {
+        const k2 = Math.min(1, (clock - at[i]) / 0.15);
+        let bounce = 0; if (state === "result") { const d = Math.hypot(r - n / 2, c - n / 2), t = clock - wave - d * 0.06; if (t > 0 && t < 0.4) bounce = Math.sin(t / 0.4 * Math.PI) * cs * 0.15; }
+        tent(x + cs / 2, y + cs / 2 - bounce, cs, 0.6 + 0.4 * k2, isBad ? "#d0352b" : ["#ff7a3a", "#ffb02a", "#4ab8e8", "#e85a8a"][i % 4]);
+      }
+      if (i === hintCell && clock - at[i] < 1.5) { ctx.strokeStyle = "#7ab4ff"; ctx.lineWidth = 3; ctx.strokeRect(x + 1.5, y + 1.5, cs - 3, cs - 3); }
+    }
+    ctx.strokeStyle = "rgba(60,80,40,0.28)"; ctx.lineWidth = 1; ctx.beginPath();
+    for (let k = 1; k < n; k++) { ctx.moveTo(gx + k * cs + 0.5, gy); ctx.lineTo(gx + k * cs + 0.5, gy + S); ctx.moveTo(gx, gy + k * cs + 0.5); ctx.lineTo(gx + S, gy + k * cs + 0.5); }
+    ctx.stroke();
+    if (kbd && state === "play") { ctx.strokeStyle = "#ffd23a"; ctx.lineWidth = 2.5; ctx.strokeRect(gx + cc * cs + 1.5, gy + cr * cs + 1.5, cs - 3, cs - 3); }
+  }
+  function button(b, label, sub, on, lit, icon) {
+    ctx.fillStyle = lit ? "rgba(255,210,58,0.2)" : on ? "rgba(255,255,255,0.09)" : "rgba(255,255,255,0.03)";
+    rr(b.x, b.y, b.w, b.h, 9); ctx.fill();
+    ctx.strokeStyle = lit ? "#ffd23a" : on ? "rgba(255,255,255,0.22)" : "rgba(255,255,255,0.08)"; ctx.lineWidth = lit ? 2.5 : 1.5; ctx.stroke();
+    const ox = icon ? 12 : 0;
+    ctx.textAlign = "center"; ctx.textBaseline = "middle"; ctx.fillStyle = on ? "#f4f6ee" : "rgba(244,246,238,0.25)";
+    ctx.font = "800 13px system-ui, sans-serif"; ctx.fillText(label, b.x + b.w / 2 + ox, b.y + b.h / 2 - (sub ? 7 : 0));
+    if (sub) { ctx.font = "600 10px system-ui, sans-serif"; ctx.fillStyle = on ? "#cfe0c8" : "rgba(200,220,200,0.3)"; ctx.fillText(sub, b.x + b.w / 2 + ox, b.y + b.h / 2 + 10); }
+    if (icon) { const x = b.x + (b.w > 140 ? 44 : 20), y = b.y + b.h / 2; if (icon === "tent") tent(x, y, 30, 1, "#ff7a3a"); else { ctx.fillStyle = "#8fcd66"; ctx.fillRect(x - 10, y - 10, 20, 20); ctx.strokeStyle = "rgba(40,100,30,0.7)"; ctx.lineWidth = 1.4; ctx.beginPath(); for (const o of [-4, 0, 4]) { ctx.moveTo(x + o, y + 6); ctx.lineTo(x + o - 1, y - 3); } ctx.stroke(); } }
+  }
+  function draw() {
+    ctx.setTransform(pxRatio, 0, 0, pxRatio, 0, 0);
+    const bg = ctx.createLinearGradient(0, 0, 0, H); bg.addColorStop(0, "#1c3424"); bg.addColorStop(1, "#0c1a10");
+    ctx.fillStyle = bg; ctx.fillRect(0, 0, W, H);
+    if (!P || state === "paused") return;
+    drawField();
+
+    // top bar
+    ctx.fillStyle = "rgba(0,0,0,0.35)"; ctx.fillRect(0, 0, W, portrait ? 30 : 24);
+    const right = touchMode ? W - 62 : W - 12, mid = portrait && touchMode ? W * 0.44 : W / 2, ty = portrait ? 15 : 12;
+    ctx.textBaseline = "middle"; ctx.font = "800 13px system-ui, sans-serif";
+    ctx.textAlign = "left"; ctx.fillStyle = "#f4f6ee"; ctx.fillText(`${nf(score)} punti`, 10, ty);
+    ctx.textAlign = "center"; ctx.fillStyle = "#ffd23a"; ctx.fillText(`PRATO ${round + 1}/${TOTAL} · ${mmss(puzT)}`, mid, ty);
+    for (let i = 0; i < diff.lives; i++) { const x = right - i * 12 - 5; if (i < lives) { ctx.fillStyle = "#ff6b7d"; ctx.beginPath(); ctx.arc(x, ty, 4, 0, TAU); ctx.fill(); } else { ctx.strokeStyle = "rgba(255,255,255,0.2)"; ctx.lineWidth = 2; ctx.beginPath(); ctx.moveTo(x - 3, ty - 3); ctx.lineTo(x + 3, ty + 3); ctx.moveTo(x + 3, ty - 3); ctx.lineTo(x - 3, ty + 3); ctx.stroke(); } }
+    if (!(portrait && touchMode)) { ctx.textAlign = "right"; ctx.font = "700 11px system-ui, sans-serif"; ctx.fillStyle = "#cfe0c8"; ctx.fillText(`REC ${nf(Math.max(bestCache, score))}`, right - diff.lives * 12 - 4, ty); }
+
+    const placed = st.filter((v) => v === 1).length, total = P.trees.length;
+    ctx.font = "600 12px system-ui, sans-serif"; ctx.fillStyle = "#cfe0c8";
+    if (portrait) { ctx.textAlign = "center"; ctx.fillText(`${placed} tende su ${total} · tempo premio ${mmss(Math.max(0, diff.par - puzT))} · errori ${mistakes} · aiuti ${hints}`, W / 2, 44); }
+    else {
+      ctx.textAlign = "left"; const x = 400;
+      ctx.font = "800 16px system-ui, sans-serif"; ctx.fillStyle = "#f4f6ee"; ctx.fillText(`${placed} tende su ${total}`, x, 52);
+      ctx.font = "600 12px system-ui, sans-serif"; ctx.fillStyle = "#cfe0c8"; ctx.fillText(`tempo premio ${mmss(Math.max(0, diff.par - puzT))}`, x, 76); ctx.fillText(`errori ${mistakes} · aiuti ${hints}`, x, 94);
+      ctx.fillStyle = "rgba(207,224,200,0.7)"; ctx.font = "500 11.5px system-ui, sans-serif";
+      ["Ogni albero ha la sua tenda accanto.", "Le tende non si toccano,", "nemmeno in diagonale."].forEach((t, k) => ctx.fillText(t, x, 114 + k * 14));
+    }
+    const T = Object.fromEntries(L.tools.map((b) => [b.id, b])), on = state === "play";
+    button(T.tent, "TENDA", touchMode ? "" : "Spazio", on, tool === "tent", "tent");
+    button(T.grass, "ERBA", portrait ? "trascina" : touchMode ? "anche trascinando" : "X · clic destro · trascina", on, tool === "grass", "grass");
+    button(T.hint, "AIUTO", portrait ? `−${100 * (round + 1)} punti` : `una casella sicura · −${100 * (round + 1)}`, on, false);
+
+    if (msg && state === "play") {
+      const a = Math.min(1, (2.2 - msg.t) * 3); ctx.globalAlpha = a; ctx.font = "800 13px system-ui, sans-serif";
+      const w = ctx.measureText(msg.text).width + 26, cx = portrait ? W / 2 : 505, y = portrait ? L.gy + L.cs * P.n + 22 : 322;
+      ctx.fillStyle = "rgba(12,26,16,0.92)"; rr(cx - w / 2, y - 14, w, 28, 14); ctx.fill();
+      ctx.fillStyle = "#ffd23a"; ctx.textAlign = "center"; ctx.fillText(msg.text, cx, y); ctx.globalAlpha = 1;
+    }
+    if (state === "result" && stateT > 1) {
+      const R = result, w = portrait ? 300 : 230, x0 = portrait ? (W - w) / 2 : 390, y0 = portrait ? 500 : 112, h = portrait ? 132 : 220;
+      ctx.globalAlpha = Math.min(1, (stateT - 1) * 4);
+      ctx.fillStyle = "rgba(12,26,16,0.96)"; rr(x0, y0, w, h, 12); ctx.fill(); ctx.strokeStyle = "rgba(255,210,58,0.7)"; ctx.lineWidth = 2; ctx.stroke();
+      ctx.textAlign = "center"; ctx.fillStyle = "#ffd23a"; ctx.font = "900 18px system-ui, sans-serif"; ctx.fillText("TUTTI SISTEMATI!", x0 + w / 2, y0 + 20);
+      ctx.fillStyle = "#cfe0c8"; ctx.font = "600 11px system-ui, sans-serif"; ctx.fillText(`in ${mmss(R.t)} · ${mistakes} ${mistakes === 1 ? "errore" : "errori"} · ${hints} ${hints === 1 ? "aiuto" : "aiuti"}`, x0 + w / 2, y0 + 40);
+      const rows = [["Prato", `+${nf(R.base)}`], ["Velocità", `+${nf(R.speed)}`], ["Senza errori né aiuti", `+${nf(R.perfect)}`], ["Aiuti", R.help ? `−${nf(R.help)}` : "0"]];
+      ctx.font = "600 12px system-ui, sans-serif";
+      rows.forEach(([t, v], k) => { const y = y0 + 60 + k * (portrait ? 14 : 24); ctx.textAlign = "left"; ctx.fillStyle = "#cfe0c8"; ctx.fillText(t, x0 + 16, y); ctx.textAlign = "right"; ctx.fillStyle = "#f4f6ee"; ctx.fillText(v, x0 + w - 16, y); });
+      if (stateT > 1.6) { ctx.textAlign = "center"; ctx.globalAlpha = 0.6 + 0.4 * Math.sin(clock * 5); ctx.fillStyle = "#ffd23a"; ctx.font = "700 11px system-ui, sans-serif"; ctx.fillText(round + 1 >= TOTAL ? (touchMode ? "tocca per finire" : "clic o Invio per finire") : touchMode ? "tocca per il prossimo prato" : "clic o Invio: prossimo prato", x0 + w / 2, y0 + h - 12); }
+      ctx.globalAlpha = 1;
+    }
+  }
+
+  // ---------- Loop ----------
+  let lastT = performance.now();
+  function frame(now) {
+    const dt = Math.min(0.05, (now - lastT) / 1000); lastT = now;
+    if (state !== "paused") update(dt);
+    draw();
+    requestAnimationFrame(frame);
+  }
+  // behind the title: a field half done
+  function demo() { usePuzzle(makePuzzle(DIFFICULTIES.normale)); P.sol.forEach((v, i) => { if (!P.tree[i] && i % 3 === 0) st[i] = v ? 1 : 2; }); }
+  resize(); demo(); resize();
+  syncControls();
+  showTitle();
+  requestAnimationFrame(frame);
+})();
+</script>
+<script src="../../shared/iniziali.js" data-record="tende-best-" data-kind="score"></script>
+</body>
+</html>
