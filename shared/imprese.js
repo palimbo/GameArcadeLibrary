@@ -9,6 +9,11 @@
   "use strict";
   // record key prefix of the game (as in trofei.js) → its feats
   const LIST = {
+    "kakuro-best-": [   // kakuro
+      { id: "perfetto", name: "Perfetto", desc: "risolvi uno schema senza errori e senza aiuti" },
+      { id: "lampo", name: "Lampo", desc: "risolvi uno schema in meno di 3 minuti" },
+      { id: "cinque", name: "Tutti e cinque", desc: "risolvi tutti e cinque gli schemi di una partita" },
+    ],
     "disegni-best-": [   // disegni-nascosti
       { id: "perfetto", name: "Perfetto", desc: "scopri un disegno senza errori e senza aiuti" },
       { id: "lampo", name: "Lampo", desc: "scopri un disegno in meno di un minuto" },

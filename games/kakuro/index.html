@@ -1,0 +1,616 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no, viewport-fit=cover">
+<title>Kakuro</title>
+<style>
+  :root {
+    --bg: #181a24;
+    --fg: #f4f6ee;
+    --muted: #c8d0dc;
+    --gold: #ffd23a;
+    --red: #ff5a4a;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  html, body {
+    height: 100%;
+    background: var(--bg);
+    color: var(--fg);
+    font-family: system-ui, -apple-system, "Segoe UI", sans-serif;
+    overflow: hidden;
+    user-select: none;
+    -webkit-user-select: none;
+    -webkit-tap-highlight-color: transparent;
+    touch-action: none;
+  }
+  #wrap { position: fixed; inset: 0; display: flex; align-items: center; justify-content: center; }
+  canvas { cursor: pointer; display: block; touch-action: none; border-radius: 6px; box-shadow: 0 0 0 2px #2e3a4e, 0 10px 40px rgba(0,0,0,0.6); }
+  #pauseBtn {
+    position: fixed; z-index: 3; display: none; right: 10px; top: calc(10px + env(safe-area-inset-top, 0px));
+    font: 700 13px system-ui, sans-serif; color: var(--fg);
+    background: rgba(0, 0, 0, 0.6); border: 1px solid rgba(244, 246, 238, 0.35);
+    border-radius: 8px; padding: 6px 10px; cursor: pointer;
+  }
+  #touch { display: none !important; }
+  #overlay {
+    position: fixed; inset: 0; z-index: 5;
+    display: flex; flex-direction: column; align-items: center; justify-content: flex-start;
+    gap: 14px; padding: 16px; text-align: center; overflow-y: auto;
+    background: rgba(20, 26, 36, 0.94);
+  }
+  #overlay > :first-child { margin-top: auto; }
+  #overlay > :last-child { margin-bottom: auto; }
+  #overlay.hidden { display: none; }
+  #homeLink {
+    position: fixed; top: calc(10px + env(safe-area-inset-top, 0px)); left: 10px; z-index: 6;
+    font: 600 13px/1 system-ui, sans-serif; color: #fff; text-decoration: none;
+    padding: 8px 12px; border-radius: 999px; background: rgba(0,0,0,.55);
+    border: 1px solid rgba(255,255,255,.25);
+  }
+  #homeLink:hover { background: rgba(0,0,0,.8); }
+  #overlay.hidden ~ #homeLink { display: none; }
+  @media (max-width: 700px) { #overlay { padding-top: calc(52px + env(safe-area-inset-top, 0px)); } }
+  #overlay h1 { font-size: clamp(32px, 10vw, 58px); font-weight: 900; font-style: italic; letter-spacing: 1px; color: var(--gold);
+    text-shadow: 3px 3px 0 #6a1a1a, 0 0 22px rgba(255,210,58,0.35); }
+  #overlay h1 span { color: #fff; }
+  #overlay h2 { font-size: clamp(26px, 7vw, 42px); font-weight: 900; letter-spacing: 2px; color: var(--gold); }
+  #overlay h2.lose { color: var(--red); }
+  #overlay p { max-width: 540px; font-size: clamp(13px, 3.4vw, 16px); line-height: 1.55; }
+  #overlay p.muted { color: var(--muted); }
+  #overlay .pts { display: grid; grid-template-columns: repeat(2, auto); gap: 4px 18px; font-size: 13px; color: var(--muted); text-align: left; max-width: 560px; }
+  #overlay .pts b { color: var(--fg); }
+  #overlay .diff { display: flex; gap: 10px; flex-wrap: wrap; justify-content: center; }
+  #overlay button {
+    font: 800 15px system-ui, sans-serif; letter-spacing: 1.5px; color: var(--fg);
+    background: transparent; cursor: pointer;
+    border: 2px solid rgba(244,246,238,0.3); border-radius: 10px; padding: 9px 16px;
+  }
+  #overlay .diff button.on { border-color: var(--c); color: var(--c); box-shadow: 0 0 12px var(--c); }
+  #overlay button.start { border-color: var(--gold); color: #2a1a02; background: var(--gold); padding: 11px 30px; box-shadow: 0 4px 0 #a87a0a; }
+  @media (max-height: 560px) {
+    #overlay { gap: 8px; }
+    #overlay h1 { font-size: 30px; }
+    #overlay p { font-size: 13px; line-height: 1.4; }
+    #overlay .help, #overlay .pts { display: none; }
+  }
+</style>
+</head>
+<body>
+<div id="wrap"><canvas id="game"></canvas></div>
+<div id="touch"></div>
+<button id="pauseBtn" type="button" aria-label="Pausa">❚❚</button>
+<div id="overlay"></div>
+<a id="homeLink" href="../../index.html">← Sala Giochi</a>
+
+
+<script id="kkgen" type="text/plain">
+// Kakuro puzzle maker: pattern, digits, unique and solvable by run-by-run reasoning
+const KK = (() => {
+  const shuffle = (a) => { for (let i = a.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); [a[i], a[j]] = [a[j], a[i]]; } return a; };
+  const bits = (m) => { let n = 0; while (m) { m &= m - 1; n++; } return n; };
+  // combos[k][s]: masks of k distinct digits 1..9 adding up to s
+  const combos = [...Array(10)].map(() => [...Array(46)].map(() => []));
+  for (let m = 2; m < 1024; m += 2) { let k = 0, s = 0; for (let d = 1; d <= 9; d++) if (m & (1 << d)) { k++; s += d; } combos[k][s].push(m); }
+  function pattern(n, maxRun) {
+    for (let tries = 0; tries < 400; tries++) {
+      const w = [...Array(n)].map((_, r) => [...Array(n)].map((_, c) => r > 0 && c > 0));
+      const black = (r, c) => { w[r][c] = false; w[n - r][n - c] = false; };
+      for (let r = 1; r < n; r++) for (let c = 1; c < n; c++) if (Math.random() < 0.2) black(r, c);
+      for (let pass = 0; pass < 50; pass++) {
+        let changed = false;
+        for (let r = 1; r < n; r++) for (let c = 1; c < n; c++) {
+          if (!w[r][c]) continue;
+          let a = c, b = c; while (w[r][a - 1]) a--; while (b + 1 < n && w[r][b + 1]) b++;
+          let u = r, d = r; while (w[u - 1][c]) u--; while (d + 1 < n && w[d + 1][c]) d++;
+          if (b - a + 1 === 1 || d - u + 1 === 1) { black(r, c); changed = true; }
+          else if (b - a + 1 > maxRun) { black(r, a + 1 + Math.floor(Math.random() * (b - a - 1))); changed = true; }
+          else if (d - u + 1 > maxRun) { black(u + 1 + Math.floor(Math.random() * (d - u - 1)), c); changed = true; }
+        }
+        if (!changed) break;
+      }
+      // enough white cells, all joined together
+      const cells = []; for (let r = 1; r < n; r++) for (let c = 1; c < n; c++) if (w[r][c]) cells.push([r, c]);
+      if (cells.length < (n - 1) * (n - 1) * 0.55) continue;
+      const seen = new Set([cells[0].join()]), st = [cells[0]];
+      while (st.length) { const [r, c] = st.pop(); for (const [dr, dc] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) { const R = r + dr, C = c + dc; if (R > 0 && C > 0 && R < n && C < n && w[R][C] && !seen.has(R + "," + C)) { seen.add(R + "," + C); st.push([R, C]); } } }
+      if (seen.size !== cells.length) continue;
+      return w;
+    }
+    return null;
+  }
+  // the runs: each a list of cell indices (r * n + c), with the clue cell
+  function runsOf(w, n) {
+    const runs = [];
+    for (let r = 0; r < n; r++) for (let c = 0; c < n; c++) {
+      if (w[r][c]) continue;
+      if (c + 1 < n && w[r][c + 1]) { const cs = []; for (let k = c + 1; k < n && w[r][k]; k++) cs.push(r * n + k); runs.push({ clue: r * n + c, dir: "a", cells: cs }); }
+      if (r + 1 < n && w[r + 1][c]) { const cs = []; for (let k = r + 1; k < n && w[k][c]; k++) cs.push(k * n + c); runs.push({ clue: r * n + c, dir: "d", cells: cs }); }
+    }
+    return runs;
+  }
+  function fill(w, n, runs) {
+    const cellRuns = {}; for (const ru of runs) for (const i of ru.cells) (cellRuns[i] = cellRuns[i] || []).push(ru);
+    const order = Object.keys(cellRuns).map(Number).sort((a, b) => a - b), val = {};
+    let steps = 0;
+    const rec = (k) => {
+      if (++steps > 20000) return false;
+      if (k === order.length) return true;
+      const i = order[k];
+      for (const d of shuffle([1, 2, 3, 4, 5, 6, 7, 8, 9])) {
+        if (cellRuns[i].some((ru) => ru.cells.some((j) => val[j] === d))) continue;
+        val[i] = d; if (rec(k + 1)) return true; delete val[i];
+      }
+      return false;
+    };
+    return rec(0) ? val : null;
+  }
+  // every valid way to fill one run, given candidate masks
+  function runOptions(ru, mask, limit = 5000) {
+    const out = [], k = ru.cells.length, cand = ru.cells.map((i) => mask[i]);
+    const rec = (j, used, s, cur) => {
+      if (out.length >= limit) return;
+      if (j === k) { if (s === ru.sum) out.push(cur.slice()); return; }
+      const left = k - j - 1;
+      for (let d = 1; d <= 9; d++) {
+        if (!(cand[j] & (1 << d)) || used & (1 << d)) continue;
+        const rest = ru.sum - s - d;
+        if (rest < (left * (left + 1)) / 2 || rest > left * (19 - left) / 2) continue;
+        cur.push(d); rec(j + 1, used | (1 << d), s + d, cur); cur.pop();
+      }
+    };
+    rec(0, 0, 0, []); return out;
+  }
+  // reasoning one run at a time; returns the masks it reaches
+  function propagate(runs, mask) {
+    let changed = true;
+    while (changed) {
+      changed = false;
+      for (const ru of runs) {
+        const opts = runOptions(ru, mask);
+        ru.cells.forEach((i, j) => { let m = 0; for (const o of opts) m |= 1 << o[j]; if (m !== mask[i]) { mask[i] = m; changed = true; } });
+      }
+    }
+    return mask;
+  }
+  function countSolutions(runs, cellsList, limit = 2) {
+    const mask = {}; for (const i of cellsList) mask[i] = 0x3fe;
+    propagate(runs, mask);
+    const cellRuns = {}; for (const ru of runs) for (const i of ru.cells) (cellRuns[i] = cellRuns[i] || []).push(ru);
+    let n = 0;
+    const rec = (m) => {
+      if (n >= limit) return;
+      if (cellsList.some((i) => !m[i])) return;
+      let best = -1, bc = 10; for (const i of cellsList) { const c = bits(m[i]); if (c > 1 && c < bc) { bc = c; best = i; } }
+      if (best < 0) { n++; return; }
+      for (let d = 1; d <= 9; d++) if (m[best] & (1 << d)) { const m2 = { ...m }; m2[best] = 1 << d; propagate(runs, m2); rec(m2); if (n >= limit) return; }
+    };
+    rec(mask); return n;
+  }
+  function solvedCount(runs, cellsList) {
+    const mask = {}; for (const i of cellsList) mask[i] = 0x3fe;
+    propagate(runs, mask);
+    let k = 0; const open = []; for (const i of cellsList) { if (bits(mask[i]) === 1) k++; else open.push(i); }
+    return { k, open, mask };
+  }
+  function make(n, maxRun, budget = 3000) {
+    const t0 = Date.now();
+    for (let attempt = 0; Date.now() - t0 < budget; attempt++) {
+      const w = pattern(n, maxRun); if (!w) continue;
+      const runs = runsOf(w, n), cellsList = [...new Set(runs.flatMap((r) => r.cells))];
+      const cellRuns = {}; for (const ru of runs) for (const i of ru.cells) (cellRuns[i] = cellRuns[i] || []).push(ru);
+      const val = fill(w, n, runs); if (!val) continue;
+      const sums = () => { for (const ru of runs) ru.sum = ru.cells.reduce((s, i) => s + val[i], 0); };
+      sums(); let cur = solvedCount(runs, cellsList);
+      // local repair: change a digit where the reasoning gets stuck, keep it if no worse
+      for (let it = 0; it < 300 && cur.open.length; it++) {
+        const i = Math.random() < 0.8 ? cur.open[Math.floor(Math.random() * cur.open.length)] : cellsList[Math.floor(Math.random() * cellsList.length)];
+        const old = val[i], used = new Set(cellRuns[i].flatMap((ru) => ru.cells.filter((j) => j !== i).map((j) => val[j])));
+        const choices = [1, 2, 3, 4, 5, 6, 7, 8, 9].filter((d) => d !== old && !used.has(d)); if (!choices.length) continue;
+        val[i] = choices[Math.floor(Math.random() * choices.length)]; sums();
+        const nx = solvedCount(runs, cellsList);
+        if (nx.k >= cur.k) cur = nx; else { val[i] = old; sums(); }
+      }
+      if (!cur.open.length) return { n, w, runs: runs.map((r) => ({ ...r, cells: r.cells.slice() })), val, tries: attempt, ms: Date.now() - t0 };
+    }
+    return null;
+  }
+  return { make, combos, runOptions, propagate, countSolutions, bits };
+})();
+
+self.onmessage = (e) => { const { n, maxRun, id } = e.data; let p = null; while (!p) p = KK.make(n, maxRun, 4000); self.postMessage({ id, n: p.n, w: p.w, runs: p.runs.map((r) => ({ clue: r.clue, dir: r.dir, cells: r.cells, sum: r.sum })), val: p.val }); };
+</script>
+<script>
+(() => {
+  "use strict";
+
+  const TAU = Math.PI * 2;
+  const DIFFICULTIES = {
+    facile:    { label: "FACILE",    color: "#7ee0a0", desc: "griglie piccole, 6×6 · 5 errori concessi", n: 6, maxRun: 4, par: 240, lives: 5 },
+    normale:   { label: "NORMALE",   color: "#ffd66b", desc: "griglie 8×8 · 3 errori concessi", n: 8, maxRun: 5, par: 480, lives: 3 },
+    difficile: { label: "DIFFICILE", color: "#ff6b7d", desc: "griglie grandi, 10×10 · 3 errori concessi", n: 10, maxRun: 6, par: 840, lives: 3 },
+  };
+  const DIFF_IDS = Object.keys(DIFFICULTIES);
+  const DIFF_KEY = "kakuro-difficulty";
+  const bestKey = (id) => `kakuro-best-${id}`;
+  const TOTAL = 5;
+  function store(k, v) { try { localStorage.setItem(k, v); } catch { /* ignore */ } }
+  function load(k) { try { return localStorage.getItem(k); } catch { return null; } }
+  const nf = (n) => n.toLocaleString("it-IT");
+  const feat = (id) => window.dispatchEvent(new CustomEvent("sala:impresa", { detail: id }));
+  const mmss = (t) => `${Math.floor(t / 60)}:${String(Math.floor(t % 60)).padStart(2, "0")}`;
+  const bits = (m) => { let n = 0; while (m) { m &= m - 1; n++; } return n; };
+
+  // ---------- The puzzle maker, in a worker so the game never stops ----------
+  const genSrc = document.getElementById("kkgen").textContent;
+  const KK = new Function(genSrc.replace(/self\.onmessage[\s\S]*$/, "") + "; return KK;")();
+  let worker = null, wantId = 0;
+  const pending = {};   // id → resolve
+  try { worker = new Worker(URL.createObjectURL(new Blob([genSrc], { type: "text/javascript" }))); worker.onmessage = (e) => { const r = pending[e.data.id]; delete pending[e.data.id]; if (r) r(e.data); }; } catch { worker = null; }
+  function generate(n, maxRun) {
+    const id = ++wantId;
+    if (!worker) return new Promise((res) => setTimeout(() => { let p = null; while (!p) p = KK.make(n, maxRun, 4000); res(p); }, 30));
+    return new Promise((res) => { pending[id] = res; worker.postMessage({ n, maxRun, id }); });
+  }
+
+  // ---------- Canvas: landscape or portrait, whichever fits the screen ----------
+  const canvas = document.getElementById("game"), ctx = canvas.getContext("2d");
+  const overlay = document.getElementById("overlay"), pauseBtn = document.getElementById("pauseBtn");
+  let W = 640, H = 360, portrait = false, pxRatio = 1, L = null;
+  let touchMode = !!(window.matchMedia && matchMedia("(pointer: coarse)").matches);
+  function layout() {
+    const n = P ? P.n : diff.n;
+    if (portrait) {
+      const cs = Math.min(46, Math.floor(342 / n)), S = cs * n;
+      L = { cs, gx: Math.round((W - S) / 2), gy: 66, helpY: 66 + S + 14,
+        pad: [...Array(9)].map((_, k) => ({ id: "d" + (k + 1), d: k + 1, x: 9 + k * 38, y: 470, w: 35, h: 58 })),
+        tools: [{ id: "notes", x: 9, y: 540, w: 108, h: 52 }, { id: "erase", x: 126, y: 540, w: 108, h: 52 }, { id: "hint", x: 243, y: 540, w: 108, h: 52 }] };
+    } else {
+      const cs = Math.min(50, Math.floor(324 / n)), S = cs * n;
+      L = { cs, gx: 14 + Math.round((324 - S) / 2), gy: 30 + Math.round((324 - S) / 2), helpY: 0,
+        pad: [...Array(9)].map((_, k) => ({ id: "d" + (k + 1), d: k + 1, x: 356 + (k % 3) * 62, y: 150 + Math.floor(k / 3) * 54, w: 56, h: 48 })),
+        tools: [{ id: "notes", x: 548, y: 150, w: 80, h: 48 }, { id: "erase", x: 548, y: 204, w: 80, h: 48 }, { id: "hint", x: 548, y: 258, w: 80, h: 48 }] };
+    }
+  }
+  function resize() {
+    portrait = window.innerHeight > window.innerWidth * 1.15;
+    W = portrait ? 360 : 640; H = portrait ? 640 : 360;
+    layout();
+    const s = Math.max(0.2, Math.min((window.innerWidth - 8) / W, (window.innerHeight - 8) / H));
+    pxRatio = Math.min(3, s * (window.devicePixelRatio || 1));
+    canvas.style.width = W * s + "px"; canvas.style.height = H * s + "px";
+    canvas.width = Math.round(W * pxRatio); canvas.height = Math.round(H * pxRatio);
+  }
+  window.addEventListener("resize", () => syncControls());
+
+  // ---------- Audio ----------
+  let audioCtx = null;
+  function beep(freq, dur, type = "triangle", vol = 0.04, delay = 0) {
+    if (!audioCtx) return;
+    const t = audioCtx.currentTime + delay, o = audioCtx.createOscillator(), g = audioCtx.createGain();
+    o.type = type; o.frequency.setValueAtTime(freq, t);
+    g.gain.setValueAtTime(0.0001, t); g.gain.exponentialRampToValueAtTime(vol, t + 0.008); g.gain.exponentialRampToValueAtTime(0.0001, t + dur);
+    o.connect(g).connect(audioCtx.destination); o.start(t); o.stop(t + dur + 0.02);
+  }
+  const SCALE = [0, 523, 587, 659, 698, 784, 880, 988, 1047, 1175];
+  const sfx = {
+    tap: () => beep(700, 0.03, "sine", 0.02),
+    place: (d) => beep(SCALE[d], 0.09, "triangle", 0.04),
+    note: () => beep(1200, 0.03, "sine", 0.015),
+    wrong: () => { beep(180, 0.12, "square", 0.035); beep(140, 0.16, "square", 0.03, 0.08); },
+    run: () => [784, 988, 1175].forEach((f, i) => beep(f, 0.1, "sine", 0.03, i * 0.05)),
+    hint: () => { beep(660, 0.06, "sine", 0.03); beep(880, 0.08, "sine", 0.03, 0.06); },
+    win: () => [523, 659, 784, 1047, 1319, 1568].forEach((f, i) => beep(f, 0.22, "triangle", 0.05, i * 0.09)),
+  };
+
+  // ---------- State ----------
+  let difficulty = DIFFICULTIES[load(DIFF_KEY)] ? load(DIFF_KEY) : "normale";
+  let diff = DIFFICULTIES[difficulty];
+  let state = "menu", menu = null, pausedFrom = null, clock = 0, stateT = 0;
+  let score = 0, lives = 0, round = 0, bestCache = 0, done = 0, gameId = 0;
+  let P = null, cells = null, cellRuns = null, sel = -1, notesMode = false, mistakes = 0, hints = 0, puzT = 0, msg = null, wave = null, flash = [], result = null, nextP = null;
+  const isPlaying = () => ["play", "result", "wait"].includes(state);
+  const white = (i) => P.w[Math.floor(i / P.n)][i % P.n];
+
+  function usePuzzle(p) {
+    P = p; layout();
+    cells = [...Array(p.n * p.n)].map((_, i) => ({ v: 0, notes: 0, bad: 0, at: -9 }));
+    cellRuns = {}; for (const ru of p.runs) for (const i of ru.cells) (cellRuns[i] = cellRuns[i] || []).push(ru);
+    sel = p.runs[0].cells[0]; notesMode = false; mistakes = 0; hints = 0; puzT = 0; wave = null; flash = []; result = null;
+  }
+  // the next puzzle is made while you play this one
+  function prepareNext() { const g = gameId, d = diff; nextP = null; generate(d.n, d.maxRun).then((p) => { if (g === gameId) nextP = p; }); }
+  function begin() {
+    if (nextP) { usePuzzle(nextP); nextP = null; state = "play"; say(`Schema ${round + 1} di ${TOTAL}`); if (round + 1 < TOTAL) prepareNext(); }
+    else { state = "wait"; stateT = 0; }
+  }
+
+  // ---------- Moves ----------
+  const right = (i) => cells[i].v && cells[i].v === P.val[i] && !cells[i].bad;
+  function place(i, d) {
+    if (state !== "play" || i < 0 || !white(i)) return;
+    const c = cells[i]; if (right(i)) return;
+    if (notesMode) { if (c.v) return; c.notes ^= 1 << d; sfx.note(); return; }
+    if (d === P.val[i]) {
+      c.v = d; c.notes = 0; c.at = clock; c.bad = 0; sfx.place(d);
+      for (const ru of cellRuns[i]) for (const j of ru.cells) cells[j].notes &= ~(1 << d);
+      let k = 0; for (const ru of cellRuns[i]) if (ru.cells.every(right)) { flash.push({ ru, at: clock + k * 0.08 }); k++; }
+      if (k) sfx.run();
+      if (Object.keys(cellRuns).every((j) => right(+j))) solved();
+    } else {
+      c.v = d; c.bad = clock; mistakes++; lives--; sfx.wrong();
+      say(lives > 0 ? `${d} non va qui · ${lives} ${lives === 1 ? "errore" : "errori"} ancora` : "Niente più errori concessi");
+      if (lives <= 0) { state = "lost"; stateT = 0; }
+    }
+  }
+  function erase(i) { if (state !== "play" || i < 0 || !white(i) || right(i)) return; const c = cells[i]; c.v = 0; c.notes = 0; c.bad = 0; sfx.tap(); }
+  // a hint: a cell the sums force, reasoning from what is already right
+  function hint() {
+    if (state !== "play") return;
+    const mask = {}; for (const j of Object.keys(cellRuns)) mask[j] = right(+j) ? 1 << P.val[j] : 0x3fe;
+    const runs = P.runs.map((r) => ({ ...r })); KK.propagate(runs, mask);
+    let i = -1;
+    if (sel >= 0 && white(sel) && !right(sel) && bits(mask[sel]) === 1) i = sel;
+    if (i < 0) for (const j of Object.keys(mask)) if (!right(+j) && bits(mask[j]) === 1) { i = +j; break; }
+    if (i < 0) for (const j of Object.keys(mask)) if (!right(+j)) { i = +j; break; }
+    if (i < 0) return;
+    hints++; sel = i; const keep = notesMode; notesMode = false; cells[i].v = 0; cells[i].bad = 0; place(i, P.val[i]); notesMode = keep; sfx.hint();
+  }
+  function solved() {
+    state = "result"; stateT = 0; done++;
+    const n = round + 1;
+    const base = 500 * n, speed = Math.max(0, Math.floor(diff.par - puzT)) * 2 * n, perfect = !mistakes && !hints ? 300 * n : 0, help = Math.min(base, hints * 100 * n);
+    const pts = base + speed + perfect - help; score += pts;
+    result = { base, speed, perfect, help, pts, t: puzT };
+    wave = { at: clock, from: sel };
+    sfx.win();
+    if (!mistakes && !hints) feat("perfetto");
+    if (puzT < 180) feat("lampo");
+    if (n === TOTAL) feat("cinque");
+  }
+  function afterResult() { if (round + 1 >= TOTAL) { gameOver(true); return; } round++; begin(); }
+  function say(text) { msg = { text, t: 0 }; }
+  // the ways to make a run's sum, keeping the digits already right
+  function waysFor(ru) {
+    const fixed = ru.cells.filter(right).map((j) => P.val[j]);
+    let fm = 0; for (const d of fixed) fm |= 1 << d;
+    return KK.combos[ru.cells.length][ru.sum].filter((m) => (m & fm) === fm).map((m) => [1, 2, 3, 4, 5, 6, 7, 8, 9].filter((d) => m & (1 << d)));
+  }
+
+  // ---------- Flow ----------
+  function startGame() {
+    if (!audioCtx) { try { audioCtx = new (window.AudioContext || window.webkitAudioContext)(); } catch { audioCtx = null; } }
+    if (audioCtx && audioCtx.state === "suspended") audioCtx.resume();
+    score = 0; lives = diff.lives; round = 0; done = 0; gameId++;
+    bestCache = parseInt(load(bestKey(difficulty)), 10) || 0;
+    menu = null; overlay.classList.add("hidden");
+    nextP = null; const g = gameId, d = diff;
+    state = "wait"; stateT = 0;
+    generate(d.n, d.maxRun).then((p) => { if (g !== gameId) return; nextP = p; if (state === "wait") begin(); });
+    syncControls(); lastT = performance.now();
+  }
+  function gameOver(victory) {
+    state = "over"; gameId++;
+    let bonus = 0;
+    if (victory) { bonus = lives * 1000 * (DIFF_IDS.indexOf(difficulty) + 1); score += bonus; }
+    const prev = parseInt(load(bestKey(difficulty)), 10) || 0, record = score > prev;
+    if (record) store(bestKey(difficulty), String(score));
+    menu = () => showOverlay(
+      (victory ? `<h2>CINQUE SU CINQUE!</h2>
+       <p>Tutti gli schemi risolti. ${lives} ${lives === 1 ? "errore concesso avanzato" : "errori concessi avanzati"}: +${nf(bonus)} punti.</p>
+       <p>Punteggio: <b>${nf(score)}</b> · ${diff.label}</p>` : `<h2 class="lose">TROPPI ERRORI</h2>
+       <p>Punteggio: <b>${nf(score)}</b> · ${done} ${done === 1 ? "schema risolto" : "schemi risolti"} su ${TOTAL} · ${diff.label}</p>`) +
+      `${record ? "<p style='color:var(--gold)'>★ NUOVO RECORD! ★</p>" : ""}
+       ${difficultyHTML()}
+       <button class="start" data-start>RIPROVA</button>`
+    );
+    menu(); syncControls();
+  }
+  function togglePause() {
+    if (isPlaying()) { pausedFrom = state; state = "paused"; showOverlay(`<h2>PAUSA</h2><p class="muted">Lo schema è nascosto e il tempo è fermo.</p><button class="start" data-resume>CONTINUA</button><p class="muted">Premi P per continuare</p>`); }
+    else if (state === "paused") { state = pausedFrom; overlay.classList.add("hidden"); lastT = performance.now(); if (state === "wait" && nextP) begin(); }
+    syncControls();
+  }
+  window.addEventListener("sala:termina", () => { if (state !== "paused") return; overlay.classList.add("hidden"); gameOver(false); });
+  function syncControls() { pauseBtn.style.display = isPlaying() && touchMode ? "block" : "none"; resize(); }
+  pauseBtn.addEventListener("click", () => togglePause());
+  function showOverlay(html) { overlay.innerHTML = html; overlay.classList.remove("hidden"); }
+  function difficultyHTML() {
+    const buttons = DIFF_IDS.map((id) => { const d = DIFFICULTIES[id]; return `<button type="button" data-diff="${id}" class="${id === difficulty ? "on" : ""}" style="--c:${d.color}">${d.label}</button>`; }).join("");
+    const best = parseInt(load(bestKey(difficulty)), 10);
+    return `<div class="diff">${buttons}</div><p class="muted">${diff.desc}${best ? ` · Record: ${nf(best)}` : ""}</p>`;
+  }
+  function setDifficulty(id) { if (!DIFFICULTIES[id]) return; difficulty = id; diff = DIFFICULTIES[id]; store(DIFF_KEY, id); if (menu) menu(); }
+  function showTitle() {
+    menu = showTitle;
+    showOverlay(
+      `<h1>KAKURO</h1>
+       <p>Le somme incrociate. Riempi le caselle bianche con le cifre da 1 a 9. Ogni gruppo di caselle bianche in fila, in orizzontale o in verticale, deve dare la somma scritta nella casella nera che lo comincia, e dentro un gruppo una cifra non si ripete. Cinque schemi, nuovi a ogni partita, ognuno con una sola soluzione che si trova ragionando.</p>
+       <div class="pts">
+         <span><b>Somme</b></span><span>nella casella nera: in alto a destra quella della riga, in basso a sinistra quella della colonna</span>
+         <span><b>Scrivi</b></span><span>${touchMode ? "tocca una casella bianca e poi una cifra" : "clicca una casella bianca e poi una cifra, o premi 1–9"}</span>
+         <span><b>Aiuto</b></span><span>sotto lo schema vedi in quanti modi si può fare la somma della casella scelta; AIUTO scrive una cifra sicura</span>
+         <span><b>Punti</b></span><span>per ogni schema 500, un premio per la velocità e uno se non sbagli e non chiedi aiuto, moltiplicati per il numero dello schema</span>
+       </div>
+       ${touchMode ? "" : `<p class="muted help">Frecce per muoversi · 1–9 scrive · N note · Canc cancella · H aiuto · P pausa</p>`}
+       ${difficultyHTML()}
+       <button class="start" data-start>COMINCIA</button>`
+    );
+  }
+  overlay.addEventListener("click", (e) => {
+    const d = e.target.closest("[data-diff]");
+    if (d) { setDifficulty(d.dataset.diff); return; }
+    if (e.target.closest("[data-start]")) startGame();
+    if (e.target.closest("[data-resume]")) togglePause();
+  });
+
+  // ---------- Input ----------
+  const toWorld = (e) => { const rc = canvas.getBoundingClientRect(); return { x: ((e.clientX - rc.left) / rc.width) * W, y: ((e.clientY - rc.top) / rc.height) * H }; };
+  const inR = (r, p) => p.x >= r.x && p.x <= r.x + r.w && p.y >= r.y && p.y <= r.y + r.h;
+  function cellAt(p) { const n = P.n, c = Math.floor((p.x - L.gx) / L.cs), r = Math.floor((p.y - L.gy) / L.cs); return c < 0 || r < 0 || c >= n || r >= n ? -1 : r * n + c; }
+  function pressTool(id) { if (id === "notes") { notesMode = !notesMode; sfx.tap(); } else if (id === "erase") erase(sel); else if (id === "hint") hint(); }
+  canvas.addEventListener("pointerdown", (e) => {
+    e.preventDefault();
+    if (state === "result") { if (stateT > 1.5) afterResult(); return; }
+    if (state !== "play") return;
+    const p = toWorld(e);
+    for (const b of L.pad) if (inR(b, p)) { place(sel, b.d); return; }
+    for (const b of L.tools) if (inR(b, p)) { pressTool(b.id); return; }
+    const i = cellAt(p); if (i >= 0 && white(i)) { sel = i; sfx.tap(); }
+  });
+  // arrows jump to the next white cell in that direction
+  function move(dr, dc) {
+    const n = P.n; let r = Math.floor(sel / n), c = sel % n;
+    for (let k = 0; k < n; k++) { r += dr; c += dc; if (r < 1 || c < 1 || r >= n || c >= n) return; if (P.w[r][c]) { sel = r * n + c; return; } }
+  }
+  window.addEventListener("keydown", (e) => {
+    const k = e.key.toLowerCase();
+    if ([" ", "arrowup", "arrowdown", "arrowleft", "arrowright"].includes(k)) e.preventDefault();
+    if (state === "menu" || state === "over") { if (e.key === "Enter") startGame(); else if (["1", "2", "3"].includes(k)) setDifficulty(DIFF_IDS[+k - 1]); return; }
+    if (k === "p" || k === "escape") { if (!e.repeat) togglePause(); return; }
+    if (state === "paused") { if (e.key === "Enter") togglePause(); return; }
+    if (state === "result") { if ((k === "enter" || k === " ") && stateT > 1.5) afterResult(); return; }
+    if (state !== "play") return;
+    if (k === "arrowleft") move(0, -1); else if (k === "arrowright") move(0, 1); else if (k === "arrowup") move(-1, 0); else if (k === "arrowdown") move(1, 0);
+    else if (e.repeat) return;
+    else if (/^[1-9]$/.test(k)) place(sel, +k);
+    else if (k === "n") pressTool("notes");
+    else if (k === "backspace" || k === "delete" || k === "0") erase(sel);
+    else if (k === "h") hint();
+  });
+  window.addEventListener("blur", () => { if (isPlaying()) togglePause(); });
+  window.addEventListener("pointerdown", (e) => { if (e.pointerType === "touch" && !touchMode) { touchMode = true; syncControls(); if (menu) menu(); } }, true);
+
+  // ---------- Update ----------
+  function update(dt) {
+    clock += dt; stateT += dt;
+    if (msg) { msg.t += dt; if (msg.t > 2.2) msg = null; }
+    if (state === "play") { puzT += dt; for (const c of cells) if (c.bad && clock - c.bad > 0.9) { c.v = 0; c.bad = 0; } }
+    if (state === "wait" && nextP) begin();
+    if (state === "lost" && stateT > 1.4) gameOver(false);
+    flash = flash.filter((f) => clock - f.at < 0.8);
+  }
+
+  // ---------- Drawing ----------
+  function rr(x, y, w, h, r) { ctx.beginPath(); ctx.roundRect(x, y, w, h, r); }
+  function drawGrid() {
+    const { cs, gx, gy } = L, n = P.n, S = cs * n;
+    const selRuns = sel >= 0 && cellRuns[sel] ? cellRuns[sel] : [];
+    ctx.fillStyle = "rgba(0,0,0,0.35)"; rr(gx - 2, gy + 3, S + 4, S + 4, 6); ctx.fill();
+    for (let i = 0; i < n * n; i++) {
+      const r = Math.floor(i / n), c = i % n, x = gx + c * cs, y = gy + r * cs;
+      if (!P.w[r][c]) {
+        ctx.fillStyle = "#2a3040"; ctx.fillRect(x, y, cs, cs);
+        const ra = P.runs.find((ru) => ru.clue === i && ru.dir === "a"), rd = P.runs.find((ru) => ru.clue === i && ru.dir === "d");
+        if (ra || rd) {
+          ctx.strokeStyle = "rgba(255,255,255,0.28)"; ctx.lineWidth = 1; ctx.beginPath(); ctx.moveTo(x + 2, y + 2); ctx.lineTo(x + cs - 2, y + cs - 2); ctx.stroke();
+          ctx.font = `700 ${Math.round(cs * 0.3)}px system-ui, sans-serif`; ctx.textBaseline = "middle";
+          const hl = (ru) => selRuns.includes(ru) ? "#ffd23a" : ru.cells.every(right) ? "rgba(232,237,244,0.4)" : "#e8edf4";
+          if (ra) { ctx.fillStyle = hl(ra); ctx.textAlign = "right"; ctx.fillText(ra.sum, x + cs - 4, y + cs * 0.3); }
+          if (rd) { ctx.fillStyle = hl(rd); ctx.textAlign = "left"; ctx.fillText(rd.sum, x + 4, y + cs * 0.72); }
+        }
+        continue;
+      }
+      let bg = "#f7f2e6";
+      if (selRuns.some((ru) => ru.cells.includes(i))) bg = "#e6eef8";
+      if (i === sel) bg = "#9fc4ef";
+      if (cells[i].bad) bg = "#ffc9c4";
+      for (const f of flash) if (f.ru.cells.includes(i) && clock >= f.at) { const k = (clock - f.at) / 0.8; bg = `rgba(255,214,90,${0.5 + 0.5 * (1 - k)})`; }
+      if (wave) { const d = Math.hypot(r - Math.floor(wave.from / n), c - (wave.from % n)), t = clock - wave.at - d * 0.06; if (t > 0 && t < 0.5) bg = `hsla(${(d * 30 + 40) % 360},80%,72%,1)`; }
+      ctx.fillStyle = bg; ctx.fillRect(x, y, cs, cs);
+      const cl = cells[i]; ctx.textAlign = "center"; ctx.textBaseline = "middle";
+      if (cl.v) { const pop = cl.at > 0 ? Math.min(1, (clock - cl.at) / 0.15) : 1; ctx.font = `700 ${Math.round(cs * 0.58 * (0.7 + 0.3 * pop))}px system-ui, sans-serif`; ctx.fillStyle = cl.bad ? "#d0352b" : "#2a62c9"; ctx.fillText(cl.v, x + cs / 2, y + cs / 2 + 1); }
+      else if (cl.notes) { ctx.font = `600 ${Math.round(cs * 0.24)}px system-ui, sans-serif`; ctx.fillStyle = "#6b7280"; for (let d = 1; d <= 9; d++) if (cl.notes & (1 << d)) ctx.fillText(d, x + ((d - 1) % 3 + 0.5) * cs / 3, y + (Math.floor((d - 1) / 3) + 0.5) * cs / 3 + 0.5); }
+    }
+    ctx.strokeStyle = "#141821"; ctx.lineWidth = 1.2; ctx.beginPath();
+    for (let k = 0; k <= n; k++) { ctx.moveTo(gx + k * cs, gy); ctx.lineTo(gx + k * cs, gy + S); ctx.moveTo(gx, gy + k * cs); ctx.lineTo(gx + S, gy + k * cs); }
+    ctx.stroke();
+  }
+  function button(b, label, sub, on, lit, big) {
+    ctx.fillStyle = lit ? "rgba(122,180,255,0.25)" : on ? "rgba(255,255,255,0.09)" : "rgba(255,255,255,0.03)";
+    rr(b.x, b.y, b.w, b.h, 9); ctx.fill();
+    ctx.strokeStyle = lit ? "#7ab4ff" : on ? "rgba(255,255,255,0.22)" : "rgba(255,255,255,0.08)"; ctx.lineWidth = lit ? 2.5 : 1.5; ctx.stroke();
+    ctx.textAlign = "center"; ctx.textBaseline = "middle"; ctx.fillStyle = on ? "#f4f6ee" : "rgba(244,246,238,0.25)";
+    ctx.font = big ? "800 24px system-ui, sans-serif" : "800 13px system-ui, sans-serif"; ctx.fillText(label, b.x + b.w / 2, b.y + b.h / 2 - (sub ? (big ? 6 : 7) : 0));
+    if (sub) { ctx.font = "600 10px system-ui, sans-serif"; ctx.fillStyle = on ? "#c8d0dc" : "rgba(200,208,220,0.3)"; ctx.fillText(sub, b.x + b.w / 2, b.y + b.h / 2 + (big ? 15 : 10)); }
+  }
+  function waysText(ru) {
+    const ways = waysFor(ru), shown = ways.slice(0, 3).map((w) => w.join("+")).join("  ·  ");
+    return `${ru.dir === "a" ? "Riga" : "Colonna"}: ${ru.sum} in ${ru.cells.length} → ${shown}${ways.length > 3 ? `  · e altri ${ways.length - 3}` : ""}`;
+  }
+  function draw() {
+    ctx.setTransform(pxRatio, 0, 0, pxRatio, 0, 0);
+    const bg = ctx.createLinearGradient(0, 0, 0, H); bg.addColorStop(0, "#1e2434"); bg.addColorStop(1, "#10131b");
+    ctx.fillStyle = bg; ctx.fillRect(0, 0, W, H);
+    if (state === "paused") return;
+    if (state === "wait" || !P) {
+      if (state === "wait") { ctx.textAlign = "center"; ctx.textBaseline = "middle"; ctx.fillStyle = "#c8d0dc"; ctx.font = "700 15px system-ui, sans-serif"; ctx.fillText("Preparo lo schema…", W / 2, H / 2); for (let k = 0; k < 3; k++) { ctx.fillStyle = `rgba(255,210,58,${0.3 + 0.7 * Math.max(0, Math.sin(clock * 5 - k))})`; ctx.beginPath(); ctx.arc(W / 2 - 14 + k * 14, H / 2 + 24, 4, 0, TAU); ctx.fill(); } }
+      return;
+    }
+    drawGrid();
+
+    // top bar
+    ctx.fillStyle = "rgba(0,0,0,0.35)"; ctx.fillRect(0, 0, W, portrait ? 30 : 24);
+    const rightX = touchMode ? W - 62 : W - 12, mid = portrait && touchMode ? W * 0.44 : W / 2, ty = portrait ? 15 : 12;
+    ctx.textBaseline = "middle"; ctx.font = "800 13px system-ui, sans-serif";
+    ctx.textAlign = "left"; ctx.fillStyle = "#f4f6ee"; ctx.fillText(`${nf(score)} punti`, 10, ty);
+    ctx.textAlign = "center"; ctx.fillStyle = "#ffd23a"; ctx.fillText(`SCHEMA ${round + 1}/${TOTAL} · ${mmss(puzT)}`, mid, ty);
+    for (let i = 0; i < diff.lives; i++) { const x = rightX - i * 12 - 5; if (i < lives) { ctx.fillStyle = "#ff6b7d"; ctx.beginPath(); ctx.arc(x, ty, 4, 0, TAU); ctx.fill(); } else { ctx.strokeStyle = "rgba(255,255,255,0.2)"; ctx.lineWidth = 2; ctx.beginPath(); ctx.moveTo(x - 3, ty - 3); ctx.lineTo(x + 3, ty + 3); ctx.moveTo(x + 3, ty - 3); ctx.lineTo(x - 3, ty + 3); ctx.stroke(); } }
+    if (!(portrait && touchMode)) { ctx.textAlign = "right"; ctx.font = "700 11px system-ui, sans-serif"; ctx.fillStyle = "#c8d0dc"; ctx.fillText(`REC ${nf(Math.max(bestCache, score))}`, rightX - diff.lives * 12 - 4, ty); }
+
+    // info and the ways to make the selected sums
+    const left = Object.keys(cellRuns).filter((j) => !right(+j)).length;
+    ctx.textAlign = "left"; ctx.font = "600 12px system-ui, sans-serif"; ctx.fillStyle = "#c8d0dc";
+    const ix = portrait ? 10 : 356, iy = portrait ? 46 : 44;
+    ctx.fillText(`${left} ${left === 1 ? "casella" : "caselle"} da riempire · tempo premio ${mmss(Math.max(0, diff.par - puzT))}`, ix, iy);
+    if (!portrait) { ctx.fillStyle = notesMode ? "#7ab4ff" : "rgba(200,208,220,0.6)"; ctx.fillText(notesMode ? "Modo note: le cifre sono promemoria" : `${diff.label} · errori ${mistakes} · aiuti ${hints}`, ix, iy + 20); }
+    if (sel >= 0 && cellRuns[sel] && state === "play") {
+      const hx = portrait ? 10 : 356, hy = portrait ? L.helpY : 92;
+      ctx.font = "600 11.5px system-ui, sans-serif";
+      cellRuns[sel].forEach((ru, k) => { ctx.fillStyle = "#ffd23a"; ctx.fillText(waysText(ru), hx, hy + k * 17, portrait ? 340 : 276); });
+    }
+    const T = Object.fromEntries(L.tools.map((b) => [b.id, b]));
+    for (const b of L.pad) button(b, String(b.d), "", state === "play", false, true);
+    button(T.notes, "NOTE", notesMode ? "accese" : "spente", state === "play", notesMode);
+    button(T.erase, "CANCELLA", "", state === "play", false);
+    button(T.hint, "AIUTO", `−${100 * (round + 1)}`, state === "play", false);
+
+    if (msg && state === "play") {
+      const a = Math.min(1, (2.2 - msg.t) * 3); ctx.globalAlpha = a; ctx.font = "800 14px system-ui, sans-serif";
+      const w = ctx.measureText(msg.text).width + 28, cx = L.gx + (L.cs * P.n) / 2, y = L.gy + (L.cs * P.n) / 2;
+      ctx.fillStyle = "rgba(16,20,28,0.9)"; rr(cx - w / 2, y - 16, w, 32, 16); ctx.fill();
+      ctx.fillStyle = "#ffd23a"; ctx.textAlign = "center"; ctx.fillText(msg.text, cx, y); ctx.globalAlpha = 1;
+    }
+    if (state === "result" && stateT > 0.9) {
+      const S = L.cs * P.n, cx = L.gx + S / 2, cy = L.gy + S / 2, w = Math.min(S - 16, 300), h = 200, R = result;
+      ctx.globalAlpha = Math.min(1, (stateT - 0.9) * 4);
+      ctx.fillStyle = "rgba(16,20,28,0.94)"; rr(cx - w / 2, cy - h / 2, w, h, 14); ctx.fill(); ctx.strokeStyle = "rgba(255,210,58,0.7)"; ctx.lineWidth = 2; ctx.stroke();
+      ctx.textAlign = "center"; ctx.textBaseline = "middle"; ctx.fillStyle = "#ffd23a"; ctx.font = "900 22px system-ui, sans-serif"; ctx.fillText("RISOLTO!", cx, cy - h / 2 + 26);
+      ctx.fillStyle = "#c8d0dc"; ctx.font = "600 12px system-ui, sans-serif"; ctx.fillText(`in ${mmss(R.t)} · ${mistakes} ${mistakes === 1 ? "errore" : "errori"} · ${hints} ${hints === 1 ? "aiuto" : "aiuti"}`, cx, cy - h / 2 + 50);
+      const rows = [["Schema", `+${nf(R.base)}`], ["Velocità", `+${nf(R.speed)}`], ["Senza errori né aiuti", `+${nf(R.perfect)}`], ["Aiuti", R.help ? `−${nf(R.help)}` : "0"]];
+      ctx.font = "600 13px system-ui, sans-serif";
+      rows.forEach(([t, v], k) => { const y = cy - h / 2 + 80 + k * 21; ctx.textAlign = "left"; ctx.fillStyle = "#c8d0dc"; ctx.fillText(t, cx - w / 2 + 20, y); ctx.textAlign = "right"; ctx.fillStyle = "#f4f6ee"; ctx.fillText(v, cx + w / 2 - 20, y); });
+      if (stateT > 1.5) { ctx.textAlign = "center"; ctx.globalAlpha = 0.6 + 0.4 * Math.sin(clock * 5); ctx.fillStyle = "#ffd23a"; ctx.font = "700 12px system-ui, sans-serif"; ctx.fillText(round + 1 >= TOTAL ? (touchMode ? "tocca per finire" : "clic o Invio per finire") : nextP ? (touchMode ? "tocca per il prossimo schema" : "clic o Invio: prossimo schema") : "preparo il prossimo schema…", cx, cy + h / 2 - 18); }
+      ctx.globalAlpha = 1;
+    }
+  }
+
+  // ---------- Loop ----------
+  let lastT = performance.now();
+  function frame(now) {
+    const dt = Math.min(0.05, (now - lastT) / 1000); lastT = now;
+    if (state !== "paused") update(dt);
+    draw();
+    requestAnimationFrame(frame);
+  }
+  // behind the title: a small puzzle half done
+  function demo() { let p = null; while (!p) p = KK.make(6, 4, 800); usePuzzle(p); let k = 0; for (const j of Object.keys(cellRuns)) if (k++ % 2) cells[j].v = P.val[j]; sel = -1; }
+  resize(); demo(); resize();
+  syncControls();
+  showTitle();
+  requestAnimationFrame(frame);
+})();
+</script>
+<script src="../../shared/iniziali.js" data-record="kakuro-best-" data-kind="score"></script>
+</body>
+</html>
