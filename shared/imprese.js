@@ -9,6 +9,11 @@
   "use strict";
   // record key prefix of the game (as in trofei.js) → its feats
   const LIST = {
+    "ponti-best-": [   // ponti
+      { id: "perfetto", name: "Perfetto", desc: "collega un arcipelago senza errori e senza aiuti" },
+      { id: "lampo", name: "Lampo", desc: "collega un arcipelago in meno di un minuto e mezzo" },
+      { id: "architetto", name: "Architetto", desc: "collega tutti e cinque gli arcipelaghi di una partita" },
+    ],
     "kakuro-best-": [   // kakuro
       { id: "perfetto", name: "Perfetto", desc: "risolvi uno schema senza errori e senza aiuti" },
       { id: "lampo", name: "Lampo", desc: "risolvi uno schema in meno di 3 minuti" },

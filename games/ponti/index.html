@@ -1,0 +1,566 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no, viewport-fit=cover">
+<title>Ponti</title>
+<style>
+  :root {
+    --bg: #0f2234;
+    --fg: #f4f6ee;
+    --muted: #c8d0dc;
+    --gold: #ffd23a;
+    --red: #ff5a4a;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  html, body {
+    height: 100%;
+    background: var(--bg);
+    color: var(--fg);
+    font-family: system-ui, -apple-system, "Segoe UI", sans-serif;
+    overflow: hidden;
+    user-select: none;
+    -webkit-user-select: none;
+    -webkit-tap-highlight-color: transparent;
+    touch-action: none;
+  }
+  #wrap { position: fixed; inset: 0; display: flex; align-items: center; justify-content: center; }
+  canvas { cursor: pointer; display: block; touch-action: none; border-radius: 6px; box-shadow: 0 0 0 2px #2e3a4e, 0 10px 40px rgba(0,0,0,0.6); }
+  #pauseBtn {
+    position: fixed; z-index: 3; display: none; right: 10px; top: calc(10px + env(safe-area-inset-top, 0px));
+    font: 700 13px system-ui, sans-serif; color: var(--fg);
+    background: rgba(0, 0, 0, 0.6); border: 1px solid rgba(244, 246, 238, 0.35);
+    border-radius: 8px; padding: 6px 10px; cursor: pointer;
+  }
+  #touch { display: none !important; }
+  #overlay {
+    position: fixed; inset: 0; z-index: 5;
+    display: flex; flex-direction: column; align-items: center; justify-content: flex-start;
+    gap: 14px; padding: 16px; text-align: center; overflow-y: auto;
+    background: rgba(20, 26, 36, 0.94);
+  }
+  #overlay > :first-child { margin-top: auto; }
+  #overlay > :last-child { margin-bottom: auto; }
+  #overlay.hidden { display: none; }
+  #homeLink {
+    position: fixed; top: calc(10px + env(safe-area-inset-top, 0px)); left: 10px; z-index: 6;
+    font: 600 13px/1 system-ui, sans-serif; color: #fff; text-decoration: none;
+    padding: 8px 12px; border-radius: 999px; background: rgba(0,0,0,.55);
+    border: 1px solid rgba(255,255,255,.25);
+  }
+  #homeLink:hover { background: rgba(0,0,0,.8); }
+  #overlay.hidden ~ #homeLink { display: none; }
+  @media (max-width: 700px) { #overlay { padding-top: calc(52px + env(safe-area-inset-top, 0px)); } }
+  #overlay h1 { font-size: clamp(32px, 10vw, 58px); font-weight: 900; font-style: italic; letter-spacing: 1px; color: var(--gold);
+    text-shadow: 3px 3px 0 #6a1a1a, 0 0 22px rgba(255,210,58,0.35); }
+  #overlay h1 span { color: #fff; }
+  #overlay h2 { font-size: clamp(26px, 7vw, 42px); font-weight: 900; letter-spacing: 2px; color: var(--gold); }
+  #overlay h2.lose { color: var(--red); }
+  #overlay p { max-width: 540px; font-size: clamp(13px, 3.4vw, 16px); line-height: 1.55; }
+  #overlay p.muted { color: var(--muted); }
+  #overlay .pts { display: grid; grid-template-columns: repeat(2, auto); gap: 4px 18px; font-size: 13px; color: var(--muted); text-align: left; max-width: 560px; }
+  #overlay .pts b { color: var(--fg); }
+  #overlay .diff { display: flex; gap: 10px; flex-wrap: wrap; justify-content: center; }
+  #overlay button {
+    font: 800 15px system-ui, sans-serif; letter-spacing: 1.5px; color: var(--fg);
+    background: transparent; cursor: pointer;
+    border: 2px solid rgba(244,246,238,0.3); border-radius: 10px; padding: 9px 16px;
+  }
+  #overlay .diff button.on { border-color: var(--c); color: var(--c); box-shadow: 0 0 12px var(--c); }
+  #overlay button.start { border-color: var(--gold); color: #2a1a02; background: var(--gold); padding: 11px 30px; box-shadow: 0 4px 0 #a87a0a; }
+  @media (max-height: 560px) {
+    #overlay { gap: 8px; }
+    #overlay h1 { font-size: 30px; }
+    #overlay p { font-size: 13px; line-height: 1.4; }
+    #overlay .help, #overlay .pts { display: none; }
+  }
+</style>
+</head>
+<body>
+<div id="wrap"><canvas id="game"></canvas></div>
+<div id="touch"></div>
+<button id="pauseBtn" type="button" aria-label="Pausa">❚❚</button>
+<div id="overlay"></div>
+<a id="homeLink" href="../../index.html">← Sala Giochi</a>
+
+
+<script>
+// Bridges puzzle maker: islands, numbers, unique and solvable by reasoning
+const PN = (() => {
+  const rnd = (n) => Math.floor(Math.random() * n);
+  const DIRS = [[1, 0], [-1, 0], [0, 1], [0, -1]];
+  // the graph: which islands see each other, and which links would cross
+  function graph(w, h, isl) {
+    const at = new Map(isl.map((p, i) => [p.y * w + p.x, i])), edges = [];
+    isl.forEach((p, i) => {
+      for (const [dx, dy] of [[1, 0], [0, 1]]) {
+        let x = p.x + dx, y = p.y + dy;
+        while (x < w && y < h && !at.has(y * w + x)) { x += dx; y += dy; }
+        if (x < w && y < h) edges.push({ a: i, b: at.get(y * w + x), hz: dy === 0, x0: p.x, y0: p.y, x1: x, y1: y });
+      }
+    });
+    const crosses = edges.map(() => []);
+    edges.forEach((e, i) => edges.forEach((f, j) => {
+      if (j <= i || e.hz === f.hz) return;
+      const H = e.hz ? e : f, V = e.hz ? f : e;
+      if (V.x0 > H.x0 && V.x0 < H.x1 && H.y0 > V.y0 && H.y0 < V.y1) { crosses[i].push(j); crosses[j].push(i); }
+    }));
+    const of = isl.map(() => []); edges.forEach((e, k) => { of[e.a].push(k); of[e.b].push(k); });
+    return { edges, crosses, of };
+  }
+  function connected(n, edges, count) {
+    const seen = new Set([0]), st = [0];
+    while (st.length) { const i = st.pop(); edges.forEach((e, k) => { if (count[k] > 0 && (e.a === i || e.b === i)) { const j = e.a === i ? e.b : e.a; if (!seen.has(j)) { seen.add(j); st.push(j); } } }); }
+    return seen.size === n;
+  }
+  // reasoning: bounds per island, no crossings, no closed groups; with "try" it may also test a value and see it fail
+  function reason(num, G, lo, hi, tries) {
+    const n = num.length, E = G.edges;
+    const step = () => {
+      let changed = false;
+      for (let i = 0; i < n; i++) {
+        const ks = G.of[i]; let sLo = 0, sHi = 0; for (const k of ks) { sLo += lo[k]; sHi += hi[k]; }
+        if (sLo > num[i] || sHi < num[i]) return null;
+        for (const k of ks) {
+          const nl = Math.max(lo[k], num[i] - (sHi - hi[k])), nh = Math.min(hi[k], num[i] - (sLo - lo[k]));
+          if (nl > nh) return null;
+          if (nl !== lo[k] || nh !== hi[k]) { lo[k] = nl; hi[k] = nh; changed = true; }
+        }
+      }
+      for (let k = 0; k < E.length; k++) if (lo[k] > 0) for (const j of G.crosses[k]) { if (lo[j] > 0) return null; if (hi[j] > 0) { hi[j] = 0; changed = true; } }
+      // two islands that would fill each other up and close off from the rest
+      if (n > 2) for (let k = 0; k < E.length; k++) {
+        const e = E[k], A = num[e.a], B = num[e.b];
+        if (A === B && A <= 2 && hi[k] >= A) { hi[k] = A - 1; changed = true; if (lo[k] > hi[k]) return null; }
+      }
+      return changed;
+    };
+    for (let guard = 0; guard < 200; guard++) { const r = step(); if (r === null) return false; if (!r) break; }
+    if (lo.every((v, k) => v === hi[k])) return connected(n, E, lo);
+    if (!tries) return true;
+    // try each open value: if it leads to a contradiction, it is ruled out
+    let progress = true;
+    while (progress) {
+      progress = false;
+      for (let k = 0; k < E.length; k++) for (let v = lo[k]; v <= hi[k] && lo[k] < hi[k]; v++) {
+        const l2 = lo.slice(), h2 = hi.slice(); l2[k] = h2[k] = v;
+        if (!reason(num, G, l2, h2, false) || (l2.every((x, j) => x === h2[j]) && !connected(n, E, l2))) {
+          if (v === lo[k]) lo[k]++; else if (v === hi[k]) hi[k]--; else continue;
+          progress = true; if (!reason(num, G, lo, hi, false)) return false;
+        }
+      }
+    }
+    if (lo.every((v, k) => v === hi[k])) return connected(n, E, lo);
+    return true;
+  }
+  function make(w, h, target, tries, budget = 2500) {
+    const t0 = Date.now();
+    while (Date.now() - t0 < budget) {
+      const isl = [{ x: rnd(w), y: rnd(h) }], occ = new Set([isl[0].y * w + isl[0].x]), sol = [];
+      const bridgeCells = new Map();   // cell -> "h" or "v"
+      const near = (x, y) => DIRS.some(([dx, dy]) => occ.has((y + dy) * w + x + dx) && x + dx >= 0 && x + dx < w);
+      for (let it = 0; it < 4000 && isl.length < target; it++) {
+        const p = isl[rnd(isl.length)], [dx, dy] = DIRS[rnd(4)], len = 2 + rnd(Math.max(1, Math.min(w, h) / 2));
+        const x = p.x + dx * len, y = p.y + dy * len;
+        if (x < 0 || y < 0 || x >= w || y >= h || occ.has(y * w + x) || near(x, y)) continue;
+        let ok = true; for (let k = 1; k < len; k++) { const c = (p.y + dy * k) * w + p.x + dx * k; if (occ.has(c) || bridgeCells.has(c)) { ok = false; break; } }
+        if (!ok) continue;
+        for (let k = 1; k < len; k++) bridgeCells.set((p.y + dy * k) * w + p.x + dx * k, dx ? "h" : "v");
+        isl.push({ x, y }); occ.add(y * w + x);
+        sol.push({ p: isl.indexOf(p), q: isl.length - 1, c: 1 + rnd(2) });
+      }
+      if (isl.length < target) continue;
+      const G = graph(w, h, isl);
+      // the solution's bridges, on the graph's edges
+      const count = G.edges.map(() => 0);
+      for (const s of sol) { const k = G.edges.findIndex((e) => (e.a === s.p && e.b === s.q) || (e.a === s.q && e.b === s.p)); if (k < 0) { count.length = 0; break; } count[k] = s.c; }
+      if (!count.length) continue;
+      // a few extra links that close loops, where nothing is in the way
+      G.edges.forEach((e, k) => { if (!count[k] && Math.random() < 0.25 && !G.crosses[k].some((j) => count[j])) count[k] = 1 + rnd(2); });
+      const num = isl.map((_, i) => G.of[i].reduce((s, k) => s + count[k], 0));
+      const lo = G.edges.map(() => 0), hi = G.edges.map(() => 2);
+      if (!reason(num, G, lo, hi, tries)) continue;
+      if (lo.every((v, k) => v === hi[k] && v === count[k])) return { w, h, isl, num, edges: G.edges, sol: count, ms: Date.now() - t0 };
+    }
+    return null;
+  }
+  return { make, graph, reason, connected };
+})();
+
+(() => {
+  "use strict";
+
+  const TAU = Math.PI * 2;
+  const DIFFICULTIES = {
+    facile:    { label: "FACILE",    color: "#7ee0a0", desc: "mare 7×7 con 10 isole · 5 errori concessi", w: 7, isl: 10, tries: false, par: 150, lives: 5 },
+    normale:   { label: "NORMALE",   color: "#ffd66b", desc: "mare 9×9 con 16 isole · 3 errori concessi", w: 9, isl: 16, tries: false, par: 300, lives: 3 },
+    difficile: { label: "DIFFICILE", color: "#ff6b7d", desc: "mare 11×11 con 24 isole e ragionamenti più lunghi · 3 errori concessi", w: 11, isl: 24, tries: true, par: 540, lives: 3 },
+  };
+  const DIFF_IDS = Object.keys(DIFFICULTIES);
+  const DIFF_KEY = "ponti-difficulty";
+  const bestKey = (id) => `ponti-best-${id}`;
+  const TOTAL = 5;
+  function store(k, v) { try { localStorage.setItem(k, v); } catch { /* ignore */ } }
+  function load(k) { try { return localStorage.getItem(k); } catch { return null; } }
+  const nf = (n) => n.toLocaleString("it-IT");
+  const feat = (id) => window.dispatchEvent(new CustomEvent("sala:impresa", { detail: id }));
+  const mmss = (t) => `${Math.floor(t / 60)}:${String(Math.floor(t % 60)).padStart(2, "0")}`;
+  function makePuzzle(d) { let p = null; while (!p) p = PN.make(d.w, d.w, d.isl, d.tries, 3000); return p; }
+
+  // ---------- Canvas: landscape or portrait, whichever fits the screen ----------
+  const canvas = document.getElementById("game"), ctx = canvas.getContext("2d");
+  const overlay = document.getElementById("overlay"), pauseBtn = document.getElementById("pauseBtn");
+  let W = 640, H = 360, portrait = false, pxRatio = 1, L = null;
+  let touchMode = !!(window.matchMedia && matchMedia("(pointer: coarse)").matches);
+  function layout() {
+    const n = P ? P.w : diff.w;
+    if (portrait) { const cs = Math.floor(344 / n); L = { cs, gx: Math.round((W - cs * n) / 2), gy: 64, hint: { x: 60, y: 560, w: 240, h: 52 } }; }
+    else { const cs = Math.floor(326 / n); L = { cs, gx: 14 + Math.round((326 - cs * n) / 2), gy: 28 + Math.round((326 - cs * n) / 2), hint: { x: 372, y: 268, w: 250, h: 52 } }; }
+  }
+  function resize() {
+    portrait = window.innerHeight > window.innerWidth * 1.15;
+    W = portrait ? 360 : 640; H = portrait ? 640 : 360;
+    layout();
+    const s = Math.max(0.2, Math.min((window.innerWidth - 8) / W, (window.innerHeight - 8) / H));
+    pxRatio = Math.min(3, s * (window.devicePixelRatio || 1));
+    canvas.style.width = W * s + "px"; canvas.style.height = H * s + "px";
+    canvas.width = Math.round(W * pxRatio); canvas.height = Math.round(H * pxRatio);
+  }
+  window.addEventListener("resize", () => syncControls());
+
+  // ---------- Audio ----------
+  let audioCtx = null;
+  function beep(freq, dur, type = "triangle", vol = 0.04, delay = 0) {
+    if (!audioCtx) return;
+    const t = audioCtx.currentTime + delay, o = audioCtx.createOscillator(), g = audioCtx.createGain();
+    o.type = type; o.frequency.setValueAtTime(freq, t);
+    g.gain.setValueAtTime(0.0001, t); g.gain.exponentialRampToValueAtTime(vol, t + 0.008); g.gain.exponentialRampToValueAtTime(0.0001, t + dur);
+    o.connect(g).connect(audioCtx.destination); o.start(t); o.stop(t + dur + 0.02);
+  }
+  function knock(vol = 0.05) {
+    if (!audioCtx) return;
+    const t = audioCtx.currentTime, n = Math.floor(audioCtx.sampleRate * 0.06), b = audioCtx.createBuffer(1, n, audioCtx.sampleRate), d = b.getChannelData(0);
+    for (let i = 0; i < n; i++) d[i] = (Math.random() * 2 - 1) * Math.pow(1 - i / n, 3);
+    const s = audioCtx.createBufferSource(), f = audioCtx.createBiquadFilter(), g = audioCtx.createGain();
+    s.buffer = b; f.type = "lowpass"; f.frequency.value = 900; g.gain.value = vol; s.connect(f).connect(g).connect(audioCtx.destination); s.start(t);
+  }
+  const sfx = {
+    tap: () => beep(700, 0.03, "sine", 0.02),
+    bridge: (c) => { knock(0.07); beep(c === 2 ? 523 : 392, 0.08, "triangle", 0.03, 0.02); },
+    island: () => [784, 988, 1175].forEach((f, i) => beep(f, 0.08, "sine", 0.025, i * 0.04)),
+    full: () => beep(200, 0.05, "sine", 0.02),
+    wrong: () => { beep(180, 0.12, "square", 0.035); beep(140, 0.16, "square", 0.03, 0.08); },
+    hint: () => { beep(660, 0.06, "sine", 0.03); beep(880, 0.08, "sine", 0.03, 0.06); },
+    win: () => [523, 659, 784, 1047, 1319, 1568].forEach((f, i) => beep(f, 0.22, "triangle", 0.05, i * 0.09)),
+  };
+
+  // ---------- State ----------
+  let difficulty = DIFFICULTIES[load(DIFF_KEY)] ? load(DIFF_KEY) : "normale";
+  let diff = DIFFICULTIES[difficulty];
+  let state = "menu", menu = null, pausedFrom = null, clock = 0, stateT = 0;
+  let score = 0, lives = 0, round = 0, bestCache = 0, done = 0;
+  let P = null, G = null, count = null, sel = -1, drag = null, mistakes = 0, hints = 0, puzT = 0, msg = null, result = null, badEdge = null, popIsl = {}, hintEdge = -1, buildMode = false, kbd = false, wave = 0;
+  const isPlaying = () => ["play", "result"].includes(state);
+
+  function usePuzzle(p) {
+    P = p; G = PN.graph(p.w, p.h, p.isl); layout();
+    count = G.edges.map(() => 0); sel = -1; drag = null; mistakes = 0; hints = 0; puzT = 0; result = null; badEdge = null; popIsl = {}; hintEdge = -1; buildMode = false;
+  }
+  const have = (i) => G.of[i].reduce((s, k) => s + count[k], 0);
+
+  // ---------- Moves ----------
+  function addBridge(k, fromHint) {
+    if (state !== "play" || k < 0) return;
+    if (count[k] >= 2) { sfx.full(); say("Tra due isole ci stanno al massimo due ponti"); return; }
+    if (count[k] >= P.sol[k]) {
+      // one too many: it does not go there
+      mistakes++; lives--; badEdge = { k, at: clock }; sfx.wrong();
+      say(lives > 0 ? `Qui non va · ${lives} ${lives === 1 ? "errore" : "errori"} ancora` : "Niente più errori concessi");
+      if (lives <= 0) { state = "lost"; stateT = 0; }
+      return;
+    }
+    count[k]++; sfx.bridge(count[k]);
+    const e = G.edges[k];
+    for (const i of [e.a, e.b]) if (have(i) === P.num[i]) { popIsl[i] = clock; sfx.island(); }
+    if (count.every((c, j) => c === P.sol[j])) solved();
+  }
+  // a hint: a bridge that the numbers make certain, from what is already built
+  function hint() {
+    if (state !== "play") return;
+    for (const tries of [false, true]) {
+      const lo = count.slice(), hi = G.edges.map(() => 2);
+      PN.reason(P.num, G, lo, hi, tries);
+      const k = lo.findIndex((v, j) => v > count[j]);
+      if (k >= 0) { hints++; hintEdge = k; addBridge(k, true); sfx.hint(); return; }
+    }
+    const k = count.findIndex((c, j) => c < P.sol[j]); if (k >= 0) { hints++; hintEdge = k; addBridge(k, true); }
+  }
+  function solved() {
+    state = "result"; stateT = 0; done++; wave = clock;
+    const n = round + 1;
+    const base = 400 * n, speed = Math.max(0, Math.floor(diff.par - puzT)) * 2 * n, perfect = !mistakes && !hints ? 300 * n : 0, help = Math.min(base, hints * 100 * n);
+    const pts = base + speed + perfect - help; score += pts;
+    result = { base, speed, perfect, help, pts, t: puzT };
+    sfx.win();
+    if (!mistakes && !hints) feat("perfetto");
+    if (puzT < 90) feat("lampo");
+    if (n === TOTAL) feat("architetto");
+  }
+  function afterResult() { if (round + 1 >= TOTAL) { gameOver(true); return; } round++; usePuzzle(makePuzzle(diff)); state = "play"; say(`Arcipelago ${round + 1} di ${TOTAL}`); }
+  function say(text) { msg = { text, t: 0 }; }
+
+  // ---------- Flow ----------
+  function startGame() {
+    if (!audioCtx) { try { audioCtx = new (window.AudioContext || window.webkitAudioContext)(); } catch { audioCtx = null; } }
+    if (audioCtx && audioCtx.state === "suspended") audioCtx.resume();
+    score = 0; lives = diff.lives; round = 0; done = 0;
+    bestCache = parseInt(load(bestKey(difficulty)), 10) || 0;
+    usePuzzle(makePuzzle(diff)); state = "play"; menu = null; overlay.classList.add("hidden");
+    say(`Arcipelago 1 di ${TOTAL}`);
+    syncControls(); lastT = performance.now();
+  }
+  function gameOver(victory) {
+    state = "over";
+    let bonus = 0;
+    if (victory) { bonus = lives * 1000 * (DIFF_IDS.indexOf(difficulty) + 1); score += bonus; }
+    const prev = parseInt(load(bestKey(difficulty)), 10) || 0, record = score > prev;
+    if (record) store(bestKey(difficulty), String(score));
+    menu = () => showOverlay(
+      (victory ? `<h2>CINQUE ARCIPELAGHI!</h2>
+       <p>Tutte le isole collegate. ${lives} ${lives === 1 ? "errore concesso avanzato" : "errori concessi avanzati"}: +${nf(bonus)} punti.</p>
+       <p>Punteggio: <b>${nf(score)}</b> · ${diff.label}</p>` : `<h2 class="lose">TROPPI ERRORI</h2>
+       <p>Punteggio: <b>${nf(score)}</b> · ${done} ${done === 1 ? "arcipelago collegato" : "arcipelaghi collegati"} su ${TOTAL} · ${diff.label}</p>`) +
+      `${record ? "<p style='color:var(--gold)'>★ NUOVO RECORD! ★</p>" : ""}
+       ${difficultyHTML()}
+       <button class="start" data-start>RIPROVA</button>`
+    );
+    menu(); syncControls();
+  }
+  function togglePause() {
+    if (isPlaying()) { pausedFrom = state; state = "paused"; drag = null; showOverlay(`<h2>PAUSA</h2><p class="muted">Le isole sono nascoste e il tempo è fermo.</p><button class="start" data-resume>CONTINUA</button><p class="muted">Premi P per continuare</p>`); }
+    else if (state === "paused") { state = pausedFrom; overlay.classList.add("hidden"); lastT = performance.now(); }
+    syncControls();
+  }
+  window.addEventListener("sala:termina", () => { if (state !== "paused") return; overlay.classList.add("hidden"); gameOver(false); });
+  function syncControls() { pauseBtn.style.display = isPlaying() && touchMode ? "block" : "none"; resize(); }
+  pauseBtn.addEventListener("click", () => togglePause());
+  function showOverlay(html) { overlay.innerHTML = html; overlay.classList.remove("hidden"); }
+  function difficultyHTML() {
+    const buttons = DIFF_IDS.map((id) => { const d = DIFFICULTIES[id]; return `<button type="button" data-diff="${id}" class="${id === difficulty ? "on" : ""}" style="--c:${d.color}">${d.label}</button>`; }).join("");
+    const best = parseInt(load(bestKey(difficulty)), 10);
+    return `<div class="diff">${buttons}</div><p class="muted">${diff.desc}${best ? ` · Record: ${nf(best)}` : ""}</p>`;
+  }
+  function setDifficulty(id) { if (!DIFFICULTIES[id]) return; difficulty = id; diff = DIFFICULTIES[id]; store(DIFF_KEY, id); if (menu) menu(); }
+  function showTitle() {
+    menu = showTitle;
+    showOverlay(
+      `<h1>PONTI</h1>
+       <p>Collega le isole con i ponti. Il numero di ogni isola dice quanti ponti partono da lì. I ponti vanno dritti, in orizzontale o in verticale, non si incrociano, e tra due isole ce ne possono essere al massimo due. Alla fine tutte le isole devono essere collegate tra loro, in un solo arcipelago.</p>
+       <div class="pts">
+         <span><b>Costruisci</b></span><span>${touchMode ? "trascina da un'isola verso un'altra" : "trascina da un'isola verso un'altra, oppure clicca le due isole"}; ancora una volta e il ponte diventa doppio</span>
+         <span><b>Isole</b></span><span>un'isola con tutti i suoi ponti diventa verde</span>
+         <span><b>Errori</b></span><span>un ponte che non va si vede in rosso e costa uno degli errori concessi</span>
+         <span><b>Punti</b></span><span>per ogni arcipelago 400, un premio per la velocità e uno se non sbagli e non chiedi aiuto, moltiplicati per il suo numero</span>
+       </div>
+       ${touchMode ? "" : `<p class="muted help">Frecce per scegliere l'isola · Maiusc + freccia costruisce un ponte · H aiuto · P pausa</p>`}
+       ${difficultyHTML()}
+       <button class="start" data-start>COMINCIA</button>`
+    );
+  }
+  overlay.addEventListener("click", (e) => {
+    const d = e.target.closest("[data-diff]");
+    if (d) { setDifficulty(d.dataset.diff); return; }
+    if (e.target.closest("[data-start]")) startGame();
+    if (e.target.closest("[data-resume]")) togglePause();
+  });
+
+  // ---------- Input ----------
+  const toWorld = (e) => { const rc = canvas.getBoundingClientRect(); return { x: ((e.clientX - rc.left) / rc.width) * W, y: ((e.clientY - rc.top) / rc.height) * H }; };
+  const inR = (r, p) => p.x >= r.x && p.x <= r.x + r.w && p.y >= r.y && p.y <= r.y + r.h;
+  const islXY = (i) => ({ x: L.gx + (P.isl[i].x + 0.5) * L.cs, y: L.gy + (P.isl[i].y + 0.5) * L.cs });
+  function islandAt(p, r = 0.55) { let best = -1, bd = L.cs * r; P.isl.forEach((_, i) => { const q = islXY(i), d = Math.hypot(q.x - p.x, q.y - p.y); if (d < bd) { bd = d; best = i; } }); return best; }
+  // the link leaving island i in a direction
+  function edgeFrom(i, dx, dy) { return G.of[i].find((k) => { const e = G.edges[k], o = e.a === i ? e.b : e.a; return Math.sign(P.isl[o].x - P.isl[i].x) === dx && Math.sign(P.isl[o].y - P.isl[i].y) === dy; }) ?? -1; }
+  function edgeAt(p) {
+    let best = -1, bd = L.cs * 0.3;
+    G.edges.forEach((e, k) => { const A = islXY(e.a), B = islXY(e.b); const inside = e.hz ? p.x > A.x + L.cs * 0.4 && p.x < B.x - L.cs * 0.4 : p.y > A.y + L.cs * 0.4 && p.y < B.y - L.cs * 0.4; if (!inside) return; const d = e.hz ? Math.abs(p.y - A.y) : Math.abs(p.x - A.x); if (d < bd && (count[k] > 0 || d < L.cs * 0.2)) { bd = d; best = k; } });
+    return best;
+  }
+  function dirOf(dx, dy) { return Math.abs(dx) > Math.abs(dy) ? [Math.sign(dx), 0] : [0, Math.sign(dy)]; }
+  canvas.addEventListener("pointerdown", (e) => {
+    e.preventDefault();
+    if (state === "result") { if (stateT > 1.5) afterResult(); return; }
+    if (state !== "play") return;
+    kbd = false;
+    const p = toWorld(e);
+    if (inR(L.hint, p)) { hint(); return; }
+    const i = islandAt(p);
+    if (i >= 0) { drag = { i, x: p.x, y: p.y, k: -1, id: e.pointerId }; try { canvas.setPointerCapture(e.pointerId); } catch { /* ignore */ } return; }
+    const k = edgeAt(p); if (k >= 0) { addBridge(k); sel = -1; return; }
+    sel = -1;
+  });
+  canvas.addEventListener("pointermove", (e) => {
+    if (!drag || e.pointerId !== drag.id) return;
+    const p = toWorld(e), dx = p.x - drag.x, dy = p.y - drag.y;
+    drag.k = Math.hypot(dx, dy) > L.cs * 0.45 ? edgeFrom(drag.i, ...dirOf(dx, dy)) : -1;
+    drag.px = p.x; drag.py = p.y;
+  });
+  canvas.addEventListener("pointerup", (e) => {
+    if (!drag || e.pointerId !== drag.id) return;
+    const d = drag; drag = null;
+    if (d.k >= 0) { addBridge(d.k); sel = -1; return; }
+    if (d.px !== undefined && Math.hypot(d.px - d.x, d.py - d.y) > L.cs * 0.45) return;
+    // a tap: first island, then a second one in line with it
+    if (sel >= 0 && sel !== d.i) { const k = G.of[sel].find((j) => G.edges[j].a === d.i || G.edges[j].b === d.i); if (k !== undefined) { addBridge(k); sel = -1; return; } }
+    sel = sel === d.i ? -1 : d.i; sfx.tap();
+  });
+  canvas.addEventListener("pointercancel", () => { drag = null; });
+  // the keyboard: arrows go to the next island that way, Shift + arrow builds there
+  function nearestIsland(i, dx, dy) {
+    const k = edgeFrom(i, dx, dy); if (k >= 0) { const e = G.edges[k]; return e.a === i ? e.b : e.a; }
+    let best = -1, bd = Infinity; const a = P.isl[i];
+    P.isl.forEach((b, j) => { const ddx = b.x - a.x, ddy = b.y - a.y, along = ddx * dx + ddy * dy, side = Math.abs(ddx * dy - ddy * dx); if (along <= 0) return; const d = along + side * 2; if (d < bd) { bd = d; best = j; } });
+    return best;
+  }
+  window.addEventListener("keydown", (e) => {
+    const k = e.key.toLowerCase();
+    if ([" ", "arrowup", "arrowdown", "arrowleft", "arrowright"].includes(k)) e.preventDefault();
+    if (state === "menu" || state === "over") { if (e.key === "Enter") startGame(); else if (["1", "2", "3"].includes(k)) setDifficulty(DIFF_IDS[+k - 1]); return; }
+    if (k === "p" || k === "escape") { if (!e.repeat) togglePause(); return; }
+    if (state === "paused") { if (e.key === "Enter") togglePause(); return; }
+    if (state === "result") { if ((k === "enter" || k === " ") && stateT > 1.5) afterResult(); return; }
+    if (state !== "play") return;
+    kbd = true;
+    const dirs = { arrowleft: [-1, 0], arrowright: [1, 0], arrowup: [0, -1], arrowdown: [0, 1] };
+    if (dirs[k]) {
+      if (sel < 0) { sel = 0; return; }
+      if (e.shiftKey || buildMode) { addBridge(edgeFrom(sel, ...dirs[k])); buildMode = false; return; }
+      const j = nearestIsland(sel, ...dirs[k]); if (j >= 0) sel = j; return;
+    }
+    if (e.repeat) return;
+    if (k === " " || k === "enter") { if (sel < 0) sel = 0; else buildMode = !buildMode; }
+    else if (k === "h") hint();
+  });
+  window.addEventListener("blur", () => { if (isPlaying()) togglePause(); });
+  window.addEventListener("pointerdown", (e) => { if (e.pointerType === "touch" && !touchMode) { touchMode = true; syncControls(); if (menu) menu(); } }, true);
+
+  // ---------- Update ----------
+  function update(dt) {
+    clock += dt; stateT += dt;
+    if (msg) { msg.t += dt; if (msg.t > 2.2) msg = null; }
+    if (state === "play") puzT += dt;
+    if (state === "lost" && stateT > 1.4) gameOver(false);
+  }
+
+  // ---------- Drawing ----------
+  function rr(x, y, w, h, r) { ctx.beginPath(); ctx.roundRect(x, y, w, h, r); }
+  function plank(A, B, e, c, color, width) {
+    const off = c === 2 ? L.cs * 0.1 : 0, ox = e.hz ? 0 : off, oy = e.hz ? off : 0;
+    ctx.strokeStyle = color; ctx.lineWidth = width; ctx.lineCap = "round";
+    for (const s of c === 2 ? [-1, 1] : [0]) { ctx.beginPath(); ctx.moveTo(A.x + ox * s, A.y + oy * s); ctx.lineTo(B.x + ox * s, B.y + oy * s); ctx.stroke(); }
+  }
+  function drawSea() {
+    const { cs, gx, gy } = L, n = P.w, S = cs * n;
+    const sea = ctx.createLinearGradient(gx, gy, gx + S, gy + S); sea.addColorStop(0, "#1d5a80"); sea.addColorStop(1, "#164a6c");
+    ctx.fillStyle = sea; rr(gx - 4, gy - 4, S + 8, S + 8, 10); ctx.fill();
+    ctx.strokeStyle = "rgba(255,255,255,0.06)"; ctx.lineWidth = 1.2;
+    for (let k = 0; k < 9; k++) { const y = gy + ((k * 47 + clock * 6) % S); ctx.beginPath(); for (let x = 0; x <= S; x += 8) ctx.lineTo(gx + x, y + Math.sin((x + k * 30) * 0.08 + clock) * 2); ctx.stroke(); }
+    ctx.fillStyle = "rgba(255,255,255,0.12)"; for (let y = 0; y < n; y++) for (let x = 0; x < n; x++) { ctx.beginPath(); ctx.arc(gx + (x + 0.5) * cs, gy + (y + 0.5) * cs, 1.2, 0, TAU); ctx.fill(); }
+  }
+  function draw() {
+    ctx.setTransform(pxRatio, 0, 0, pxRatio, 0, 0);
+    const bg = ctx.createLinearGradient(0, 0, 0, H); bg.addColorStop(0, "#14304a"); bg.addColorStop(1, "#0a1826");
+    ctx.fillStyle = bg; ctx.fillRect(0, 0, W, H);
+    if (!P || state === "paused") return;
+    drawSea();
+    const R = L.cs * 0.38;
+    // bridges
+    G.edges.forEach((e, k) => {
+      const A = islXY(e.a), B = islXY(e.b);
+      if (count[k]) plank(A, B, e, count[k], k === hintEdge && clock - (badEdge ? 0 : 0) < 999 ? "#bfe0ff" : "#e8c890", Math.max(2.5, L.cs * 0.09));
+      if (badEdge && badEdge.k === k && clock - badEdge.at < 0.9) { ctx.globalAlpha = 1 - (clock - badEdge.at) / 0.9; plank(A, B, e, Math.min(2, count[k] + 1), "#ff4a4a", Math.max(3, L.cs * 0.11)); ctx.globalAlpha = 1; }
+    });
+    if (drag && drag.k >= 0) { const e = G.edges[drag.k]; ctx.setLineDash([5, 5]); plank(islXY(e.a), islXY(e.b), e, 1, "rgba(255,255,255,0.7)", 2.5); ctx.setLineDash([]); }
+    // islands
+    P.isl.forEach((_, i) => {
+      const q = islXY(i), h = have(i), full = h === P.num[i], pop = popIsl[i] !== undefined ? Math.max(0, 1 - (clock - popIsl[i]) / 0.3) : 0;
+      let r = R * (1 + pop * 0.25);
+      if (state === "result") { const d = Math.hypot(P.isl[i].x - P.w / 2, P.isl[i].y - P.w / 2), t = clock - wave - d * 0.06; if (t > 0 && t < 0.4) r = R * (1 + Math.sin(t / 0.4 * Math.PI) * 0.35); }
+      ctx.fillStyle = "rgba(0,0,0,0.3)"; ctx.beginPath(); ctx.arc(q.x + 1.5, q.y + 2.5, r, 0, TAU); ctx.fill();
+      ctx.fillStyle = full ? "#7ee0a0" : "#f4ecd8"; ctx.beginPath(); ctx.arc(q.x, q.y, r, 0, TAU); ctx.fill();
+      ctx.strokeStyle = i === sel || (drag && drag.i === i) ? "#ffd23a" : full ? "#3aa060" : "#b89a6a"; ctx.lineWidth = i === sel || (drag && drag.i === i) ? 3 : 2; ctx.stroke();
+      ctx.fillStyle = full ? "#14482a" : "#2a2a30"; ctx.font = `800 ${Math.round(r * 1.1)}px system-ui, sans-serif`; ctx.textAlign = "center"; ctx.textBaseline = "middle"; ctx.fillText(P.num[i], q.x, q.y + 1);
+      if (!full && h > 0) {
+        // a small badge: how many bridges are still missing (red if too many)
+        const bx = q.x + r * 0.78, by = q.y - r * 0.78, br = Math.max(6, r * 0.42), left = P.num[i] - h;
+        ctx.fillStyle = "#ffd23a"; ctx.beginPath(); ctx.arc(bx, by, br, 0, TAU); ctx.fill(); ctx.strokeStyle = "#0f2234"; ctx.lineWidth = 1.5; ctx.stroke();
+        ctx.fillStyle = "#2a2000"; ctx.font = `800 ${Math.round(br * 1.25)}px system-ui, sans-serif`; ctx.fillText(left, bx, by + 0.5);
+      }
+    });
+    if (kbd && buildMode && sel >= 0) { const q = islXY(sel); ctx.strokeStyle = "#7ab4ff"; ctx.setLineDash([3, 3]); ctx.lineWidth = 2; ctx.beginPath(); ctx.arc(q.x, q.y, R * 1.35, 0, TAU); ctx.stroke(); ctx.setLineDash([]); }
+
+    // top bar
+    ctx.fillStyle = "rgba(0,0,0,0.35)"; ctx.fillRect(0, 0, W, portrait ? 30 : 24);
+    const rightX = touchMode ? W - 62 : W - 12, mid = portrait && touchMode ? W * 0.44 : W / 2, ty = portrait ? 15 : 12;
+    ctx.textBaseline = "middle"; ctx.font = "800 13px system-ui, sans-serif";
+    ctx.textAlign = "left"; ctx.fillStyle = "#f4f6ee"; ctx.fillText(`${nf(score)} punti`, 10, ty);
+    ctx.textAlign = "center"; ctx.fillStyle = "#ffd23a"; ctx.fillText(`ARCIPELAGO ${round + 1}/${TOTAL} · ${mmss(puzT)}`, mid, ty);
+    for (let i = 0; i < diff.lives; i++) { const x = rightX - i * 12 - 5; if (i < lives) { ctx.fillStyle = "#ff6b7d"; ctx.beginPath(); ctx.arc(x, ty, 4, 0, TAU); ctx.fill(); } else { ctx.strokeStyle = "rgba(255,255,255,0.2)"; ctx.lineWidth = 2; ctx.beginPath(); ctx.moveTo(x - 3, ty - 3); ctx.lineTo(x + 3, ty + 3); ctx.moveTo(x + 3, ty - 3); ctx.lineTo(x - 3, ty + 3); ctx.stroke(); } }
+    if (!(portrait && touchMode)) { ctx.textAlign = "right"; ctx.font = "700 11px system-ui, sans-serif"; ctx.fillStyle = "#c8d8e4"; ctx.fillText(`REC ${nf(Math.max(bestCache, score))}`, rightX - diff.lives * 12 - 4, ty); }
+
+    // info
+    const fullN = P.isl.filter((_, i) => have(i) === P.num[i]).length;
+    ctx.textAlign = "left"; ctx.font = "600 12px system-ui, sans-serif"; ctx.fillStyle = "#c8d8e4";
+    if (portrait) { ctx.textAlign = "center"; ctx.fillText(`${fullN} isole complete su ${P.isl.length} · tempo premio ${mmss(Math.max(0, diff.par - puzT))}`, W / 2, 46); ctx.fillText(`errori ${mistakes} · aiuti ${hints}`, W / 2, L.gy + L.cs * P.w + 22); }
+    else {
+      const x = 372; ctx.font = "800 15px system-ui, sans-serif"; ctx.fillStyle = "#f4f6ee"; ctx.fillText(`${fullN} isole complete su ${P.isl.length}`, x, 52);
+      ctx.font = "600 12px system-ui, sans-serif"; ctx.fillStyle = "#c8d8e4"; ctx.fillText(`tempo premio ${mmss(Math.max(0, diff.par - puzT))} · errori ${mistakes} · aiuti ${hints}`, x, 74);
+      ctx.fillStyle = "rgba(200,216,228,0.75)"; ctx.font = "500 12px system-ui, sans-serif";
+      const tips = touchMode ? ["Trascina da un'isola verso un'altra:", "un ponte; ancora una volta, doppio.", "Tocca un ponte per raddoppiarlo."] : ["Trascina da un'isola verso un'altra,", "o clicca le due isole: un ponte.", "Ancora una volta e diventa doppio.", "Frecce e Maiusc + freccia da tastiera."];
+      tips.forEach((t, k) => ctx.fillText(t, x, 112 + k * 18));
+      ctx.fillText("Il bollino giallo dice quanti ponti", x, 196); ctx.fillText("mancano ancora a un'isola.", x, 214);
+    }
+    const B = L.hint, on = state === "play";
+    ctx.fillStyle = on ? "rgba(255,255,255,0.09)" : "rgba(255,255,255,0.03)"; rr(B.x, B.y, B.w, B.h, 10); ctx.fill(); ctx.strokeStyle = "rgba(255,255,255,0.22)"; ctx.lineWidth = 1.5; ctx.stroke();
+    ctx.textAlign = "center"; ctx.fillStyle = on ? "#f4f6ee" : "rgba(244,246,238,0.3)"; ctx.font = "800 14px system-ui, sans-serif"; ctx.fillText("AIUTO", B.x + B.w / 2, B.y + 19);
+    ctx.font = "600 10px system-ui, sans-serif"; ctx.fillStyle = "#c8d8e4"; ctx.fillText(`un ponte sicuro · −${100 * (round + 1)} punti`, B.x + B.w / 2, B.y + 36);
+
+    if (msg && state === "play") {
+      const a = Math.min(1, (2.2 - msg.t) * 3); ctx.globalAlpha = a; ctx.font = "800 13px system-ui, sans-serif";
+      const w = ctx.measureText(msg.text).width + 26, cx = portrait ? W / 2 : 497, y = portrait ? L.gy + L.cs * P.w + 46 : 246;
+      ctx.fillStyle = "rgba(10,20,30,0.92)"; rr(cx - w / 2, y - 14, w, 28, 14); ctx.fill();
+      ctx.fillStyle = "#ffd23a"; ctx.textAlign = "center"; ctx.fillText(msg.text, cx, y); ctx.globalAlpha = 1;
+    }
+    if (state === "result" && stateT > 0.9) {
+      const RR = result, w = portrait ? 300 : 250, x0 = portrait ? (W - w) / 2 : 372, y0 = portrait ? L.gy + L.cs * P.w + 8 : 100, h = portrait ? 150 : 222;
+      ctx.globalAlpha = Math.min(1, (stateT - 0.9) * 4);
+      ctx.fillStyle = "rgba(10,20,30,0.96)"; rr(x0, y0, w, h, 12); ctx.fill(); ctx.strokeStyle = "rgba(255,210,58,0.7)"; ctx.lineWidth = 2; ctx.stroke();
+      ctx.textAlign = "center"; ctx.fillStyle = "#ffd23a"; ctx.font = "900 19px system-ui, sans-serif"; ctx.fillText("TUTTE COLLEGATE!", x0 + w / 2, y0 + 22);
+      ctx.fillStyle = "#c8d8e4"; ctx.font = "600 11px system-ui, sans-serif"; ctx.fillText(`in ${mmss(RR.t)} · ${mistakes} ${mistakes === 1 ? "errore" : "errori"} · ${hints} ${hints === 1 ? "aiuto" : "aiuti"}`, x0 + w / 2, y0 + 42);
+      const rows = [["Arcipelago", `+${nf(RR.base)}`], ["Velocità", `+${nf(RR.speed)}`], ["Senza errori né aiuti", `+${nf(RR.perfect)}`], ["Aiuti", RR.help ? `−${nf(RR.help)}` : "0"]];
+      ctx.font = "600 12px system-ui, sans-serif";
+      rows.forEach(([t, v], k) => { const y = y0 + 64 + k * (portrait ? 16 : 24); ctx.textAlign = "left"; ctx.fillStyle = "#c8d8e4"; ctx.fillText(t, x0 + 18, y); ctx.textAlign = "right"; ctx.fillStyle = "#f4f6ee"; ctx.fillText(v, x0 + w - 18, y); });
+      if (stateT > 1.5) { ctx.textAlign = "center"; ctx.globalAlpha = 0.6 + 0.4 * Math.sin(clock * 5); ctx.fillStyle = "#ffd23a"; ctx.font = "700 12px system-ui, sans-serif"; ctx.fillText(round + 1 >= TOTAL ? (touchMode ? "tocca per finire" : "clic o Invio per finire") : touchMode ? "tocca per il prossimo arcipelago" : "clic o Invio: prossimo arcipelago", x0 + w / 2, y0 + h - 14); }
+      ctx.globalAlpha = 1;
+    }
+  }
+
+  // ---------- Loop ----------
+  let lastT = performance.now();
+  function frame(now) {
+    const dt = Math.min(0.05, (now - lastT) / 1000); lastT = now;
+    if (state !== "paused") update(dt);
+    draw();
+    requestAnimationFrame(frame);
+  }
+  // behind the title: an archipelago half built
+  function demo() { usePuzzle(makePuzzle(DIFFICULTIES.normale)); count = P.sol.map((c, k) => (k % 2 ? c : 0)); }
+  resize(); demo(); resize();
+  syncControls();
+  showTitle();
+  requestAnimationFrame(frame);
+})();
+</script>
+<script src="../../shared/iniziali.js" data-record="ponti-best-" data-kind="score"></script>
+</body>
+</html>
