@@ -9,6 +9,11 @@
   "use strict";
   // record key prefix of the game (as in trofei.js) → its feats
   const LIST = {
+    "bollasubolla-best-": [   // bolla-su-bolla
+      { id: "valanga", name: "Valanga", desc: "fai cadere dieci bolle con un tiro solo" },
+      { id: "sponda", name: "Di sponda", desc: "fai scoppiare un gruppo con un tiro che ha rimbalzato due volte" },
+      { id: "fondo", name: "Fino in fondo", desc: "finisci il ventiquattresimo livello" },
+    ],
     "cinque-best-": [   // cinque-lettere
       { id: "indue", name: "In due", desc: "indovina una parola in due tentativi o meno" },
       { id: "lampo", name: "Lampo", desc: "indovina una parola in meno di 30 secondi" },
