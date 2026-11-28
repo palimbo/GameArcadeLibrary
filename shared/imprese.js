@@ -9,6 +9,11 @@
   "use strict";
   // record key prefix of the game (as in trofei.js) → its feats
   const LIST = {
+    "lumi-best-": [   // lumi-sul-palco
+      { id: "fullcombo", name: "Nessun passo falso", desc: "finisci una canzone senza mancare una nota" },
+      { id: "stella", name: "Stella del palco", desc: "ottieni il rango S in una canzone" },
+      { id: "tournee", name: "Tournée", desc: "finisci tutte e tre le canzoni" },
+    ],
     "ruggine-best-": [   // strada-di-ruggine
       { id: "speronata", name: "Speronata", desc: "investi cinque nemici con un veicolo" },
       { id: "leggendaria", name: "Leggendaria", desc: "trova un'arma leggendaria" },
