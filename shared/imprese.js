@@ -9,6 +9,11 @@
   "use strict";
   // record key prefix of the game (as in trofei.js) → its feats
   const LIST = {
+    "ruggine-best-": [   // strada-di-ruggine
+      { id: "speronata", name: "Speronata", desc: "manda fuori strada o contro le rocce cinque predoni in una partita" },
+      { id: "intatta", name: "Senza un graffio", desc: "finisci un tratto di strada senza perdere corazza" },
+      { id: "oasi", name: "L'Oasi delle Rondini", desc: "sconfiggi il Mastino dello Sciacallo e arriva all'Oasi" },
+    ],
     "salvamariky-best-": [   // salva-mariky
       { id: "intatto", name: "Senza un graffio", desc: "finisci un livello senza farti colpire e senza cadere" },
       { id: "monete", name: "Salvadanaio", desc: "raccogli 100 monete in una partita" },
