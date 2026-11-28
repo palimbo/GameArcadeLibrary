@@ -9,6 +9,11 @@
   "use strict";
   // record key prefix of the game (as in trofei.js) → its feats
   const LIST = {
+    "mongolfiera-best-": [   // mongolfiera
+      { id: "perfetta", name: "Senza una sbavatura", desc: "indovina una parola di almeno 7 lettere senza errori e senza aiuti" },
+      { id: "proverbio", name: "Saggezza popolare", desc: "indovina un proverbio" },
+      { id: "dieci", name: "Dieci su dieci", desc: "indovina tutte le dieci parole di un volo" },
+    ],
     "riccio-best-": [   // riccio-goloso
       { id: "tutti", name: "Pancia piena", desc: "finisci tutti i dodici livelli in una partita" },
       { id: "perfetto", name: "Tutte le stelle", desc: "prendi tutte le 36 stelle in una partita" },

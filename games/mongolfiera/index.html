@@ -1,0 +1,428 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no, viewport-fit=cover">
+<title>Mongolfiera</title>
+<style>
+  :root {
+    --bg: #1a2a44;
+    --fg: #f4f6ee;
+    --muted: #c8d0dc;
+    --gold: #ffcc4a;
+    --red: #ff5a4a;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  html, body {
+    height: 100%;
+    background: var(--bg);
+    color: var(--fg);
+    font-family: system-ui, -apple-system, "Segoe UI", sans-serif;
+    overflow: hidden;
+    user-select: none;
+    -webkit-user-select: none;
+    -webkit-tap-highlight-color: transparent;
+    touch-action: none;
+  }
+  #wrap { position: fixed; inset: 0; display: flex; align-items: center; justify-content: center; }
+  canvas { cursor: pointer; display: block; touch-action: none; border-radius: 6px; box-shadow: 0 0 0 2px #2e3a4e, 0 10px 40px rgba(0,0,0,0.6); }
+  #pauseBtn {
+    position: fixed; z-index: 3; display: none; right: 10px; top: calc(10px + env(safe-area-inset-top, 0px));
+    font: 700 13px system-ui, sans-serif; color: var(--fg);
+    background: rgba(0, 0, 0, 0.6); border: 1px solid rgba(244, 246, 238, 0.35);
+    border-radius: 8px; padding: 6px 10px; cursor: pointer;
+  }
+  #touch { display: none !important; }
+  #overlay {
+    position: fixed; inset: 0; z-index: 5;
+    display: flex; flex-direction: column; align-items: center; justify-content: flex-start;
+    gap: 14px; padding: 16px; text-align: center; overflow-y: auto;
+    background: rgba(20, 26, 36, 0.94);
+  }
+  #overlay > :first-child { margin-top: auto; }
+  #overlay > :last-child { margin-bottom: auto; }
+  #overlay.hidden { display: none; }
+  #homeLink {
+    position: fixed; top: calc(10px + env(safe-area-inset-top, 0px)); left: 10px; z-index: 6;
+    font: 600 13px/1 system-ui, sans-serif; color: #fff; text-decoration: none;
+    padding: 8px 12px; border-radius: 999px; background: rgba(0,0,0,.55);
+    border: 1px solid rgba(255,255,255,.25);
+  }
+  #homeLink:hover { background: rgba(0,0,0,.8); }
+  #overlay.hidden ~ #homeLink { display: none; }
+  @media (max-width: 700px) { #overlay { padding-top: calc(52px + env(safe-area-inset-top, 0px)); } }
+  #overlay h1 { font-size: clamp(32px, 10vw, 58px); font-weight: 900; font-style: italic; letter-spacing: 1px; color: var(--gold);
+    text-shadow: 3px 3px 0 #2a4a8a, 0 0 22px rgba(255,210,58,0.35); }
+  #overlay h1 span { color: #fff; }
+  #overlay h2 { font-size: clamp(26px, 7vw, 42px); font-weight: 900; letter-spacing: 2px; color: var(--gold); }
+  #overlay h2.lose { color: var(--red); }
+  #overlay p { max-width: 540px; font-size: clamp(13px, 3.4vw, 16px); line-height: 1.55; }
+  #overlay p.muted { color: var(--muted); }
+  #overlay .pts { display: grid; grid-template-columns: repeat(2, auto); gap: 4px 18px; font-size: 13px; color: var(--muted); text-align: left; max-width: 560px; }
+  #overlay .pts b { color: var(--fg); }
+  #overlay .diff { display: flex; gap: 10px; flex-wrap: wrap; justify-content: center; }
+  #overlay button {
+    font: 800 15px system-ui, sans-serif; letter-spacing: 1.5px; color: var(--fg);
+    background: transparent; cursor: pointer;
+    border: 2px solid rgba(244,246,238,0.3); border-radius: 10px; padding: 9px 16px;
+  }
+  #overlay .diff button.on { border-color: var(--c); color: var(--c); box-shadow: 0 0 12px var(--c); }
+  #overlay button.start { border-color: var(--gold); color: #2a1a02; background: var(--gold); padding: 11px 30px; box-shadow: 0 4px 0 #a87a0a; }
+  #overlay .menuList { display: flex; flex-wrap: wrap; gap: 6px 10px; justify-content: center; max-width: 600px; font-size: 13px; color: var(--muted); }
+  #overlay .menuList span { background: rgba(255,255,255,0.06); border-radius: 8px; padding: 4px 9px; }
+  #overlay .menuList b { color: var(--gold); }
+  #overlay .upgs { display: flex; gap: 10px; flex-wrap: wrap; justify-content: center; }
+  #overlay button.upg { display: flex; flex-direction: column; gap: 3px; width: 170px; text-align: center; letter-spacing: 0.3px; font-size: 13px; }
+  #overlay button.upg span { font-weight: 600; font-size: 12px; color: var(--muted); }
+  #overlay button.upg:disabled { opacity: 0.4; cursor: default; }
+  @media (max-height: 560px) {
+    #overlay { gap: 8px; }
+    #overlay h1 { font-size: 30px; }
+    #overlay p { font-size: 13px; line-height: 1.4; }
+    #overlay .help, #overlay .pts { display: none; }
+    #overlay .menuList { font-size: 11px; gap: 4px; }
+    #overlay button.upg { width: 150px; padding: 6px 10px; }
+  }
+</style>
+</head>
+<body>
+<div id="wrap"><canvas id="game"></canvas></div>
+<div id="touch"></div>
+<button id="pauseBtn" type="button" aria-label="Pausa">❚❚</button>
+<div id="overlay"></div>
+<a id="homeLink" href="../../index.html">← Sala Giochi</a>
+
+
+<script>
+(() => {
+  "use strict";
+
+  const TAU = Math.PI * 2;
+  const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
+  const rnd = (a, b) => a + Math.random() * (b - a);
+  const nf = (n) => Math.floor(n).toLocaleString("it-IT");
+  const feat = (id) => window.dispatchEvent(new CustomEvent("sala:impresa", { detail: id }));
+  function store(k, v) { try { localStorage.setItem(k, v); } catch { /* ignore */ } }
+  function load(k) { try { return localStorage.getItem(k); } catch { return null; } }
+
+  const DIFFICULTIES = {
+    facile:    { label: "FACILE",    color: "#7ee0a0", desc: "otto palloncini · parole corte", balloons: 8, min: 4, max: 7, proverbs: 0 },
+    normale:   { label: "NORMALE",   color: "#ffcc4a", desc: "sei palloncini · parole di ogni lunghezza e qualche proverbio", balloons: 6, min: 5, max: 11, proverbs: 2 },
+    difficile: { label: "DIFFICILE", color: "#ff5a4a", desc: "cinque palloncini · parole lunghe e proverbi", balloons: 5, min: 7, max: 20, proverbs: 3 },
+  };
+  const DIFF_IDS = Object.keys(DIFFICULTIES);
+  const DIFF_KEY = "mongolfiera-difficulty";
+  const bestKey = (id) => `mongolfiera-best-${id}`;
+  let difficulty = DIFFICULTIES[load(DIFF_KEY)] ? load(DIFF_KEY) : "normale";
+  let diff = DIFFICULTIES[difficulty];
+  const ROUNDS = 10;
+
+  // ---------- The words ----------
+  const WORDS = {
+    "Animali": "GATTO CANE CAVALLO ELEFANTE GIRAFFA LEONE TIGRE ZEBRA CANGURO DELFINO BALENA SCOIATTOLO RICCIO VOLPE LUPO ORSO CONIGLIO TARTARUGA COCCODRILLO PINGUINO PAPPAGALLO CIVETTA FARFALLA FORMICA LUMACA RANOCCHIO CAMMELLO RINOCERONTE IPPOPOTAMO GORILLA FENICOTTERO PELLICANO STAMBECCO MARMOTTA CICOGNA",
+    "In cucina": "PIZZA PASTA LASAGNA RISOTTO GNOCCHI TORTELLINI POLENTA MINESTRONE FOCACCIA GRISSINI MOZZARELLA PARMIGIANO PROSCIUTTO SALAME OLIVA POMODORO MELANZANA ZUCCHINA CAROTA PEPERONE BASILICO ROSMARINO CIOCCOLATO TIRAMISU CANNOLO PANETTONE BISCOTTO GELATO FRAGOLA ANGURIA ARANCIA LIMONE CILIEGIA CASTAGNA NOCCIOLA",
+    "Città italiane": "ROMA MILANO NAPOLI TORINO PALERMO GENOVA BOLOGNA FIRENZE BARI CATANIA VENEZIA VERONA MESSINA PADOVA TRIESTE BRESCIA PARMA MODENA PERUGIA LIVORNO RAVENNA CAGLIARI FOGGIA RIMINI SALERNO FERRARA SASSARI LATINA MONZA PESCARA BERGAMO TRENTO VICENZA ANCONA LECCE",
+    "Mestieri": "MAESTRA DOTTORE INFERMIERE CUOCO PANETTIERE PASTICCERE FALEGNAME IDRAULICO ELETTRICISTA MURATORE POMPIERE POSTINO FARMACISTA VETERINARIO GIARDINIERE PESCATORE CONTADINO PITTORE SCULTORE MUSICISTA ATTORE GIORNALISTA FOTOGRAFO PILOTA MARINAIO ASTRONAUTA SARTO BARBIERE ARCHITETTO INGEGNERE BIBLIOTECARIO CAMERIERE AUTISTA MECCANICO GELATAIO",
+    "In casa": "TAVOLO SEDIA DIVANO POLTRONA LETTO CUSCINO COPERTA ARMADIO CASSETTO SPECCHIO LAMPADA TAPPETO FINESTRA PORTA SCALA CAMINO FORNO FRIGORIFERO LAVATRICE PENTOLA PADELLA FORCHETTA CUCCHIAIO COLTELLO BICCHIERE TAZZINA CAFFETTIERA OROLOGIO TELEFONO TELEVISORE OMBRELLO SCOPA ASCIUGAMANO SAPONETTA SVEGLIA",
+    "Sport e giochi": "CALCIO TENNIS PALLAVOLO PALLACANESTRO NUOTO CICLISMO ATLETICA SCI PATTINAGGIO GINNASTICA SCHERMA PUGILATO RUGBY GOLF BASEBALL CANOTTAGGIO EQUITAZIONE ARRAMPICATA MARATONA BOCCE BILIARDO SCACCHI DAMA BRISCOLA SCOPA NASCONDINO ALTALENA AQUILONE TROTTOLA BIGLIE",
+    "Natura": "MONTAGNA COLLINA PIANURA VULCANO GHIACCIAIO CASCATA FIUME TORRENTE LAGO MARE SPIAGGIA SCOGLIERA ISOLA PENISOLA DESERTO FORESTA BOSCO PRATO GIRASOLE MARGHERITA TULIPANO QUERCIA CASTAGNO ABETE BETULLA ARCOBALENO TEMPORALE FULMINE NUVOLA NEBBIA RUGIADA TRAMONTO CONCHIGLIA",
+    "Proverbi": "CHI VA PIANO VA SANO E VA LONTANO|CHI DORME NON PIGLIA PESCI|TRA IL DIRE E IL FARE C'E DI MEZZO IL MARE|NON TUTTE LE CIAMBELLE RIESCONO COL BUCO|CHI TROVA UN AMICO TROVA UN TESORO|L'ABITO NON FA IL MONACO|MEGLIO TARDI CHE MAI|ROSSO DI SERA BEL TEMPO SI SPERA|CHI FA DA SE FA PER TRE|L'UNIONE FA LA FORZA|IL TEMPO E DENARO|PAESE CHE VAI USANZA CHE TROVI|CHI CERCA TROVA|BATTI IL FERRO FINCHE E CALDO|A CAVAL DONATO NON SI GUARDA IN BOCCA|OCCHIO NON VEDE CUORE NON DUOLE|CHI SEMINA VENTO RACCOGLIE TEMPESTA|L'APPETITO VIEN MANGIANDO|IMPARA L'ARTE E METTILA DA PARTE|NON SI PUO AVERE LA BOTTE PIENA E LA MOGLIE UBRIACA",
+  };
+  const POOL = []; for (const [cat, list] of Object.entries(WORDS)) for (const w of list.split(cat === "Proverbi" ? "|" : " ")) POOL.push({ cat, w });
+  const letters = (w) => w.replace(/[^A-Z]/g, "");
+  function pickWords() {
+    const words = POOL.filter((x) => x.cat !== "Proverbi" && letters(x.w).length >= diff.min && letters(x.w).length <= diff.max).sort(() => Math.random() - 0.5);
+    const provs = POOL.filter((x) => x.cat === "Proverbi").sort(() => Math.random() - 0.5).slice(0, diff.proverbs);
+    // mix categories: no two in a row from the same one when possible
+    const out = []; for (const x of words) { if (out.length >= ROUNDS - provs.length) break; if (out.length && out[out.length - 1].cat === x.cat && Math.random() < 0.8) continue; out.push(x); }
+    while (out.length < ROUNDS - provs.length) out.push(words[out.length]);
+    for (const p of provs) out.splice(3 + Math.floor(Math.random() * (out.length - 3)), 0, p);
+    return out.slice(0, ROUNDS);
+  }
+
+  // ---------- Canvas ----------
+  const canvas = document.getElementById("game"), ctx = canvas.getContext("2d");
+  const overlay = document.getElementById("overlay"), pauseBtn = document.getElementById("pauseBtn");
+  let W = 640, H = 360, portrait = false, pxRatio = 1, KEYS = [], HINT = null, BAL = null, WORD = null;
+  const ROWS = ["QWERTYUIOP", "ASDFGHJKL", "ZXCVBNM"];
+  function resize() {
+    portrait = window.innerHeight > window.innerWidth * 1.05;
+    W = portrait ? 360 : 640; H = portrait ? 640 : 360;
+    const s = Math.max(0.2, Math.min((window.innerWidth - 4) / W, (window.innerHeight - 4) / H));
+    pxRatio = Math.min(3, s * (window.devicePixelRatio || 1));
+    canvas.style.width = W * s + "px"; canvas.style.height = H * s + "px";
+    canvas.width = Math.round(W * pxRatio); canvas.height = Math.round(H * pxRatio);
+    // keyboard
+    const kx0 = portrait ? 6 : 240, kw = portrait ? 33 : 36, kh = portrait ? 46 : 34, gap = portrait ? 2 : 3, ky0 = portrait ? 466 : 230;
+    KEYS = [];
+    ROWS.forEach((row, r) => { const off = (10 - row.length) * (kw + gap) / 2; for (let i = 0; i < row.length; i++) KEYS.push({ ch: row[i], x: kx0 + off + i * (kw + gap), y: ky0 + r * (kh + gap * 2), w: kw, h: kh }); });
+    const last = KEYS[KEYS.length - 1];
+    HINT = { x: last.x + kw + gap + 2, y: last.y, w: (portrait ? 354 : 632) - (last.x + kw + gap + 2), h: kh };
+    BAL = portrait ? { x: 180, y: 150 } : { x: 118, y: 150 };
+    WORD = portrait ? { x: 180, y: 360, w: 344 } : { x: 436, y: 120, w: 392 };
+  }
+  window.addEventListener("resize", () => syncControls());
+
+  // ---------- Sound ----------
+  let audioCtx = null;
+  function tone(freq, dur, type = "square", vol = 0.03, delay = 0, slide = 0) {
+    if (!audioCtx) return;
+    const t = audioCtx.currentTime + delay, o = audioCtx.createOscillator(), g = audioCtx.createGain();
+    o.type = type; o.frequency.setValueAtTime(freq, t); if (slide) o.frequency.exponentialRampToValueAtTime(slide, t + dur);
+    g.gain.setValueAtTime(0.0001, t); g.gain.exponentialRampToValueAtTime(vol, t + 0.008); g.gain.exponentialRampToValueAtTime(0.0001, t + dur);
+    o.connect(g).connect(audioCtx.destination); o.start(t); o.stop(t + dur + 0.02);
+  }
+  function noise(dur, vol) { if (!audioCtx) return; const t = audioCtx.currentTime, n = Math.floor(audioCtx.sampleRate * dur), b = audioCtx.createBuffer(1, n, audioCtx.sampleRate), d = b.getChannelData(0); for (let i = 0; i < n; i++) d[i] = (Math.random() * 2 - 1) * Math.pow(1 - i / n, 4); const s = audioCtx.createBufferSource(), g = audioCtx.createGain(); s.buffer = b; g.gain.value = vol; s.connect(g).connect(audioCtx.destination); s.start(t); }
+  const sfx = {
+    good: (n) => { for (let i = 0; i < Math.min(n, 4); i++) tone(784 + i * 120, 0.1, "triangle", 0.04, i * 0.06); },
+    pop: () => { noise(0.12, 0.3); tone(220, 0.15, "sine", 0.04, 0, 90); },
+    win: () => [523, 659, 784, 1047, 1319].forEach((f, i) => tone(f, 0.16, "triangle", 0.045, i * 0.08)),
+    lose: () => [392, 330, 262, 196].forEach((f, i) => tone(f, 0.25, "triangle", 0.04, i * 0.14)),
+    key: () => tone(1200, 0.02, "square", 0.015),
+  };
+
+  // ---------- State ----------
+  let state = "menu", menu = null, pausedFrom = null, clock = 0, guessedByPlayer = new Set();
+  const wrongShown = (ch) => guessedByPlayer.has(ch);
+  let list = [], round = 0, cur = null, guessed = new Set(), wrong = new Set(), balloons = 0, popped = [], score = 0, solved = 0, streak = 0, wordDone = 0, wordWon = false, fx = [], texts = [], drop = 0, hintsUsed = 0;
+  function startGame() {
+    if (!audioCtx) { try { audioCtx = new (window.AudioContext || window.webkitAudioContext)(); } catch { audioCtx = null; } }
+    if (audioCtx && audioCtx.state === "suspended") audioCtx.resume();
+    list = pickWords(); round = 0; score = 0; solved = 0; streak = 0;
+    startWord();
+    state = "play"; menu = null; overlay.classList.add("hidden"); syncControls();
+  }
+  function startWord() {
+    cur = list[round]; guessedByPlayer = new Set(); guessed = new Set(); wrong = new Set(); balloons = diff.balloons; popped = []; wordDone = 0; wordWon = false; drop = 0; hintsUsed = 0;
+  }
+  const isRevealed = (ch) => !/[A-Z]/.test(ch) || guessed.has(ch);
+  const complete = () => [...cur.w].every(isRevealed);
+  function guess(ch) {
+    if (state !== "play" || wordDone || guessed.has(ch) || wrong.has(ch)) return;
+    if (cur.w.includes(ch)) {
+      guessed.add(ch); const n = [...cur.w].filter((c) => c === ch).length; sfx.good(n);
+      if (complete()) winWord();
+    } else {
+      wrong.add(ch); popBalloon();
+    }
+  }
+  function popBalloon() {
+    balloons--; sfx.pop();
+    const n = diff.balloons, k = n - balloons - 1, i = k % 2 ? n - 1 - (k >> 1) : k >> 1, p = balloonPos(i); // outer balloons go first, left and right in turn
+    popped.push(i); for (let k = 0; k < 10; k++) fx.push({ x: p.x, y: p.y, vx: rnd(-80, 80), vy: rnd(-80, 40), t: 0, life: 0.6, c: BCOL[i % BCOL.length] });
+    if (balloons <= 0) loseWord();
+  }
+  function hint() {
+    if (state !== "play" || wordDone || balloons <= 1) return;
+    const hidden = [...new Set([...cur.w].filter((c) => /[A-Z]/.test(c) && !guessed.has(c)))];
+    if (!hidden.length) return;
+    // the help costs a balloon, and reveals the letter that appears most
+    hidden.sort((a, b) => [...cur.w].filter((c) => c === b).length - [...cur.w].filter((c) => c === a).length);
+    hintsUsed++; popBalloon(); guessed.add(hidden[0]); sfx.good(1);
+    if (complete()) winWord();
+  }
+  function winWord() {
+    wordDone = 0.001; wordWon = true; solved++; streak++;
+    const uniq = new Set(letters(cur.w)).size, pts = 100 + balloons * 40 + uniq * 10 + (streak > 1 ? (streak - 1) * 20 : 0);
+    score += pts; sfx.win();
+    texts.push({ text: wrong.size === 0 ? `SENZA ERRORI! +${pts}` : `+${pts}`, c: "#ffe060", t: 0 });
+    if (wrong.size === 0 && !hintsUsed && letters(cur.w).length >= 7) feat("perfetta");
+    if (cur.cat === "Proverbi") feat("proverbio");
+  }
+  function loseWord() { wordDone = 0.001; wordWon = false; streak = 0; sfx.lose(); for (const c of cur.w) if (/[A-Z]/.test(c)) guessed.add(c); }
+  function nextWord() {
+    round++;
+    if (round >= ROUNDS) { if (solved === ROUNDS) feat("dieci"); gameOver(); return; }
+    startWord();
+  }
+  function gameOver(quit = false) {
+    if (state === "over") return;
+    state = "over";
+    const prev = parseInt(load(bestKey(difficulty)), 10) || 0, record = !quit && score > prev;
+    if (record) store(bestKey(difficulty), String(score));
+    menu = () => showOverlay(
+      `<h2>${quit ? "ATTERRAGGIO" : solved >= 8 ? "CHE VIAGGIO!" : "FINE DEL VOLO"}</h2>
+       <p>${quit ? "La mongolfiera torna a terra." : `${solved} parole indovinate su ${ROUNDS}.`}</p>
+       <p>Punti: <b>${nf(score)}</b> · ${diff.label}</p>
+       ${record ? "<p style='color:var(--gold)'>★ NUOVO RECORD! ★</p>" : ""}
+       ${difficultyHTML()}
+       <button class="start" data-start>UN ALTRO VOLO</button>`);
+    menu(); syncControls();
+  }
+
+  // ---------- Update ----------
+  function update(dt) {
+    clock += dt;
+    for (const f of fx) { f.t += dt; f.x += f.vx * dt; f.y += f.vy * dt; f.vy += 200 * dt; } fx = fx.filter((f) => f.t < f.life);
+    for (const t of texts) t.t += dt; texts = texts.filter((t) => t.t < 1.6);
+    if (state !== "play") return;
+    const target = (diff.balloons - balloons) / diff.balloons;
+    drop += (target - drop) * Math.min(1, dt * 3);
+    if (wordDone) { wordDone += dt; if (wordDone > 2.2) nextWord(); }
+  }
+
+  // ---------- Drawing ----------
+  const BCOL = ["#ff4a5a", "#ffb02a", "#ffe03a", "#5ad05a", "#3aa8ff", "#a86aff", "#ff7ad0", "#3ae0d0"];
+  function circ(x, y, r) { ctx.beginPath(); ctx.arc(x, y, r, 0, TAU); }
+  function rr(x, y, w, h, r) { ctx.beginPath(); ctx.roundRect(x, y, w, h, r); }
+  function balloonPos(i) {
+    const n = diff.balloons, a = -Math.PI / 2 + (i - (n - 1) / 2) * 0.38, R = portrait ? 70 : 74;
+    const by = BAL.y + drop * (portrait ? 70 : 90) + (wordDone && wordWon ? -wordDone * 120 : 0);
+    return { x: BAL.x + Math.cos(a) * R * 0.95 + Math.sin(clock * 1.5 + i) * 2, y: by - 30 + Math.sin(a) * R * 0.9 + Math.cos(clock * 1.3 + i) * 2 };
+  }
+  function drawBalloons() {
+    const by = BAL.y + drop * (portrait ? 70 : 90) + (wordDone && wordWon ? -wordDone * 120 : 0), sw = Math.sin(clock * 1.2) * 3;
+    const basket = { x: BAL.x + sw, y: by + 40 };
+    const lost = wordDone && !wordWon;
+    const fall = lost ? Math.min(1, wordDone * 1.2) : 0;
+    // strings
+    for (let i = 0; i < diff.balloons; i++) { if (popped.includes(i)) continue; const p = balloonPos(i); ctx.strokeStyle = "rgba(255,255,255,0.6)"; ctx.lineWidth = 1; ctx.beginPath(); ctx.moveTo(p.x, p.y + 20); ctx.quadraticCurveTo((p.x + basket.x) / 2 + 4, (p.y + basket.y) / 2, basket.x + (p.x - BAL.x) * 0.12, basket.y - 12 + fall * 60); ctx.stroke(); }
+    for (let i = 0; i < diff.balloons; i++) {
+      if (popped.includes(i)) continue; const p = balloonPos(i), c = BCOL[i % BCOL.length];
+      ctx.fillStyle = c; ctx.beginPath(); ctx.ellipse(p.x, p.y, 16, 20, 0, 0, TAU); ctx.fill();
+      ctx.beginPath(); ctx.moveTo(p.x - 3, p.y + 21); ctx.lineTo(p.x + 3, p.y + 21); ctx.lineTo(p.x, p.y + 17); ctx.closePath(); ctx.fill();
+      ctx.fillStyle = "rgba(255,255,255,0.45)"; ctx.beginPath(); ctx.ellipse(p.x - 6, p.y - 8, 4, 6, -0.4, 0, TAU); ctx.fill();
+    }
+    // the basket and its little passenger (a cat in a scarf)
+    const bx = basket.x, bY = basket.y + fall * 60;
+    ctx.save(); ctx.translate(bx, bY);
+    circ(-6, -22, 11); ctx.fillStyle = "#f2a24a"; ctx.fill();
+    ctx.fillStyle = "#f2a24a"; ctx.beginPath(); ctx.moveTo(-15, -28); ctx.lineTo(-13, -40); ctx.lineTo(-7, -31); ctx.closePath(); ctx.fill(); ctx.beginPath(); ctx.moveTo(3, -29); ctx.lineTo(4, -41); ctx.lineTo(-3, -32); ctx.closePath(); ctx.fill();
+    ctx.fillStyle = "#1a1a1a"; const scared = balloons <= 1 && !wordWon; circ(-10, -23, scared ? 2.5 : 1.6); ctx.fill(); circ(-2, -23, scared ? 2.5 : 1.6); ctx.fill();
+    ctx.strokeStyle = "#1a1a1a"; ctx.lineWidth = 1.2; ctx.beginPath(); if (wordWon && wordDone) ctx.arc(-6, -19, 3, 0.2, Math.PI - 0.2); else if (scared) { ctx.arc(-6, -16, 2.5, 0, TAU); } else { ctx.moveTo(-8, -18); ctx.lineTo(-4, -18); } ctx.stroke();
+    ctx.fillStyle = "#e84a4a"; ctx.fillRect(-15, -13, 18, 4);
+    ctx.fillStyle = "#a8743a"; rr(-20, -12, 40, 24, 4); ctx.fill();
+    ctx.strokeStyle = "#7a5028"; ctx.lineWidth = 1.5; for (let i = -14; i <= 14; i += 7) { ctx.beginPath(); ctx.moveTo(i, -12); ctx.lineTo(i, 12); ctx.stroke(); } ctx.beginPath(); ctx.moveTo(-20, 0); ctx.lineTo(20, 0); ctx.stroke();
+    ctx.restore();
+    if (lost) { ctx.fillStyle = "#e8d070"; ctx.beginPath(); ctx.ellipse(BAL.x, by + 110, 46, 14, 0, Math.PI, TAU); ctx.fill(); ctx.fillStyle = "#d8b84a"; for (let i = -40; i <= 40; i += 8) { ctx.fillRect(BAL.x + i, by + 96 + Math.abs(i) * 0.12, 2, 12); } }
+  }
+  function drawWord() {
+    const chars = [...cur.w], W0 = WORD;
+    // break into lines at spaces so long proverbs fit
+    const maxCols = Math.floor(W0.w / 22);
+    const lines = []; let line = [];
+    for (const word of cur.w.split(" ")) { if (line.length && line.join(" ").length + 1 + word.length > maxCols) { lines.push(line.join(" ")); line = []; } line.push(word); }
+    lines.push(line.join(" "));
+    const cw = Math.min(30, (W0.w) / Math.max(...lines.map((l) => l.length))), fs = Math.min(24, cw * 0.82);
+    ctx.textAlign = "center"; ctx.textBaseline = "middle";
+    ctx.fillStyle = "#c8d8f0"; ctx.font = "800 12px system-ui"; ctx.fillText(cur.cat.toUpperCase(), W0.x, W0.y - 34 - (lines.length - 1) * 18);
+    lines.forEach((l, li) => {
+      const y = W0.y + (li - (lines.length - 1) / 2) * (cw + 10), x0 = W0.x - (l.length * cw) / 2 + cw / 2;
+      [...l].forEach((ch, i) => {
+        const x = x0 + i * cw; if (ch === " ") return;
+        if (!/[A-Z]/.test(ch)) { ctx.fillStyle = "#fff"; ctx.font = `800 ${fs}px system-ui`; ctx.fillText(ch, x, y); return; }
+        ctx.fillStyle = "rgba(255,255,255,0.12)"; rr(x - cw / 2 + 2, y - cw / 2 - 2, cw - 4, cw + 2, 4); ctx.fill();
+        ctx.fillStyle = "rgba(255,255,255,0.7)"; ctx.fillRect(x - cw / 2 + 4, y + cw / 2 - 1, cw - 8, 2);
+        if (guessed.has(ch)) { const missed = wordDone && !wordWon && !wrongShown(ch); ctx.fillStyle = missed ? "#ff9a8a" : "#fff"; ctx.font = `900 ${fs}px system-ui`; ctx.fillText(ch, x, y); }
+      });
+    });
+    void chars;
+  }
+  function drawKeys() {
+    for (const k of KEYS) {
+      const g = guessed.has(k.ch) && guessedByPlayer.has(k.ch), b = wrong.has(k.ch);
+      rr(k.x, k.y, k.w, k.h, 6); ctx.fillStyle = g ? "#3aa84a" : b ? "rgba(255,255,255,0.08)" : "rgba(255,255,255,0.88)"; ctx.fill();
+      ctx.fillStyle = g ? "#fff" : b ? "rgba(255,255,255,0.3)" : "#1a2a44"; ctx.font = `800 ${portrait ? 17 : 15}px system-ui`; ctx.textAlign = "center"; ctx.textBaseline = "middle"; ctx.fillText(k.ch, k.x + k.w / 2, k.y + k.h / 2 + 1);
+    }
+    const H0 = HINT, can = balloons > 1 && !wordDone;
+    rr(H0.x, H0.y, H0.w, H0.h, 8); ctx.fillStyle = can ? "rgba(255,204,74,0.9)" : "rgba(255,255,255,0.1)"; ctx.fill();
+    ctx.fillStyle = can ? "#3a2a08" : "rgba(255,255,255,0.35)"; ctx.font = "800 12px system-ui"; ctx.fillText("AIUTO", H0.x + H0.w / 2, H0.y + H0.h / 2 - 6); ctx.font = "600 9px system-ui"; ctx.fillText("−1 pallone", H0.x + H0.w / 2, H0.y + H0.h / 2 + 8);
+  }
+  function draw() {
+    ctx.setTransform(pxRatio, 0, 0, pxRatio, 0, 0);
+    const g = ctx.createLinearGradient(0, 0, 0, H); g.addColorStop(0, "#2a5aa8"); g.addColorStop(0.6, "#6aa8e0"); g.addColorStop(1, "#bfe0f8"); ctx.fillStyle = g; ctx.fillRect(0, 0, W, H);
+    // clouds and hills
+    ctx.fillStyle = "rgba(255,255,255,0.7)"; for (let i = 0; i < 6; i++) { const x = ((i * 157 + clock * (6 + i * 2)) % (W + 120)) - 60, y = 40 + (i * 61) % (H * 0.5); for (const [dx, dy, r] of [[-16, 4, 12], [0, -2, 16], [16, 4, 12]]) { circ(x + dx, y + dy, r); ctx.fill(); } }
+    ctx.fillStyle = "#5aa84a"; ctx.beginPath(); ctx.moveTo(0, H); for (let x = 0; x <= W; x += 20) ctx.lineTo(x, H - 30 - Math.sin(x / 70) * 12); ctx.lineTo(W, H); ctx.fill();
+    if (!cur) return;
+    // a dark panel behind the word and the keys
+    if (portrait) { rr(4, 270, 352, 364, 14); } else { rr(232, 8, 404, 344, 14); } ctx.fillStyle = "rgba(14,26,52,0.94)"; ctx.fill();
+    drawBalloons();
+    drawWord(); drawKeys();
+    for (const f of fx) { ctx.globalAlpha = 1 - f.t / f.life; ctx.fillStyle = f.c; ctx.fillRect(f.x, f.y, 4, 4); } ctx.globalAlpha = 1;
+    // HUD
+    ctx.textAlign = "left"; ctx.textBaseline = "middle"; ctx.fillStyle = "#fff"; ctx.font = "800 13px system-ui";
+    const hx = portrait ? 12 : 12, hy = portrait ? 22 : 22;
+    rr(hx - 6, hy - 13, portrait ? 220 : 210, 26, 8); ctx.fillStyle = "rgba(14,26,52,0.6)"; ctx.fill(); ctx.fillStyle = "#fff";
+    ctx.fillText(`Parola ${round + 1}/${ROUNDS} · ${nf(score)} punti`, hx, hy);
+    if (streak > 1) { ctx.fillStyle = "#ffe060"; ctx.font = "800 11px system-ui"; ctx.fillText(`serie di ${streak}!`, hx, hy + 24); }
+    for (const t of texts) { ctx.globalAlpha = Math.min(1, (1.6 - t.t) * 2); ctx.font = "900 22px system-ui"; ctx.textAlign = "center"; ctx.lineWidth = 5; ctx.strokeStyle = "rgba(14,26,52,0.8)"; const y = (portrait ? 300 : 52) - t.t * 16; ctx.strokeText(t.text, WORD.x, y); ctx.fillStyle = t.c; ctx.fillText(t.text, WORD.x, y); }
+    ctx.globalAlpha = 1;
+    if (wordDone && !wordWon) { ctx.font = "900 18px system-ui"; ctx.textAlign = "center"; ctx.fillStyle = "#ffb0a0"; ctx.fillText("Atterraggio sul fieno!", BAL.x, portrait ? 40 : H - 60); }
+  }
+
+  // ---------- Menus ----------
+  function showOverlay(html) { overlay.innerHTML = html; overlay.classList.remove("hidden"); }
+  function difficultyHTML() {
+    const buttons = DIFF_IDS.map((id) => { const d = DIFFICULTIES[id]; return `<button type="button" data-diff="${id}" class="${id === difficulty ? "on" : ""}" style="--c:${d.color}">${d.label}</button>`; }).join("");
+    const best = parseInt(load(bestKey(difficulty)), 10);
+    return `<div class="diff">${buttons}</div><p class="muted">${diff.desc}${best ? ` · Record: ${nf(best)}` : ""}</p>`;
+  }
+  function setDifficulty(id) { if (!DIFFICULTIES[id]) return; difficulty = id; diff = DIFFICULTIES[id]; store(DIFF_KEY, id); if (menu) menu(); }
+  function showTitle() {
+    menu = showTitle; state = "menu";
+    showOverlay(
+      `<h1>MONGOL<span>FIERA</span></h1>
+       <p>Una gatta in viaggio su una cesta tenuta su dai palloncini. Per farla volare indovina la parola nascosta una lettera alla volta: ogni lettera che non c'è fa scoppiare un palloncino, e se scoppiano tutti la cesta scende dolcemente su un mucchio di fieno.</p>
+       <div class="pts">
+         <span><b>Parole</b></span><span>dieci a volo, da animali, cucina, città italiane, mestieri, casa, sport e natura; a Normale e Difficile anche qualche proverbio</span>
+         <span><b>Aiuto</b></span><span>rivela la lettera che compare più volte, ma costa un palloncino</span>
+         <span><b>Punti</b></span><span>100 a parola, 40 per ogni palloncino rimasto, 10 per ogni lettera diversa e un premio per le serie</span>
+       </div>
+       <p class="muted help">${touchMode ? "Tocca le lettere." : "Scrivi le lettere con la tastiera o cliccale. Il tasto ? chiede un aiuto. Esc pausa."}</p>
+       ${difficultyHTML()}
+       <button class="start" data-start>SI PARTE</button>`);
+    syncControls();
+  }
+  function togglePause() {
+    if (state === "play") { pausedFrom = state; state = "paused"; showOverlay(`<h2>PAUSA</h2><button class="start" data-resume>CONTINUA</button>`); }
+    else if (state === "paused") { state = pausedFrom; overlay.classList.add("hidden"); lastT = performance.now(); }
+    syncControls();
+  }
+  window.addEventListener("sala:termina", () => { if (state !== "paused") return; overlay.classList.add("hidden"); gameOver(true); });
+  function syncControls() { pauseBtn.style.display = state === "play" && touchMode ? "block" : "none"; resize(); }
+  pauseBtn.addEventListener("click", () => togglePause());
+  overlay.addEventListener("click", (e) => {
+    const q = (s) => e.target.closest(s); let el;
+    if ((el = q("[data-diff]"))) { setDifficulty(el.dataset.diff); return; }
+    if (q("[data-start]")) { startGame(); return; }
+    if (q("[data-resume]")) { togglePause(); return; }
+  });
+
+  // ---------- Input ----------
+  let touchMode = !!(window.matchMedia && matchMedia("(pointer: coarse)").matches);
+  function press(ch) { if (state !== "play" || wordDone) return; if (!guessed.has(ch) && !wrong.has(ch)) { guessedByPlayer.add(ch); sfx.key(); guess(ch); } }
+  canvas.addEventListener("pointerdown", (e) => {
+    e.preventDefault(); if (state !== "play") return;
+    const rc = canvas.getBoundingClientRect(), x = ((e.clientX - rc.left) / rc.width) * W, y = ((e.clientY - rc.top) / rc.height) * H;
+    for (const k of KEYS) if (x >= k.x - 1 && x <= k.x + k.w + 1 && y >= k.y - 1 && y <= k.y + k.h + 1) { press(k.ch); return; }
+    if (x >= HINT.x && x <= HINT.x + HINT.w && y >= HINT.y && y <= HINT.y + HINT.h) hint();
+  });
+  window.addEventListener("keydown", (e) => {
+    if (state === "menu" || state === "over") { if (e.key === "Enter") startGame(); return; }
+    if (e.key === "Escape" || (e.key === "P" && e.shiftKey)) { if (!e.repeat) togglePause(); return; }
+    if (state !== "play" || e.repeat) return;
+    if (e.key === "?" || e.key === "-") { hint(); return; }
+    const ch = e.key.toUpperCase();
+    if (/^[A-Z]$/.test(ch)) { e.preventDefault(); press(ch); }
+  });
+  window.addEventListener("blur", () => { if (state === "play") togglePause(); });
+  window.addEventListener("pointerdown", (e) => { if (e.pointerType === "touch" && !touchMode) { touchMode = true; syncControls(); if (menu) menu(); } }, true);
+
+  // ---------- Loop ----------
+  let lastT = performance.now();
+  function frame(now) {
+    const dt = Math.min(0.05, (now - lastT) / 1000); lastT = now;
+    if (state !== "paused") update(dt);
+    draw();
+    requestAnimationFrame(frame);
+  }
+  resize();
+  list = [{ cat: "In volo", w: "MONGOLFIERA" }]; cur = list[0];
+  showTitle();
+  requestAnimationFrame(frame);
+})();
+</script>
+<script src="../../shared/iniziali.js" data-record="mongolfiera-best-" data-kind="score"></script>
+</body>
+</html>
