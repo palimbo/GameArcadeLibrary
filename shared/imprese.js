@@ -9,6 +9,11 @@
   "use strict";
   // record key prefix of the game (as in trofei.js) → its feats
   const LIST = {
+    "dischetto-best-": [   // dal-dischetto
+      { id: "incrocio", name: "All'incrocio", desc: "segna un rigore all'incrocio dei pali" },
+      { id: "saracinesca", name: "Saracinesca", desc: "para tre rigori nella stessa partita" },
+      { id: "coppa", name: "Coppa in bacheca", desc: "vinci la finale della Coppa dei Rigori" },
+    ],
     "boscaiolo-best-": [   // boscaiolo
       { id: "cento", name: "Cento colpi", desc: "dai 100 colpi d'ascia in una partita" },
       { id: "inverno", name: "Fino all'inverno", desc: "taglia fino a vedere la neve (300 colpi)" },
