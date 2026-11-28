@@ -9,6 +9,11 @@
   "use strict";
   // record key prefix of the game (as in trofei.js) → its feats
   const LIST = {
+    "pizzeria-best-": [   // pizzeria-svelta
+      { id: "puntogiusto", name: "Al punto giusto", desc: "sforna 10 pizze perfette in una partita" },
+      { id: "esaurito", name: "Tutto esaurito", desc: "chiudi una giornata, dalla quarta in poi, senza un cliente scontento" },
+      { id: "stellato", name: "Pizzeria stellata", desc: "arriva alla fine dell'ottava giornata" },
+    ],
     "teschi-best-": [   // teschi-e-fiocchi
       { id: "fullcombo", name: "Full combo!!", desc: "finisci una canzone senza mancare una freccia" },
       { id: "vittoria", name: "Regina della pista", desc: "vinci una sfida contro la CPU o contro un'amica" },

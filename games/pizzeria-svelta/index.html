@@ -1,0 +1,568 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no, viewport-fit=cover">
+<title>Pizzeria Svelta</title>
+<style>
+  :root {
+    --bg: #2a1810;
+    --fg: #f4f6ee;
+    --muted: #c8d0dc;
+    --gold: #ffc23a;
+    --red: #ff5a4a;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  html, body {
+    height: 100%;
+    background: var(--bg);
+    color: var(--fg);
+    font-family: system-ui, -apple-system, "Segoe UI", sans-serif;
+    overflow: hidden;
+    user-select: none;
+    -webkit-user-select: none;
+    -webkit-tap-highlight-color: transparent;
+    touch-action: none;
+  }
+  #wrap { position: fixed; inset: 0; display: flex; align-items: center; justify-content: center; }
+  canvas { cursor: pointer; display: block; touch-action: none; border-radius: 6px; box-shadow: 0 0 0 2px #2e3a4e, 0 10px 40px rgba(0,0,0,0.6); }
+  #pauseBtn {
+    position: fixed; z-index: 3; display: none; right: 10px; top: calc(10px + env(safe-area-inset-top, 0px));
+    font: 700 13px system-ui, sans-serif; color: var(--fg);
+    background: rgba(0, 0, 0, 0.6); border: 1px solid rgba(244, 246, 238, 0.35);
+    border-radius: 8px; padding: 6px 10px; cursor: pointer;
+  }
+  #touch { display: none !important; }
+  #overlay {
+    position: fixed; inset: 0; z-index: 5;
+    display: flex; flex-direction: column; align-items: center; justify-content: flex-start;
+    gap: 14px; padding: 16px; text-align: center; overflow-y: auto;
+    background: rgba(20, 26, 36, 0.94);
+  }
+  #overlay > :first-child { margin-top: auto; }
+  #overlay > :last-child { margin-bottom: auto; }
+  #overlay.hidden { display: none; }
+  #homeLink {
+    position: fixed; top: calc(10px + env(safe-area-inset-top, 0px)); left: 10px; z-index: 6;
+    font: 600 13px/1 system-ui, sans-serif; color: #fff; text-decoration: none;
+    padding: 8px 12px; border-radius: 999px; background: rgba(0,0,0,.55);
+    border: 1px solid rgba(255,255,255,.25);
+  }
+  #homeLink:hover { background: rgba(0,0,0,.8); }
+  #overlay.hidden ~ #homeLink { display: none; }
+  @media (max-width: 700px) { #overlay { padding-top: calc(52px + env(safe-area-inset-top, 0px)); } }
+  #overlay h1 { font-size: clamp(32px, 10vw, 58px); font-weight: 900; font-style: italic; letter-spacing: 1px; color: var(--gold);
+    text-shadow: 3px 3px 0 #6a1a1a, 0 0 22px rgba(255,210,58,0.35); }
+  #overlay h1 span { color: #fff; }
+  #overlay h2 { font-size: clamp(26px, 7vw, 42px); font-weight: 900; letter-spacing: 2px; color: var(--gold); }
+  #overlay h2.lose { color: var(--red); }
+  #overlay p { max-width: 540px; font-size: clamp(13px, 3.4vw, 16px); line-height: 1.55; }
+  #overlay p.muted { color: var(--muted); }
+  #overlay .pts { display: grid; grid-template-columns: repeat(2, auto); gap: 4px 18px; font-size: 13px; color: var(--muted); text-align: left; max-width: 560px; }
+  #overlay .pts b { color: var(--fg); }
+  #overlay .diff { display: flex; gap: 10px; flex-wrap: wrap; justify-content: center; }
+  #overlay button {
+    font: 800 15px system-ui, sans-serif; letter-spacing: 1.5px; color: var(--fg);
+    background: transparent; cursor: pointer;
+    border: 2px solid rgba(244,246,238,0.3); border-radius: 10px; padding: 9px 16px;
+  }
+  #overlay .diff button.on { border-color: var(--c); color: var(--c); box-shadow: 0 0 12px var(--c); }
+  #overlay button.start { border-color: var(--gold); color: #2a1a02; background: var(--gold); padding: 11px 30px; box-shadow: 0 4px 0 #a87a0a; }
+  #overlay .menuList { display: flex; flex-wrap: wrap; gap: 6px 10px; justify-content: center; max-width: 600px; font-size: 13px; color: var(--muted); }
+  #overlay .menuList span { background: rgba(255,255,255,0.06); border-radius: 8px; padding: 4px 9px; }
+  #overlay .menuList b { color: var(--gold); }
+  #overlay .upgs { display: flex; gap: 10px; flex-wrap: wrap; justify-content: center; }
+  #overlay button.upg { display: flex; flex-direction: column; gap: 3px; width: 170px; text-align: center; letter-spacing: 0.3px; font-size: 13px; }
+  #overlay button.upg span { font-weight: 600; font-size: 12px; color: var(--muted); }
+  #overlay button.upg:disabled { opacity: 0.4; cursor: default; }
+  @media (max-height: 560px) {
+    #overlay { gap: 8px; }
+    #overlay h1 { font-size: 30px; }
+    #overlay p { font-size: 13px; line-height: 1.4; }
+    #overlay .help, #overlay .pts { display: none; }
+    #overlay .menuList { font-size: 11px; gap: 4px; }
+    #overlay button.upg { width: 150px; padding: 6px 10px; }
+  }
+</style>
+</head>
+<body>
+<div id="wrap"><canvas id="game"></canvas></div>
+<div id="touch"></div>
+<button id="pauseBtn" type="button" aria-label="Pausa">❚❚</button>
+<div id="overlay"></div>
+<a id="homeLink" href="../../index.html">← Sala Giochi</a>
+
+
+<script>
+(() => {
+  "use strict";
+
+  const TAU = Math.PI * 2;
+  const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
+  const rnd = (a, b) => a + Math.random() * (b - a);
+  const nf = (n) => Math.floor(n).toLocaleString("it-IT");
+  const feat = (id) => window.dispatchEvent(new CustomEvent("sala:impresa", { detail: id }));
+  function store(k, v) { try { localStorage.setItem(k, v); } catch { /* ignore */ } }
+  function load(k) { try { return localStorage.getItem(k); } catch { return null; } }
+
+  const DIFFICULTIES = {
+    facile:    { label: "FACILE",    color: "#7ee0a0", desc: "clienti pazienti e meno numerosi · la pizza brucia più tardi", patience: 1.4, rate: 0.75, burn: 1.6 },
+    normale:   { label: "NORMALE",   color: "#ffc23a", desc: "il sabato sera di una pizzeria vera", patience: 1, rate: 1, burn: 1.35 },
+    difficile: { label: "DIFFICILE", color: "#ff5a4a", desc: "clienti frettolosi, file più lunghe, forno senza pietà", patience: 0.75, rate: 1.25, burn: 1.22 },
+  };
+  const DIFF_IDS = Object.keys(DIFFICULTIES);
+  const DIFF_KEY = "pizzeria-difficulty";
+  const bestKey = (id) => `pizzeria-best-${id}`;
+  let difficulty = DIFFICULTIES[load(DIFF_KEY)] ? load(DIFF_KEY) : "normale";
+  let diff = DIFFICULTIES[difficulty];
+
+  // ---------- The menu ----------
+  const ING = {
+    pom: { name: "Pomodoro", key: "1" }, moz: { name: "Mozzarella", key: "2" }, bas: { name: "Basilico", key: "3" }, fun: { name: "Funghi", key: "4" }, sal: { name: "Salame", key: "5" },
+    pro: { name: "Prosciutto", key: "6" }, oli: { name: "Olive", key: "7" }, acc: { name: "Acciughe", key: "8" }, pep: { name: "Peperoni", key: "9" }, car: { name: "Carciofi", key: "0" },
+  };
+  const ING_IDS = Object.keys(ING);
+  const PIZZAS = [
+    { name: "Margherita", t: ["pom", "moz", "bas"], day: 1 }, { name: "Funghi", t: ["pom", "moz", "fun"], day: 1 },
+    { name: "Diavola", t: ["pom", "moz", "sal"], day: 2 }, { name: "Prosciutto", t: ["pom", "moz", "pro"], day: 3 },
+    { name: "Napoli", t: ["pom", "moz", "acc", "oli"], day: 4 }, { name: "Ortolana", t: ["pom", "moz", "pep", "car"], day: 5 },
+    { name: "Capricciosa", t: ["pom", "moz", "pro", "fun", "car", "oli"], day: 6 }, { name: "Bianca", t: ["moz", "pro", "fun"], day: 7 },
+    { name: "Della casa", t: ["pom", "moz", "sal", "pep", "oli"], day: 8 },
+  ];
+  const DAYS = 8;
+  const UPGRADES = [
+    { id: "forno", name: "Forno più caldo", desc: "le pizze cuociono prima", costs: [40, 80, 140] },
+    { id: "campanello", name: "Campanello d'argento", desc: "i clienti aspettano più volentieri", costs: [35, 70, 120] },
+    { id: "quarto", name: "Quarto forno", desc: "una bocca di forno in più", costs: [90] },
+  ];
+
+  // ---------- Canvas and layout ----------
+  const canvas = document.getElementById("game"), ctx = canvas.getContext("2d");
+  const overlay = document.getElementById("overlay"), pauseBtn = document.getElementById("pauseBtn");
+  let W = 640, H = 360, portrait = false, pxRatio = 1, LY = null;
+  function layout() {
+    const ovenN = up.quarto ? 4 : 3;
+    if (portrait) {
+      LY = { seats: [0, 1, 2, 3].map((i) => ({ x: 48 + i * 88, y: 164 })), counterY: 176, tray: { x: 300, y: 226, r: 24 }, hud: { x: 8, y: 198 },
+        board: { x: 112, y: 306, r: 60 }, trash: { x: 36, y: 386, w: 52, h: 34 },
+        ovens: Array.from({ length: ovenN }, (_, i) => ({ x: 214, y: 268 + i * (ovenN === 4 ? 42 : 52), w: 136, h: ovenN === 4 ? 38 : 46 })),
+        bins: ING_IDS.map((id, i) => ({ id, x: 14 + (i % 5) * 67, y: 440 + Math.floor(i / 5) * 92, w: 62, h: 84 })) };
+    } else {
+      LY = { seats: [0, 1, 2, 3].map((i) => ({ x: 62 + i * 108, y: 124 })), counterY: 134, tray: { x: 532, y: 110, r: 22 }, hud: { x: 470, y: 6 },
+        board: { x: 92, y: 236, r: 62 }, trash: { x: 30, y: 316, w: 52, h: 32 },
+        ovens: Array.from({ length: ovenN }, (_, i) => ({ x: 502, y: 160 + i * (ovenN === 4 ? 49 : 64), w: 130, h: ovenN === 4 ? 44 : 56 })),
+        bins: ING_IDS.map((id, i) => ({ id, x: 172 + (i % 5) * 64, y: 168 + Math.floor(i / 5) * 92, w: 60, h: 84 })) };
+    }
+  }
+  function resize() {
+    portrait = window.innerHeight > window.innerWidth * 1.05;
+    W = portrait ? 360 : 640; H = portrait ? 640 : 360;
+    const s = Math.max(0.2, Math.min((window.innerWidth - 4) / W, (window.innerHeight - 4) / H));
+    pxRatio = Math.min(3, s * (window.devicePixelRatio || 1));
+    canvas.style.width = W * s + "px"; canvas.style.height = H * s + "px";
+    canvas.width = Math.round(W * pxRatio); canvas.height = Math.round(H * pxRatio);
+    layout();
+  }
+  window.addEventListener("resize", () => syncControls());
+
+  // ---------- Sound ----------
+  let audioCtx = null;
+  function tone(freq, dur, type = "square", vol = 0.03, delay = 0, slide = 0) {
+    if (!audioCtx) return;
+    const t = audioCtx.currentTime + delay, o = audioCtx.createOscillator(), g = audioCtx.createGain();
+    o.type = type; o.frequency.setValueAtTime(freq, t); if (slide) o.frequency.exponentialRampToValueAtTime(slide, t + dur);
+    g.gain.setValueAtTime(0.0001, t); g.gain.exponentialRampToValueAtTime(vol, t + 0.008); g.gain.exponentialRampToValueAtTime(0.0001, t + dur);
+    o.connect(g).connect(audioCtx.destination); o.start(t); o.stop(t + dur + 0.02);
+  }
+  function noise(dur, freq, vol) { if (!audioCtx) return; const t = audioCtx.currentTime, n = Math.floor(audioCtx.sampleRate * dur), b = audioCtx.createBuffer(1, n, audioCtx.sampleRate), d = b.getChannelData(0); for (let i = 0; i < n; i++) d[i] = (Math.random() * 2 - 1) * (1 - i / n); const s = audioCtx.createBufferSource(), f = audioCtx.createBiquadFilter(), g = audioCtx.createGain(); s.buffer = b; f.type = "lowpass"; f.frequency.value = freq; g.gain.value = vol; s.connect(f).connect(g).connect(audioCtx.destination); s.start(t); }
+  const sfx = {
+    topping: () => { noise(0.06, 2400, 0.08); tone(520 + Math.random() * 200, 0.05, "triangle", 0.03); },
+    oven: () => { noise(0.3, 600, 0.1); },
+    ding: () => { tone(1568, 0.25, "triangle", 0.05); tone(2093, 0.4, "triangle", 0.04, 0.08); },
+    pay: () => [880, 1109, 1319].forEach((f, i) => tone(f, 0.09, "square", 0.03, i * 0.06)),
+    angry: () => tone(220, 0.3, "sawtooth", 0.04, 0, 120),
+    trash: () => noise(0.2, 900, 0.12),
+    burn: () => noise(0.5, 400, 0.12),
+    bell: () => { tone(1320, 0.5, "sine", 0.05); tone(1980, 0.5, "sine", 0.02); },
+  };
+  // a little mandolin tarantella in the background
+  const TUNE = [69, 72, 76, 72, 69, 72, 76, 72, 71, 74, 77, 74, 71, 74, 77, 74, 72, 76, 79, 76, 72, 76, 79, 76, 71, 74, 77, 74, 68, 71, 76, 71];
+  let tb = 0, nextT = 0, music = load("pizzeria-music") !== "0";
+  setInterval(() => {
+    if (!audioCtx || !music || state !== "play") { if (audioCtx) nextT = audioCtx.currentTime + 0.05; return; }
+    while (nextT < audioCtx.currentTime + 0.15) {
+      const d = Math.max(0, nextT - audioCtx.currentTime), m = TUNE[tb % TUNE.length] - 12;
+      const f = 440 * Math.pow(2, (m - 69) / 12); tone(f, 0.11, "triangle", 0.014, d); tone(f, 0.05, "square", 0.004, d + 0.03);
+      if (tb % 3 === 0) tone(440 * Math.pow(2, (TUNE[tb % TUNE.length] - 93) / 12), 0.2, "triangle", 0.02, d);
+      tb++; nextT += 0.15;
+    }
+  }, 50);
+
+  // ---------- State ----------
+  let state = "menu", menu = null, pausedFrom = null, clock = 0;
+  let day = 1, money = 0, earned = 0, stars = 5, perfectCount = 0, dayAngry = 0, dayServed = 0;
+  let up = { forno: 0, campanello: 0, quarto: 0 };
+  let customers = [], ovens = [], board = null, tray = null, toSpawn = 0, spawnT = 0, texts = [], parts = [], dayT = 0, dayEndT = 0;
+  const bakeTime = () => 7 * Math.pow(0.85, up.forno);
+  const patienceBase = () => (26 - day * 1.3) * diff.patience * (1 + 0.15 * up.campanello);
+  const menuToday = () => PIZZAS.filter((p) => p.day <= day);
+  const ingToday = () => ING_IDS.filter((id) => menuToday().some((p) => p.t.includes(id)));
+  const seed = (n) => { const s = Math.sin(n * 91.7) * 43758.5453; return s - Math.floor(s); };
+
+  function startGame() {
+    if (!audioCtx) { try { audioCtx = new (window.AudioContext || window.webkitAudioContext)(); } catch { audioCtx = null; } }
+    if (audioCtx && audioCtx.state === "suspended") audioCtx.resume();
+    day = 1; money = 0; earned = 0; stars = 5; perfectCount = 0; up = { forno: 0, campanello: 0, quarto: 0 };
+    startDay();
+  }
+  function startDay() {
+    layout(); customers = []; ovens = LY.ovens.map(() => null); board = null; tray = null; texts = []; parts = [];
+    toSpawn = Math.round((6 + day * 2) * diff.rate); spawnT = 1.5; dayAngry = 0; dayServed = 0; dayT = 0; dayEndT = 0;
+    state = "intro"; menu = null; overlay.classList.add("hidden");
+    const news = PIZZAS.filter((p) => p.day === day);
+    showOverlay(`<h2>GIORNATA ${day} DI ${DAYS}</h2><p>${toSpawn} clienti stasera.${news.length ? ` Nel menu ${news.length > 1 ? "arrivano" : "arriva"}: <b>${news.map((p) => p.name).join(" e ")}</b>.` : ""}</p>
+      <div class="menuList">${menuToday().map((p) => `<span><b>${p.name}</b> · ${p.t.map((t) => ING[t].name.toLowerCase()).join(", ")}</span>`).join("")}</div>
+      <button class="start" data-go>APRI LA PIZZERIA</button>`);
+    syncControls();
+  }
+  function spawnCustomer() {
+    const free = [0, 1, 2, 3].filter((i) => !customers.some((c) => c.seat === i));
+    if (!free.length) return false;
+    const list = menuToday(), news = list.filter((p) => p.day === day);
+    const pz = Math.random() < 0.35 && news.length ? news[Math.floor(Math.random() * news.length)] : list[Math.floor(Math.random() * list.length)];
+    const pat = patienceBase() * (0.9 + 0.1 * pz.t.length / 3);
+    customers.push({ seat: free[Math.floor(Math.random() * free.length)], pizza: pz, patience: pat, max: pat, look: Math.floor(Math.random() * 1000), t: 0, mood: 0, leaving: 0 });
+    sfx.bell(); return true;
+  }
+
+  // ---------- Making pizza ----------
+  function addTopping(id) {
+    if (state !== "play" || !ingToday().includes(id)) return;
+    if (!board) board = { t: new Set(), id: Math.random() * 1000 };
+    if (board.t.has(id)) { say(LY.board.x, LY.board.y - LY.board.r - 10, "c'è già!", "#ffd8a0"); return; }
+    board.t.add(id); sfx.topping();
+    for (let k = 0; k < 6; k++) parts.push({ x: LY.board.x + rnd(-30, 30), y: LY.board.y + rnd(-30, 30), vx: rnd(-30, 30), vy: rnd(-60, -20), t: 0, life: 0.4, c: "#fff2d0" });
+  }
+  function bake(i) {
+    if (ovens[i]) { takeOut(i); return; }
+    if (!board || !board.t.size) { say(LY.ovens[i].x + 60, LY.ovens[i].y, "prima la pizza!", "#ffd8a0"); return; }
+    ovens[i] = { pizza: board, t: 0 }; board = null; sfx.oven();
+  }
+  function takeOut(i) {
+    const o = ovens[i]; if (!o) return;
+    const k = o.t / bakeTime();
+    if (tray) { say(LY.tray.x, LY.tray.y - 30, "il banco è pieno!", "#ffd8a0"); return; }
+    if (k < 0.85) { say(LY.ovens[i].x + 60, LY.ovens[i].y, "è ancora cruda!", "#ffd8a0"); return; }
+    tray = { pizza: o.pizza, k }; ovens[i] = null; sfx.ding();
+  }
+  function trash() {
+    if (tray) { tray = null; sfx.trash(); return; }
+    if (board) { board = null; sfx.trash(); }
+  }
+  function serve(c) {
+    if (!tray || c.leaving) return;
+    const want = new Set(c.pizza.t), got = tray.pizza.t, same = want.size === got.size && [...want].every((x) => got.has(x));
+    const cooked = tray.k <= diff.burn, perfect = tray.k >= 0.95 && tray.k <= 1.15;
+    const S = LY.seats[c.seat];
+    if (same && cooked) {
+      const price = 6 + c.pizza.t.length, tip = Math.round((c.patience / c.max) * 5) + (perfect ? 2 : 0);
+      money += price + tip; earned += price + tip; dayServed++; c.mood = 1; c.leaving = 1.2;
+      say(S.x, S.y - 70, `+${price + tip} €${perfect ? " · PERFETTA!" : tip >= 4 ? " · GRAZIE!" : ""}`, "#8aff8a");
+      if (perfect) { perfectCount++; if (perfectCount >= 10) feat("puntogiusto"); }
+      sfx.pay();
+    } else {
+      c.mood = -1; c.leaving = 1.2; sfx.angry();
+      say(S.x, S.y - 70, !cooked ? "È BRUCIATA!" : "NON È LA MIA!", "#ff8a8a");
+      loseStar();
+    }
+    tray = null;
+  }
+  function loseStar() {
+    stars = Math.max(0, stars - 1); dayAngry++;
+    if (stars <= 0 && state === "play") { state = "ending"; setTimeout(() => gameOver(false), 1100); }
+  }
+  function say(x, y, text, c) { texts.push({ x, y, text, c, t: 0 }); }
+
+  // ---------- Update ----------
+  function update(dt) {
+    clock += dt;
+    for (const p of parts) { p.t += dt; p.x += p.vx * dt; p.y += p.vy * dt; p.vy += 120 * dt; } parts = parts.filter((p) => p.t < p.life);
+    for (const t of texts) t.t += dt; texts = texts.filter((t) => t.t < 1.4);
+    if (state !== "play") return;
+    dayT += dt;
+    // new customers
+    spawnT -= dt;
+    if (toSpawn > 0 && spawnT <= 0) { if (spawnCustomer()) { toSpawn--; spawnT = rnd(4.5, 7.5) / diff.rate * Math.max(0.5, 1 - day * 0.06); } else spawnT = 1; }
+    for (const c of customers) {
+      c.t += dt;
+      if (c.leaving > 0) { c.leaving -= dt; continue; }
+      c.patience -= dt;
+      if (c.patience <= 0) { c.mood = -1; c.leaving = 1.2; sfx.angry(); const S = LY.seats[c.seat]; say(S.x, S.y - 70, "ME NE VADO!", "#ff8a8a"); loseStar(); if (state !== "play") return; }
+    }
+    customers = customers.filter((c) => !(c.leaving < 0));
+    // the ovens
+    for (let i = 0; i < ovens.length; i++) { const o = ovens[i]; if (!o) continue; const prev = o.t / bakeTime(); o.t += dt; const k = o.t / bakeTime();
+      if (prev < 0.95 && k >= 0.95) sfx.ding();
+      if (prev <= diff.burn && k > diff.burn) { sfx.burn(); say(LY.ovens[i].x + 60, LY.ovens[i].y, "BRUCIATA!", "#ff8a8a"); }
+      if (k > diff.burn && Math.random() < 0.3) parts.push({ x: LY.ovens[i].x + 40 + rnd(-8, 8), y: LY.ovens[i].y + 6, vx: rnd(-8, 8), vy: -rnd(30, 50), t: 0, life: 1, c: "rgba(70,60,60,0.6)", smoke: true });
+      if (k > diff.burn + 1.2) { ovens[i] = null; } }
+    // end of the day
+    if (toSpawn <= 0 && !customers.length) { dayEndT += dt; if (dayEndT > 1) endDay(); }
+  }
+  function endDay() {
+    if (stars <= 0) return;
+    state = "shop"; if (dayAngry === 0 && day >= 4) feat("esaurito");
+    if (day >= DAYS) { feat("stellato"); gameOver(true); return; }
+    menu = () => {
+      const opts = UPGRADES.map((u) => { const lv = up[u.id], cost = u.costs[lv]; return `<button type="button" class="upg" data-buy="${u.id}" ${cost === undefined || money < cost ? "disabled" : ""}><b>${u.name}${u.costs.length > 1 ? ` · liv. ${lv}/${u.costs.length}` : lv ? " ✓" : ""}</b><span>${u.desc}</span><span>${cost === undefined ? "al massimo" : cost + " €"}</span></button>`; }).join("");
+      showOverlay(`<h2>CHIUSURA!</h2><p>Giornata ${day}: ${dayServed === 1 ? "1 pizza servita" : dayServed + " pizze servite"}${dayAngry ? `, ${dayAngry} ${dayAngry > 1 ? "clienti scontenti" : "cliente scontento"}` : ", tutti contenti!"}</p>
+        <p>In cassa: <b>${money} €</b> · stelle ${"★".repeat(stars)}${"☆".repeat(5 - stars)}</p>
+        <p class="muted">Spendi qualcosa per la bottega, poi si riapre:</p><div class="upgs">${opts}</div>
+        <button class="start" data-next>GIORNATA ${day + 1}</button>`);
+    };
+    menu(); syncControls();
+  }
+  function gameOver(won, quit = false) {
+    if (state === "over") return;
+    state = "over";
+    const prev = parseInt(load(bestKey(difficulty)), 10) || 0, record = earned > prev;
+    if (record) store(bestKey(difficulty), String(earned));
+    menu = () => showOverlay(
+      (won ? `<h2>PIZZERIA STELLATA!</h2><p>Otto giornate di forno acceso: in città non si parla d'altro.</p>` : `<h2 class="lose">SERRANDA GIÙ</h2><p>${quit ? `Hai chiuso bottega alla giornata ${day}.` : `Troppi clienti scontenti: le stelle sono finite alla giornata ${day}.`}</p>`) +
+      `<p>Incasso totale: <b>${nf(earned)} €</b> · pizze perfette ${perfectCount} · ${diff.label}</p>
+       ${record ? "<p style='color:var(--gold)'>★ NUOVO RECORD! ★</p>" : ""}
+       ${difficultyHTML()}
+       <button class="start" data-start>RIAPRI</button>`
+    );
+    menu(); syncControls();
+  }
+
+  // ---------- Drawing ----------
+  function rr(x, y, w, h, r) { ctx.beginPath(); ctx.roundRect(x, y, w, h, r); }
+  function circ(x, y, r) { ctx.beginPath(); ctx.arc(x, y, r, 0, TAU); }
+  const INK = "#3a1e10";
+  function ingIcon(id, x, y, s, rot = 0) {
+    ctx.save(); ctx.translate(x, y); ctx.rotate(rot); ctx.scale(s, s);
+    switch (id) {
+      case "pom": circ(0, 0, 9); ctx.fillStyle = "#e0402a"; ctx.fill(); ctx.fillStyle = "#3a8a2a"; ctx.fillRect(-2, -11, 4, 4); break;
+      case "moz": ctx.fillStyle = "#fffaf0"; for (const [a, b, r] of [[-3, -2, 6], [4, 1, 5], [-1, 5, 5]]) { circ(a, b, r); ctx.fill(); } break;
+      case "bas": ctx.fillStyle = "#3aa83a"; ctx.beginPath(); ctx.ellipse(0, 0, 8, 4, 0.6, 0, TAU); ctx.fill(); ctx.strokeStyle = "#2a7a2a"; ctx.lineWidth = 1; ctx.beginPath(); ctx.moveTo(-6, -4); ctx.lineTo(6, 4); ctx.stroke(); break;
+      case "fun": ctx.fillStyle = "#c8a078"; ctx.beginPath(); ctx.arc(0, 0, 8, Math.PI, 0); ctx.fill(); ctx.fillStyle = "#e8d0b0"; ctx.fillRect(-3, 0, 6, 6); break;
+      case "sal": circ(0, 0, 7.5); ctx.fillStyle = "#c8302a"; ctx.fill(); ctx.fillStyle = "#ffd8c8"; for (const [a, b] of [[-3, -2], [2, 3], [3, -3], [-2, 3]]) { circ(a, b, 1.2); ctx.fill(); } break;
+      case "pro": ctx.fillStyle = "#f0a0a0"; ctx.beginPath(); ctx.moveTo(-9, -3); ctx.quadraticCurveTo(0, -9, 9, -3); ctx.quadraticCurveTo(6, 6, -6, 5); ctx.closePath(); ctx.fill(); ctx.strokeStyle = "#fff0e8"; ctx.lineWidth = 1.5; ctx.stroke(); break;
+      case "oli": circ(0, 0, 5); ctx.fillStyle = "#2a2420"; ctx.fill(); circ(0, 0, 2); ctx.fillStyle = "#8a6a4a"; ctx.fill(); break;
+      case "acc": ctx.fillStyle = "#9aa0a8"; ctx.beginPath(); ctx.ellipse(0, 0, 10, 3, 0, 0, TAU); ctx.fill(); ctx.beginPath(); ctx.moveTo(9, 0); ctx.lineTo(13, -3); ctx.lineTo(13, 3); ctx.fill(); break;
+      case "pep": ctx.strokeStyle = "#3ab83a"; ctx.lineWidth = 3.5; ctx.beginPath(); ctx.arc(0, 4, 8, Math.PI * 1.15, Math.PI * 1.85); ctx.stroke(); ctx.strokeStyle = "#ffcc2a"; ctx.lineWidth = 3; ctx.beginPath(); ctx.arc(0, 8, 8, Math.PI * 1.2, Math.PI * 1.8); ctx.stroke(); break;
+      case "car": ctx.fillStyle = "#7a9a4a"; for (let k = 0; k < 5; k++) { ctx.beginPath(); ctx.ellipse(Math.cos(k * 1.26) * 3, Math.sin(k * 1.26) * 3, 5, 3, k * 1.26, 0, TAU); ctx.fill(); } circ(0, 0, 2.5); ctx.fillStyle = "#c8d88a"; ctx.fill(); break;
+    }
+    ctx.restore();
+  }
+  function drawPizza(x, y, r, tops, k = 0, pid = 1) {
+    // dough, sauce, cheese, then the toppings scattered
+    const baked = clamp(k, 0, 2), crust = baked > diff.burn ? "#4a2a18" : baked >= 0.85 ? "#d8963a" : "#f0d8a0";
+    circ(x, y + 3, r); ctx.fillStyle = "rgba(0,0,0,0.25)"; ctx.fill();
+    circ(x, y, r); ctx.fillStyle = crust; ctx.fill(); ctx.strokeStyle = INK; ctx.lineWidth = Math.max(1.2, r / 30); ctx.stroke();
+    if (baked >= 0.85 && baked <= diff.burn) { ctx.fillStyle = "rgba(90,40,10,0.35)"; for (let i = 0; i < 6; i++) { const a = seed(pid + i) * TAU; circ(x + Math.cos(a) * r * 0.9, y + Math.sin(a) * r * 0.9, r * 0.06); ctx.fill(); } }
+    if (tops.has("pom")) { circ(x, y, r * 0.84); ctx.fillStyle = baked > diff.burn ? "#5a2018" : "#d8402a"; ctx.fill(); }
+    else { circ(x, y, r * 0.84); ctx.fillStyle = baked >= 0.85 ? "#f0c880" : "#f8e8c0"; ctx.fill(); }
+    if (tops.has("moz")) { ctx.fillStyle = baked > diff.burn ? "#7a5a3a" : baked >= 0.85 ? "#fff0b8" : "#fffaf0"; for (let i = 0; i < 9; i++) { const a = seed(pid * 3 + i) * TAU, d = seed(pid * 5 + i) * r * 0.6; circ(x + Math.cos(a) * d, y + Math.sin(a) * d, r * (0.16 + seed(i + pid) * 0.08)); ctx.fill(); } }
+    const s = r / 34;
+    let n = 0;
+    for (const id of ING_IDS) { if (id === "pom" || id === "moz" || !tops.has(id)) continue; const cnt = id === "bas" ? 4 : 5; for (let i = 0; i < cnt; i++) { const a = seed(pid + n * 7 + i * 13) * TAU, d = (0.2 + seed(pid * 2 + n + i * 3) * 0.5) * r; ingIcon(id, x + Math.cos(a) * d, y + Math.sin(a) * d, s * 0.9, a); } n++; }
+    if (baked > diff.burn) { circ(x, y, r); ctx.fillStyle = "rgba(30,15,10,0.45)"; ctx.fill(); }
+  }
+  function drawCustomer(c) {
+    const S = LY.seats[c.seat], x = S.x, bob = Math.sin(clock * 3 + c.look) * 1.5, look = c.look;
+    const enter = Math.min(1, c.t * 3), leave = c.leaving > 0 ? 1 - c.leaving / 1.2 : 0, dx = (1 - enter) * 40 + leave * (c.mood > 0 ? -60 : 60), alpha = c.leaving > 0 ? c.leaving / 1.2 : enter;
+    const y = S.y + bob;
+    ctx.save(); ctx.globalAlpha = clamp(alpha, 0, 1); ctx.translate(x + dx, y);
+    const shirt = ["#4a8ad8", "#d84a6a", "#5ab86a", "#d8a03a", "#8a5ad8", "#3ab8b8"][look % 6], skin = ["#ffd8b8", "#e8b890", "#c08a60", "#8a5a3a"][look % 4], hair = ["#3a2a1a", "#8a5a2a", "#e8c860", "#1a1a1a", "#c84a2a"][look % 5];
+    rr(-20, -18, 40, 30, 12); ctx.fillStyle = shirt; ctx.fill(); ctx.strokeStyle = INK; ctx.lineWidth = 2; ctx.stroke();
+    circ(0, -34, 16); ctx.fillStyle = skin; ctx.fill(); ctx.stroke();
+    ctx.fillStyle = hair; ctx.beginPath(); ctx.arc(0, -38, 16, Math.PI * 1.05, Math.PI * 1.95); ctx.closePath(); ctx.fill();
+    if (look % 3 === 0) { ctx.fillStyle = shirt; rr(-14, -56, 28, 8, 3); ctx.fill(); ctx.stroke(); }
+    const p = c.patience / c.max, mood = c.mood || (p > 0.5 ? 1 : p > 0.25 ? 0 : -1);
+    ctx.fillStyle = INK; circ(-6, -35, 2); ctx.fill(); circ(6, -35, 2); ctx.fill();
+    ctx.strokeStyle = INK; ctx.lineWidth = 2; ctx.beginPath();
+    if (mood > 0) ctx.arc(0, -30, 5, 0.2, Math.PI - 0.2); else if (mood < 0) ctx.arc(0, -23, 5, Math.PI + 0.3, -0.3); else { ctx.moveTo(-4, -26); ctx.lineTo(4, -26); }
+    ctx.stroke();
+    if (mood < 0 && !c.leaving) { ctx.fillStyle = "rgba(255,80,60,0.7)"; ctx.font = "900 12px system-ui"; ctx.textAlign = "center"; ctx.fillText("!", 14, -48); }
+    ctx.restore();
+    if (c.leaving) return;
+    // the order bubble and patience
+    const bw = portrait ? 78 : 92, bx = x - bw / 2, by = y - 112;
+    rr(bx, by, bw, 48, 10); ctx.fillStyle = "#fffaf0"; ctx.fill(); ctx.strokeStyle = INK; ctx.lineWidth = 2; ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(x - 6, by + 47); ctx.lineTo(x, by + 54); ctx.lineTo(x + 6, by + 47); ctx.fillStyle = "#fffaf0"; ctx.fill();
+    drawPizza(x, by + 18, 13, new Set(c.pizza.t), 1, c.look);
+    ctx.fillStyle = INK; ctx.font = `800 ${portrait ? 9 : 10}px system-ui, sans-serif`; ctx.textAlign = "center"; ctx.textBaseline = "middle"; ctx.fillText(c.pizza.name, x, by + 39);
+  }
+  function drawPatience(c) {
+    if (c.leaving) return;
+    const S = LY.seats[c.seat], p = clamp(c.patience / c.max, 0, 1), y = LY.counterY + 2;
+    rr(S.x - 24, y, 48, 8, 4); ctx.fillStyle = "rgba(0,0,0,0.45)"; ctx.fill();
+    rr(S.x - 24, y, 48 * p, 8, 4); ctx.fillStyle = p > 0.5 ? "#6ade5a" : p > 0.25 ? "#ffc23a" : "#ff4a3a"; ctx.fill();
+    if (p < 0.25 && Math.sin(clock * 12) > 0) { ctx.strokeStyle = "#ff4a3a"; ctx.lineWidth = 1.5; rr(S.x - 24, y, 48, 8, 4); ctx.stroke(); }
+  }
+  function drawOven(o, R, i) {
+    rr(R.x, R.y, R.w, R.h, 10); ctx.fillStyle = "#8a4a30"; ctx.fill(); ctx.strokeStyle = INK; ctx.lineWidth = 2; ctx.stroke();
+    ctx.fillStyle = "rgba(0,0,0,0.12)"; for (let k = 0; k < 4; k++) ctx.fillRect(R.x + 4, R.y + 6 + k * (R.h / 4), R.w - 8, 1.5);
+    const mx = R.x + 44, my = R.y + R.h / 2, mr = R.h * 0.42;
+    ctx.beginPath(); ctx.arc(mx, my + mr * 0.4, mr, Math.PI, 0); ctx.lineTo(mx + mr, my + mr * 0.7); ctx.lineTo(mx - mr, my + mr * 0.7); ctx.closePath(); ctx.fillStyle = "#1a0a06"; ctx.fill(); ctx.stroke();
+    const fl = 0.6 + 0.4 * Math.sin(clock * 9 + i); ctx.fillStyle = `rgba(255,${120 + fl * 60},40,${0.5 + fl * 0.3})`; ctx.beginPath(); ctx.ellipse(mx, my + mr * 0.45, mr * 0.8, mr * 0.25, 0, 0, TAU); ctx.fill();
+    ctx.fillStyle = "#fff"; ctx.font = "800 10px system-ui, sans-serif"; ctx.textAlign = "left"; ctx.textBaseline = "middle";
+    if (!o) { ctx.fillStyle = "rgba(255,240,220,0.7)"; ctx.fillText(board ? "inforna qui" : "forno libero", R.x + 74, my); return; }
+    const k = o.t / bakeTime();
+    drawPizza(mx, my + 2, mr * 0.7, o.pizza.t, k, o.pizza.id);
+    // doneness gauge: raw, cooked (perfect band), burnt
+    const gx = R.x + 74, gw = R.w - 82, gy = my - 4;
+    const toX = (v) => gx + clamp(v / (diff.burn + 0.25), 0, 1) * gw;
+    rr(gx, gy, gw, 8, 4); ctx.fillStyle = "#f0d8a0"; ctx.fill();
+    ctx.fillStyle = "#6ade5a"; ctx.fillRect(toX(0.85), gy, toX(diff.burn) - toX(0.85), 8); ctx.fillStyle = "#2a9a2a"; ctx.fillRect(toX(0.95), gy, toX(1.15) - toX(0.95), 8);
+    ctx.fillStyle = "#4a2a18"; ctx.fillRect(toX(diff.burn), gy, gx + gw - toX(diff.burn), 8);
+    ctx.strokeStyle = INK; ctx.lineWidth = 1.5; rr(gx, gy, gw, 8, 4); ctx.stroke();
+    const px = toX(k); ctx.fillStyle = "#fff"; ctx.beginPath(); ctx.moveTo(px, gy - 2); ctx.lineTo(px - 4, gy - 8); ctx.lineTo(px + 4, gy - 8); ctx.closePath(); ctx.fill(); ctx.stroke();
+    ctx.fillStyle = k > diff.burn ? "#ff8a8a" : k >= 0.85 ? "#bfffb0" : "#ffe8c8"; ctx.font = "800 10px system-ui, sans-serif"; ctx.fillText(k > diff.burn ? "bruciata!" : k >= 0.95 && k <= 1.15 ? "PERFETTA!" : k >= 0.85 ? "cotta" : "cuoce…", gx, gy + 18);
+  }
+  function draw() {
+    ctx.setTransform(pxRatio, 0, 0, pxRatio, 0, 0);
+    // the room: brick wall, tiles, counter
+    ctx.fillStyle = "#a8583a"; ctx.fillRect(0, 0, W, LY.counterY);
+    for (let y = 0; y < LY.counterY; y += 14) for (let x = (y / 14) % 2 ? -14 : 0; x < W; x += 28) { ctx.fillStyle = (x + y) % 3 ? "#b8643f" : "#9a4e33"; ctx.fillRect(x + 1, y + 1, 26, 12); }
+    ctx.fillStyle = "rgba(255,220,160,0.12)"; ctx.beginPath(); ctx.ellipse(W / 2, 0, W * 0.6, LY.counterY * 0.9, 0, 0, Math.PI); ctx.fill();
+    ctx.fillStyle = "#f0e8d8"; ctx.fillRect(0, LY.counterY, W, H - LY.counterY);
+    for (let y = LY.counterY; y < H; y += 24) for (let x = 0; x < W; x += 24) if (((x + y) / 24) % 2 < 1) { ctx.fillStyle = "#e0d4c0"; ctx.fillRect(x, y, 24, 24); }
+    for (const c of customers) drawCustomer(c);
+    // counter
+    ctx.fillStyle = "#7a4a2a"; ctx.fillRect(0, LY.counterY - 6, W, 22); ctx.fillStyle = "#9a6038"; ctx.fillRect(0, LY.counterY - 6, W, 6); ctx.fillStyle = INK; ctx.fillRect(0, LY.counterY + 16, W, 2);
+    for (const c of customers) drawPatience(c);
+    if (portrait) { rr(W / 2 - 72, 8, 144, 24, 6); ctx.fillStyle = "#2a3a2a"; ctx.fill(); ctx.strokeStyle = "#e8d8b0"; ctx.lineWidth = 1.5; ctx.stroke(); ctx.fillStyle = "#fff8e0"; ctx.font = "italic 800 14px Georgia, serif"; ctx.textAlign = "center"; ctx.textBaseline = "middle"; ctx.fillText("Pizzeria Svelta", W / 2, 20); }
+    // the tray of ready pizzas
+    const T = LY.tray; circ(T.x, T.y, T.r + 6); ctx.fillStyle = "#c8c8d0"; ctx.fill(); ctx.strokeStyle = INK; ctx.lineWidth = 2; ctx.stroke();
+    if (tray) { drawPizza(T.x, T.y, T.r, tray.pizza.t, tray.k, tray.pizza.id); ctx.fillStyle = "#fff"; ctx.font = "800 9px system-ui"; ctx.textAlign = "center"; ctx.lineWidth = 3; ctx.strokeStyle = "rgba(40,20,10,0.7)"; ctx.strokeText("tocca il cliente", T.x, T.y + T.r + 13); ctx.fillText("tocca il cliente", T.x, T.y + T.r + 13); }
+    else { ctx.fillStyle = "rgba(60,40,30,0.5)"; ctx.font = "700 9px system-ui"; ctx.textAlign = "center"; ctx.fillText("banco", T.x, T.y + 3); }
+    // board
+    const Bd = LY.board; rr(Bd.x - Bd.r - 10, Bd.y - Bd.r - 10, Bd.r * 2 + 20, Bd.r * 2 + 20, 16); ctx.fillStyle = "#c8945a"; ctx.fill(); ctx.strokeStyle = INK; ctx.lineWidth = 2; ctx.stroke();
+    if (board) drawPizza(Bd.x, Bd.y, Bd.r, board.t, 0, board.id);
+    else { ctx.fillStyle = "rgba(60,30,10,0.55)"; ctx.font = "700 11px system-ui"; ctx.textAlign = "center"; ctx.fillText("tocca gli ingredienti", Bd.x, Bd.y - 6); ctx.fillText("per stendere la pizza", Bd.x, Bd.y + 9); }
+    const Tr = LY.trash; rr(Tr.x, Tr.y, Tr.w, Tr.h, 8); ctx.fillStyle = "#5a5a62"; ctx.fill(); ctx.stroke(); ctx.fillStyle = "#fff"; ctx.font = "800 10px system-ui"; ctx.textAlign = "center"; ctx.fillText("BUTTA", Tr.x + Tr.w / 2, Tr.y + Tr.h / 2 + 1);
+    // ingredient bins
+    const avail = ingToday();
+    for (const b of LY.bins) {
+      const ok = avail.includes(b.id);
+      rr(b.x, b.y, b.w, b.h, 10); ctx.fillStyle = ok ? "#fff8ec" : "rgba(255,255,255,0.35)"; ctx.fill(); ctx.strokeStyle = ok ? INK : "rgba(0,0,0,0.15)"; ctx.lineWidth = 2; ctx.stroke();
+      ctx.globalAlpha = ok ? 1 : 0.25;
+      rr(b.x + 6, b.y + 6, b.w - 12, b.h - 32, 8); ctx.fillStyle = "#e8dcc8"; ctx.fill();
+      for (let k = 0; k < 3; k++) ingIcon(b.id, b.x + b.w / 2 + (k - 1) * 11, b.y + 20 + (k % 2) * 12, 1.1, k);
+      ctx.fillStyle = INK; ctx.font = "800 9px system-ui, sans-serif"; ctx.textAlign = "center"; ctx.fillText(ING[b.id].name, b.x + b.w / 2, b.y + b.h - 16);
+      if (!touchMode) { ctx.fillStyle = "rgba(60,40,30,0.5)"; ctx.font = "700 8px system-ui"; ctx.fillText(`tasto ${ING[b.id].key}`, b.x + b.w / 2, b.y + b.h - 6); }
+      ctx.globalAlpha = 1;
+      if (ok && board && board.t.has(b.id)) { ctx.fillStyle = "#3a9a3a"; circ(b.x + b.w - 8, b.y + 8, 7); ctx.fill(); ctx.fillStyle = "#fff"; ctx.font = "900 10px system-ui"; ctx.fillText("✓", b.x + b.w - 8, b.y + 9); }
+    }
+    LY.ovens.forEach((R, i) => drawOven(ovens[i], R, i));
+    for (const p of parts) { ctx.globalAlpha = 1 - p.t / p.life; ctx.fillStyle = p.c; if (p.smoke) { circ(p.x, p.y, 4 + p.t * 8); ctx.fill(); } else ctx.fillRect(p.x, p.y, 3, 3); } ctx.globalAlpha = 1;
+    for (const t of texts) { ctx.globalAlpha = Math.min(1, (1.4 - t.t) * 2); ctx.font = "900 13px system-ui, sans-serif"; ctx.textAlign = "center"; ctx.lineWidth = 4; ctx.strokeStyle = "rgba(40,20,10,0.8)"; ctx.strokeText(t.text, t.x, t.y - t.t * 20); ctx.fillStyle = t.c; ctx.fillText(t.text, t.x, t.y - t.t * 20); } ctx.globalAlpha = 1;
+    // HUD
+    const hp = LY.hud, left = toSpawn + customers.filter((c) => !c.leaving).length, starTxt = "★".repeat(stars) + "☆".repeat(5 - stars);
+    ctx.textBaseline = "middle"; ctx.textAlign = "left";
+    if (portrait) {
+      rr(hp.x, hp.y, 216, 22, 8); ctx.fillStyle = "rgba(30,15,8,0.78)"; ctx.fill();
+      ctx.fillStyle = "#fff"; ctx.font = "800 11px system-ui, sans-serif"; ctx.fillText(`G. ${day}/${DAYS} · ${money} €`, hp.x + 8, hp.y + 11);
+      ctx.fillStyle = "#ffc23a"; ctx.fillText(starTxt, hp.x + 98, hp.y + 11);
+      ctx.fillStyle = "rgba(255,255,255,0.75)"; ctx.font = "700 9px system-ui"; ctx.textAlign = "right"; ctx.fillText(`${left} in fila`, hp.x + 210, hp.y + 11);
+    } else {
+      rr(hp.x, hp.y, 116, 62, 10); ctx.fillStyle = "rgba(30,15,8,0.78)"; ctx.fill();
+      ctx.fillStyle = "#fff"; ctx.font = "800 12px system-ui, sans-serif"; ctx.fillText(`Giorno ${day}/${DAYS}`, hp.x + 9, hp.y + 12);
+      ctx.fillStyle = "#ffe08a"; ctx.fillText(`${money} €`, hp.x + 9, hp.y + 27);
+      ctx.fillStyle = "#ffc23a"; ctx.font = "800 13px system-ui, sans-serif"; ctx.fillText(starTxt, hp.x + 9, hp.y + 42);
+      ctx.fillStyle = "rgba(255,255,255,0.75)"; ctx.font = "700 10px system-ui"; ctx.fillText(`ancora ${left} clienti`, hp.x + 9, hp.y + 55);
+    }
+  }
+
+  // ---------- Menus ----------
+  function showOverlay(html) { overlay.innerHTML = html; overlay.classList.remove("hidden"); }
+  function difficultyHTML() {
+    const buttons = DIFF_IDS.map((id) => { const d = DIFFICULTIES[id]; return `<button type="button" data-diff="${id}" class="${id === difficulty ? "on" : ""}" style="--c:${d.color}">${d.label}</button>`; }).join("");
+    const best = parseInt(load(bestKey(difficulty)), 10);
+    return `<div class="diff">${buttons}</div><p class="muted">${diff.desc}${best ? ` · Record: ${nf(best)} €` : ""}</p>`;
+  }
+  function setDifficulty(id) { if (!DIFFICULTIES[id]) return; difficulty = id; diff = DIFFICULTIES[id]; store(DIFF_KEY, id); if (menu) menu(); }
+  function showTitle() {
+    menu = showTitle; state = "menu";
+    showOverlay(
+      `<h1>PIZZERIA <span>SVELTA</span></h1>
+       <p>Il forno a legna è acceso e la fila arriva fino alla piazza. Leggi l'ordine nel fumetto, componi la pizza, infornala, sfornala al momento giusto e servila prima che il cliente perda la pazienza. Otto giornate per diventare la pizzeria più famosa della città.</p>
+       <div class="pts">
+         <span><b>1 · Componi</b></span><span>tocca gli ingredienti: la pizza nel fumetto ti mostra cosa serve (e la lista è nel cartello di inizio giornata)</span>
+         <span><b>2 · Inforna</b></span><span>tocca un forno libero; quando l'indicatore entra nel verde è cotta, nel verde scuro è perfetta (mancia in più)</span>
+         <span><b>3 · Sforna e servi</b></span><span>tocca il forno per metterla sul banco, poi tocca il cliente giusto. Pizza sbagliata, bruciata o cliente stufo: perdi una stella</span>
+       </div>
+       <p class="muted help">${touchMode ? "Tutto si fa toccando." : "Si gioca col mouse; i tasti 1–0 mettono gli ingredienti, Q W E R i forni, 1–4 con Maiusc servono i clienti, Canc butta. P pausa, M musica."}</p>
+       ${difficultyHTML()}
+       <button class="start" data-start>ACCENDI IL FORNO</button>`
+    );
+    syncControls();
+  }
+  function togglePause() {
+    if (state === "play") { pausedFrom = state; state = "paused"; showOverlay(`<h2>PAUSA</h2><button class="start" data-resume>CONTINUA</button><p class="muted">Musica: <button type="button" data-music>${music ? "ACCESA" : "SPENTA"}</button></p>`); }
+    else if (state === "paused") { state = pausedFrom; overlay.classList.add("hidden"); lastT = performance.now(); }
+    syncControls();
+  }
+  window.addEventListener("sala:termina", () => { if (state !== "paused") return; overlay.classList.add("hidden"); gameOver(false, true); });
+  function syncControls() { pauseBtn.style.display = state === "play" && touchMode ? "block" : "none"; resize(); }
+  pauseBtn.addEventListener("click", () => togglePause());
+  overlay.addEventListener("click", (e) => {
+    const q = (s) => e.target.closest(s); let el;
+    if ((el = q("[data-diff]"))) { setDifficulty(el.dataset.diff); return; }
+    if (q("[data-music]")) { music = !music; store("pizzeria-music", music ? "1" : "0"); q("[data-music]").textContent = music ? "ACCESA" : "SPENTA"; return; }
+    if (q("[data-start]")) { startGame(); return; }
+    if (q("[data-go]")) { state = "play"; overlay.classList.add("hidden"); syncControls(); lastT = performance.now(); return; }
+    if ((el = q("[data-buy]"))) { const u = UPGRADES.find((x) => x.id === el.dataset.buy), cost = u.costs[up[u.id]]; if (cost !== undefined && money >= cost) { money -= cost; up[u.id]++; sfx.pay(); menu(); } return; }
+    if (q("[data-next]")) { day++; startDay(); return; }
+    if (q("[data-resume]")) { togglePause(); return; }
+  });
+
+  // ---------- Input ----------
+  let touchMode = !!(window.matchMedia && matchMedia("(pointer: coarse)").matches);
+  const inRect = (p, r) => p.x >= r.x && p.x <= r.x + r.w && p.y >= r.y && p.y <= r.y + r.h;
+  function tapAt(p) {
+    if (state !== "play") return;
+    for (const b of LY.bins) if (inRect(p, b)) { addTopping(b.id); return; }
+    for (let i = 0; i < LY.ovens.length; i++) if (inRect(p, LY.ovens[i])) { bake(i); return; }
+    if (inRect(p, LY.trash)) { trash(); return; }
+    if (Math.hypot(p.x - LY.tray.x, p.y - LY.tray.y) < LY.tray.r + 12) return;
+    // customers: the whole figure and the bubble count
+    let best = null, bd = 60;
+    for (const c of customers) { if (c.leaving) continue; const S = LY.seats[c.seat]; const d = Math.hypot(p.x - S.x, (p.y - (S.y - 50)) * 0.6); if (d < bd) { bd = d; best = c; } }
+    if (best) { if (tray) serve(best); else say(LY.tray.x, LY.tray.y - 34, "prima sforna una pizza!", "#ffd8a0"); }
+  }
+  canvas.addEventListener("pointerdown", (e) => { e.preventDefault(); const rc = canvas.getBoundingClientRect(); tapAt({ x: ((e.clientX - rc.left) / rc.width) * W, y: ((e.clientY - rc.top) / rc.height) * H }); });
+  window.addEventListener("keydown", (e) => {
+    const k = e.key.toLowerCase();
+    if (state === "menu" || state === "over") { if (e.key === "Enter") startGame(); return; }
+    if (k === "p" || k === "escape") { if (!e.repeat) togglePause(); return; }
+    if (k === "m" && !e.repeat) { music = !music; store("pizzeria-music", music ? "1" : "0"); return; }
+    if (state === "intro" && e.key === "Enter") { state = "play"; overlay.classList.add("hidden"); syncControls(); return; }
+    if (state !== "play" || e.repeat) return;
+    if (e.shiftKey && /^Digit[1-4]$/.test(e.code)) { const idx = +e.code.slice(5) - 1; const c = customers.find((q) => q.seat === idx && !q.leaving); if (c) serve(c); return; }
+    const ing = ING_IDS.find((id) => "Digit" + ING[id].key === e.code || ING[id].key === k); if (ing) { addTopping(ing); return; }
+    const oi = ["q", "w", "e", "r"].indexOf(k); if (oi >= 0 && oi < LY.ovens.length) { bake(oi); return; }
+    if (k === "delete" || k === "backspace") trash();
+  });
+  window.addEventListener("blur", () => { if (state === "play") togglePause(); });
+  window.addEventListener("pointerdown", (e) => { if (e.pointerType === "touch" && !touchMode) { touchMode = true; syncControls(); if (menu) menu(); } }, true);
+
+  // ---------- Loop ----------
+  let lastT = performance.now();
+  function frame(now) {
+    const dt = Math.min(0.05, (now - lastT) / 1000); lastT = now;
+    if (state !== "paused") update(dt);
+    draw();
+    requestAnimationFrame(frame);
+  }
+  resize(); showTitle();
+  requestAnimationFrame(frame);
+})();
+</script>
+<script src="../../shared/iniziali.js" data-record="pizzeria-best-" data-kind="score"></script>
+</body>
+</html>
