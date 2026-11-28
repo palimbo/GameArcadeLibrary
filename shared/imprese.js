@@ -9,6 +9,11 @@
   "use strict";
   // record key prefix of the game (as in trofei.js) → its feats
   const LIST = {
+    "salvamariky-best-": [   // salva-mariky
+      { id: "intatto", name: "Senza un graffio", desc: "finisci un livello senza farti colpire e senza cadere" },
+      { id: "monete", name: "Salvadanaio", desc: "raccogli 100 monete in una partita" },
+      { id: "eroe", name: "Eroe", desc: "sconfiggi il Barone Grugno e salva Mariky" },
+    ],
     "bollasubolla-best-": [   // bolla-su-bolla
       { id: "valanga", name: "Valanga", desc: "fai cadere dieci bolle con un tiro solo" },
       { id: "sponda", name: "Di sponda", desc: "fai scoppiare un gruppo con un tiro che ha rimbalzato due volte" },
