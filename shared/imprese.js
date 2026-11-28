@@ -9,6 +9,11 @@
   "use strict";
   // record key prefix of the game (as in trofei.js) → its feats
   const LIST = {
+    "teschi-best-": [   // teschi-e-fiocchi
+      { id: "fullcombo", name: "Full combo!!", desc: "finisci una canzone senza mancare una freccia" },
+      { id: "vittoria", name: "Regina della pista", desc: "vinci una sfida contro la CPU o contro un'amica" },
+      { id: "squadra", name: "Tutta la squadra", desc: "finisci una canzone con ognuna delle quattro ragazze" },
+    ],
     "lumi-best-": [   // lumi-sul-palco
       { id: "fullcombo", name: "Nessun passo falso", desc: "finisci una canzone senza mancare una nota" },
       { id: "stella", name: "Stella del palco", desc: "ottieni il rango S in una canzone" },

@@ -9,6 +9,7 @@
   "use strict";
   // record key prefix → [bronzo, argento, oro] (and t for times)
   const DATA = {
+    "teschi-best-": [700000, 850000, 800000],   // teschi-e-fiocchi (stima sul punteggio a 1.000.000)
     "lumi-best-": [700000, 850000, 800000],   // lumi-sul-palco (stima sul punteggio a 1.000.000)
     "ruggine-best-": [20000, 60000, 90000],   // strada-di-ruggine (stima sulle missioni)
     "salvamariky-best-": [15000, 30000, 25000],   // salva-mariky (stima)
