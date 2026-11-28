@@ -9,6 +9,11 @@
   "use strict";
   // record key prefix of the game (as in trofei.js) → its feats
   const LIST = {
+    "gemelle-best-": [   // carte-gemelle
+      { id: "memoria", name: "Memoria d'elefante", desc: "finisci un livello da almeno 8 coppie senza errori" },
+      { id: "combo", name: "Combo da sei", desc: "trova sei coppie di fila senza sbagliare" },
+      { id: "tutte", name: "Mazzo finito", desc: "finisci tutti gli otto livelli" },
+    ],
     "mongolfiera-best-": [   // mongolfiera
       { id: "perfetta", name: "Senza una sbavatura", desc: "indovina una parola di almeno 7 lettere senza errori e senza aiuti" },
       { id: "proverbio", name: "Saggezza popolare", desc: "indovina un proverbio" },

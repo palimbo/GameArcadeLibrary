@@ -1,0 +1,394 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no, viewport-fit=cover">
+<title>Carte Gemelle</title>
+<style>
+  :root {
+    --bg: #1a1430;
+    --fg: #f4f6ee;
+    --muted: #c8d0dc;
+    --gold: #ffd25a;
+    --red: #ff5a4a;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  html, body {
+    height: 100%;
+    background: var(--bg);
+    color: var(--fg);
+    font-family: system-ui, -apple-system, "Segoe UI", sans-serif;
+    overflow: hidden;
+    user-select: none;
+    -webkit-user-select: none;
+    -webkit-tap-highlight-color: transparent;
+    touch-action: none;
+  }
+  #wrap { position: fixed; inset: 0; display: flex; align-items: center; justify-content: center; }
+  canvas { cursor: pointer; display: block; touch-action: none; border-radius: 6px; box-shadow: 0 0 0 2px #2e3a4e, 0 10px 40px rgba(0,0,0,0.6); }
+  #pauseBtn {
+    position: fixed; z-index: 3; display: none; right: 10px; top: calc(10px + env(safe-area-inset-top, 0px));
+    font: 700 13px system-ui, sans-serif; color: var(--fg);
+    background: rgba(0, 0, 0, 0.6); border: 1px solid rgba(244, 246, 238, 0.35);
+    border-radius: 8px; padding: 6px 10px; cursor: pointer;
+  }
+  #touch { display: none !important; }
+  #overlay {
+    position: fixed; inset: 0; z-index: 5;
+    display: flex; flex-direction: column; align-items: center; justify-content: flex-start;
+    gap: 14px; padding: 16px; text-align: center; overflow-y: auto;
+    background: rgba(20, 26, 36, 0.94);
+  }
+  #overlay > :first-child { margin-top: auto; }
+  #overlay > :last-child { margin-bottom: auto; }
+  #overlay.hidden { display: none; }
+  #homeLink {
+    position: fixed; top: calc(10px + env(safe-area-inset-top, 0px)); left: 10px; z-index: 6;
+    font: 600 13px/1 system-ui, sans-serif; color: #fff; text-decoration: none;
+    padding: 8px 12px; border-radius: 999px; background: rgba(0,0,0,.55);
+    border: 1px solid rgba(255,255,255,.25);
+  }
+  #homeLink:hover { background: rgba(0,0,0,.8); }
+  #overlay.hidden ~ #homeLink { display: none; }
+  @media (max-width: 700px) { #overlay { padding-top: calc(52px + env(safe-area-inset-top, 0px)); } }
+  #overlay h1 { font-size: clamp(32px, 10vw, 58px); font-weight: 900; font-style: italic; letter-spacing: 1px; color: var(--gold);
+    text-shadow: 3px 3px 0 #4a2a8a, 0 0 22px rgba(255,210,58,0.35); }
+  #overlay h1 span { color: #fff; }
+  #overlay h2 { font-size: clamp(26px, 7vw, 42px); font-weight: 900; letter-spacing: 2px; color: var(--gold); }
+  #overlay h2.lose { color: var(--red); }
+  #overlay p { max-width: 540px; font-size: clamp(13px, 3.4vw, 16px); line-height: 1.55; }
+  #overlay p.muted { color: var(--muted); }
+  #overlay .pts { display: grid; grid-template-columns: repeat(2, auto); gap: 4px 18px; font-size: 13px; color: var(--muted); text-align: left; max-width: 560px; }
+  #overlay .pts b { color: var(--fg); }
+  #overlay .diff { display: flex; gap: 10px; flex-wrap: wrap; justify-content: center; }
+  #overlay button {
+    font: 800 15px system-ui, sans-serif; letter-spacing: 1.5px; color: var(--fg);
+    background: transparent; cursor: pointer;
+    border: 2px solid rgba(244,246,238,0.3); border-radius: 10px; padding: 9px 16px;
+  }
+  #overlay .diff button.on { border-color: var(--c); color: var(--c); box-shadow: 0 0 12px var(--c); }
+  #overlay button.start { border-color: var(--gold); color: #2a1a02; background: var(--gold); padding: 11px 30px; box-shadow: 0 4px 0 #a87a0a; }
+  #overlay .menuList { display: flex; flex-wrap: wrap; gap: 6px 10px; justify-content: center; max-width: 600px; font-size: 13px; color: var(--muted); }
+  #overlay .menuList span { background: rgba(255,255,255,0.06); border-radius: 8px; padding: 4px 9px; }
+  #overlay .menuList b { color: var(--gold); }
+  #overlay .upgs { display: flex; gap: 10px; flex-wrap: wrap; justify-content: center; }
+  #overlay button.upg { display: flex; flex-direction: column; gap: 3px; width: 170px; text-align: center; letter-spacing: 0.3px; font-size: 13px; }
+  #overlay button.upg span { font-weight: 600; font-size: 12px; color: var(--muted); }
+  #overlay button.upg:disabled { opacity: 0.4; cursor: default; }
+  @media (max-height: 560px) {
+    #overlay { gap: 8px; }
+    #overlay h1 { font-size: 30px; }
+    #overlay p { font-size: 13px; line-height: 1.4; }
+    #overlay .help, #overlay .pts { display: none; }
+    #overlay .menuList { font-size: 11px; gap: 4px; }
+    #overlay button.upg { width: 150px; padding: 6px 10px; }
+  }
+</style>
+</head>
+<body>
+<div id="wrap"><canvas id="game"></canvas></div>
+<div id="touch"></div>
+<button id="pauseBtn" type="button" aria-label="Pausa">❚❚</button>
+<div id="overlay"></div>
+<a id="homeLink" href="../../index.html">← Sala Giochi</a>
+
+
+<script>
+(() => {
+  "use strict";
+
+  const TAU = Math.PI * 2;
+  const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
+  const nf = (n) => Math.floor(n).toLocaleString("it-IT");
+  const feat = (id) => window.dispatchEvent(new CustomEvent("sala:impresa", { detail: id }));
+  function store(k, v) { try { localStorage.setItem(k, v); } catch { /* ignore */ } }
+  function load(k) { try { return localStorage.getItem(k); } catch { return null; } }
+
+  const DIFFICULTIES = {
+    facile:    { label: "FACILE",    color: "#7ee0a0", desc: "sbirciata lunga, tempo abbondante, le carte non si mescolano mai", peek: 2.6, time: 6, shuffle: 0 },
+    normale:   { label: "NORMALE",   color: "#ffd25a", desc: "dal quinto livello, ogni tre errori due carte si scambiano di posto", peek: 1.6, time: 4.2, shuffle: 3 },
+    difficile: { label: "DIFFICILE", color: "#ff5a4a", desc: "sbirciata lampo, tempo stretto, e ogni due errori uno scambio", peek: 0.9, time: 3.3, shuffle: 2 },
+  };
+  const DIFF_IDS = Object.keys(DIFFICULTIES);
+  const DIFF_KEY = "gemelle-difficulty";
+  const bestKey = (id) => `gemelle-best-${id}`;
+  let difficulty = DIFFICULTIES[load(DIFF_KEY)] ? load(DIFF_KEY) : "normale";
+  let diff = DIFFICULTIES[difficulty];
+  const LEVELS = [6, 8, 10, 12, 12, 14, 15, 18];
+  const ICONS = ["mela", "ciliegie", "banana", "stella", "luna", "sole", "cuore", "pesce", "fiore", "foglia", "fungo", "casa", "ombrello", "nota", "goccia", "fulmine", "palloncino", "gemma", "chiave", "campana"];
+  const ICOL = { mela: "#e8423a", ciliegie: "#c8203a", banana: "#f2d23a", stella: "#ffc82a", luna: "#e0c84a", sole: "#ff9a2a", cuore: "#ff4a7a", pesce: "#3aa8e8", fiore: "#e86ad8", foglia: "#3ab84a", fungo: "#d8402a", casa: "#c8783a", ombrello: "#7a5ae8", nota: "#2a2a3a", goccia: "#3ac8f0", fulmine: "#ffd82a", palloncino: "#ff5a5a", gemma: "#3ae0c0", chiave: "#d8a82a", campana: "#e8b83a" };
+
+  // ---------- Canvas ----------
+  const canvas = document.getElementById("game"), ctx = canvas.getContext("2d");
+  const overlay = document.getElementById("overlay"), pauseBtn = document.getElementById("pauseBtn");
+  let W = 640, H = 360, portrait = false, pxRatio = 1, AREA = null;
+  function resize() {
+    portrait = window.innerHeight > window.innerWidth * 1.05;
+    W = portrait ? 360 : 640; H = portrait ? 640 : 360;
+    const s = Math.max(0.2, Math.min((window.innerWidth - 4) / W, (window.innerHeight - 4) / H));
+    pxRatio = Math.min(3, s * (window.devicePixelRatio || 1));
+    canvas.style.width = W * s + "px"; canvas.style.height = H * s + "px";
+    canvas.width = Math.round(W * pxRatio); canvas.height = Math.round(H * pxRatio);
+    AREA = portrait ? { x: 10, y: 84, w: 340, h: 546 } : { x: 160, y: 10, w: 470, h: 340 };
+    if (cards.length) layoutCards();
+  }
+  window.addEventListener("resize", () => syncControls());
+
+  // ---------- Sound ----------
+  let audioCtx = null;
+  function tone(freq, dur, type = "square", vol = 0.03, delay = 0, slide = 0) {
+    if (!audioCtx) return;
+    const t = audioCtx.currentTime + delay, o = audioCtx.createOscillator(), g = audioCtx.createGain();
+    o.type = type; o.frequency.setValueAtTime(freq, t); if (slide) o.frequency.exponentialRampToValueAtTime(slide, t + dur);
+    g.gain.setValueAtTime(0.0001, t); g.gain.exponentialRampToValueAtTime(vol, t + 0.008); g.gain.exponentialRampToValueAtTime(0.0001, t + dur);
+    o.connect(g).connect(audioCtx.destination); o.start(t); o.stop(t + dur + 0.02);
+  }
+  const PENTA = [0, 2, 4, 7, 9, 12, 14, 16, 19, 21];
+  const sfx = {
+    flip: () => tone(900 + Math.random() * 200, 0.04, "triangle", 0.03),
+    match: (c) => { const b = 523 * Math.pow(2, PENTA[Math.min(9, c)] / 12); tone(b, 0.15, "triangle", 0.05); tone(b * 1.5, 0.2, "sine", 0.03, 0.06); },
+    miss: () => tone(220, 0.15, "triangle", 0.035, 0, 180),
+    swap: () => { tone(600, 0.2, "sine", 0.03, 0, 1200); tone(1200, 0.2, "sine", 0.02, 0.1, 600); },
+    level: () => [523, 659, 784, 1047, 1319].forEach((f, i) => tone(f, 0.16, "triangle", 0.045, i * 0.08)),
+    tick: () => tone(1500, 0.03, "square", 0.02),
+    lose: () => [392, 330, 262].forEach((f, i) => tone(f, 0.3, "triangle", 0.04, i * 0.15)),
+  };
+
+  // ---------- State ----------
+  let state = "menu", menu = null, pausedFrom = null, clock = 0;
+  let timers = [];
+  const later = (t, f) => timers.push({ t, f });
+  let level = 0, cards = [], open = [], score = 0, combo = 0, bestCombo = 0, mistakes = 0, levelMistakes = 0, timeLeft = 0, peekT = 0, lockT = 0, fx = [], texts = [], lastSec = 0, cols = 4, rows = 3, cw = 60, ch = 80;
+  function startGame() {
+    if (!audioCtx) { try { audioCtx = new (window.AudioContext || window.webkitAudioContext)(); } catch { audioCtx = null; } }
+    if (audioCtx && audioCtx.state === "suspended") audioCtx.resume();
+    level = 0; score = 0; bestCombo = 0; mistakes = 0;
+    startLevel();
+  }
+  function startLevel() {
+    const pairs = LEVELS[level];
+    const icons = ICONS.slice().sort(() => Math.random() - 0.5).slice(0, pairs);
+    const deck = icons.flatMap((ic) => [ic, ic]).sort(() => Math.random() - 0.5);
+    cards = deck.map((ic, i) => ({ ic, slot: i, face: 1, gone: 0, flip: 1, x: 0, y: 0, tx: 0, ty: 0, wob: 0 }));
+    open = []; combo = 0; levelMistakes = 0; lockT = 0; fx = []; texts = []; timers = [];
+    timeLeft = Math.round(pairs * diff.time + 6); lastSec = Math.ceil(timeLeft); peekT = diff.peek + 0.4;
+    layoutCards(true);
+    state = "play"; menu = null; overlay.classList.add("hidden"); syncControls();
+  }
+  function layoutCards(snap) {
+    // the grid that gives the largest cards for this many slots
+    const n = cards.length; let best = null;
+    for (let c = 2; c <= 8; c++) { const r = Math.ceil(n / c); const w = Math.min(AREA.w / c, (AREA.h / r) * 0.74); if (!best || w > best.w) best = { c, r, w }; }
+    cols = best.c; rows = best.r; cw = best.w * 0.9; ch = cw / 0.74;
+    const gx = AREA.w / cols, gy = Math.min(AREA.h / rows, gx / 0.74), oy = AREA.y + (AREA.h - gy * rows) / 2;
+    for (const k of cards) { const c = k.slot % cols, r = Math.floor(k.slot / cols), lastRow = r === rows - 1, inRow = lastRow ? n - (rows - 1) * cols : cols, ox = AREA.x + (AREA.w - gx * inRow) / 2; k.tx = ox + c * gx + gx / 2; k.ty = oy + r * gy + gy / 2; if (snap) { k.x = k.tx; k.y = k.ty; } }
+  }
+  function cardAt(x, y) { return cards.find((k) => !k.gone && Math.abs(x - k.x) < cw / 2 && Math.abs(y - k.y) < ch / 2); }
+  function tap(x, y) {
+    if (state !== "play" || peekT > 0 || lockT > 0) return;
+    const k = cardAt(x, y); if (!k || k.face || open.includes(k)) return;
+    k.face = 1; open.push(k); sfx.flip();
+    if (open.length === 2) {
+      const [a, b] = open;
+      if (a.ic === b.ic) {
+        combo++; bestCombo = Math.max(bestCombo, combo);
+        const pts = 50 * combo; score += pts; sfx.match(combo);
+        texts.push({ x: (a.x + b.x) / 2, y: (a.y + b.y) / 2, text: combo > 1 ? `+${pts} · COMBO ×${combo}` : `+${pts}`, c: "#ffe060", t: 0 });
+        if (combo >= 6) feat("combo");
+        later(0.25, () => { a.gone = b.gone = 0.001; for (const q of [a, b]) for (let i = 0; i < 10; i++) fx.push({ x: q.x, y: q.y, vx: (Math.random() - 0.5) * 220, vy: (Math.random() - 0.5) * 220, t: 0, life: 0.6, c: ICOL[q.ic] }); });
+        open = [];
+        if (cards.filter((q) => q !== a && q !== b && !q.gone).length === 0) later(0.7, levelDone);
+      } else {
+        combo = 0; mistakes++; levelMistakes++; lockT = 0.75;
+        later(0.3, () => { sfx.miss(); a.wob = b.wob = 0.3; });
+        if (diff.shuffle && level >= 4 && levelMistakes % diff.shuffle === 0) later(0.8, swapTwo);
+      }
+    }
+  }
+  function swapTwo() {
+    const down = cards.filter((k) => !k.gone && !k.face); if (down.length < 2) return;
+    const a = down[Math.floor(Math.random() * down.length)]; let b; do { b = down[Math.floor(Math.random() * down.length)]; } while (b === a);
+    [a.slot, b.slot] = [b.slot, a.slot]; layoutCards(false); sfx.swap();
+    texts.push({ x: W / 2, y: AREA.y + 20, text: "Due carte hanno cambiato posto!", c: "#c8a0ff", t: 0 });
+  }
+  function levelDone() {
+    if (state !== "play") return;
+    const bonus = Math.round(timeLeft) * 10 + (levelMistakes === 0 ? 300 : 0); score += bonus; sfx.level();
+    if (levelMistakes === 0 && LEVELS[level] >= 8) feat("memoria");
+    if (level >= LEVELS.length - 1) { feat("tutte"); gameOver(true); return; }
+    state = "between";
+    menu = () => showOverlay(`<h2>LIVELLO ${level + 1} FATTO!</h2><p>Tempo avanzato: +${Math.round(timeLeft) * 10}${levelMistakes === 0 ? " · nessun errore: +300" : ` · ${levelMistakes} ${levelMistakes === 1 ? "errore" : "errori"}`}</p>
+      <p>Punti: <b>${nf(score)}</b> · combo migliore ×${bestCombo}</p><button class="start" data-next>LIVELLO ${level + 2} · ${LEVELS[level + 1]} COPPIE</button>`);
+    menu(); syncControls();
+  }
+  function gameOver(won, quit = false) {
+    if (state === "over") return;
+    state = "over"; if (!won && !quit) sfx.lose();
+    const prev = parseInt(load(bestKey(difficulty)), 10) || 0, record = !quit && score > prev;
+    if (record) store(bestKey(difficulty), String(score));
+    menu = () => showOverlay(
+      (won ? `<h2>MEMORIA DI FERRO!</h2><p>Tutti gli otto livelli, ${mistakes} ${mistakes === 1 ? "errore" : "errori"} in tutto.</p>` : `<h2 class="lose">${quit ? "MAZZO CHIUSO" : "TEMPO SCADUTO"}</h2><p>Arrivati al livello ${level + 1}.</p>`) +
+      `<p>Punti: <b>${nf(score)}</b> · combo migliore ×${bestCombo} · ${diff.label}</p>
+       ${record ? "<p style='color:var(--gold)'>★ NUOVO RECORD! ★</p>" : ""}
+       ${difficultyHTML()}
+       <button class="start" data-start>RIMESCOLA</button>`);
+    menu(); syncControls();
+  }
+
+  // ---------- Update ----------
+  function update(dt) {
+    clock += dt;
+    for (const f of fx) { f.t += dt; f.x += f.vx * dt; f.y += f.vy * dt; } fx = fx.filter((f) => f.t < f.life);
+    for (const t of texts) t.t += dt; texts = texts.filter((t) => t.t < 1.3);
+    for (const k of cards) {
+      k.x += (k.tx - k.x) * Math.min(1, dt * 6); k.y += (k.ty - k.y) * Math.min(1, dt * 6);
+      k.flip += ((k.face ? 1 : 0) - k.flip) * Math.min(1, dt * 14);
+      if (k.gone) k.gone += dt; if (k.wob > 0) k.wob -= dt;
+    }
+    if (state !== "play") return;
+    for (const tm of timers.slice()) { tm.t -= dt; if (tm.t <= 0) { timers.splice(timers.indexOf(tm), 1); tm.f(); } }
+    if (peekT > 0) { peekT -= dt; if (peekT <= 0) for (const k of cards) k.face = 0; return; }
+    if (lockT > 0) { lockT -= dt; if (lockT <= 0) { for (const k of open) k.face = 0; open = []; } }
+    timeLeft -= dt;
+    if (Math.ceil(timeLeft) !== lastSec) { lastSec = Math.ceil(timeLeft); if (lastSec <= 5 && lastSec > 0) sfx.tick(); }
+    if (timeLeft <= 0) { timeLeft = 0; for (const k of cards) k.face = 1; gameOver(false); }
+  }
+
+  // ---------- Drawing ----------
+  function circ(x, y, r) { ctx.beginPath(); ctx.arc(x, y, r, 0, TAU); }
+  function rr(x, y, w, h, r) { ctx.beginPath(); ctx.roundRect(x, y, w, h, r); }
+  function icon(ic, s) {
+    // drawn around (0,0), roughly in a 1×1 box scaled by s
+    ctx.save(); ctx.scale(s, s); ctx.lineJoin = "round"; ctx.lineCap = "round";
+    const c = ICOL[ic]; ctx.fillStyle = c; ctx.strokeStyle = c;
+    const star = (r, k = 0.45, n = 5) => { ctx.beginPath(); for (let i = 0; i < n * 2; i++) { const a = -Math.PI / 2 + i * Math.PI / n, q = i % 2 ? r * k : r; ctx.lineTo(Math.cos(a) * q, Math.sin(a) * q); } ctx.closePath(); };
+    switch (ic) {
+      case "mela": circ(-0.12, 0.05, 0.3); ctx.fill(); circ(0.12, 0.05, 0.3); ctx.fill(); ctx.fillStyle = "#6a3a1a"; ctx.fillRect(-0.02, -0.38, 0.05, 0.16); ctx.fillStyle = "#3ab84a"; ctx.beginPath(); ctx.ellipse(0.12, -0.32, 0.12, 0.06, -0.5, 0, TAU); ctx.fill(); break;
+      case "ciliegie": ctx.strokeStyle = "#3a8a2a"; ctx.lineWidth = 0.05; ctx.beginPath(); ctx.moveTo(-0.18, 0.15); ctx.quadraticCurveTo(-0.05, -0.2, 0.1, -0.38); ctx.moveTo(0.2, 0.18); ctx.quadraticCurveTo(0.15, -0.15, 0.1, -0.38); ctx.stroke(); circ(-0.2, 0.22, 0.17); ctx.fill(); circ(0.2, 0.25, 0.17); ctx.fill(); break;
+      case "banana": ctx.lineWidth = 0.2; ctx.beginPath(); ctx.arc(0, -0.25, 0.45, 0.45, Math.PI - 0.45); ctx.stroke(); ctx.fillStyle = "#6a4a1a"; circ(0.4, -0.05, 0.05); ctx.fill(); break;
+      case "stella": star(0.42); ctx.fill(); break;
+      case "luna": circ(0, 0, 0.38); ctx.fill(); ctx.fillStyle = "#fffaf0"; circ(0.18, -0.1, 0.32); ctx.fill(); ctx.fillStyle = "#c8b850"; circ(-0.2, 0.12, 0.04); ctx.fill(); break;
+      case "sole": for (let i = 0; i < 8; i++) { ctx.save(); ctx.rotate(i * Math.PI / 4); ctx.fillRect(-0.04, -0.46, 0.08, 0.14); ctx.restore(); } circ(0, 0, 0.25); ctx.fill(); break;
+      case "cuore": ctx.beginPath(); ctx.moveTo(0, 0.36); ctx.bezierCurveTo(-0.55, 0, -0.3, -0.45, 0, -0.18); ctx.bezierCurveTo(0.3, -0.45, 0.55, 0, 0, 0.36); ctx.fill(); break;
+      case "pesce": ctx.beginPath(); ctx.ellipse(-0.05, 0, 0.3, 0.18, 0, 0, TAU); ctx.fill(); ctx.beginPath(); ctx.moveTo(0.2, 0); ctx.lineTo(0.42, -0.18); ctx.lineTo(0.42, 0.18); ctx.closePath(); ctx.fill(); ctx.fillStyle = "#fff"; circ(-0.2, -0.04, 0.05); ctx.fill(); break;
+      case "fiore": for (let i = 0; i < 5; i++) { const a = i * TAU / 5; circ(Math.cos(a) * 0.2, Math.sin(a) * 0.2, 0.15); ctx.fill(); } ctx.fillStyle = "#ffd82a"; circ(0, 0, 0.12); ctx.fill(); break;
+      case "foglia": ctx.beginPath(); ctx.moveTo(-0.3, 0.3); ctx.quadraticCurveTo(-0.35, -0.3, 0.35, -0.35); ctx.quadraticCurveTo(0.3, 0.3, -0.3, 0.3); ctx.fill(); ctx.strokeStyle = "#1a7a2a"; ctx.lineWidth = 0.03; ctx.beginPath(); ctx.moveTo(-0.3, 0.3); ctx.lineTo(0.25, -0.25); ctx.stroke(); break;
+      case "fungo": ctx.beginPath(); ctx.arc(0, 0, 0.36, Math.PI, 0); ctx.closePath(); ctx.fill(); ctx.fillStyle = "#f4e8d0"; ctx.fillRect(-0.12, 0, 0.24, 0.3); ctx.fillStyle = "#fff"; circ(-0.15, -0.15, 0.06); ctx.fill(); circ(0.12, -0.2, 0.05); ctx.fill(); break;
+      case "casa": ctx.fillRect(-0.28, -0.05, 0.56, 0.38); ctx.fillStyle = "#c8302a"; ctx.beginPath(); ctx.moveTo(-0.38, -0.02); ctx.lineTo(0, -0.38); ctx.lineTo(0.38, -0.02); ctx.closePath(); ctx.fill(); ctx.fillStyle = "#5a3a1a"; ctx.fillRect(-0.07, 0.12, 0.14, 0.21); break;
+      case "ombrello": ctx.beginPath(); ctx.arc(0, 0, 0.4, Math.PI, 0); ctx.closePath(); ctx.fill(); ctx.strokeStyle = "#3a2a5a"; ctx.lineWidth = 0.05; ctx.beginPath(); ctx.moveTo(0, 0); ctx.lineTo(0, 0.3); ctx.arc(-0.07, 0.3, 0.07, 0, Math.PI); ctx.stroke(); break;
+      case "nota": circ(-0.12, 0.25, 0.12); ctx.fill(); ctx.fillRect(-0.02, -0.35, 0.06, 0.6); ctx.beginPath(); ctx.moveTo(0.04, -0.35); ctx.quadraticCurveTo(0.3, -0.25, 0.22, -0.02); ctx.quadraticCurveTo(0.2, -0.18, 0.04, -0.2); ctx.fill(); break;
+      case "goccia": ctx.beginPath(); ctx.moveTo(0, -0.4); ctx.quadraticCurveTo(0.35, 0.05, 0.25, 0.2); ctx.arc(0, 0.15, 0.25, 0.2, Math.PI - 0.2); ctx.quadraticCurveTo(-0.35, 0.05, 0, -0.4); ctx.fill(); break;
+      case "fulmine": ctx.beginPath(); ctx.moveTo(0.1, -0.42); ctx.lineTo(-0.22, 0.05); ctx.lineTo(0, 0.05); ctx.lineTo(-0.1, 0.42); ctx.lineTo(0.24, -0.08); ctx.lineTo(0.02, -0.08); ctx.closePath(); ctx.fill(); break;
+      case "palloncino": ctx.beginPath(); ctx.ellipse(0, -0.08, 0.26, 0.32, 0, 0, TAU); ctx.fill(); ctx.strokeStyle = "#6a6a7a"; ctx.lineWidth = 0.025; ctx.beginPath(); ctx.moveTo(0, 0.24); ctx.quadraticCurveTo(0.08, 0.34, -0.02, 0.44); ctx.stroke(); break;
+      case "gemma": ctx.beginPath(); ctx.moveTo(-0.35, -0.12); ctx.lineTo(-0.18, -0.32); ctx.lineTo(0.18, -0.32); ctx.lineTo(0.35, -0.12); ctx.lineTo(0, 0.38); ctx.closePath(); ctx.fill(); ctx.strokeStyle = "rgba(255,255,255,0.6)"; ctx.lineWidth = 0.03; ctx.beginPath(); ctx.moveTo(-0.35, -0.12); ctx.lineTo(0.35, -0.12); ctx.moveTo(-0.1, -0.32); ctx.lineTo(0, 0.38); ctx.lineTo(0.1, -0.32); ctx.stroke(); break;
+      case "chiave": ctx.lineWidth = 0.09; circ(-0.2, 0, 0.15); ctx.stroke(); ctx.fillRect(-0.06, -0.045, 0.45, 0.09); ctx.fillRect(0.25, 0, 0.07, 0.15); ctx.fillRect(0.34, 0, 0.06, 0.11); break;
+      case "campana": ctx.beginPath(); ctx.moveTo(-0.3, 0.22); ctx.quadraticCurveTo(-0.28, -0.32, 0, -0.32); ctx.quadraticCurveTo(0.28, -0.32, 0.3, 0.22); ctx.closePath(); ctx.fill(); circ(0, 0.3, 0.07); ctx.fill(); ctx.fillRect(-0.04, -0.42, 0.08, 0.1); break;
+    }
+    ctx.restore();
+  }
+  function drawCard(k) {
+    if (k.gone > 0.5) return;
+    const sx = Math.abs(Math.cos(k.flip * Math.PI)) || 0.02, faceUp = k.flip > 0.5, shrink = k.gone ? 1 - k.gone * 2 : 1, wob = k.wob > 0 ? Math.sin(k.wob * 40) * 3 : 0;
+    ctx.save(); ctx.translate(k.x + wob, k.y); ctx.scale(sx * shrink, shrink); ctx.globalAlpha = shrink;
+    rr(-cw / 2 + 2, -ch / 2 + 3, cw, ch, 8); ctx.fillStyle = "rgba(0,0,0,0.3)"; ctx.fill();
+    rr(-cw / 2, -ch / 2, cw, ch, 8);
+    if (faceUp) {
+      ctx.fillStyle = "#fffaf0"; ctx.fill(); ctx.strokeStyle = "#d8c8a0"; ctx.lineWidth = 2; ctx.stroke();
+      icon(k.ic, cw * 0.82);
+    } else {
+      const g = ctx.createLinearGradient(-cw / 2, -ch / 2, cw / 2, ch / 2); g.addColorStop(0, "#5a3ab8"); g.addColorStop(1, "#2a1a6a"); ctx.fillStyle = g; ctx.fill();
+      ctx.strokeStyle = "#ffd25a"; ctx.lineWidth = 2; rr(-cw / 2 + 4, -ch / 2 + 4, cw - 8, ch - 8, 6); ctx.stroke();
+      ctx.fillStyle = "rgba(255,210,90,0.85)"; ctx.beginPath(); for (let i = 0; i < 8; i++) { const a = -Math.PI / 2 + i * Math.PI / 4, q = i % 2 ? cw * 0.07 : cw * 0.18; ctx.lineTo(Math.cos(a) * q, Math.sin(a) * q); } ctx.closePath(); ctx.fill();
+      ctx.fillStyle = "rgba(255,255,255,0.08)"; for (let i = -3; i <= 3; i++) ctx.fillRect(-cw / 2 + 6, i * ch / 8 - 0.5, cw - 12, 1);
+    }
+    ctx.restore();
+  }
+  function draw() {
+    ctx.setTransform(pxRatio, 0, 0, pxRatio, 0, 0);
+    const g = ctx.createRadialGradient(W / 2, H / 2, 40, W / 2, H / 2, Math.max(W, H) * 0.8); g.addColorStop(0, "#2a6a4a"); g.addColorStop(1, "#0e2a1e"); ctx.fillStyle = g; ctx.fillRect(0, 0, W, H);
+    ctx.fillStyle = "rgba(255,255,255,0.03)"; for (let i = 0; i < 60; i++) ctx.fillRect((i * 97) % W, (i * 53) % H, 2, 2);
+    for (const k of cards) drawCard(k);
+    for (const f of fx) { ctx.globalAlpha = 1 - f.t / f.life; ctx.fillStyle = f.c; circ(f.x, f.y, 3); ctx.fill(); } ctx.globalAlpha = 1;
+    for (const t of texts) { ctx.globalAlpha = Math.min(1, (1.3 - t.t) * 2); ctx.font = "900 16px system-ui"; ctx.textAlign = "center"; ctx.textBaseline = "middle"; ctx.lineWidth = 4; ctx.strokeStyle = "rgba(10,20,15,0.8)"; ctx.strokeText(t.text, t.x, t.y - t.t * 20); ctx.fillStyle = t.c; ctx.fillText(t.text, t.x, t.y - t.t * 20); }
+    ctx.globalAlpha = 1;
+    // HUD
+    const left = cards.filter((k) => !k.gone).length / 2, tl = Math.ceil(timeLeft), low = tl <= 5 && state === "play" && peekT <= 0;
+    const rows2 = [["LIVELLO", `${level + 1} / ${LEVELS.length}`], ["TEMPO", `${tl}″`], ["PUNTI", nf(score)], ["COPPIE", `${LEVELS[level] - Math.ceil(left)} / ${LEVELS[level]}`], ["COMBO", combo > 1 ? `×${combo}` : "—"]];
+    ctx.textBaseline = "middle"; ctx.textAlign = "left";
+    if (portrait) {
+      rows2.forEach(([a, b], i) => { const x = 14 + (i % 3) * 116, y = 18 + Math.floor(i / 3) * 34; ctx.fillStyle = "#9ad0b0"; ctx.font = "800 9px system-ui"; ctx.fillText(a, x, y); ctx.fillStyle = i === 1 && low ? (Math.sin(clock * 10) > 0 ? "#ff5a4a" : "#fff") : "#fff"; ctx.font = "800 15px system-ui"; ctx.fillText(b, x, y + 14); });
+    } else {
+      ctx.fillStyle = "#ffd25a"; ctx.font = "italic 900 18px system-ui"; ctx.fillText("CARTE", 14, 26); ctx.fillText("GEMELLE", 14, 46);
+      rows2.forEach(([a, b], i) => { const y = 82 + i * 46; ctx.fillStyle = "#9ad0b0"; ctx.font = "800 10px system-ui"; ctx.fillText(a, 16, y); ctx.fillStyle = i === 1 && low ? (Math.sin(clock * 10) > 0 ? "#ff5a4a" : "#fff") : "#fff"; ctx.font = "800 18px system-ui"; ctx.fillText(b, 16, y + 18); });
+    }
+    if (state === "play" && peekT > 0) { ctx.textAlign = "center"; ctx.font = "900 20px system-ui"; ctx.lineWidth = 5; ctx.strokeStyle = "rgba(10,20,15,0.85)"; const x = portrait ? AREA.x + AREA.w / 2 : 76, y = portrait ? 76 : 330; const t = `Guarda bene… ${Math.ceil(peekT)}`; if (!portrait) ctx.font = "900 15px system-ui"; ctx.strokeText(t, x, y); ctx.fillStyle = "#fff"; ctx.fillText(t, x, y); }
+  }
+
+  // ---------- Menus ----------
+  function showOverlay(html) { overlay.innerHTML = html; overlay.classList.remove("hidden"); }
+  function difficultyHTML() {
+    const buttons = DIFF_IDS.map((id) => { const d = DIFFICULTIES[id]; return `<button type="button" data-diff="${id}" class="${id === difficulty ? "on" : ""}" style="--c:${d.color}">${d.label}</button>`; }).join("");
+    const best = parseInt(load(bestKey(difficulty)), 10);
+    return `<div class="diff">${buttons}</div><p class="muted">${diff.desc}${best ? ` · Record: ${nf(best)}` : ""}</p>`;
+  }
+  function setDifficulty(id) { if (!DIFFICULTIES[id]) return; difficulty = id; diff = DIFFICULTIES[id]; store(DIFF_KEY, id); if (menu) menu(); }
+  function showTitle() {
+    menu = showTitle; state = "menu";
+    showOverlay(
+      `<h1>CARTE <span>GEMELLE</span></h1>
+       <p>Le carte sono tutte girate: all'inizio di ogni livello le vedi per un attimo, poi tocca alla tua memoria. Gira due carte alla volta e trova le coppie uguali prima che finisca il tempo. Otto livelli, da 6 a 18 coppie.</p>
+       <div class="pts">
+         <span><b>Combo</b></span><span>ogni coppia trovata di fila vale di più: 50, 100, 150… un errore azzera la combo</span>
+         <span><b>Tempo</b></span><span>quello che avanza diventa punti, e un livello senza errori vale 300 in più</span>
+         <span><b>Scambi</b></span><span>dal quinto livello, se sbagli troppo, due carte coperte si scambiano di posto sotto i tuoi occhi</span>
+       </div>
+       <p class="muted help">${touchMode ? "Tocca le carte." : "Clicca le carte. P pausa."}</p>
+       ${difficultyHTML()}
+       <button class="start" data-start>DISTRIBUISCI</button>`);
+    syncControls();
+  }
+  function togglePause() {
+    if (state === "play") { pausedFrom = state; state = "paused"; showOverlay(`<h2>PAUSA</h2><button class="start" data-resume>CONTINUA</button>`); }
+    else if (state === "paused") { state = pausedFrom; overlay.classList.add("hidden"); lastT = performance.now(); }
+    syncControls();
+  }
+  window.addEventListener("sala:termina", () => { if (state !== "paused") return; overlay.classList.add("hidden"); gameOver(false, true); });
+  function syncControls() { pauseBtn.style.display = state === "play" && touchMode ? "block" : "none"; resize(); }
+  pauseBtn.addEventListener("click", () => togglePause());
+  overlay.addEventListener("click", (e) => {
+    const q = (s) => e.target.closest(s); let el;
+    if ((el = q("[data-diff]"))) { setDifficulty(el.dataset.diff); return; }
+    if (q("[data-start]")) { startGame(); return; }
+    if (q("[data-next]")) { level++; startLevel(); return; }
+    if (q("[data-resume]")) { togglePause(); return; }
+  });
+
+  // ---------- Input ----------
+  let touchMode = !!(window.matchMedia && matchMedia("(pointer: coarse)").matches);
+  canvas.addEventListener("pointerdown", (e) => { e.preventDefault(); const rc = canvas.getBoundingClientRect(); tap(((e.clientX - rc.left) / rc.width) * W, ((e.clientY - rc.top) / rc.height) * H); });
+  window.addEventListener("keydown", (e) => {
+    const k = e.key.toLowerCase();
+    if (state === "menu" || state === "over") { if (e.key === "Enter") startGame(); return; }
+    if (state === "between" && e.key === "Enter") { level++; startLevel(); return; }
+    if (k === "p" || k === "escape") { if (!e.repeat) togglePause(); }
+  });
+  window.addEventListener("blur", () => { if (state === "play") togglePause(); });
+  window.addEventListener("pointerdown", (e) => { if (e.pointerType === "touch" && !touchMode) { touchMode = true; syncControls(); if (menu) menu(); } }, true);
+
+  // ---------- Loop ----------
+  let lastT = performance.now();
+  function frame(now) {
+    const dt = Math.min(0.05, (now - lastT) / 1000); lastT = now;
+    if (state !== "paused") update(dt);
+    draw();
+    requestAnimationFrame(frame);
+  }
+  resize();
+  cards = ICONS.slice(0, 12).map((ic, i) => ({ ic, slot: i, face: i % 3 === 0 ? 1 : 0, gone: 0, flip: i % 3 === 0 ? 1 : 0, x: 0, y: 0, tx: 0, ty: 0, wob: 0 })); layoutCards(true);
+  showTitle();
+  requestAnimationFrame(frame);
+})();
+</script>
+<script src="../../shared/iniziali.js" data-record="gemelle-best-" data-kind="score"></script>
+</body>
+</html>

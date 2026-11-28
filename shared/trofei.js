@@ -9,6 +9,7 @@
   "use strict";
   // record key prefix → [bronzo, argento, oro] (and t for times)
   const DATA = {
+    "gemelle-best-": [12000, 18000, 18000],   // carte-gemelle (bot)
     "mongolfiera-best-": [1800, 2500, 2200],   // mongolfiera (stima sulle regole)
     "riccio-best-": [6000, 8000, 7500],   // riccio-goloso (stima: il massimo è 10.800)
     "dischetto-best-": [3000, 4000, 3500],   // dal-dischetto (bot)
