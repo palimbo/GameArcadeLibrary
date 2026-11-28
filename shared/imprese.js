@@ -9,6 +9,11 @@
   "use strict";
   // record key prefix of the game (as in trofei.js) → its feats
   const LIST = {
+    "capostazione-best-": [   // capostazione
+      { id: "senzaerrori", name: "Puntuale come un orologio", desc: "finisci un livello, dal terzo in poi, senza un treno sbagliato" },
+      { id: "serie", name: "Serie d'oro", desc: "porta 30 treni giusti di fila" },
+      { id: "capolinea", name: "Capolinea", desc: "finisci il decimo livello" },
+    ],
     "pizzeria-best-": [   // pizzeria-svelta
       { id: "puntogiusto", name: "Al punto giusto", desc: "sforna 10 pizze perfette in una partita" },
       { id: "esaurito", name: "Tutto esaurito", desc: "chiudi una giornata, dalla quarta in poi, senza un cliente scontento" },
