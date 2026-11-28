@@ -9,6 +9,7 @@
   "use strict";
   // record key prefix → [bronzo, argento, oro] (and t for times)
   const DATA = {
+    "riccio-best-": [6000, 8000, 7500],   // riccio-goloso (stima: il massimo è 10.800)
     "dischetto-best-": [3000, 4000, 3500],   // dal-dischetto (bot)
     "boscaiolo-best-": [250, 400, 450],   // boscaiolo (bot, da 3 a 7 colpi al secondo)
     "buca-best-": [2000, 3000, 2000],   // buca-golosa (bot)

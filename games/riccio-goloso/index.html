@@ -1,0 +1,510 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no, viewport-fit=cover">
+<title>Riccio Goloso</title>
+<style>
+  :root {
+    --bg: #2a1a2a;
+    --fg: #f4f6ee;
+    --muted: #c8d0dc;
+    --gold: #ffc84a;
+    --red: #ff5a4a;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  html, body {
+    height: 100%;
+    background: var(--bg);
+    color: var(--fg);
+    font-family: system-ui, -apple-system, "Segoe UI", sans-serif;
+    overflow: hidden;
+    user-select: none;
+    -webkit-user-select: none;
+    -webkit-tap-highlight-color: transparent;
+    touch-action: none;
+  }
+  #wrap { position: fixed; inset: 0; display: flex; align-items: center; justify-content: center; }
+  canvas { cursor: pointer; display: block; touch-action: none; border-radius: 6px; box-shadow: 0 0 0 2px #2e3a4e, 0 10px 40px rgba(0,0,0,0.6); }
+  #pauseBtn {
+    position: fixed; z-index: 3; display: none; right: 10px; top: calc(10px + env(safe-area-inset-top, 0px));
+    font: 700 13px system-ui, sans-serif; color: var(--fg);
+    background: rgba(0, 0, 0, 0.6); border: 1px solid rgba(244, 246, 238, 0.35);
+    border-radius: 8px; padding: 6px 10px; cursor: pointer;
+  }
+  #touch { display: none !important; }
+  #overlay {
+    position: fixed; inset: 0; z-index: 5;
+    display: flex; flex-direction: column; align-items: center; justify-content: flex-start;
+    gap: 14px; padding: 16px; text-align: center; overflow-y: auto;
+    background: rgba(20, 26, 36, 0.94);
+  }
+  #overlay > :first-child { margin-top: auto; }
+  #overlay > :last-child { margin-bottom: auto; }
+  #overlay.hidden { display: none; }
+  #homeLink {
+    position: fixed; top: calc(10px + env(safe-area-inset-top, 0px)); left: 10px; z-index: 6;
+    font: 600 13px/1 system-ui, sans-serif; color: #fff; text-decoration: none;
+    padding: 8px 12px; border-radius: 999px; background: rgba(0,0,0,.55);
+    border: 1px solid rgba(255,255,255,.25);
+  }
+  #homeLink:hover { background: rgba(0,0,0,.8); }
+  #overlay.hidden ~ #homeLink { display: none; }
+  @media (max-width: 700px) { #overlay { padding-top: calc(52px + env(safe-area-inset-top, 0px)); } }
+  #overlay h1 { font-size: clamp(32px, 10vw, 58px); font-weight: 900; font-style: italic; letter-spacing: 1px; color: var(--gold);
+    text-shadow: 3px 3px 0 #8a3a5a, 0 0 22px rgba(255,210,58,0.35); }
+  #overlay h1 span { color: #fff; }
+  #overlay h2 { font-size: clamp(26px, 7vw, 42px); font-weight: 900; letter-spacing: 2px; color: var(--gold); }
+  #overlay h2.lose { color: var(--red); }
+  #overlay p { max-width: 540px; font-size: clamp(13px, 3.4vw, 16px); line-height: 1.55; }
+  #overlay p.muted { color: var(--muted); }
+  #overlay .pts { display: grid; grid-template-columns: repeat(2, auto); gap: 4px 18px; font-size: 13px; color: var(--muted); text-align: left; max-width: 560px; }
+  #overlay .pts b { color: var(--fg); }
+  #overlay .diff { display: flex; gap: 10px; flex-wrap: wrap; justify-content: center; }
+  #overlay button {
+    font: 800 15px system-ui, sans-serif; letter-spacing: 1.5px; color: var(--fg);
+    background: transparent; cursor: pointer;
+    border: 2px solid rgba(244,246,238,0.3); border-radius: 10px; padding: 9px 16px;
+  }
+  #overlay .diff button.on { border-color: var(--c); color: var(--c); box-shadow: 0 0 12px var(--c); }
+  #overlay button.start { border-color: var(--gold); color: #2a1a02; background: var(--gold); padding: 11px 30px; box-shadow: 0 4px 0 #a87a0a; }
+  #overlay .menuList { display: flex; flex-wrap: wrap; gap: 6px 10px; justify-content: center; max-width: 600px; font-size: 13px; color: var(--muted); }
+  #overlay .menuList span { background: rgba(255,255,255,0.06); border-radius: 8px; padding: 4px 9px; }
+  #overlay .menuList b { color: var(--gold); }
+  #overlay .upgs { display: flex; gap: 10px; flex-wrap: wrap; justify-content: center; }
+  #overlay button.upg { display: flex; flex-direction: column; gap: 3px; width: 170px; text-align: center; letter-spacing: 0.3px; font-size: 13px; }
+  #overlay button.upg span { font-weight: 600; font-size: 12px; color: var(--muted); }
+  #overlay button.upg:disabled { opacity: 0.4; cursor: default; }
+  @media (max-height: 560px) {
+    #overlay { gap: 8px; }
+    #overlay h1 { font-size: 30px; }
+    #overlay p { font-size: 13px; line-height: 1.4; }
+    #overlay .help, #overlay .pts { display: none; }
+    #overlay .menuList { font-size: 11px; gap: 4px; }
+    #overlay button.upg { width: 150px; padding: 6px 10px; }
+  }
+</style>
+</head>
+<body>
+<div id="wrap"><canvas id="game"></canvas></div>
+<div id="touch"></div>
+<button id="pauseBtn" type="button" aria-label="Pausa">❚❚</button>
+<div id="overlay"></div>
+<a id="homeLink" href="../../index.html">← Sala Giochi</a>
+
+
+<script>
+(() => {
+  "use strict";
+
+  const LEVELS = [{"name":"Primo assaggio","candy":{"x":180,"y":170},"ropes":[{"x":180,"y":60,"len":110}],"autopins":[],"bubbles":[],"spikes":[],"stars":[[180,281],[180,359],[180,435]],"riccio":{"x":180,"y":543}},{"name":"Altalena","candy":{"x":180,"y":160},"ropes":[{"x":100,"y":60,"len":125},{"x":260,"y":60,"len":125}],"autopins":[],"bubbles":[],"spikes":[],"stars":[[28,164],[184,209],[244,370]],"riccio":{"x":279,"y":541}},{"name":"Pendolo","candy":{"x":250,"y":120},"ropes":[{"x":120,"y":80,"len":136}],"autopins":[],"bubbles":[],"spikes":[],"stars":[[189,268],[169,349],[153,429]],"riccio":{"x":136,"y":541}},{"name":"Il chiodo","candy":{"x":200,"y":110},"ropes":[{"x":90,"y":80,"len":114}],"autopins":[{"x":139,"y":218,"r":55}],"bubbles":[],"spikes":[],"stars":[[153,275],[217,342],[256,425]],"riccio":{"x":292,"y":542}},{"name":"Bolla di sapone","candy":{"x":50,"y":150},"ropes":[{"x":130,"y":70,"len":113}],"autopins":[],"bubbles":[{"x":213,"y":224}],"spikes":[],"stars":[[230,231],[271,276],[295,337]],"riccio":{"x":320,"y":437}},{"name":"Occhio alle spine","candy":{"x":180,"y":190},"ropes":[{"x":80,"y":70,"len":160},{"x":280,"y":70,"len":160}],"autopins":[],"bubbles":[],"spikes":[[120,460,240,460]],"stars":[[227,274],[237,319],[246,372]],"riccio":{"x":257,"y":465}},{"name":"Tre fili","candy":{"x":180,"y":180},"ropes":[{"x":70,"y":110,"len":135},{"x":180,"y":50,"len":135},{"x":290,"y":110,"len":135}],"autopins":[],"bubbles":[],"spikes":[],"stars":[[226,275],[244,352],[258,432]],"riccio":{"x":271,"y":543}},{"name":"Due chiodi","candy":{"x":170,"y":100},"ropes":[{"x":80,"y":70,"len":96}],"autopins":[{"x":153,"y":194,"r":55},{"x":116,"y":266,"r":55}],"bubbles":[],"spikes":[],"stars":[[166,245],[121,309],[113,411]],"riccio":{"x":107,"y":542}},{"name":"Su e giù","candy":{"x":250,"y":150},"ropes":[{"x":250,"y":60,"len":90}],"autopins":[{"x":220,"y":303,"r":55}],"bubbles":[{"x":250,"y":211}],"spikes":[],"stars":[[250,290],[197,352],[104,417]],"riccio":{"x":42,"y":542}},{"name":"Sopra le spine","candy":{"x":100,"y":470},"ropes":[{"x":60,"y":350,"len":125}],"autopins":[],"bubbles":[{"x":100,"y":470}],"spikes":[[150,530,330,530]],"stars":[[80,159],[79,280],[78,401]],"riccio":{"x":78,"y":540}},{"name":"Ragnatela","candy":{"x":180,"y":230},"ropes":[{"x":70,"y":90,"len":180},{"x":290,"y":90,"len":180},{"x":180,"y":420,"len":195}],"autopins":[],"bubbles":[],"spikes":[[70,500,150,500]],"stars":[[231,318],[244,378],[254,440]],"riccio":{"x":265,"y":539}},{"name":"Gran finale","candy":{"x":90,"y":120},"ropes":[{"x":60,"y":50,"len":76}],"autopins":[{"x":78,"y":150,"r":55}],"bubbles":[{"x":65,"y":244}],"spikes":[[40,535,200,535]],"stars":[[68,218],[52,309],[50,403]],"riccio":{"x":48,"y":530}}];
+
+  // ---------- Physics (deterministic: fixed 1/120 s steps) ----------
+  const PHYS = (() => {
+    const DT = 1 / 120, G = 980, ITER = 24, CANDY_R = 14, SEG = 12;
+    function create(L) {
+      const w = { t: 0, pts: [], cons: [], ropes: [], candy: null, bubble: null, autopins: [], spikes: L.spikes || [], stars: (L.stars || []).map((s) => ({ x: s[0], y: s[1], got: false, t: 0 })), riccio: L.riccio, state: "run", events: [] };
+      w.candy = addPt(w, L.candy.x, L.candy.y, 1);
+      for (const r of L.ropes || []) addRope(w, r.x, r.y, r.len);
+      w.autopins = (L.autopins || []).map((a) => ({ x: a.x, y: a.y, r: a.r, used: false }));
+      w.bubbles = (L.bubbles || []).map((b) => ({ x: b.x, y: b.y, on: false, popped: false }));
+      return w;
+    }
+    function addPt(w, x, y, inv) { const p = { x, y, px: x, py: y, inv }; w.pts.push(p); return p; }
+    function addRope(w, x, y, len) {
+      const c = w.candy, d = Math.hypot(c.x - x, c.y - y); len = Math.max(len || d, 10);
+      const n = Math.max(2, Math.ceil(len / SEG)), pin = addPt(w, x, y, 0), rope = { pin, links: [], pts: [pin] };
+      let prev = pin;
+      for (let i = 1; i < n; i++) { const k = i / n, p = addPt(w, x + (c.x - x) * k, y + (c.y - y) * k, 40); rope.pts.push(p); const cn = { a: prev, b: p, len: len / n, on: true }; w.cons.push(cn); rope.links.push(cn); prev = p; }
+      const cn = { a: prev, b: c, len: len / n, on: true }; w.cons.push(cn); rope.links.push(cn); rope.pts.push(c);
+      w.ropes.push(rope); return rope;
+    }
+    function attached(w) { return w.ropes.some((r) => { for (const l of r.links) if (!l.on) return false; return true; }); }
+    function step(w) {
+      if (w.state !== "run") return;
+      w.t += DT;
+      const c = w.candy, bub = w.bubbles.find((b) => b.on);
+      for (const p of w.pts) {
+        if (!p.inv) continue;
+        let vx = (p.x - p.px) * 0.999, vy = (p.y - p.py) * 0.999, ay = G;
+        if (p === c && bub) { vx *= 0.985; vy *= 0.985; ay = -320; }
+        p.px = p.x; p.py = p.y; p.x += vx; p.y += vy + ay * DT * DT;
+      }
+      for (let it = 0; it < ITER; it++) for (const k of w.cons) {
+        if (!k.on) continue;
+        const dx = k.b.x - k.a.x, dy = k.b.y - k.a.y, d = Math.hypot(dx, dy) || 0.0001;
+        if (d <= k.len) continue; // ropes only pull
+        const s = k.a.inv + k.b.inv; if (!s) continue;
+        const diff = (d - k.len) / d / s;
+        k.a.x += dx * diff * k.a.inv; k.a.y += dy * diff * k.a.inv; k.b.x -= dx * diff * k.b.inv; k.b.y -= dy * diff * k.b.inv;
+      }
+      if (bub) { bub.x = c.x; bub.y = c.y; }
+      for (const b of w.bubbles) if (!b.on && !b.popped && Math.hypot(b.x - c.x, b.y - c.y) < 26) { b.on = true; w.events.push("bubble"); }
+      for (const a of w.autopins) if (!a.used && Math.hypot(a.x - c.x, a.y - c.y) < a.r) { a.used = true; addRope(w, a.x, a.y, Math.hypot(a.x - c.x, a.y - c.y)); w.events.push("pin"); }
+      for (const s of w.stars) if (!s.got && Math.hypot(s.x - c.x, s.y - c.y) < 22) { s.got = true; s.t = w.t; w.events.push("star"); }
+      for (const s of w.spikes) { const dx = s[2] - s[0], dy = s[3] - s[1], l2 = dx * dx + dy * dy, t = Math.max(0, Math.min(1, ((c.x - s[0]) * dx + (c.y - s[1]) * dy) / l2)); if (Math.hypot(s[0] + dx * t - c.x, s[1] + dy * t - c.y) < CANDY_R + 6) { w.state = "lost"; w.why = "spikes"; w.events.push("lost"); return; } }
+      const R = w.riccio; if (Math.hypot(R.x - c.x, R.y - 14 - c.y) < 26) { w.state = "won"; w.events.push("won"); return; }
+      if (c.y > 640 || c.x < -60 || c.x > 420 || c.y < -120) { w.state = "lost"; w.why = "out"; w.events.push("lost"); }
+    }
+    function cutRope(w, i) { const r = w.ropes[i]; if (!r) return false; const l = r.links[Math.floor(r.links.length / 2)]; if (!l.on) return false; l.on = false; return true; }
+    function cutSegment(w, x1, y1, x2, y2) {
+      let cut = false;
+      for (const k of w.cons) {
+        if (!k.on) continue;
+        if (segX(x1, y1, x2, y2, k.a.x, k.a.y, k.b.x, k.b.y)) { k.on = false; cut = true; }
+      }
+      return cut;
+    }
+    function segX(ax, ay, bx, by, cx, cy, dx, dy) {
+      const d = (bx - ax) * (dy - cy) - (by - ay) * (dx - cx); if (!d) return false;
+      const u = ((cx - ax) * (dy - cy) - (cy - ay) * (dx - cx)) / d, v = ((cx - ax) * (by - ay) - (cy - ay) * (bx - ax)) / d;
+      return u >= 0 && u <= 1 && v >= 0 && v <= 1;
+    }
+    function popBubble(w) { const b = w.bubbles.find((q) => q.on); if (!b) return false; b.on = false; b.popped = true; return true; }
+    return { DT, CANDY_R, create, step, cutRope, cutSegment, popBubble, attached };
+  })();
+
+  // ---------- Game ----------
+  const TAU = Math.PI * 2;
+  const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
+  const nf = (n) => Math.floor(n).toLocaleString("it-IT");
+  const feat = (id) => window.dispatchEvent(new CustomEvent("sala:impresa", { detail: id }));
+  function store(k, v) { try { localStorage.setItem(k, v); } catch { /* ignore */ } }
+  function load(k) { try { return localStorage.getItem(k); } catch { return null; } }
+
+  const DIFFICULTIES = {
+    facile:    { label: "FACILE",    color: "#7ee0a0", desc: "stelle e bocca più grandi · ritentare non costa punti", grab: 6, retry: 0 },
+    normale:   { label: "NORMALE",   color: "#ffc84a", desc: "ogni tentativo in più costa 40 punti", grab: 0, retry: 40 },
+    difficile: { label: "DIFFICILE", color: "#ff5a4a", desc: "stelle e bocca più piccole · ogni tentativo costa 80 punti", grab: -4, retry: 80 },
+  };
+  const DIFF_IDS = Object.keys(DIFFICULTIES);
+  const DIFF_KEY = "riccio-difficulty";
+  const bestKey = (id) => `riccio-best-${id}`;
+  const STARS_KEY = "riccio-stelle";
+  let difficulty = DIFFICULTIES[load(DIFF_KEY)] ? load(DIFF_KEY) : "normale";
+  let diff = DIFFICULTIES[difficulty];
+  let bestStars = (() => { try { const a = JSON.parse(load(STARS_KEY)); return Array.isArray(a) ? a : []; } catch { return []; } })();
+
+  // ---------- Canvas: the level box is 360 × 560 ----------
+  const canvas = document.getElementById("game"), ctx = canvas.getContext("2d");
+  const overlay = document.getElementById("overlay"), pauseBtn = document.getElementById("pauseBtn");
+  let W = 640, H = 360, portrait = false, pxRatio = 1, V = { x: 0, y: 0, s: 1 }, RESTART = null;
+  function resize() {
+    portrait = window.innerHeight > window.innerWidth * 1.05;
+    W = portrait ? 360 : 640; H = portrait ? 640 : 360;
+    const s = Math.max(0.2, Math.min((window.innerWidth - 4) / W, (window.innerHeight - 4) / H));
+    pxRatio = Math.min(3, s * (window.devicePixelRatio || 1));
+    canvas.style.width = W * s + "px"; canvas.style.height = H * s + "px";
+    canvas.width = Math.round(W * pxRatio); canvas.height = Math.round(H * pxRatio);
+    V = portrait ? { x: 0, y: 64, s: 1 } : { x: (W - 360 * (352 / 560)) / 2, y: 4, s: 352 / 560 };
+    RESTART = portrait ? { x: 30, y: 34, r: 20 } : { x: V.x + 360 * V.s + 40, y: 300, r: 22 };
+  }
+  window.addEventListener("resize", () => syncControls());
+  const toWorld = (p) => ({ x: (p.x - V.x) / V.s, y: (p.y - V.y) / V.s });
+
+  // ---------- Sound ----------
+  let audioCtx = null;
+  function tone(freq, dur, type = "square", vol = 0.03, delay = 0, slide = 0) {
+    if (!audioCtx) return;
+    const t = audioCtx.currentTime + delay, o = audioCtx.createOscillator(), g = audioCtx.createGain();
+    o.type = type; o.frequency.setValueAtTime(freq, t); if (slide) o.frequency.exponentialRampToValueAtTime(slide, t + dur);
+    g.gain.setValueAtTime(0.0001, t); g.gain.exponentialRampToValueAtTime(vol, t + 0.008); g.gain.exponentialRampToValueAtTime(0.0001, t + dur);
+    o.connect(g).connect(audioCtx.destination); o.start(t); o.stop(t + dur + 0.02);
+  }
+  function noise(dur, freq, vol) { if (!audioCtx) return; const t = audioCtx.currentTime, n = Math.floor(audioCtx.sampleRate * dur), b = audioCtx.createBuffer(1, n, audioCtx.sampleRate), d = b.getChannelData(0); for (let i = 0; i < n; i++) d[i] = (Math.random() * 2 - 1) * (1 - i / n); const s = audioCtx.createBufferSource(), f = audioCtx.createBiquadFilter(), g = audioCtx.createGain(); s.buffer = b; f.type = "highpass"; f.frequency.value = freq; g.gain.value = vol; s.connect(f).connect(g).connect(audioCtx.destination); s.start(t); }
+  const sfx = {
+    cut: () => { noise(0.08, 3000, 0.12); tone(900, 0.05, "triangle", 0.03, 0, 500); },
+    star: (n) => { tone([1047, 1319, 1568][n % 3], 0.18, "triangle", 0.05); tone([1568, 1976, 2349][n % 3], 0.22, "sine", 0.03, 0.05); },
+    pin: () => { tone(500, 0.06, "square", 0.03); tone(750, 0.08, "triangle", 0.03, 0.04); },
+    bubble: () => tone(400, 0.25, "sine", 0.04, 0, 900),
+    pop: () => { noise(0.05, 1500, 0.15); tone(1200, 0.06, "sine", 0.04, 0, 300); },
+    win: () => [523, 659, 784, 1047].forEach((f, i) => tone(f, 0.16, "triangle", 0.045, 0.1 + i * 0.09)),
+    munch: () => { for (let i = 0; i < 4; i++) { noise(0.05, 800, 0.1); tone(180, 0.05, "square", 0.02, i * 0.12); } },
+    lose: () => tone(300, 0.4, "sawtooth", 0.035, 0, 120),
+  };
+
+  // ---------- State ----------
+  let state = "menu", menu = null, pausedFrom = null, clock = 0, acc = 0;
+  let li = 0, single = false, world = null, score = 0, runStars = 0, retries = 0, levelStars = [], trail = [], drag = null, fx = [], endT = 0, munch = 0, swipeCuts = 0;
+  function startRun(from = 0, one = false) {
+    if (!audioCtx) { try { audioCtx = new (window.AudioContext || window.webkitAudioContext)(); } catch { audioCtx = null; } }
+    if (audioCtx && audioCtx.state === "suspended") audioCtx.resume();
+    li = from; single = one; score = 0; runStars = 0; levelStars = [];
+    startLevel(true);
+  }
+  function startLevel(fresh) {
+    if (fresh) retries = 0;
+    const L = LEVELS[li];
+    world = PHYS.create(L); acc = 0; fx = []; trail = []; drag = null; endT = 0; munch = 0;
+    state = "play"; menu = null; overlay.classList.add("hidden"); syncControls();
+  }
+  function grabR() { return diff.grab; }
+  function afterStep() {
+    for (const e of world.events) {
+      if (e === "star") { const n = world.stars.filter((s) => s.got).length - 1; sfx.star(n); const s = world.stars.filter((q) => q.got).sort((a, b) => b.t - a.t)[0]; fx.push({ kind: "burst", x: s.x, y: s.y, t: 0, life: 0.6 }); }
+      else if (e === "pin") sfx.pin(); else if (e === "bubble") sfx.bubble();
+      else if (e === "won") { sfx.munch(); munch = 1; }
+      else if (e === "lost") { sfx.lose(); if (world.why === "spikes") fx.push({ kind: "splat", x: world.candy.x, y: world.candy.y, t: 0, life: 0.8 }); }
+    }
+    world.events.length = 0;
+  }
+  // the difficulty widens or narrows the stars and the mouth without touching the physics
+  function grabCheck() {
+    const g = grabR(), c = world.candy;
+    if (g) {
+      for (const s of world.stars) if (!s.got && Math.hypot(s.x - c.x, s.y - c.y) < 22 + g) { s.got = true; s.t = world.t; world.events.push("star"); }
+      const R = world.riccio; if (world.state === "run" && Math.hypot(R.x - c.x, R.y - 14 - c.y) < 26 + g) { world.state = "won"; world.events.push("won"); }
+    }
+  }
+  function finishLevel() {
+    const got = world.stars.filter((s) => s.got).length;
+    bestStars[li] = Math.max(bestStars[li] || 0, got); store(STARS_KEY, JSON.stringify(bestStars));
+    if (single) {
+      menu = () => showOverlay(`<h2>${"★".repeat(got)}${"☆".repeat(3 - got)}</h2><p>${LEVELS[li].name}: ${got} ${got === 1 ? "stella" : "stelle"}${retries ? ` · ${retries + 1} tentativi` : ""}.</p>
+        <button class="start" data-replay>RIPROVA</button> <button type="button" data-levels>LIVELLI</button>`);
+      state = "between"; menu(); syncControls(); return;
+    }
+    const pts = Math.max(100, 300 + 200 * got - diff.retry * retries); score += pts; runStars += got; levelStars[li] = got;
+    if (li === LEVELS.length - 1) { feat("tutti"); if (runStars === LEVELS.length * 3) feat("perfetto"); gameOver(true); return; }
+    state = "between";
+    menu = () => showOverlay(`<h2>${"★".repeat(got)}${"☆".repeat(3 - got)}</h2><p><b>${LEVELS[li].name}</b>: +${pts}${retries ? ` (${retries + 1} tentativi)` : ""}</p>
+      <p>Punti: <b>${nf(score)}</b> · stelle ${runStars}/${(li + 1) * 3}</p>
+      <button class="start" data-next>LIVELLO ${li + 2}: ${LEVELS[li + 1].name.toUpperCase()}</button>`);
+    menu(); syncControls();
+  }
+  function gameOver(won, quit = false) {
+    if (state === "over") return;
+    state = "over";
+    const prev = parseInt(load(bestKey(difficulty)), 10) || 0, record = !single && score > prev;
+    if (record) store(bestKey(difficulty), String(score));
+    menu = () => showOverlay(
+      (won ? `<h2>PANCIA PIENA!</h2><p>Dodici caramelle, dodici morsi felici: il riccio si fa un pisolino.</p>` : `<h2 class="lose">BASTA DOLCI</h2><p>${quit ? `Partita chiusa al livello ${li + 1}.` : ""}</p>`) +
+      `<p>Punti: <b>${nf(score)}</b> · stelle ${runStars}/${LEVELS.length * 3} · ${diff.label}</p>
+       ${record ? "<p style='color:var(--gold)'>★ NUOVO RECORD! ★</p>" : ""}
+       ${difficultyHTML()}
+       <button class="start" data-start>DI NUOVO</button> <button type="button" data-levels>LIVELLI</button>`);
+    menu(); syncControls();
+  }
+
+  // ---------- Update ----------
+  function update(dt) {
+    clock += dt;
+    for (const f of fx) f.t += dt; fx = fx.filter((f) => f.t < f.life);
+    trail = trail.filter((p) => clock - p.t < 0.18);
+    if (state !== "play") return;
+    if (munch > 0) munch += dt;
+    if (world.state === "run") {
+      acc += dt;
+      while (acc >= PHYS.DT && world.state === "run") { PHYS.step(world); grabCheck(); acc -= PHYS.DT; }
+      afterStep();
+    } else {
+      endT += dt;
+      if (world.state === "won" && endT > 1.4) { sfx.win(); finishLevel(); }
+      if (world.state === "lost" && endT > 0.9) { retries++; startLevel(false); }
+    }
+  }
+  function swipe(a, b) {
+    const n = world.cons.filter((k) => k.on).length; // count the cut ropes, not links
+    const before = world.ropes.filter((r) => r.links.every((l) => l.on)).length;
+    if (PHYS.cutSegment(world, a.x, a.y, b.x, b.y)) {
+      sfx.cut();
+      const after = world.ropes.filter((r) => r.links.every((l) => l.on)).length;
+      swipeCuts += before - after; if (swipeCuts >= 2) feat("doppio");
+    }
+    void n;
+  }
+
+  // ---------- Drawing ----------
+  function circ(x, y, r) { ctx.beginPath(); ctx.arc(x, y, r, 0, TAU); }
+  function star(x, y, r, rot) { ctx.beginPath(); for (let i = 0; i < 10; i++) { const a = -Math.PI / 2 + i * Math.PI / 5 + rot, q = i % 2 ? r * 0.45 : r; ctx.lineTo(x + Math.cos(a) * q, y + Math.sin(a) * q); } ctx.closePath(); }
+  function drawRiccio(R) {
+    const c = world.candy, near = Math.hypot(c.x - R.x, c.y - R.y) < 110 && world.state === "run", open = near ? 1 : 0, chew = munch > 0 ? Math.abs(Math.sin(munch * 14)) : 0;
+    ctx.save(); ctx.translate(R.x, R.y);
+    if (R.y < 520) { ctx.fillStyle = "#a8743a"; ctx.fillRect(-36, 10, 72, 10); ctx.fillStyle = "#7a5028"; ctx.fillRect(-36, 18, 72, 4); ctx.fillRect(-28, 22, 6, 14); ctx.fillRect(22, 22, 6, 14); }
+    // spikes around the body
+    ctx.fillStyle = "#6a4a2a";
+    for (let i = 0; i < 13; i++) { const a = Math.PI + (i / 12) * Math.PI, bob = Math.sin(clock * 3 + i) * 1; ctx.beginPath(); ctx.moveTo(Math.cos(a - 0.15) * 22, Math.sin(a - 0.15) * 18); ctx.lineTo(Math.cos(a) * (34 + bob), Math.sin(a) * (30 + bob)); ctx.lineTo(Math.cos(a + 0.15) * 22, Math.sin(a + 0.15) * 18); ctx.fill(); }
+    ctx.fillStyle = "#8a5a32"; ctx.beginPath(); ctx.ellipse(0, 0, 28, 24, 0, Math.PI, TAU); ctx.lineTo(28, 8); ctx.quadraticCurveTo(0, 16, -28, 8); ctx.closePath(); ctx.fill();
+    // face
+    ctx.fillStyle = "#f0d0a0"; ctx.beginPath(); ctx.ellipse(0, -4, 18, 14, 0, 0, TAU); ctx.fill();
+    const lookX = clamp((c.x - R.x) / 60, -1, 1) * 2, lookY = clamp((c.y - R.y) / 60, -1, 1) * 2;
+    for (const s of [-1, 1]) { circ(s * 7, -9, 4.5); ctx.fillStyle = "#fff"; ctx.fill(); circ(s * 7 + lookX, -9 + lookY, 2.6); ctx.fillStyle = "#1a1a1a"; ctx.fill(); }
+    circ(0, -3, 3); ctx.fillStyle = "#2a1a1a"; ctx.fill();
+    ctx.fillStyle = "#c83a3a"; ctx.beginPath(); ctx.ellipse(0, 4, 6 + open * 3, 1.5 + open * 5 + chew * 3, 0, 0, TAU); ctx.fill();
+    ctx.fillStyle = "rgba(255,120,120,0.45)"; circ(-12, 0, 3.5); ctx.fill(); circ(12, 0, 3.5); ctx.fill();
+    ctx.restore();
+  }
+  function drawCandy(c) {
+    const rot = (c.x * 0.05) % TAU;
+    circ(c.x + 2, c.y + 3, 14); ctx.fillStyle = "rgba(0,0,0,0.18)"; ctx.fill();
+    circ(c.x, c.y, 14); ctx.fillStyle = "#fff4f4"; ctx.fill();
+    ctx.save(); ctx.beginPath(); ctx.arc(c.x, c.y, 14, 0, TAU); ctx.clip(); ctx.translate(c.x, c.y); ctx.rotate(rot);
+    ctx.fillStyle = "#e83a5a"; for (let i = 0; i < 4; i++) { ctx.beginPath(); ctx.moveTo(0, 0); ctx.arc(0, 0, 15, i * Math.PI / 2, i * Math.PI / 2 + 0.75); ctx.closePath(); ctx.fill(); }
+    ctx.restore();
+    circ(c.x, c.y, 14); ctx.strokeStyle = "#a8203a"; ctx.lineWidth = 1.5; ctx.stroke();
+    circ(c.x - 5, c.y - 5, 3.5); ctx.fillStyle = "rgba(255,255,255,0.75)"; ctx.fill();
+  }
+  function drawWorld() {
+    const w = world;
+    ctx.save(); ctx.translate(V.x, V.y); ctx.scale(V.s, V.s);
+    // the box: patterned wallpaper and a wooden floor
+    ctx.fillStyle = "#fbeef0"; ctx.fillRect(0, 0, 360, 560);
+    ctx.fillStyle = "rgba(232,140,170,0.12)"; for (let x = 0; x < 360; x += 30) ctx.fillRect(x, 0, 14, 556);
+    ctx.fillStyle = "rgba(200,120,150,0.18)"; for (let y = 20; y < 556; y += 40) for (let x = (y / 40) % 2 ? 22 : 7; x < 360; x += 30) { circ(x, y, 2); ctx.fill(); }
+    ctx.fillStyle = "#c89058"; ctx.fillRect(0, 556, 360, 4);
+    ctx.strokeStyle = "#8a5a3a"; ctx.lineWidth = 3; ctx.strokeRect(1.5, 1.5, 357, 557);
+    // autopins (range ring), bubbles, spikes, stars
+    for (const a of w.autopins) { if (!a.used) { ctx.setLineDash([4, 5]); circ(a.x, a.y, a.r); ctx.strokeStyle = "rgba(120,80,160,0.55)"; ctx.lineWidth = 1.5; ctx.stroke(); ctx.setLineDash([]); } }
+    for (const s of w.spikes) { const dx = s[2] - s[0], dy = s[3] - s[1], l = Math.hypot(dx, dy), n = Math.max(1, Math.round(l / 14)), nx = -dy / l, ny = dx / l; ctx.fillStyle = "#7a808a"; for (let i = 0; i < n; i++) { const t0 = i / n, t1 = (i + 1) / n, tm = (t0 + t1) / 2; for (const sg of [1, -1]) { ctx.beginPath(); ctx.moveTo(s[0] + dx * t0, s[1] + dy * t0); ctx.lineTo(s[0] + dx * tm + nx * 11 * sg, s[1] + dy * tm + ny * 11 * sg); ctx.lineTo(s[0] + dx * t1, s[1] + dy * t1); ctx.closePath(); ctx.fill(); } } ctx.strokeStyle = "#4a4e56"; ctx.lineWidth = 3; ctx.beginPath(); ctx.moveTo(s[0], s[1]); ctx.lineTo(s[2], s[3]); ctx.stroke(); }
+    for (const s of w.stars) if (!s.got) { const pul = 1 + Math.sin(clock * 4 + s.x) * 0.06; star(s.x, s.y, 13 * pul, clock * 0.8); ctx.fillStyle = "#ffcf2a"; ctx.fill(); ctx.strokeStyle = "#d89a1a"; ctx.lineWidth = 1.5; ctx.stroke(); }
+    drawRiccio(w.riccio);
+    // ropes: each run of intact links is drawn as one line
+    ctx.lineCap = "round"; ctx.lineJoin = "round";
+    for (const r of w.ropes) {
+      let run = [r.pts[0]];
+      const flush = () => { if (run.length > 1) { ctx.beginPath(); ctx.moveTo(run[0].x, run[0].y); for (const p of run) ctx.lineTo(p.x, p.y); ctx.strokeStyle = "#7a4a2a"; ctx.lineWidth = 3.5; ctx.stroke(); ctx.strokeStyle = "#c8945a"; ctx.lineWidth = 1.5; ctx.stroke(); } };
+      r.links.forEach((l, i) => { if (l.on) run.push(r.pts[i + 1]); else { flush(); run = [r.pts[i + 1]]; } });
+      flush();
+    }
+    for (const r of w.ropes) { const p = r.pin; circ(p.x + 1, p.y + 2, 6); ctx.fillStyle = "rgba(0,0,0,0.2)"; ctx.fill(); circ(p.x, p.y, 6); ctx.fillStyle = "#d8a83a"; ctx.fill(); ctx.strokeStyle = "#8a6a1a"; ctx.lineWidth = 1.5; ctx.stroke(); circ(p.x - 1.5, p.y - 1.5, 1.8); ctx.fillStyle = "#fff6c0"; ctx.fill(); }
+    for (const a of w.autopins) if (!a.used) { circ(a.x, a.y, 6); ctx.fillStyle = "#b07ad8"; ctx.fill(); ctx.strokeStyle = "#6a3a9a"; ctx.lineWidth = 1.5; ctx.stroke(); }
+    if (w.state !== "lost" || w.why !== "spikes") if (w.state !== "won") drawCandy(w.candy); else if (munch < 0.3) { ctx.globalAlpha = 1 - munch / 0.3; drawCandy(w.candy); ctx.globalAlpha = 1; }
+    for (const b of w.bubbles) if (!b.popped) { const r = b.on ? 24 : 22 + Math.sin(clock * 3) * 1; circ(b.x, b.y, r); ctx.fillStyle = "rgba(160,220,255,0.28)"; ctx.fill(); ctx.strokeStyle = "rgba(120,190,240,0.8)"; ctx.lineWidth = 2; ctx.stroke(); circ(b.x - r * 0.4, b.y - r * 0.4, r * 0.18); ctx.fillStyle = "rgba(255,255,255,0.8)"; ctx.fill(); }
+    for (const f of fx) {
+      const k = f.t / f.life; ctx.globalAlpha = 1 - k;
+      if (f.kind === "burst") { for (let i = 0; i < 8; i++) { const a = i * TAU / 8; star(f.x + Math.cos(a) * k * 30, f.y + Math.sin(a) * k * 30, 4, 0); ctx.fillStyle = "#ffcf2a"; ctx.fill(); } }
+      if (f.kind === "splat") { for (let i = 0; i < 10; i++) { const a = i * TAU / 10; circ(f.x + Math.cos(a) * k * 26, f.y + Math.sin(a) * k * 26, 4); ctx.fillStyle = i % 2 ? "#e83a5a" : "#fff"; ctx.fill(); } }
+    }
+    ctx.globalAlpha = 1;
+    // the swipe trail
+    if (trail.length > 1) { ctx.strokeStyle = "rgba(255,255,255,0.9)"; ctx.lineWidth = 4; ctx.beginPath(); trail.forEach((p, i) => (i ? ctx.lineTo(p.x, p.y) : ctx.moveTo(p.x, p.y))); ctx.stroke(); ctx.strokeStyle = "rgba(255,120,160,0.6)"; ctx.lineWidth = 1.5; ctx.stroke(); }
+    if (w.state === "lost") { ctx.fillStyle = "rgba(255,255,255,0.4)"; ctx.fillRect(0, 0, 360, 560); ctx.fillStyle = "#c83a5a"; ctx.font = "900 26px system-ui"; ctx.textAlign = "center"; ctx.fillText(w.why === "spikes" ? "AHIA, LE SPINE!" : "CARAMELLA PERSA!", 180, 260); ctx.font = "700 14px system-ui"; ctx.fillText("si riprova…", 180, 286); }
+    ctx.restore();
+  }
+  function draw() {
+    ctx.setTransform(pxRatio, 0, 0, pxRatio, 0, 0);
+    const g = ctx.createLinearGradient(0, 0, 0, H); g.addColorStop(0, "#3a2a4a"); g.addColorStop(1, "#1e1428"); ctx.fillStyle = g; ctx.fillRect(0, 0, W, H);
+    if (!world) return;
+    drawWorld();
+    // HUD
+    const L = LEVELS[li], got = world.stars.filter((s) => s.got).length;
+    ctx.textBaseline = "middle"; ctx.fillStyle = "#fff";
+    if (portrait) {
+      ctx.textAlign = "center"; ctx.font = "800 14px system-ui"; ctx.fillText(`${li + 1}. ${L.name}`, W / 2, 22);
+      ctx.font = "700 11px system-ui"; ctx.fillStyle = "#e8d0f0"; ctx.fillText(single ? "allenamento" : `${nf(score)} punti${retries ? ` · tentativo ${retries + 1}` : ""}`, W / 2, 42);
+      for (let i = 0; i < 3; i++) { star(W - 74 + i * 22, 32, 9, 0); ctx.fillStyle = i < got ? "#ffcf2a" : "rgba(255,255,255,0.2)"; ctx.fill(); }
+    } else {
+      const lx = 12, rx = V.x + 360 * V.s + 16;
+      ctx.textAlign = "left"; ctx.font = "800 11px system-ui"; ctx.fillStyle = "#c8a8e0"; ctx.fillText(`LIVELLO ${li + 1} / ${LEVELS.length}`, lx, 24);
+      ctx.fillStyle = "#fff"; ctx.font = "800 16px system-ui"; wrapText(L.name, lx, 46, V.x - 24, 19);
+      ctx.font = "700 12px system-ui"; ctx.fillStyle = "#e8d0f0"; ctx.fillText(single ? "allenamento" : `${nf(score)} punti`, lx, 100);
+      if (retries) ctx.fillText(`tentativo ${retries + 1}`, lx, 118);
+      for (let i = 0; i < 3; i++) { star(rx + 14 + i * 30, 30, 12, 0); ctx.fillStyle = i < got ? "#ffcf2a" : "rgba(255,255,255,0.2)"; ctx.fill(); }
+      ctx.fillStyle = "#a890c0"; ctx.font = "600 10px system-ui";
+      wrapText(touchMode ? "Striscia il dito sulle corde per tagliarle; tocca la bolla per farla scoppiare." : "Trascina il mouse sulle corde per tagliarle; clicca la bolla per farla scoppiare. R ricomincia.", rx, 70, W - rx - 10, 13);
+      ctx.fillStyle = "#a890c0"; wrapText(world.autopins.length ? "Il chiodo viola aggancia la caramella quando passa nel suo cerchio." : world.bubbles.length ? "Nella bolla la caramella sale: falla scoppiare al momento giusto." : world.spikes.length ? "Attenti alle spine: rompono la caramella." : "Prendi le tre stelle prima di dare la caramella al riccio.", lx, 150, V.x - 24, 13);
+    }
+    const B = RESTART; circ(B.x, B.y, B.r); ctx.fillStyle = "rgba(255,255,255,0.12)"; ctx.fill(); ctx.strokeStyle = "rgba(255,255,255,0.5)"; ctx.lineWidth = 2; ctx.stroke();
+    ctx.strokeStyle = "#fff"; ctx.lineWidth = 2.5; ctx.beginPath(); ctx.arc(B.x, B.y, B.r * 0.45, -0.3, Math.PI * 1.5); ctx.stroke(); ctx.fillStyle = "#fff"; ctx.beginPath(); ctx.moveTo(B.x + B.r * 0.1, B.y - B.r * 0.75); ctx.lineTo(B.x + B.r * 0.1, B.y - B.r * 0.2); ctx.lineTo(B.x - B.r * 0.35, B.y - B.r * 0.48); ctx.closePath(); ctx.fill();
+  }
+  function wrapText(t, x, y, w, lh) { const words = t.split(" "); let line = "", yy = y; for (const wd of words) { const tt = line ? line + " " + wd : wd; if (ctx.measureText(tt).width > w && line) { ctx.fillText(line, x, yy); line = wd; yy += lh; } else line = tt; } ctx.fillText(line, x, yy); }
+
+  // ---------- Menus ----------
+  function showOverlay(html) { overlay.innerHTML = html; overlay.classList.remove("hidden"); }
+  function difficultyHTML() {
+    const buttons = DIFF_IDS.map((id) => { const d = DIFFICULTIES[id]; return `<button type="button" data-diff="${id}" class="${id === difficulty ? "on" : ""}" style="--c:${d.color}">${d.label}</button>`; }).join("");
+    const best = parseInt(load(bestKey(difficulty)), 10);
+    return `<div class="diff">${buttons}</div><p class="muted">${diff.desc}${best ? ` · Record: ${nf(best)}` : ""}</p>`;
+  }
+  function setDifficulty(id) { if (!DIFFICULTIES[id]) return; difficulty = id; diff = DIFFICULTIES[id]; store(DIFF_KEY, id); if (menu) menu(); }
+  const totalBest = () => LEVELS.reduce((a, _, i) => a + (bestStars[i] || 0), 0);
+  function showTitle() {
+    menu = showTitle; state = "menu";
+    showOverlay(
+      `<h1>RICCIO <span>GOLOSO</span></h1>
+       <p>Il riccio ha una voglia matta di caramelle, ma le caramelle sono appese alle corde. Taglia le corde al momento giusto e falle dondolare, volare e cadere fino alla sua bocca, raccogliendo per strada le tre stelle di ogni livello.</p>
+       <div class="pts">
+         <span><b>Corde</b></span><span>${touchMode ? "striscia il dito" : "trascina il mouse"} sopra una corda per tagliarla; con un solo gesto puoi tagliarne più d'una</span>
+         <span><b>Chiodi viola</b></span><span>agganciano la caramella con una corda nuova quando passa nel loro cerchio</span>
+         <span><b>Bolle e spine</b></span><span>la bolla porta la caramella in alto, ${touchMode ? "toccala" : "cliccala"} per farla scoppiare; le spine rompono la caramella</span>
+       </div>
+       <p class="muted">Stelle raccolte finora: ${totalBest()} / ${LEVELS.length * 3}</p>
+       ${difficultyHTML()}
+       <button class="start" data-start>GIOCA DAL PRIMO LIVELLO</button> <button type="button" data-levels>LIVELLI</button>`);
+    syncControls();
+  }
+  function showLevels() {
+    menu = showLevels; state = "menu";
+    showOverlay(`<h2>LIVELLI</h2><p class="muted">Allenati su un livello per prendere tutte le stelle (non conta per il record).</p>
+      <div class="upgs">${LEVELS.map((L, i) => `<button type="button" class="upg" data-level="${i}"><b>${i + 1}. ${L.name}</b><span>${"★".repeat(bestStars[i] || 0)}${"☆".repeat(3 - (bestStars[i] || 0))}</span></button>`).join("")}</div>
+      <button type="button" data-title>INDIETRO</button>`);
+    syncControls();
+  }
+  function togglePause() {
+    if (state === "play") { pausedFrom = state; state = "paused"; drag = null; showOverlay(`<h2>PAUSA</h2><button class="start" data-resume>CONTINUA</button> <button type="button" data-restart>RICOMINCIA IL LIVELLO</button>`); }
+    else if (state === "paused") { state = pausedFrom; overlay.classList.add("hidden"); lastT = performance.now(); }
+    syncControls();
+  }
+  window.addEventListener("sala:termina", () => { if (state !== "paused") return; overlay.classList.add("hidden"); if (single) { showLevels(); return; } gameOver(false, true); });
+  function syncControls() { pauseBtn.style.display = state === "play" && touchMode ? "block" : "none"; resize(); }
+  pauseBtn.addEventListener("click", () => togglePause());
+  overlay.addEventListener("click", (e) => {
+    const q = (s) => e.target.closest(s); let el;
+    if ((el = q("[data-diff]"))) { setDifficulty(el.dataset.diff); return; }
+    if (q("[data-start]")) { startRun(0, false); return; }
+    if (q("[data-levels]")) { showLevels(); return; }
+    if (q("[data-title]")) { showTitle(); return; }
+    if ((el = q("[data-level]"))) { startRun(+el.dataset.level, true); return; }
+    if (q("[data-next]")) { li++; startLevel(true); return; }
+    if (q("[data-replay]")) { startLevel(true); return; }
+    if (q("[data-resume]")) { togglePause(); return; }
+    if (q("[data-restart]")) { state = "play"; retries++; startLevel(false); return; }
+  });
+
+  // ---------- Input ----------
+  let touchMode = !!(window.matchMedia && matchMedia("(pointer: coarse)").matches);
+  const toGame = (e) => { const rc = canvas.getBoundingClientRect(); return { x: ((e.clientX - rc.left) / rc.width) * W, y: ((e.clientY - rc.top) / rc.height) * H }; };
+  canvas.addEventListener("pointerdown", (e) => {
+    e.preventDefault(); if (state !== "play" || world.state !== "run") return;
+    const p = toGame(e), B = RESTART;
+    if (Math.hypot(p.x - B.x, p.y - B.y) < B.r + 6) { retries++; startLevel(false); return; }
+    const wp = toWorld(p);
+    // a tap on the bubble pops it
+    const bub = world.bubbles.find((b) => b.on);
+    if (bub && Math.hypot(wp.x - bub.x, wp.y - bub.y) < 40) { PHYS.popBubble(world); sfx.pop(); fx.push({ kind: "burst", x: bub.x, y: bub.y, t: 0, life: 0.3 }); }
+    drag = { id: e.pointerId, last: wp }; swipeCuts = 0; trail = [{ x: wp.x, y: wp.y, t: clock }];
+    try { canvas.setPointerCapture(e.pointerId); } catch { /* ignore */ }
+  });
+  canvas.addEventListener("pointermove", (e) => {
+    if (!drag || e.pointerId !== drag.id || state !== "play" || world.state !== "run") return;
+    const wp = toWorld(toGame(e)); swipe(drag.last, wp); drag.last = wp; trail.push({ x: wp.x, y: wp.y, t: clock });
+  });
+  const up = (e) => { if (drag && e.pointerId === drag.id) drag = null; };
+  canvas.addEventListener("pointerup", up); canvas.addEventListener("pointercancel", up);
+  window.addEventListener("keydown", (e) => {
+    const k = e.key.length === 1 ? e.key.toLowerCase() : e.key;
+    if (state === "menu" || state === "over") { if (e.key === "Enter") startRun(0, false); return; }
+    if (state === "between" && e.key === "Enter") { if (single) startLevel(true); else { li++; startLevel(true); } return; }
+    if (k === "p" || k === "Escape") { if (!e.repeat) togglePause(); return; }
+    if (k === "r" && state === "play" && !e.repeat) { retries++; startLevel(false); }
+  });
+  window.addEventListener("blur", () => { if (state === "play") togglePause(); });
+  window.addEventListener("pointerdown", (e) => { if (e.pointerType === "touch" && !touchMode) { touchMode = true; syncControls(); if (menu) menu(); } }, true);
+
+  // ---------- Loop ----------
+  let lastT = performance.now();
+  function frame(now) {
+    const dt = Math.min(0.05, (now - lastT) / 1000); lastT = now;
+    if (state !== "paused") update(dt);
+    draw();
+    requestAnimationFrame(frame);
+  }
+  resize();
+  world = PHYS.create(LEVELS[0]);
+  showTitle();
+  requestAnimationFrame(frame);
+})();
+</script>
+<script src="../../shared/iniziali.js" data-record="riccio-best-" data-kind="score"></script>
+</body>
+</html>

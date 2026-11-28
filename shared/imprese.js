@@ -9,6 +9,11 @@
   "use strict";
   // record key prefix of the game (as in trofei.js) → its feats
   const LIST = {
+    "riccio-best-": [   // riccio-goloso
+      { id: "tutti", name: "Pancia piena", desc: "finisci tutti i dodici livelli in una partita" },
+      { id: "perfetto", name: "Tutte le stelle", desc: "prendi tutte le 36 stelle in una partita" },
+      { id: "doppio", name: "Due in un colpo", desc: "taglia due corde con un gesto solo" },
+    ],
     "dischetto-best-": [   // dal-dischetto
       { id: "incrocio", name: "All'incrocio", desc: "segna un rigore all'incrocio dei pali" },
       { id: "saracinesca", name: "Saracinesca", desc: "para tre rigori nella stessa partita" },
