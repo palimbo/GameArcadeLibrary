@@ -9,6 +9,11 @@
   "use strict";
   // record key prefix of the game (as in trofei.js) → its feats
   const LIST = {
+    "boscaiolo-best-": [   // boscaiolo
+      { id: "cento", name: "Cento colpi", desc: "dai 100 colpi d'ascia in una partita" },
+      { id: "inverno", name: "Fino all'inverno", desc: "taglia fino a vedere la neve (300 colpi)" },
+      { id: "oro", name: "Vena d'oro", desc: "taglia 10 ciocchi d'oro in una partita" },
+    ],
     "buca-best-": [   // buca-golosa
       { id: "torre", name: "Giù la torre", desc: "inghiotti la torre in centro città" },
       { id: "rivale", name: "Pesce grande", desc: "inghiotti una buca rivale" },

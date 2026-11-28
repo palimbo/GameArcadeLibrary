@@ -9,6 +9,7 @@
   "use strict";
   // record key prefix → [bronzo, argento, oro] (and t for times)
   const DATA = {
+    "boscaiolo-best-": [250, 400, 450],   // boscaiolo (bot, da 3 a 7 colpi al secondo)
     "buca-best-": [2000, 3000, 2000],   // buca-golosa (bot)
     "dama-best-": [1500, 1600, 1400],   // dama (stima: vincere con qualche pedina in più)
     "lancio-best-": [15000, 22000, 25000],   // lancio-libero (stima: il bot che vede tutto fa circa 37.000)

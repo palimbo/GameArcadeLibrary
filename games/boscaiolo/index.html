@@ -1,0 +1,392 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no, viewport-fit=cover">
+<title>Boscaiolo</title>
+<style>
+  :root {
+    --bg: #14261a;
+    --fg: #f4f6ee;
+    --muted: #c8d0dc;
+    --gold: #ffcf4a;
+    --red: #ff5a4a;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  html, body {
+    height: 100%;
+    background: var(--bg);
+    color: var(--fg);
+    font-family: system-ui, -apple-system, "Segoe UI", sans-serif;
+    overflow: hidden;
+    user-select: none;
+    -webkit-user-select: none;
+    -webkit-tap-highlight-color: transparent;
+    touch-action: none;
+  }
+  #wrap { position: fixed; inset: 0; display: flex; align-items: center; justify-content: center; }
+  canvas { cursor: pointer; display: block; touch-action: none; border-radius: 6px; box-shadow: 0 0 0 2px #2e3a4e, 0 10px 40px rgba(0,0,0,0.6); }
+  #pauseBtn {
+    position: fixed; z-index: 3; display: none; right: 10px; top: calc(10px + env(safe-area-inset-top, 0px));
+    font: 700 13px system-ui, sans-serif; color: var(--fg);
+    background: rgba(0, 0, 0, 0.6); border: 1px solid rgba(244, 246, 238, 0.35);
+    border-radius: 8px; padding: 6px 10px; cursor: pointer;
+  }
+  #touch { display: none !important; }
+  #overlay {
+    position: fixed; inset: 0; z-index: 5;
+    display: flex; flex-direction: column; align-items: center; justify-content: flex-start;
+    gap: 14px; padding: 16px; text-align: center; overflow-y: auto;
+    background: rgba(20, 26, 36, 0.94);
+  }
+  #overlay > :first-child { margin-top: auto; }
+  #overlay > :last-child { margin-bottom: auto; }
+  #overlay.hidden { display: none; }
+  #homeLink {
+    position: fixed; top: calc(10px + env(safe-area-inset-top, 0px)); left: 10px; z-index: 6;
+    font: 600 13px/1 system-ui, sans-serif; color: #fff; text-decoration: none;
+    padding: 8px 12px; border-radius: 999px; background: rgba(0,0,0,.55);
+    border: 1px solid rgba(255,255,255,.25);
+  }
+  #homeLink:hover { background: rgba(0,0,0,.8); }
+  #overlay.hidden ~ #homeLink { display: none; }
+  @media (max-width: 700px) { #overlay { padding-top: calc(52px + env(safe-area-inset-top, 0px)); } }
+  #overlay h1 { font-size: clamp(32px, 10vw, 58px); font-weight: 900; font-style: italic; letter-spacing: 1px; color: var(--gold);
+    text-shadow: 3px 3px 0 #6a2a12, 0 0 22px rgba(255,210,58,0.35); }
+  #overlay h1 span { color: #fff; }
+  #overlay h2 { font-size: clamp(26px, 7vw, 42px); font-weight: 900; letter-spacing: 2px; color: var(--gold); }
+  #overlay h2.lose { color: var(--red); }
+  #overlay p { max-width: 540px; font-size: clamp(13px, 3.4vw, 16px); line-height: 1.55; }
+  #overlay p.muted { color: var(--muted); }
+  #overlay .pts { display: grid; grid-template-columns: repeat(2, auto); gap: 4px 18px; font-size: 13px; color: var(--muted); text-align: left; max-width: 560px; }
+  #overlay .pts b { color: var(--fg); }
+  #overlay .diff { display: flex; gap: 10px; flex-wrap: wrap; justify-content: center; }
+  #overlay button {
+    font: 800 15px system-ui, sans-serif; letter-spacing: 1.5px; color: var(--fg);
+    background: transparent; cursor: pointer;
+    border: 2px solid rgba(244,246,238,0.3); border-radius: 10px; padding: 9px 16px;
+  }
+  #overlay .diff button.on { border-color: var(--c); color: var(--c); box-shadow: 0 0 12px var(--c); }
+  #overlay button.start { border-color: var(--gold); color: #2a1a02; background: var(--gold); padding: 11px 30px; box-shadow: 0 4px 0 #a87a0a; }
+  #overlay .menuList { display: flex; flex-wrap: wrap; gap: 6px 10px; justify-content: center; max-width: 600px; font-size: 13px; color: var(--muted); }
+  #overlay .menuList span { background: rgba(255,255,255,0.06); border-radius: 8px; padding: 4px 9px; }
+  #overlay .menuList b { color: var(--gold); }
+  #overlay .upgs { display: flex; gap: 10px; flex-wrap: wrap; justify-content: center; }
+  #overlay button.upg { display: flex; flex-direction: column; gap: 3px; width: 170px; text-align: center; letter-spacing: 0.3px; font-size: 13px; }
+  #overlay button.upg span { font-weight: 600; font-size: 12px; color: var(--muted); }
+  #overlay button.upg:disabled { opacity: 0.4; cursor: default; }
+  @media (max-height: 560px) {
+    #overlay { gap: 8px; }
+    #overlay h1 { font-size: 30px; }
+    #overlay p { font-size: 13px; line-height: 1.4; }
+    #overlay .help, #overlay .pts { display: none; }
+    #overlay .menuList { font-size: 11px; gap: 4px; }
+    #overlay button.upg { width: 150px; padding: 6px 10px; }
+  }
+</style>
+</head>
+<body>
+<div id="wrap"><canvas id="game"></canvas></div>
+<div id="touch"></div>
+<button id="pauseBtn" type="button" aria-label="Pausa">❚❚</button>
+<div id="overlay"></div>
+<a id="homeLink" href="../../index.html">← Sala Giochi</a>
+
+
+<script>
+(() => {
+  "use strict";
+
+  const TAU = Math.PI * 2;
+  const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
+  const rnd = (a, b) => a + Math.random() * (b - a);
+  const nf = (n) => Math.floor(n).toLocaleString("it-IT");
+  const feat = (id) => window.dispatchEvent(new CustomEvent("sala:impresa", { detail: id }));
+  function store(k, v) { try { localStorage.setItem(k, v); } catch { /* ignore */ } }
+  function load(k) { try { return localStorage.getItem(k); } catch { return null; } }
+
+  const DIFFICULTIES = {
+    facile:    { label: "FACILE",    color: "#7ee0a0", desc: "il tempo scende piano e i rami sono pochi", drain: 0.75, branch: 0.45 },
+    normale:   { label: "NORMALE",   color: "#ffcf4a", desc: "una giornata di lavoro nel bosco", drain: 1, branch: 0.56 },
+    difficile: { label: "DIFFICILE", color: "#ff5a4a", desc: "il tempo vola e i rami fioccano", drain: 1.28, branch: 0.64 },
+  };
+  const DIFF_IDS = Object.keys(DIFFICULTIES);
+  const DIFF_KEY = "boscaiolo-difficulty";
+  const bestKey = (id) => `boscaiolo-best-${id}`;
+  let difficulty = DIFFICULTIES[load(DIFF_KEY)] ? load(DIFF_KEY) : "normale";
+  let diff = DIFFICULTIES[difficulty];
+
+  const SEASONS = [
+    { name: "Primavera", sky: ["#8ad0f8", "#e0f4ff"], hills: ["#5ab85a", "#4aa04a"], leaf: ["#5ac84a", "#3aa83a"], ground: "#6ac85a", flower: "#ff8ac8" },
+    { name: "Estate", sky: ["#5ab0f0", "#c8ecff"], hills: ["#3a9a3a", "#2a8a3a"], leaf: ["#2a9a2a", "#1a7a2a"], ground: "#5ab04a", flower: "#ffe04a" },
+    { name: "Autunno", sky: ["#f0b070", "#ffe8c0"], hills: ["#c8782a", "#a85a2a"], leaf: ["#f08a2a", "#d85a1a"], ground: "#a8883a", flower: "#ff5a3a" },
+    { name: "Inverno", sky: ["#9ab0c8", "#e8f0f8"], hills: ["#e8f0f8", "#c8d8e8"], leaf: ["#e8f4ff", "#b8d0e8"], ground: "#f0f6fc", flower: "#8ad0ff" },
+  ];
+  const FEVER_EVERY = 50, FEVER_TIME = 5;
+
+  // ---------- Canvas ----------
+  const canvas = document.getElementById("game"), ctx = canvas.getContext("2d");
+  const overlay = document.getElementById("overlay"), pauseBtn = document.getElementById("pauseBtn");
+  let W = 640, H = 360, portrait = false, pxRatio = 1, SEG = 46, TW = 56, GROUND = 300;
+  function resize() {
+    portrait = window.innerHeight > window.innerWidth * 1.05;
+    W = portrait ? 360 : 640; H = portrait ? 640 : 360;
+    const s = Math.max(0.2, Math.min((window.innerWidth - 4) / W, (window.innerHeight - 4) / H));
+    pxRatio = Math.min(3, s * (window.devicePixelRatio || 1));
+    canvas.style.width = W * s + "px"; canvas.style.height = H * s + "px";
+    canvas.width = Math.round(W * pxRatio); canvas.height = Math.round(H * pxRatio);
+    SEG = portrait ? 70 : 46; TW = portrait ? 66 : 54; GROUND = portrait ? H - 110 : H - 50;
+  }
+  window.addEventListener("resize", () => syncControls());
+
+  // ---------- Sound ----------
+  let audioCtx = null;
+  function tone(freq, dur, type = "square", vol = 0.03, delay = 0, slide = 0) {
+    if (!audioCtx) return;
+    const t = audioCtx.currentTime + delay, o = audioCtx.createOscillator(), g = audioCtx.createGain();
+    o.type = type; o.frequency.setValueAtTime(freq, t); if (slide) o.frequency.exponentialRampToValueAtTime(slide, t + dur);
+    g.gain.setValueAtTime(0.0001, t); g.gain.exponentialRampToValueAtTime(vol, t + 0.005); g.gain.exponentialRampToValueAtTime(0.0001, t + dur);
+    o.connect(g).connect(audioCtx.destination); o.start(t); o.stop(t + dur + 0.02);
+  }
+  function noise(dur, freq, vol) { if (!audioCtx) return; const t = audioCtx.currentTime, n = Math.floor(audioCtx.sampleRate * dur), b = audioCtx.createBuffer(1, n, audioCtx.sampleRate), d = b.getChannelData(0); for (let i = 0; i < n; i++) d[i] = (Math.random() * 2 - 1) * Math.pow(1 - i / n, 3); const s = audioCtx.createBufferSource(), f = audioCtx.createBiquadFilter(), g = audioCtx.createGain(); s.buffer = b; f.type = "lowpass"; f.frequency.value = freq; g.gain.value = vol; s.connect(f).connect(g).connect(audioCtx.destination); s.start(t); }
+  const sfx = {
+    chop: () => { noise(0.08, 2200, 0.25); tone(180 + Math.random() * 40, 0.07, "triangle", 0.06); },
+    gold: () => { tone(1568, 0.12, "triangle", 0.05); tone(2093, 0.2, "triangle", 0.04, 0.06); },
+    crash: () => { noise(0.5, 600, 0.35); tone(120, 0.5, "sawtooth", 0.06, 0, 50); },
+    fever: () => [523, 659, 784, 1047, 1319].forEach((f, i) => tone(f, 0.12, "square", 0.03, i * 0.05)),
+    season: () => [392, 523, 659].forEach((f, i) => tone(f, 0.2, "triangle", 0.04, i * 0.1)),
+    warn: () => tone(880, 0.05, "square", 0.02),
+  };
+
+  // ---------- State ----------
+  let state = "menu", menu = null, pausedFrom = null, clock = 0;
+  let segs = [], side = -1, timer = 0.6, score = 0, chops = 0, golds = 0, fever = 0, feverCount = 0, season = 0, started = false;
+  let swing = 0, drop = 0, flying = [], chips = [], texts = [], dead = 0, warnT = 0, snow = [], lastBranch = 0;
+  function newSeg() {
+    // never two branches in a row on opposite sides right after each other is fine (always solvable): each piece has at most one
+    let b = 0;
+    if (segs.length > 2 && lastBranch === 0 && Math.random() < diff.branch + Math.min(0.15, chops * 0.0006)) b = Math.random() < 0.5 ? -1 : 1;
+    else if (segs.length > 2 && lastBranch !== 0 && Math.random() < 0.25) b = lastBranch; // same side twice: a little breather
+    lastBranch = b;
+    return { b, gold: b === 0 && Math.random() < 0.06, knot: Math.random() };
+  }
+  function startGame() {
+    if (!audioCtx) { try { audioCtx = new (window.AudioContext || window.webkitAudioContext)(); } catch { audioCtx = null; } }
+    if (audioCtx && audioCtx.state === "suspended") audioCtx.resume();
+    segs = []; lastBranch = 0; for (let i = 0; i < 14; i++) segs.push(newSeg());
+    side = -1; timer = 0.6; score = 0; chops = 0; golds = 0; fever = 0; feverCount = 0; season = 0; started = false;
+    swing = 0; drop = 0; flying = []; chips = []; texts = []; dead = 0;
+    state = "play"; menu = null; overlay.classList.add("hidden"); syncControls();
+  }
+  function chop(s) {
+    if (state !== "play" || dead) return;
+    started = true; side = s; swing = 0.14;
+    // walking into a branch at your own height
+    if (segs[0].b === s && !fever) { die(); return; }
+    const seg = segs.shift(); segs.push(newSeg()); drop = 1;
+    flying.push({ x: W / 2, y: GROUND - SEG / 2, vx: -s * rnd(260, 360), vy: -rnd(120, 220), rot: 0, vr: -s * rnd(8, 14), seg, t: 0 });
+    for (let i = 0; i < 8; i++) chips.push({ x: W / 2 + s * TW / 2, y: GROUND - SEG / 2, vx: s * rnd(40, 160), vy: -rnd(60, 220), t: 0, life: rnd(0.4, 0.8), c: i % 2 ? "#e8c890" : "#a87a4a" });
+    chops++;
+    let pts = fever ? 2 : 1;
+    if (seg.gold) { pts += 5; golds++; sfx.gold(); texts.push({ x: W / 2 - s * 70, y: GROUND - SEG - 20, text: "+5 ORO", c: "#ffe060", t: 0 }); if (golds === 10) feat("oro"); }
+    else sfx.chop();
+    score += pts;
+    timer = Math.min(1, timer + Math.max(0.028, 0.05 - chops * 0.00005));
+    if (chops === 100) feat("cento");
+    if (!fever) feverCount++;
+    if (feverCount >= FEVER_EVERY) { feverCount = 0; fever = FEVER_TIME; sfx.fever(); texts.push({ x: W / 2, y: H * 0.3, text: "BOSCO IN FIORE! ×2", c: "#ff8ac8", t: 0, big: true }); }
+    const ns = Math.min(3, Math.floor(chops / 100)); if (ns !== season) { season = ns; sfx.season(); texts.push({ x: W / 2, y: H * 0.22, text: SEASONS[ns].name.toUpperCase(), c: "#fff", t: 0, big: true }); if (ns === 3) feat("inverno"); }
+    // crushed by the branch coming down
+    if (segs[0].b === s && !fever) die();
+  }
+  function die() {
+    dead = 0.001; sfx.crash();
+    setTimeout(() => gameOver(), 1200);
+  }
+  function gameOver(quit = false) {
+    if (state === "over") return;
+    state = "over";
+    const prev = parseInt(load(bestKey(difficulty)), 10) || 0, record = !quit && score > prev;
+    if (record) store(bestKey(difficulty), String(score));
+    menu = () => showOverlay(
+      `<h2 class="lose">${quit ? "PAUSA PRANZO" : timer <= 0 ? "TEMPO SCADUTO" : "UN RAMO IN TESTA!"}</h2>
+       <p>${quit ? "L'ascia torna sulla spalla." : `${chops} colpi d'ascia, ${golds} ${golds === 1 ? "ciocco d'oro" : "ciocchi d'oro"}, stagione raggiunta: ${SEASONS[season].name.toLowerCase()}.`}</p>
+       <p>Punti: <b>${nf(score)}</b> · ${diff.label}</p>
+       ${record ? "<p style='color:var(--gold)'>★ NUOVO RECORD! ★</p>" : ""}
+       ${difficultyHTML()}
+       <button class="start" data-start>UN ALTRO ALBERO</button>`);
+    menu(); syncControls();
+  }
+
+  // ---------- Update ----------
+  function update(dt) {
+    clock += dt;
+    swing = Math.max(0, swing - dt); drop = Math.max(0, drop - dt * 14);
+    for (const f of flying) { f.t += dt; f.x += f.vx * dt; f.y += f.vy * dt; f.vy += 900 * dt; f.rot += f.vr * dt; } flying = flying.filter((f) => f.t < 1.5);
+    for (const c of chips) { c.t += dt; c.x += c.vx * dt; c.y += c.vy * dt; c.vy += 700 * dt; } chips = chips.filter((c) => c.t < c.life);
+    for (const t of texts) t.t += dt; texts = texts.filter((t) => t.t < (t.big ? 1.8 : 1));
+    if (season === 3) { if (snow.length < 80) snow.push({ x: rnd(0, W), y: -5, v: rnd(20, 50), s: rnd(1, 2.5) }); for (const f of snow) { f.y += f.v * dt; f.x += Math.sin(clock + f.v) * 10 * dt; } snow = snow.filter((f) => f.y < H); } else snow = [];
+    if (state !== "play") return;
+    if (dead) { dead += dt; return; }
+    if (!started) return;
+    if (fever > 0) { fever -= dt; if (fever <= 0) { fever = 0; if (segs[0].b === side) segs[0].b = 0; } }
+    timer -= dt * diff.drain * (0.09 + Math.min(0.2, chops * 0.00045)) * (fever > 0 ? 0.4 : 1);
+    if (timer < 0.22) { warnT -= dt; if (warnT <= 0) { sfx.warn(); warnT = 0.3; } }
+    if (timer <= 0) { timer = 0; die(); }
+  }
+
+  // ---------- Drawing ----------
+  function circ(x, y, r) { ctx.beginPath(); ctx.arc(x, y, r, 0, TAU); }
+  function rr(x, y, w, h, r) { ctx.beginPath(); ctx.roundRect(x, y, w, h, r); }
+  function drawSegment(x, y, seg, rot = 0) {
+    // y is the bottom of the piece
+    ctx.save(); ctx.translate(x, y - SEG / 2); ctx.rotate(rot);
+    const w = TW, h = SEG + 1;
+    ctx.fillStyle = seg.gold ? "#d8a02a" : "#8a5a32"; ctx.fillRect(-w / 2, -h / 2, w, h);
+    ctx.fillStyle = seg.gold ? "#f0c84a" : "#a06a3a"; ctx.fillRect(-w / 2 + 6, -h / 2, w * 0.3, h);
+    ctx.strokeStyle = seg.gold ? "rgba(120,70,0,0.5)" : "rgba(50,30,15,0.45)"; ctx.lineWidth = 2;
+    for (let i = 0; i < 3; i++) { const xx = -w / 2 + 8 + ((seg.knot * 37 + i * 17) % (w - 16)); ctx.beginPath(); ctx.moveTo(xx, -h / 2); ctx.lineTo(xx + 2, h / 2); ctx.stroke(); }
+    if (seg.knot > 0.6) { ctx.beginPath(); ctx.ellipse(-w * 0.1, 0, 5, 7, 0, 0, TAU); ctx.stroke(); }
+    if (seg.gold) { ctx.globalAlpha = 0.4 + 0.3 * Math.sin(clock * 8); ctx.fillStyle = "#fff8c0"; ctx.fillRect(-w / 2, -h / 2, w, h); ctx.globalAlpha = 1; }
+    ctx.strokeStyle = "#3a2210"; ctx.lineWidth = 2; ctx.strokeRect(-w / 2, -h / 2, w, h);
+    ctx.restore();
+  }
+  function drawBranch(x, y, s, flower) {
+    const S = SEASONS[season], len = portrait ? 96 : 82, by = y - SEG * 0.55;
+    ctx.fillStyle = "#6a4022"; ctx.strokeStyle = "#3a2210"; ctx.lineWidth = 2;
+    ctx.beginPath(); ctx.moveTo(x + s * TW / 2 - s * 2, by - 7); ctx.lineTo(x + s * (TW / 2 + len), by - 3); ctx.lineTo(x + s * (TW / 2 + len), by + 3); ctx.lineTo(x + s * TW / 2 - s * 2, by + 7); ctx.closePath(); ctx.fill(); ctx.stroke();
+    const lx = x + s * (TW / 2 + len - 14);
+    for (const [dx, dy, r] of [[0, -10, 16], [-s * 18, -6, 12], [s * 10, -2, 12], [0, 2, 11]]) { circ(lx + dx, by + dy, r); ctx.fillStyle = flower ? "#ffd0e8" : S.leaf[(dx + dy) % 2 ? 1 : 0]; ctx.fill(); }
+    if (flower) for (let i = 0; i < 6; i++) { circ(lx + Math.cos(i) * 12, by - 6 + Math.sin(i * 2) * 8, 3.5); ctx.fillStyle = S.flower; ctx.fill(); }
+  }
+  function drawLumberjack() {
+    const x = W / 2 + side * (TW / 2 + (portrait ? 46 : 40)), y = GROUND, f = -side; // faces the trunk
+    ctx.save(); ctx.translate(x, y);
+    if (dead) { ctx.scale(1.3, 0.35); }
+    ctx.scale(f, 1);
+    const sw = swing > 0 ? swing / 0.14 : 0;
+    // legs, body, head, beard, cap
+    ctx.fillStyle = "#3a4a7a"; ctx.fillRect(-10, -26, 8, 26); ctx.fillRect(2, -26, 8, 26);
+    ctx.fillStyle = "#2a1a10"; ctx.fillRect(-12, -4, 11, 4); ctx.fillRect(1, -4, 11, 4);
+    rr(-14, -56, 28, 32, 6); ctx.fillStyle = "#c8302a"; ctx.fill();
+    ctx.strokeStyle = "rgba(40,10,10,0.55)"; ctx.lineWidth = 2; for (let i = -10; i <= 10; i += 7) { ctx.beginPath(); ctx.moveTo(i, -56); ctx.lineTo(i, -24); ctx.stroke(); } ctx.beginPath(); ctx.moveTo(-14, -44); ctx.lineTo(14, -44); ctx.moveTo(-14, -34); ctx.lineTo(14, -34); ctx.stroke();
+    circ(0, -66, 11); ctx.fillStyle = "#ffcf9a"; ctx.fill();
+    ctx.fillStyle = "#7a3a1a"; ctx.beginPath(); ctx.moveTo(-9, -66); ctx.quadraticCurveTo(0, -46, 11, -64); ctx.lineTo(8, -60); ctx.quadraticCurveTo(0, -56, -6, -62); ctx.closePath(); ctx.fill();
+    ctx.fillStyle = "#1a1a1a"; circ(5, -69, 1.6); ctx.fill();
+    rr(-12, -82, 24, 10, 4); ctx.fillStyle = "#2a5a3a"; ctx.fill(); ctx.fillRect(-2, -74, 16, 3);
+    // the axe: raised, then swung towards the trunk
+    ctx.save(); ctx.translate(6, -46); ctx.rotate(-2.2 + (1 - sw) * 0 + (swing > 0 ? (1 - sw) * 2.6 : 0) + (swing > 0 ? 0 : 0.2));
+    ctx.fillStyle = "#8a5a2a"; ctx.fillRect(-2, -34, 4, 36);
+    ctx.fillStyle = "#c8ccd4"; ctx.beginPath(); ctx.moveTo(2, -34); ctx.lineTo(16, -38); ctx.lineTo(18, -22); ctx.lineTo(2, -24); ctx.closePath(); ctx.fill(); ctx.strokeStyle = "#5a5a62"; ctx.lineWidth = 1.5; ctx.stroke();
+    ctx.restore();
+    circ(8, -44, 5); ctx.fillStyle = "#ffcf9a"; ctx.fill();
+    ctx.restore();
+    if (dead) { ctx.fillStyle = "#ffe060"; for (let i = 0; i < 3; i++) { const a = clock * 4 + i * 2.1; ctx.font = "900 14px system-ui"; ctx.textAlign = "center"; ctx.fillText("★", x + Math.cos(a) * 20, y - 24 + Math.sin(a) * 6); } }
+  }
+  function draw() {
+    ctx.setTransform(pxRatio, 0, 0, pxRatio, 0, 0);
+    const S = SEASONS[season];
+    const g = ctx.createLinearGradient(0, 0, 0, H); g.addColorStop(0, S.sky[0]); g.addColorStop(1, S.sky[1]); ctx.fillStyle = g; ctx.fillRect(0, 0, W, H);
+    // hills and background trees
+    for (let l = 0; l < 2; l++) { ctx.fillStyle = S.hills[l]; ctx.beginPath(); ctx.moveTo(0, H); for (let x = 0; x <= W; x += 20) ctx.lineTo(x, GROUND - 60 + l * 30 - Math.sin(x / (90 - l * 30) + l * 2) * (24 - l * 8)); ctx.lineTo(W, H); ctx.closePath(); ctx.fill(); }
+    for (let i = 0; i < 9; i++) { const x = (i * 97 + 30) % W, h = 50 + (i * 37) % 40; if (Math.abs(x - W / 2) < 90) continue; ctx.fillStyle = "rgba(40,60,40,0.35)"; ctx.beginPath(); ctx.moveTo(x, GROUND - 10 - h); ctx.lineTo(x + 18, GROUND - 10); ctx.lineTo(x - 18, GROUND - 10); ctx.closePath(); ctx.fill(); }
+    ctx.fillStyle = S.ground; ctx.fillRect(0, GROUND, W, H - GROUND);
+    ctx.fillStyle = "rgba(0,0,0,0.08)"; ctx.fillRect(0, GROUND, W, 4);
+    // stump base and the trunk (sliding down after each chop)
+    const off = drop * SEG;
+    ctx.fillStyle = "#6a4022"; ctx.beginPath(); ctx.ellipse(W / 2, GROUND + 4, TW * 0.75, 8, 0, 0, TAU); ctx.fill();
+    for (let i = segs.length - 1; i >= 0; i--) {
+      const y = GROUND - i * SEG - off; if (y < -SEG) continue;
+      drawSegment(W / 2, y, segs[i]);
+      if (segs[i].b) drawBranch(W / 2, y, segs[i].b, fever > 0);
+    }
+    for (const f of flying) { drawSegment(f.x, f.y + SEG / 2, f.seg, f.rot); }
+    drawLumberjack();
+    for (const c of chips) { ctx.globalAlpha = 1 - c.t / c.life; ctx.fillStyle = c.c; ctx.fillRect(c.x, c.y, 4, 3); }
+    ctx.globalAlpha = 1;
+    ctx.fillStyle = "#fff"; for (const f of snow) { circ(f.x, f.y, f.s); ctx.fill(); }
+    // timer bar and score
+    const bw = portrait ? 260 : 300, bx = W / 2 - bw / 2, by = portrait ? 56 : 14;
+    rr(bx - 4, by - 4, bw + 8, 22, 8); ctx.fillStyle = "rgba(30,20,10,0.6)"; ctx.fill();
+    const tc = fever > 0 ? "#ff8ac8" : timer > 0.4 ? "#7ae05a" : timer > 0.22 ? "#ffcf4a" : "#ff4a3a";
+    rr(bx, by, bw * clamp(timer, 0, 1), 14, 6); ctx.fillStyle = tc; ctx.fill();
+    ctx.fillStyle = "#fff"; ctx.textAlign = "center"; ctx.textBaseline = "middle"; ctx.font = "900 34px system-ui";
+    ctx.lineWidth = 5; ctx.strokeStyle = "rgba(30,20,10,0.6)"; ctx.strokeText(nf(score), W / 2, by + 48); ctx.fillText(nf(score), W / 2, by + 48);
+    ctx.font = "800 11px system-ui"; ctx.fillStyle = "rgba(255,255,255,0.9)"; ctx.strokeText(SEASONS[season].name, W / 2, by + 74); ctx.fillText(SEASONS[season].name, W / 2, by + 74);
+    if (state === "play" && !started) {
+      ctx.font = "800 14px system-ui"; ctx.fillStyle = "#fff"; ctx.strokeText(touchMode ? "tocca a sinistra o a destra del tronco" : "← → per tagliare", W / 2, H * 0.5); ctx.fillText(touchMode ? "tocca a sinistra o a destra del tronco" : "← → per tagliare", W / 2, H * 0.5);
+      ctx.font = "900 28px system-ui"; ctx.fillText("◀", W / 2 - (portrait ? 120 : 160), H * 0.62); ctx.fillText("▶", W / 2 + (portrait ? 120 : 160), H * 0.62);
+    }
+    for (const t of texts) { const life = t.big ? 1.8 : 1; ctx.globalAlpha = Math.min(1, (life - t.t) * 2); ctx.font = `900 ${t.big ? 24 : 15}px system-ui`; ctx.lineWidth = 5; ctx.strokeStyle = "rgba(30,20,10,0.7)"; ctx.strokeText(t.text, t.x, t.y - t.t * 20); ctx.fillStyle = t.c; ctx.fillText(t.text, t.x, t.y - t.t * 20); }
+    ctx.globalAlpha = 1; ctx.textAlign = "left";
+  }
+
+  // ---------- Menus ----------
+  function showOverlay(html) { overlay.innerHTML = html; overlay.classList.remove("hidden"); }
+  function difficultyHTML() {
+    const buttons = DIFF_IDS.map((id) => { const d = DIFFICULTIES[id]; return `<button type="button" data-diff="${id}" class="${id === difficulty ? "on" : ""}" style="--c:${d.color}">${d.label}</button>`; }).join("");
+    const best = parseInt(load(bestKey(difficulty)), 10);
+    return `<div class="diff">${buttons}</div><p class="muted">${diff.desc}${best ? ` · Record: ${nf(best)}` : ""}</p>`;
+  }
+  function setDifficulty(id) { if (!DIFFICULTIES[id]) return; difficulty = id; diff = DIFFICULTIES[id]; store(DIFF_KEY, id); if (menu) menu(); }
+  function showTitle() {
+    menu = showTitle; state = "menu";
+    showOverlay(
+      `<h1>BOSCAI<span>OLO</span></h1>
+       <p>Un tronco altissimo e un'ascia ben affilata. Ogni colpo stacca un ciocco e l'albero scende di un pezzo: mettiti dal lato giusto, perché i rami scendono con lui e un ramo in testa fa male. Il tempo scorre sempre, e ogni colpo te ne ridà un po'.</p>
+       <div class="pts">
+         <span><b>Tagliare</b></span><span>${touchMode ? "tocca a sinistra o a destra del tronco" : "← e → (o A e D)"}: il boscaiolo passa da quella parte e taglia</span>
+         <span><b>Rami</b></span><span>non metterti mai sotto un ramo che scende, e non andarci contro</span>
+         <span><b>Premi</b></span><span>i ciocchi d'oro valgono 5; ogni 50 colpi il bosco fiorisce: per 5 secondi i rami sono fiori innocui, il tempo rallenta e i punti valgono doppio. Ogni 100 colpi cambia la stagione</span>
+       </div>
+       <p class="muted help">${touchMode ? "" : "P pausa."}</p>
+       ${difficultyHTML()}
+       <button class="start" data-start>AL BOSCO</button>`);
+    syncControls();
+  }
+  function togglePause() {
+    if (state === "play" && !dead) { pausedFrom = state; state = "paused"; showOverlay(`<h2>PAUSA</h2><button class="start" data-resume>CONTINUA</button>`); }
+    else if (state === "paused") { state = pausedFrom; overlay.classList.add("hidden"); lastT = performance.now(); }
+    syncControls();
+  }
+  window.addEventListener("sala:termina", () => { if (state !== "paused") return; overlay.classList.add("hidden"); gameOver(true); });
+  function syncControls() { pauseBtn.style.display = state === "play" && touchMode ? "block" : "none"; resize(); }
+  pauseBtn.addEventListener("click", () => togglePause());
+  overlay.addEventListener("click", (e) => {
+    const q = (s) => e.target.closest(s); let el;
+    if ((el = q("[data-diff]"))) { setDifficulty(el.dataset.diff); return; }
+    if (q("[data-start]")) { startGame(); return; }
+    if (q("[data-resume]")) { togglePause(); return; }
+  });
+
+  // ---------- Input ----------
+  let touchMode = !!(window.matchMedia && matchMedia("(pointer: coarse)").matches);
+  canvas.addEventListener("pointerdown", (e) => { e.preventDefault(); const rc = canvas.getBoundingClientRect(), x = ((e.clientX - rc.left) / rc.width) * W; chop(x < W / 2 ? -1 : 1); });
+  window.addEventListener("keydown", (e) => {
+    const k = e.key.length === 1 ? e.key.toLowerCase() : e.key;
+    if (state === "menu" || state === "over") { if (e.key === "Enter") startGame(); return; }
+    if (k === "p" || k === "Escape") { if (!e.repeat) togglePause(); return; }
+    if (e.repeat) return;
+    if (k === "ArrowLeft" || k === "a") { e.preventDefault(); chop(-1); }
+    if (k === "ArrowRight" || k === "d") { e.preventDefault(); chop(1); }
+  });
+  window.addEventListener("blur", () => { if (state === "play" && started) togglePause(); });
+  window.addEventListener("pointerdown", (e) => { if (e.pointerType === "touch" && !touchMode) { touchMode = true; syncControls(); if (menu) menu(); } }, true);
+
+  // ---------- Loop ----------
+  let lastT = performance.now();
+  function frame(now) {
+    const dt = Math.min(0.05, (now - lastT) / 1000); lastT = now;
+    if (state !== "paused") update(dt);
+    draw();
+    requestAnimationFrame(frame);
+  }
+  resize();
+  for (let i = 0; i < 14; i++) segs.push(newSeg());
+  showTitle();
+  requestAnimationFrame(frame);
+})();
+</script>
+<script src="../../shared/iniziali.js" data-record="boscaiolo-best-" data-kind="score"></script>
+</body>
+</html>
