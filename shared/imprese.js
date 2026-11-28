@@ -9,6 +9,11 @@
   "use strict";
   // record key prefix of the game (as in trofei.js) → its feats
   const LIST = {
+    "dama-best-": [   // dama
+      { id: "dama", name: "Fai dama", desc: "porta una pedina fino in fondo alla scacchiera" },
+      { id: "retata", name: "Retata", desc: "prendi almeno tre pezzi in una mossa sola" },
+      { id: "campione", name: "Batti il Campione", desc: "vinci una partita a Difficile" },
+    ],
     "lancio-best-": [   // lancio-libero
       { id: "centro", name: "Nel mezzo", desc: "atterra nel centro del bersaglio" },
       { id: "anelli", name: "Collana di anelli", desc: "prendi tutti gli anelli di un lancio" },

@@ -1,0 +1,505 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no, viewport-fit=cover">
+<title>Dama</title>
+<style>
+  :root {
+    --bg: #22160e;
+    --fg: #f4f6ee;
+    --muted: #c8d0dc;
+    --gold: #f0c060;
+    --red: #ff5a4a;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  html, body {
+    height: 100%;
+    background: var(--bg);
+    color: var(--fg);
+    font-family: system-ui, -apple-system, "Segoe UI", sans-serif;
+    overflow: hidden;
+    user-select: none;
+    -webkit-user-select: none;
+    -webkit-tap-highlight-color: transparent;
+    touch-action: none;
+  }
+  #wrap { position: fixed; inset: 0; display: flex; align-items: center; justify-content: center; }
+  canvas { cursor: pointer; display: block; touch-action: none; border-radius: 6px; box-shadow: 0 0 0 2px #2e3a4e, 0 10px 40px rgba(0,0,0,0.6); }
+  #pauseBtn {
+    position: fixed; z-index: 3; display: none; right: 10px; top: calc(10px + env(safe-area-inset-top, 0px));
+    font: 700 13px system-ui, sans-serif; color: var(--fg);
+    background: rgba(0, 0, 0, 0.6); border: 1px solid rgba(244, 246, 238, 0.35);
+    border-radius: 8px; padding: 6px 10px; cursor: pointer;
+  }
+  #touch { display: none !important; }
+  #overlay {
+    position: fixed; inset: 0; z-index: 5;
+    display: flex; flex-direction: column; align-items: center; justify-content: flex-start;
+    gap: 14px; padding: 16px; text-align: center; overflow-y: auto;
+    background: rgba(20, 26, 36, 0.94);
+  }
+  #overlay > :first-child { margin-top: auto; }
+  #overlay > :last-child { margin-bottom: auto; }
+  #overlay.hidden { display: none; }
+  #homeLink {
+    position: fixed; top: calc(10px + env(safe-area-inset-top, 0px)); left: 10px; z-index: 6;
+    font: 600 13px/1 system-ui, sans-serif; color: #fff; text-decoration: none;
+    padding: 8px 12px; border-radius: 999px; background: rgba(0,0,0,.55);
+    border: 1px solid rgba(255,255,255,.25);
+  }
+  #homeLink:hover { background: rgba(0,0,0,.8); }
+  #overlay.hidden ~ #homeLink { display: none; }
+  @media (max-width: 700px) { #overlay { padding-top: calc(52px + env(safe-area-inset-top, 0px)); } }
+  #overlay h1 { font-size: clamp(32px, 10vw, 58px); font-weight: 900; font-style: italic; letter-spacing: 1px; color: var(--gold);
+    text-shadow: 3px 3px 0 #6a1a1a, 0 0 22px rgba(255,210,58,0.35); }
+  #overlay h1 span { color: #fff; }
+  #overlay h2 { font-size: clamp(26px, 7vw, 42px); font-weight: 900; letter-spacing: 2px; color: var(--gold); }
+  #overlay h2.lose { color: var(--red); }
+  #overlay p { max-width: 540px; font-size: clamp(13px, 3.4vw, 16px); line-height: 1.55; }
+  #overlay p.muted { color: var(--muted); }
+  #overlay .pts { display: grid; grid-template-columns: repeat(2, auto); gap: 4px 18px; font-size: 13px; color: var(--muted); text-align: left; max-width: 560px; }
+  #overlay .pts b { color: var(--fg); }
+  #overlay .diff { display: flex; gap: 10px; flex-wrap: wrap; justify-content: center; }
+  #overlay button {
+    font: 800 15px system-ui, sans-serif; letter-spacing: 1.5px; color: var(--fg);
+    background: transparent; cursor: pointer;
+    border: 2px solid rgba(244,246,238,0.3); border-radius: 10px; padding: 9px 16px;
+  }
+  #overlay .diff button.on { border-color: var(--c); color: var(--c); box-shadow: 0 0 12px var(--c); }
+  #overlay button.start { border-color: var(--gold); color: #2a1a02; background: var(--gold); padding: 11px 30px; box-shadow: 0 4px 0 #a87a0a; }
+  #overlay .menuList { display: flex; flex-wrap: wrap; gap: 6px 10px; justify-content: center; max-width: 600px; font-size: 13px; color: var(--muted); }
+  #overlay .menuList span { background: rgba(255,255,255,0.06); border-radius: 8px; padding: 4px 9px; }
+  #overlay .menuList b { color: var(--gold); }
+  #overlay .upgs { display: flex; gap: 10px; flex-wrap: wrap; justify-content: center; }
+  #overlay button.upg { display: flex; flex-direction: column; gap: 3px; width: 170px; text-align: center; letter-spacing: 0.3px; font-size: 13px; }
+  #overlay button.upg span { font-weight: 600; font-size: 12px; color: var(--muted); }
+  #overlay button.upg:disabled { opacity: 0.4; cursor: default; }
+  @media (max-height: 560px) {
+    #overlay { gap: 8px; }
+    #overlay h1 { font-size: 30px; }
+    #overlay p { font-size: 13px; line-height: 1.4; }
+    #overlay .help, #overlay .pts { display: none; }
+    #overlay .menuList { font-size: 11px; gap: 4px; }
+    #overlay button.upg { width: 150px; padding: 6px 10px; }
+  }
+</style>
+</head>
+<body>
+<div id="wrap"><canvas id="game"></canvas></div>
+<div id="touch"></div>
+<button id="pauseBtn" type="button" aria-label="Pausa">❚❚</button>
+<div id="overlay"></div>
+<a id="homeLink" href="../../index.html">← Sala Giochi</a>
+
+
+<script>
+(() => {
+  "use strict";
+
+  const TAU = Math.PI * 2;
+  const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
+  const nf = (n) => Math.floor(n).toLocaleString("it-IT");
+  const feat = (id) => window.dispatchEvent(new CustomEvent("sala:impresa", { detail: id }));
+  function store(k, v) { try { localStorage.setItem(k, v); } catch { /* ignore */ } }
+  function load(k) { try { return localStorage.getItem(k); } catch { return null; } }
+
+  const DIFFICULTIES = {
+    facile:    { label: "FACILE",    color: "#7ee0a0", desc: "Nonno Gigi: guarda una mossa avanti e ogni tanto si distrae", who: "Nonno Gigi", depth: 2, random: 0.3, time: 200 },
+    normale:   { label: "NORMALE",   color: "#f0c060", desc: "la Maestra Rina: pensa qualche mossa avanti", who: "la Maestra Rina", depth: 4, random: 0.05, time: 400 },
+    difficile: { label: "DIFFICILE", color: "#ff5a4a", desc: "il Campione del circolo: calcola in profondità e non regala niente", who: "il Campione del circolo", depth: 9, random: 0, time: 900 },
+  };
+  const DIFF_IDS = Object.keys(DIFFICULTIES);
+  const DIFF_KEY = "dama-difficulty";
+  const bestKey = (id) => `dama-best-${id}`;
+  let difficulty = DIFFICULTIES[load(DIFF_KEY)] ? load(DIFF_KEY) : "normale";
+  let diff = DIFFICULTIES[difficulty];
+
+  // ---------- Rules: Italian draughts ----------
+  // board[r*8+c]: 1 white man, 2 white king (the player, moving up), -1 black man, -2 black king; dark squares are (r+c) even
+  const DRAW_PLIES = 80;
+  const dark = (r, c) => (r + c) % 2 === 0;
+  function initialBoard() { const b = new Int8Array(64); for (let r = 0; r < 8; r++) for (let c = 0; c < 8; c++) if (dark(r, c)) b[r * 8 + c] = r < 3 ? -1 : r > 4 ? 1 : 0; return b; }
+  const DIRS = [[-1, -1], [-1, 1], [1, -1], [1, 1]];
+  function dirsFor(p) { return Math.abs(p) === 2 ? DIRS : p > 0 ? DIRS.slice(0, 2) : DIRS.slice(2); }
+  function captures(b, from) {
+    const p = b[from], out = [], side = Math.sign(p), king = Math.abs(p) === 2;
+    b[from] = 0;
+    (function rec(sq, path, caps) {
+      const r = (sq / 8) | 0, c = sq % 8; let found = false;
+      for (const [dr, dc] of dirsFor(p)) {
+        const r1 = r + dr, c1 = c + dc, r2 = r + 2 * dr, c2 = c + 2 * dc;
+        if (r2 < 0 || r2 > 7 || c2 < 0 || c2 > 7) continue;
+        const mid = r1 * 8 + c1, land = r2 * 8 + c2, m = b[mid];
+        if (Math.sign(m) !== -side || caps.includes(mid) || b[land] !== 0) continue;
+        if (!king && Math.abs(m) === 2) continue; // a man cannot take a king
+        found = true;
+        const np = path.concat(land), nc = caps.concat(mid);
+        if (!king && (side > 0 ? r2 === 0 : r2 === 7)) out.push({ from, path: np, caps: nc }); // promotion ends the move
+        else rec(land, np, nc);
+      }
+      if (!found && caps.length) out.push({ from, path, caps });
+    })(from, [], []);
+    b[from] = p;
+    for (const m of out) { m.king = king; m.kingCaps = m.caps.filter((s) => Math.abs(b[s]) === 2).length; const fk = m.caps.findIndex((s) => Math.abs(b[s]) === 2); m.firstKing = fk < 0 ? 99 : fk; }
+    return out;
+  }
+  function legalMoves(b, side) {
+    let caps = [];
+    for (let s = 0; s < 64; s++) if (Math.sign(b[s]) === side) caps = caps.concat(captures(b, s));
+    if (caps.length) {
+      // the Italian priorities: most pieces, then capture with the king, then most kings taken, then the king met first
+      const maxN = Math.max(...caps.map((m) => m.caps.length)); caps = caps.filter((m) => m.caps.length === maxN);
+      if (caps.some((m) => m.king)) caps = caps.filter((m) => m.king);
+      const maxK = Math.max(...caps.map((m) => m.kingCaps)); caps = caps.filter((m) => m.kingCaps === maxK);
+      const firstK = Math.min(...caps.map((m) => m.firstKing)); caps = caps.filter((m) => m.firstKing === firstK);
+      return caps;
+    }
+    const out = [];
+    for (let s = 0; s < 64; s++) {
+      const p = b[s]; if (Math.sign(p) !== side) continue;
+      const r = (s / 8) | 0, c = s % 8;
+      for (const [dr, dc] of dirsFor(p)) { const r1 = r + dr, c1 = c + dc; if (r1 < 0 || r1 > 7 || c1 < 0 || c1 > 7) continue; if (b[r1 * 8 + c1] === 0) out.push({ from: s, path: [r1 * 8 + c1], caps: [] }); }
+    }
+    return out;
+  }
+  function applyMove(b, m) {
+    const nb = b.slice(), p = nb[m.from], to = m.path[m.path.length - 1], r = (to / 8) | 0;
+    nb[m.from] = 0; for (const s of m.caps) nb[s] = 0;
+    nb[to] = Math.abs(p) === 1 && (p > 0 ? r === 0 : r === 7) ? p * 2 : p;
+    return nb;
+  }
+  const promotes = (b, m) => { const p = b[m.from], r = (m.path[m.path.length - 1] / 8) | 0; return Math.abs(p) === 1 && (p > 0 ? r === 0 : r === 7); };
+
+  // ---------- The opponent ----------
+  function evaluate(b, side) {
+    let s = 0, men = 0;
+    for (let i = 0; i < 64; i++) {
+      const p = b[i]; if (!p) continue; men++;
+      const r = (i / 8) | 0, c = i % 8, own = Math.sign(p), adv = own > 0 ? 7 - r : r;
+      let v = Math.abs(p) === 2 ? 165 : 100 + adv * adv * 0.9;
+      if (Math.abs(p) === 1 && adv === 0) v += 6; // back row guards
+      if (c >= 2 && c <= 5 && r >= 2 && r <= 5) v += 4;
+      if (Math.abs(p) === 2) v += 6 - Math.abs(3.5 - r) - Math.abs(3.5 - c);
+      s += own * v;
+    }
+    return s * side;
+  }
+  let deadline = 0, nodes = 0;
+  function negamax(b, side, depth, alpha, beta, ply) {
+    if ((++nodes & 1023) === 0 && performance.now() > deadline) throw 0;
+    const moves = legalMoves(b, side);
+    if (!moves.length) return -10000 + ply;
+    // keep looking while captures are pending (quiescence)
+    if (depth <= 0 && !moves[0].caps.length) return evaluate(b, side);
+    if (depth <= -6) return evaluate(b, side);
+    let best = -1e9;
+    for (const m of moves) {
+      const v = -negamax(applyMove(b, m), -side, depth - 1, -beta, -alpha, ply + 1);
+      if (v > best) best = v; if (v > alpha) alpha = v; if (alpha >= beta) break;
+    }
+    return best;
+  }
+  function chooseMove(b, side) {
+    const moves = legalMoves(b, side);
+    if (moves.length === 1) return moves[0];
+    if (Math.random() < diff.random) return moves[Math.floor(Math.random() * moves.length)];
+    deadline = performance.now() + diff.time; nodes = 0;
+    let bestMove = moves[Math.floor(Math.random() * moves.length)], order = moves.slice().sort(() => Math.random() - 0.5);
+    for (let d = 1; d <= diff.depth; d++) {
+      try {
+        let alpha = -1e9, bm = null, scores = [];
+        for (const m of order) { const v = -negamax(applyMove(b, m), -side, d - 1, -1e9, -alpha, 1); scores.push([v, m]); if (v > alpha) { alpha = v; bm = m; } }
+        bestMove = bm; order = scores.sort((x, y) => y[0] - x[0]).map((x) => x[1]);
+        if (alpha > 9000) break;
+      } catch { break; }
+    }
+    return bestMove;
+  }
+
+  // ---------- Canvas ----------
+  const canvas = document.getElementById("game"), ctx = canvas.getContext("2d");
+  const overlay = document.getElementById("overlay"), pauseBtn = document.getElementById("pauseBtn");
+  let W = 640, H = 360, portrait = false, pxRatio = 1, BD = null;
+  function resize() {
+    portrait = window.innerHeight > window.innerWidth * 1.05;
+    W = portrait ? 360 : 640; H = portrait ? 640 : 360;
+    const s = Math.max(0.2, Math.min((window.innerWidth - 4) / W, (window.innerHeight - 4) / H));
+    pxRatio = Math.min(3, s * (window.devicePixelRatio || 1));
+    canvas.style.width = W * s + "px"; canvas.style.height = H * s + "px";
+    canvas.width = Math.round(W * pxRatio); canvas.height = Math.round(H * pxRatio);
+    BD = portrait ? { x: 12, y: 150, s: 336 } : { x: 24, y: 16, s: 328 };
+  }
+  window.addEventListener("resize", () => syncControls());
+
+  // ---------- Sound ----------
+  let audioCtx = null;
+  function tone(freq, dur, type = "square", vol = 0.03, delay = 0, slide = 0) {
+    if (!audioCtx) return;
+    const t = audioCtx.currentTime + delay, o = audioCtx.createOscillator(), g = audioCtx.createGain();
+    o.type = type; o.frequency.setValueAtTime(freq, t); if (slide) o.frequency.exponentialRampToValueAtTime(slide, t + dur);
+    g.gain.setValueAtTime(0.0001, t); g.gain.exponentialRampToValueAtTime(vol, t + 0.005); g.gain.exponentialRampToValueAtTime(0.0001, t + dur);
+    o.connect(g).connect(audioCtx.destination); o.start(t); o.stop(t + dur + 0.02);
+  }
+  const sfx = {
+    clack: () => { tone(900, 0.04, "triangle", 0.06); tone(420, 0.06, "sine", 0.05, 0.005); },
+    take: () => { tone(620, 0.05, "square", 0.03); tone(310, 0.12, "triangle", 0.04, 0.03); },
+    crown: () => [784, 988, 1175, 1568].forEach((f, i) => tone(f, 0.14, "triangle", 0.035, i * 0.07)),
+    pick: () => tone(1200, 0.03, "sine", 0.03),
+    no: () => tone(180, 0.15, "sawtooth", 0.03),
+    win: () => [523, 659, 784, 1047, 1319].forEach((f, i) => tone(f, 0.2, "triangle", 0.04, i * 0.1)),
+    lose: () => [392, 349, 311, 262].forEach((f, i) => tone(f, 0.3, "triangle", 0.04, i * 0.15)),
+  };
+
+  // ---------- State ----------
+  let state = "menu", menu = null, pausedFrom = null, clock = 0;
+  let board = initialBoard(), turn = 1, moves = [], sel = -1, stepPath = [], lastMove = null, anim = null, quiet = 0, plies = 0, playerMoves = 0;
+  let msg = "", msgT = 0, cpuThinkT = 0, captured = { 1: 0, "-1": 0 }, result = null, hintSquares = [];
+
+  function startGame() {
+    if (!audioCtx) { try { audioCtx = new (window.AudioContext || window.webkitAudioContext)(); } catch { audioCtx = null; } }
+    if (audioCtx && audioCtx.state === "suspended") audioCtx.resume();
+    board = initialBoard(); turn = 1; sel = -1; stepPath = []; lastMove = null; anim = null; quiet = 0; plies = 0; playerMoves = 0;
+    captured = { 1: 0, "-1": 0 }; result = null; menu = null;
+    state = "play"; overlay.classList.add("hidden"); beginTurn(); syncControls();
+  }
+  function say(t, dur = 2) { msg = t; msgT = dur; }
+  function beginTurn() {
+    moves = legalMoves(board, turn); sel = -1; stepPath = [];
+    if (!moves.length) { endGame(turn === 1 ? "lose" : "win"); return; }
+    if (quiet >= DRAW_PLIES) { endGame("draw"); return; }
+    if (turn === 1 && moves[0].caps.length) say(moves[0].caps.length > 1 ? `Presa obbligatoria: ${moves[0].caps.length} pedine!` : "Presa obbligatoria!", 2.2);
+    if (turn === -1) cpuThinkT = 0.45;
+  }
+  function doMove(m) {
+    const prom = promotes(board, m), p = board[m.from];
+    anim = { m, piece: p, t: 0, dur: 0.18 * m.path.length + 0.05, prom, before: board };
+    board = applyMove(board, m); lastMove = m; plies++;
+    if (m.caps.length || prom) quiet = 0; else quiet++;
+    captured[turn] += m.caps.length;
+    if (turn === 1) { msgT = 0; hintSquares = []; playerMoves++; if (m.caps.length >= 3) feat("retata"); if (prom) feat("dama"); }
+    sel = -1; stepPath = []; moves = [];
+  }
+  function endGame(res) {
+    result = res; state = "over";
+    const mine = board.reduce((a, p) => a + (p === 1 ? 120 : p === 2 ? 150 : 0), 0);
+    const score = res === "win" ? 1000 + mine + Math.max(0, 300 - playerMoves * 5) : res === "draw" ? 300 + Math.round(mine / 6) : captured[1] * 30;
+    if (res === "win") { sfx.win(); if (difficulty === "difficile") feat("campione"); } else if (res === "lose") sfx.lose(); else sfx.clack();
+    const prev = parseInt(load(bestKey(difficulty)), 10) || 0, record = score > prev && res !== "quit";
+    if (record && res !== "quit") store(bestKey(difficulty), String(score));
+    const left = board.filter((p) => p > 0).length;
+    menu = () => showOverlay(
+      (res === "win" ? `<h2>HAI VINTO!</h2><p>${cap(diff.who)} ti stringe la mano: ${left} ${left === 1 ? "pedina rimasta" : "pedine rimaste"} in ${playerMoves} mosse.</p>`
+        : res === "draw" ? `<h2>PATTA</h2><p>${DRAW_PLIES / 2} mosse a testa senza prese né promozioni: ve la siete giocata alla pari.</p>`
+        : res === "quit" ? `<h2 class="lose">PARTITA SOSPESA</h2><p>Le pedine tornano nella scatola.</p>`
+        : `<h2 class="lose">HA VINTO ${diff.who.toUpperCase()}</h2><p>Non ti restano mosse. Hai preso ${captured[1]} ${captured[1] === 1 ? "pedina" : "pedine"}.</p>`) +
+      `<p>Punti: <b>${nf(res === "quit" ? 0 : score)}</b> · ${diff.label}</p>
+       ${record ? "<p style='color:var(--gold)'>★ NUOVO RECORD! ★</p>" : ""}
+       ${difficultyHTML()}
+       <button class="start" data-start>RIVINCITA</button>`);
+    setTimeout(() => { if (state === "over") { menu(); syncControls(); } }, res === "quit" ? 0 : 1200);
+  }
+  const cap = (s) => s.charAt(0).toUpperCase() + s.slice(1);
+
+  // ---------- Player input ----------
+  const sqXY = (s) => { const q = BD.s / 8; return { x: BD.x + (s % 8) * q + q / 2, y: BD.y + ((s / 8) | 0) * q + q / 2 }; };
+  function sqAt(p) { const q = BD.s / 8, c = Math.floor((p.x - BD.x) / q), r = Math.floor((p.y - BD.y) / q); return c < 0 || r < 0 || c > 7 || r > 7 ? -1 : r * 8 + c; }
+  const candidates = () => moves.filter((m) => m.from === sel && stepPath.every((s, i) => m.path[i] === s));
+  function tap(s) {
+    if (state !== "play" || turn !== 1 || anim || s < 0) return;
+    if (Math.sign(board[s]) === 1 && stepPath.length === 0) {
+      if (moves.some((m) => m.from === s)) { sel = s; sfx.pick(); }
+      else { sel = -1; say(moves[0].caps.length ? "Devi prendere! Le pedine che possono muovere sono evidenziate." : "Questa pedina non può muoversi.", 2); sfx.no(); hintSquares = [...new Set(moves.map((m) => m.from))]; }
+      return;
+    }
+    if (sel < 0) return;
+    const cand = candidates();
+    // a tap on the final square of a capture chain, or on the next step
+    const finals = cand.filter((m) => m.path[m.path.length - 1] === s);
+    if (finals.length === 1) { doMove(finals[0]); return; }
+    const steps = cand.filter((m) => m.path[stepPath.length] === s);
+    if (steps.length) {
+      stepPath.push(s);
+      const done = steps.filter((m) => m.path.length === stepPath.length);
+      if (done.length === 1 && steps.length === 1) doMove(done[0]); else sfx.pick();
+      return;
+    }
+    sel = -1; stepPath = []; sfx.no();
+  }
+
+  // ---------- Update ----------
+  function update(dt) {
+    clock += dt; if (msgT > 0) msgT -= dt;
+    if (state !== "play") return;
+    if (anim) {
+      const prev = anim.t; anim.t += dt;
+      const seg = 0.18, k1 = Math.floor(prev / seg), k2 = Math.floor(anim.t / seg);
+      if (k2 > k1 && k2 <= anim.m.path.length) { if (anim.m.caps.length) sfx.take(); else sfx.clack(); }
+      if (anim.t >= anim.dur) {
+        if (anim.prom) { sfx.crown(); say(turn === 1 ? "DAMA! La tua pedina è promossa." : "L'avversario fa dama.", 1.8); }
+        anim = null; turn = -turn; beginTurn();
+      }
+      return;
+    }
+    if (turn === -1) { cpuThinkT -= dt; if (cpuThinkT <= 0) { const m = chooseMove(board, -1); if (m) doMove(m); } }
+  }
+
+  // ---------- Drawing ----------
+  function circ(x, y, r) { ctx.beginPath(); ctx.arc(x, y, r, 0, TAU); }
+  function rr(x, y, w, h, r) { ctx.beginPath(); ctx.roundRect(x, y, w, h, r); }
+  function drawPiece(x, y, p, q, lift = 0) {
+    const r = q * 0.39, white = p > 0, king = Math.abs(p) === 2;
+    const layers = king ? 2 : 1;
+    circ(x + 1.5, y + 3 + lift * 0.3, r); ctx.fillStyle = `rgba(0,0,0,${0.35 - lift * 0.01})`; ctx.fill();
+    for (let l = 0; l < layers; l++) {
+      const yy = y - lift - l * q * 0.12;
+      circ(x, yy + q * 0.06, r); ctx.fillStyle = white ? "#c8b8a0" : "#1a1210"; ctx.fill();
+      circ(x, yy, r); const g = ctx.createRadialGradient(x - r * 0.3, yy - r * 0.35, r * 0.1, x, yy, r);
+      if (white) { g.addColorStop(0, "#fffaf0"); g.addColorStop(1, "#e0d4bc"); } else { g.addColorStop(0, "#5a4a42"); g.addColorStop(1, "#201814"); }
+      ctx.fillStyle = g; ctx.fill(); ctx.strokeStyle = white ? "#9a8a70" : "#000"; ctx.lineWidth = 1; ctx.stroke();
+      circ(x, yy, r * 0.68); ctx.strokeStyle = white ? "rgba(140,120,90,0.5)" : "rgba(255,255,255,0.12)"; ctx.lineWidth = 1.5; ctx.stroke();
+    }
+    if (king) {
+      const yy = y - lift - q * 0.12; ctx.fillStyle = white ? "#c89a2a" : "#f0c060";
+      ctx.beginPath(); const cw = r * 0.62, ch = r * 0.42; ctx.moveTo(x - cw, yy + ch * 0.5); ctx.lineTo(x - cw, yy - ch * 0.4); ctx.lineTo(x - cw * 0.5, yy); ctx.lineTo(x, yy - ch * 0.7); ctx.lineTo(x + cw * 0.5, yy); ctx.lineTo(x + cw, yy - ch * 0.4); ctx.lineTo(x + cw, yy + ch * 0.5); ctx.closePath(); ctx.fill();
+    }
+  }
+  function draw() {
+    ctx.setTransform(pxRatio, 0, 0, pxRatio, 0, 0);
+    const bg = ctx.createLinearGradient(0, 0, W, H); bg.addColorStop(0, "#3a2616"); bg.addColorStop(1, "#1e140c"); ctx.fillStyle = bg; ctx.fillRect(0, 0, W, H);
+    // table grain
+    ctx.strokeStyle = "rgba(255,220,170,0.04)"; ctx.lineWidth = 2; for (let i = 0; i < 30; i++) { ctx.beginPath(); ctx.moveTo(0, i * 23 + Math.sin(i) * 6); ctx.bezierCurveTo(W / 3, i * 23 + 8, W * 0.66, i * 23 - 8, W, i * 23 + Math.cos(i) * 6); ctx.stroke(); }
+    const q = BD.s / 8;
+    // frame and squares
+    rr(BD.x - 10, BD.y - 10, BD.s + 20, BD.s + 20, 8); ctx.fillStyle = "#5a3418"; ctx.fill(); ctx.strokeStyle = "#2a160a"; ctx.lineWidth = 2; ctx.stroke();
+    for (let r = 0; r < 8; r++) for (let c = 0; c < 8; c++) { ctx.fillStyle = dark(r, c) ? "#7a4a26" : "#f0dcb4"; ctx.fillRect(BD.x + c * q, BD.y + r * q, q, q); }
+    // last move
+    if (lastMove && !anim) for (const s of [lastMove.from, ...lastMove.path]) { const p = sqXY(s); ctx.fillStyle = "rgba(255,210,80,0.22)"; ctx.fillRect(p.x - q / 2, p.y - q / 2, q, q); }
+    // selectable pieces and targets
+    if (state === "play" && turn === 1 && !anim) {
+      const froms = new Set(moves.map((m) => m.from)), forced = moves.length && moves[0].caps.length;
+      if (sel < 0 && (forced || msgT > 0 && hintSquares.length)) for (const s of froms) { const p = sqXY(s); ctx.strokeStyle = `rgba(120,255,140,${0.5 + 0.4 * Math.sin(clock * 5)})`; ctx.lineWidth = 3; ctx.strokeRect(p.x - q / 2 + 2, p.y - q / 2 + 2, q - 4, q - 4); }
+      if (sel >= 0) {
+        const p = sqXY(sel); ctx.strokeStyle = "#ffe060"; ctx.lineWidth = 3; ctx.strokeRect(p.x - q / 2 + 1.5, p.y - q / 2 + 1.5, q - 3, q - 3);
+        for (const m of candidates()) {
+          const nxt = m.path[stepPath.length], fin = m.path[m.path.length - 1];
+          for (const s of [nxt, fin]) { const t = sqXY(s); circ(t.x, t.y, q * (s === fin ? 0.2 : 0.13)); ctx.fillStyle = s === fin ? "rgba(120,255,140,0.75)" : "rgba(255,255,255,0.5)"; ctx.fill(); }
+        }
+        for (const s of stepPath) { const t = sqXY(s); circ(t.x, t.y, q * 0.15); ctx.fillStyle = "#ffe060"; ctx.fill(); }
+      }
+    }
+    // pieces (the one moving is drawn on its path)
+    const src = anim ? anim.before : board;
+    for (let s = 0; s < 64; s++) {
+      const p = src[s]; if (!p) continue;
+      if (anim && s === anim.m.from) continue;
+      const pos = sqXY(s);
+      if (anim && anim.m.caps.includes(s)) { const k = clamp((anim.t - anim.m.caps.indexOf(s) * 0.18 - 0.1) / 0.15, 0, 1); ctx.globalAlpha = 1 - k; }
+      drawPiece(pos.x, pos.y, p, q); ctx.globalAlpha = 1;
+    }
+    if (state === "play" && turn === 1 && !anim && sel >= 0) for (const m of candidates()) for (const s of m.caps) { const t = sqXY(s); ctx.strokeStyle = "rgba(255,70,50,0.95)"; ctx.lineWidth = 3.5; ctx.beginPath(); ctx.moveTo(t.x - q * 0.22, t.y - q * 0.22); ctx.lineTo(t.x + q * 0.22, t.y + q * 0.22); ctx.moveTo(t.x + q * 0.22, t.y - q * 0.22); ctx.lineTo(t.x - q * 0.22, t.y + q * 0.22); ctx.stroke(); }
+    if (anim) {
+      const seg = 0.18, pts = [anim.m.from, ...anim.m.path], i = Math.min(pts.length - 2, Math.floor(anim.t / seg)), k = clamp((anim.t - i * seg) / seg, 0, 1);
+      const a = sqXY(pts[i]), b = sqXY(pts[i + 1]), e = k < 0.5 ? 2 * k * k : 1 - Math.pow(-2 * k + 2, 2) / 2;
+      const hop = anim.m.caps.length ? Math.sin(k * Math.PI) * q * 0.35 : Math.sin(k * Math.PI) * q * 0.12;
+      drawPiece(a.x + (b.x - a.x) * e, a.y + (b.y - a.y) * e, anim.t >= anim.dur - 0.05 && anim.prom ? anim.piece * 2 : anim.piece, q, hop);
+    }
+    drawPanel();
+  }
+  function drawPanel() {
+    const mine = board.filter((p) => p > 0).length, theirs = board.filter((p) => p < 0).length;
+    const thinking = state === "play" && turn === -1 && !anim;
+    ctx.textBaseline = "middle"; ctx.textAlign = "left";
+    const row = (x, y, white, name, count, active) => {
+      rr(x, y, portrait ? 336 : 252, 50, 10); ctx.fillStyle = active ? "rgba(240,192,96,0.18)" : "rgba(0,0,0,0.25)"; ctx.fill(); if (active) { ctx.strokeStyle = "#f0c060"; ctx.lineWidth = 2; ctx.stroke(); }
+      drawPiece(x + 25, y + 26, white ? 1 : -1, 36);
+      ctx.fillStyle = "#fff4e0"; ctx.font = "800 14px system-ui"; ctx.fillText(name, x + 50, y + 18);
+      ctx.fillStyle = "#c8b090"; ctx.font = "600 11px system-ui"; ctx.fillText(`${count} ${count === 1 ? "pedina" : "pedine"} in gioco`, x + 50, y + 36);
+    };
+    const px = portrait ? 12 : 372;
+    row(px, portrait ? 12 : 18, false, cap(diff.who), theirs, thinking);
+    if (thinking) { ctx.fillStyle = "#f0c060"; ctx.font = "700 11px system-ui"; ctx.textAlign = "right"; ctx.fillText("ci pensa" + ".".repeat(1 + Math.floor(clock * 3) % 3), px + (portrait ? 326 : 242), portrait ? 30 : 36); ctx.textAlign = "left"; }
+    row(px, portrait ? 74 : 78, true, "Tu", mine, state === "play" && turn === 1 && !anim);
+    // info
+    ctx.fillStyle = "#c8b090"; ctx.font = "600 11px system-ui";
+    const iy = portrait ? 508 : 152;
+    const lines = [`Mossa ${Math.floor(plies / 2) + 1} · ${diff.label}`, quiet > DRAW_PLIES - 20 ? `Patta tra ${Math.ceil((DRAW_PLIES - quiet) / 2)} mosse senza prese` : "Tocca una pedina, poi la casella d'arrivo."];
+    lines.forEach((t, i) => ctx.fillText(t, portrait ? 18 : 376, iy + i * 18));
+    if (msgT > 0) {
+      ctx.globalAlpha = clamp(msgT * 2, 0, 1); const my = portrait ? 560 : 214, mw = portrait ? 336 : 252;
+      rr(portrait ? 12 : 372, my, mw, 44, 10); ctx.fillStyle = "rgba(240,192,96,0.95)"; ctx.fill();
+      ctx.fillStyle = "#2a1a08"; ctx.font = "800 12px system-ui"; ctx.textAlign = "center";
+      wrap(msg, (portrait ? 12 : 372) + mw / 2, my + 22, mw - 20);
+      ctx.textAlign = "left"; ctx.globalAlpha = 1;
+    }
+    if (!portrait) { ctx.fillStyle = "#8a7050"; ctx.font = "600 10px system-ui"; ctx.fillText("Dama italiana: le pedine non mangiano le dame,", 376, 296); ctx.fillText("la presa è obbligatoria e si prende il più possibile.", 376, 311); ctx.fillText(touchMode ? "" : "P pausa.", 376, 326); }
+  }
+  function wrap(t, x, y, w) {
+    const words = t.split(" "), lines = []; let cur = "";
+    for (const wd of words) { const tt = cur ? cur + " " + wd : wd; if (ctx.measureText(tt).width > w && cur) { lines.push(cur); cur = wd; } else cur = tt; }
+    lines.push(cur); lines.forEach((l, i) => ctx.fillText(l, x, y + (i - (lines.length - 1) / 2) * 15));
+  }
+
+  // ---------- Menus ----------
+  function showOverlay(html) { overlay.innerHTML = html; overlay.classList.remove("hidden"); }
+  function difficultyHTML() {
+    const buttons = DIFF_IDS.map((id) => { const d = DIFFICULTIES[id]; return `<button type="button" data-diff="${id}" class="${id === difficulty ? "on" : ""}" style="--c:${d.color}">${d.label}</button>`; }).join("");
+    const best = parseInt(load(bestKey(difficulty)), 10);
+    return `<div class="diff">${buttons}</div><p class="muted">${diff.desc}${best ? ` · Record: ${nf(best)}` : ""}</p>`;
+  }
+  function setDifficulty(id) { if (!DIFFICULTIES[id]) return; difficulty = id; diff = DIFFICULTIES[id]; store(DIFF_KEY, id); if (menu) menu(); }
+  function showTitle() {
+    menu = showTitle; state = "menu";
+    showOverlay(
+      `<h1>DA<span>MA</span></h1>
+       <p>La dama italiana, sul tavolo di legno del circolo. Tu hai il bianco e la prima mossa è tua; dall'altra parte siedono, a seconda della difficoltà, Nonno Gigi, la Maestra Rina o il Campione del circolo.</p>
+       <div class="pts">
+         <span><b>Muovere</b></span><span>le pedine vanno avanti in diagonale di una casella; la dama anche indietro</span>
+         <span><b>Prendere</b></span><span>si salta il pezzo avversario se dietro c'è posto, anche più volte di fila. È obbligatorio, e si deve prendere il più possibile (con la dama, se si può)</span>
+         <span><b>Regola italiana</b></span><span>la pedina non può mangiare la dama; arrivata in fondo diventa dama. Vince chi lascia l'altro senza mosse</span>
+       </div>
+       <p class="muted help">Tocca una pedina e poi la casella d'arrivo: nelle prese multiple basta toccare l'ultima casella.</p>
+       ${difficultyHTML()}
+       <button class="start" data-start>SI GIOCA</button>`);
+    syncControls();
+  }
+  function togglePause() {
+    if (state === "play") { pausedFrom = state; state = "paused"; showOverlay(`<h2>PAUSA</h2><button class="start" data-resume>CONTINUA</button>`); }
+    else if (state === "paused") { state = pausedFrom; overlay.classList.add("hidden"); lastT = performance.now(); }
+    syncControls();
+  }
+  window.addEventListener("sala:termina", () => { if (state !== "paused") return; overlay.classList.add("hidden"); state = "play"; endGame("quit"); });
+  function syncControls() { pauseBtn.style.display = state === "play" && touchMode ? "block" : "none"; resize(); }
+  pauseBtn.addEventListener("click", () => togglePause());
+  overlay.addEventListener("click", (e) => {
+    const q = (s) => e.target.closest(s); let el;
+    if ((el = q("[data-diff]"))) { setDifficulty(el.dataset.diff); return; }
+    if (q("[data-start]")) { startGame(); return; }
+    if (q("[data-resume]")) { togglePause(); return; }
+  });
+
+  // ---------- Input ----------
+  let touchMode = !!(window.matchMedia && matchMedia("(pointer: coarse)").matches);
+  canvas.addEventListener("pointerdown", (e) => { e.preventDefault(); const rc = canvas.getBoundingClientRect(); tap(sqAt({ x: ((e.clientX - rc.left) / rc.width) * W, y: ((e.clientY - rc.top) / rc.height) * H })); });
+  window.addEventListener("keydown", (e) => {
+    if (state === "menu" || state === "over") { if (e.key === "Enter") startGame(); return; }
+    const k = e.key.toLowerCase();
+    if (k === "p" || k === "escape") { if (!e.repeat) togglePause(); }
+  });
+  window.addEventListener("pointerdown", (e) => { if (e.pointerType === "touch" && !touchMode) { touchMode = true; syncControls(); if (menu) menu(); } }, true);
+
+  // ---------- Loop ----------
+  let lastT = performance.now();
+  function frame(now) {
+    const dt = Math.min(0.05, (now - lastT) / 1000); lastT = now;
+    if (state !== "paused") update(dt);
+    draw();
+    requestAnimationFrame(frame);
+  }
+  resize(); showTitle();
+  requestAnimationFrame(frame);
+})();
+</script>
+<script src="../../shared/iniziali.js" data-record="dama-best-" data-kind="score"></script>
+</body>
+</html>
