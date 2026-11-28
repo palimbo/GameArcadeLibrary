@@ -1,0 +1,471 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no, viewport-fit=cover">
+<title>Fili di Luce</title>
+<style>
+  :root {
+    --bg: #0c0a1a;
+    --fg: #f4f6ee;
+    --muted: #c8d0dc;
+    --gold: #5af0ff;
+    --red: #ff5a4a;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  html, body {
+    height: 100%;
+    background: var(--bg);
+    color: var(--fg);
+    font-family: system-ui, -apple-system, "Segoe UI", sans-serif;
+    overflow: hidden;
+    user-select: none;
+    -webkit-user-select: none;
+    -webkit-tap-highlight-color: transparent;
+    touch-action: none;
+  }
+  #wrap { position: fixed; inset: 0; display: flex; align-items: center; justify-content: center; }
+  canvas { cursor: pointer; display: block; touch-action: none; border-radius: 6px; box-shadow: 0 0 0 2px #2e3a4e, 0 10px 40px rgba(0,0,0,0.6); }
+  #pauseBtn {
+    position: fixed; z-index: 3; display: none; right: 10px; top: calc(10px + env(safe-area-inset-top, 0px));
+    font: 700 13px system-ui, sans-serif; color: var(--fg);
+    background: rgba(0, 0, 0, 0.6); border: 1px solid rgba(244, 246, 238, 0.35);
+    border-radius: 8px; padding: 6px 10px; cursor: pointer;
+  }
+  #touch { display: none !important; }
+  #overlay {
+    position: fixed; inset: 0; z-index: 5;
+    display: flex; flex-direction: column; align-items: center; justify-content: flex-start;
+    gap: 14px; padding: 16px; text-align: center; overflow-y: auto;
+    background: rgba(20, 26, 36, 0.94);
+  }
+  #overlay > :first-child { margin-top: auto; }
+  #overlay > :last-child { margin-bottom: auto; }
+  #overlay.hidden { display: none; }
+  #homeLink {
+    position: fixed; top: calc(10px + env(safe-area-inset-top, 0px)); left: 10px; z-index: 6;
+    font: 600 13px/1 system-ui, sans-serif; color: #fff; text-decoration: none;
+    padding: 8px 12px; border-radius: 999px; background: rgba(0,0,0,.55);
+    border: 1px solid rgba(255,255,255,.25);
+  }
+  #homeLink:hover { background: rgba(0,0,0,.8); }
+  #overlay.hidden ~ #homeLink { display: none; }
+  @media (max-width: 700px) { #overlay { padding-top: calc(52px + env(safe-area-inset-top, 0px)); } }
+  #overlay h1 { font-size: clamp(32px, 10vw, 58px); font-weight: 900; font-style: italic; letter-spacing: 1px; color: var(--gold);
+    text-shadow: 3px 3px 0 #a0207a, 0 0 22px rgba(90,240,255,0.45); }
+  #overlay h1 span { color: #fff; }
+  #overlay h2 { font-size: clamp(26px, 7vw, 42px); font-weight: 900; letter-spacing: 2px; color: var(--gold); }
+  #overlay h2.lose { color: var(--red); }
+  #overlay p { max-width: 540px; font-size: clamp(13px, 3.4vw, 16px); line-height: 1.55; }
+  #overlay p.muted { color: var(--muted); }
+  #overlay .pts { display: grid; grid-template-columns: repeat(2, auto); gap: 4px 18px; font-size: 13px; color: var(--muted); text-align: left; max-width: 560px; }
+  #overlay .pts b { color: var(--fg); }
+  #overlay .diff { display: flex; gap: 10px; flex-wrap: wrap; justify-content: center; }
+  #overlay button {
+    font: 800 15px system-ui, sans-serif; letter-spacing: 1.5px; color: var(--fg);
+    background: transparent; cursor: pointer;
+    border: 2px solid rgba(244,246,238,0.3); border-radius: 10px; padding: 9px 16px;
+  }
+  #overlay .diff button.on { border-color: var(--c); color: var(--c); box-shadow: 0 0 12px var(--c); }
+  #overlay button.start { border-color: var(--gold); color: #04141a; background: var(--gold); padding: 11px 30px; box-shadow: 0 4px 0 #1a8a9a; }
+  #overlay .menuList { display: flex; flex-wrap: wrap; gap: 6px 10px; justify-content: center; max-width: 600px; font-size: 13px; color: var(--muted); }
+  #overlay .menuList span { background: rgba(255,255,255,0.06); border-radius: 8px; padding: 4px 9px; }
+  #overlay .menuList b { color: var(--gold); }
+  #overlay .upgs { display: flex; gap: 10px; flex-wrap: wrap; justify-content: center; }
+  #overlay button.upg { display: flex; flex-direction: column; gap: 3px; width: 170px; text-align: center; letter-spacing: 0.3px; font-size: 13px; }
+  #overlay button.upg span { font-weight: 600; font-size: 12px; color: var(--muted); }
+  #overlay button.upg:disabled { opacity: 0.4; cursor: default; }
+  @media (max-height: 560px) {
+    #overlay { gap: 8px; }
+    #overlay h1 { font-size: 30px; }
+    #overlay p { font-size: 13px; line-height: 1.4; }
+    #overlay .help, #overlay .pts { display: none; }
+    #overlay .menuList { font-size: 11px; gap: 4px; }
+    #overlay button.upg { width: 150px; padding: 6px 10px; }
+  }
+</style>
+</head>
+<body>
+<div id="wrap"><canvas id="game"></canvas></div>
+<div id="touch"></div>
+<button id="pauseBtn" type="button" aria-label="Pausa">❚❚</button>
+<div id="overlay"></div>
+<a id="homeLink" href="../../index.html">← Sala Giochi</a>
+
+
+<script>
+(() => {
+  "use strict";
+
+  const TAU = Math.PI * 2;
+  const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
+  const nf = (n) => Math.floor(n).toLocaleString("it-IT");
+  const feat = (id) => window.dispatchEvent(new CustomEvent("sala:impresa", { detail: id }));
+  function store(k, v) { try { localStorage.setItem(k, v); } catch { /* ignore */ } }
+  function load(k) { try { return localStorage.getItem(k); } catch { return null; } }
+
+  const DIFFICULTIES = {
+    facile:    { label: "FACILE",    color: "#7ef0a0", desc: "griglie da 5×5 a 7×7", sizes: [5, 5, 5, 6, 6, 6, 6, 7, 7, 7] },
+    normale:   { label: "NORMALE",   color: "#5af0ff", desc: "griglie da 5×5 a 8×8", sizes: [5, 6, 6, 6, 7, 7, 7, 8, 8, 8] },
+    difficile: { label: "DIFFICILE", color: "#ff5ac8", desc: "griglie da 6×6 a 9×9", sizes: [6, 7, 7, 8, 8, 8, 9, 9, 9, 9] },
+  };
+  const DIFF_IDS = Object.keys(DIFFICULTIES);
+  const DIFF_KEY = "fili-difficulty";
+  const bestKey = (id) => `fili-best-${id}`;
+  let difficulty = DIFFICULTIES[load(DIFF_KEY)] ? load(DIFF_KEY) : "normale";
+  let diff = DIFFICULTIES[difficulty];
+  const PUZZLES = 10, HINTS = 3;
+  const COLORS = ["#ff3a4a", "#3a7aff", "#3ae05a", "#ffe03a", "#ff9a2a", "#3ae8e8", "#ff4ad8", "#a86aff", "#f4f4f4", "#b8783a", "#ffa0c8", "#a8ff3a", "#2aa8a0"];
+
+  // ---------- Canvas ----------
+  const canvas = document.getElementById("game"), ctx = canvas.getContext("2d");
+  const overlay = document.getElementById("overlay"), pauseBtn = document.getElementById("pauseBtn");
+  let W = 640, H = 360, portrait = false, pxRatio = 1, G = null, BTN = [];
+  function layout() {
+    G = portrait ? { x: 10, y: 126, s: 340 } : { x: 20, y: 20, s: 320 };
+    BTN = portrait
+      ? [{ id: "hint", x: 18, y: 500, w: 156, h: 46 }, { id: "clear", x: 186, y: 500, w: 156, h: 46 }]
+      : [{ id: "hint", x: 372, y: 262, w: 120, h: 44 }, { id: "clear", x: 502, y: 262, w: 120, h: 44 }];
+  }
+  function resize() {
+    portrait = window.innerHeight > window.innerWidth * 1.05;
+    W = portrait ? 360 : 640; H = portrait ? 640 : 360;
+    const s = Math.max(0.2, Math.min((window.innerWidth - 4) / W, (window.innerHeight - 4) / H));
+    pxRatio = Math.min(3, s * (window.devicePixelRatio || 1));
+    canvas.style.width = W * s + "px"; canvas.style.height = H * s + "px";
+    canvas.width = Math.round(W * pxRatio); canvas.height = Math.round(H * pxRatio);
+    layout();
+  }
+  window.addEventListener("resize", () => syncControls());
+
+  // ---------- Sound ----------
+  let audioCtx = null;
+  function tone(freq, dur, type = "square", vol = 0.03, delay = 0, slide = 0) {
+    if (!audioCtx) return;
+    const t = audioCtx.currentTime + delay, o = audioCtx.createOscillator(), g = audioCtx.createGain();
+    o.type = type; o.frequency.setValueAtTime(freq, t); if (slide) o.frequency.exponentialRampToValueAtTime(slide, t + dur);
+    g.gain.setValueAtTime(0.0001, t); g.gain.exponentialRampToValueAtTime(vol, t + 0.008); g.gain.exponentialRampToValueAtTime(0.0001, t + dur);
+    o.connect(g).connect(audioCtx.destination); o.start(t); o.stop(t + dur + 0.02);
+  }
+  const midi = (m) => 440 * Math.pow(2, (m - 69) / 12);
+  const PENTA = [0, 2, 4, 7, 9, 12, 14, 16, 19, 21, 24, 26, 28];
+  const sfx = {
+    step: (len) => tone(midi(60 + PENTA[Math.min(12, len % 13)]), 0.05, "triangle", 0.018),
+    link: (c) => { tone(midi(72 + PENTA[c % 13]), 0.15, "triangle", 0.045); tone(midi(79 + PENTA[c % 13]), 0.22, "sine", 0.03, 0.06); },
+    cut: () => tone(300, 0.08, "sawtooth", 0.02, 0, 180),
+    solve: () => [0, 4, 7, 11, 14, 19].forEach((n, i) => tone(midi(72 + n), 0.22, "triangle", 0.035, i * 0.07)),
+    hint: () => { tone(880, 0.1, "sine", 0.04); tone(1320, 0.18, "sine", 0.03, 0.08); },
+  };
+  // ambient pad
+  let music = load("fili-music") !== "0", padStep = 0, nextT = 0;
+  const PAD = [[57, 64, 69], [53, 60, 69], [55, 62, 67], [52, 59, 64]];
+  setInterval(() => {
+    if (!audioCtx || !music || state !== "play") { if (audioCtx) nextT = audioCtx.currentTime + 0.05; return; }
+    while (nextT < audioCtx.currentTime + 0.2) {
+      const d = Math.max(0, nextT - audioCtx.currentTime), ch = PAD[Math.floor(padStep / 8) % PAD.length];
+      if (padStep % 8 === 0) ch.forEach((m) => tone(midi(m), 2.2, "sine", 0.01, d));
+      if (padStep % 2 === 0) tone(midi(ch[(padStep / 2) % 3] + 12), 0.3, "triangle", 0.006, d);
+      padStep++; nextT += 0.3;
+    }
+  }, 60);
+
+  // ---------- Puzzle generation ----------
+  // a random Hamiltonian path over the grid (zig-zag shuffled with "backbite" moves), cut into pieces of 3+ cells:
+  // every piece is a valid wire, its two ends become the dots, and the solution fills the whole board
+  function generate(N) {
+    const nb = (c) => { const x = c % N, y = (c / N) | 0, r = []; if (x > 0) r.push(c - 1); if (x < N - 1) r.push(c + 1); if (y > 0) r.push(c - N); if (y < N - 1) r.push(c + N); return r; };
+    for (let attempt = 0; attempt < 200; attempt++) {
+      let path = []; for (let y = 0; y < N; y++) for (let i = 0; i < N; i++) path.push(y * N + (y % 2 ? N - 1 - i : i));
+      for (let k = 0; k < N * N * 30; k++) {
+        if (Math.random() < 0.5) path.reverse();
+        const e = path[path.length - 1], opts = nb(e).filter((n) => n !== path[path.length - 2]), n = opts[Math.floor(Math.random() * opts.length)];
+        const i = path.indexOf(n);
+        path = path.slice(0, i + 1).concat(path.slice(i + 1).reverse());
+      }
+      // cut into pieces
+      const total = N * N, k = Math.round(N * (1.0 + Math.random() * 0.25)), lens = Array(k).fill(3);
+      let rest = total - 3 * k; if (rest < 0) continue;
+      while (rest > 0) { const j = Math.floor(Math.random() * k); if (lens[j] < N * 2.6) { lens[j]++; rest--; } }
+      const pieces = []; let at = 0; for (const L of lens) { pieces.push(path.slice(at, at + L)); at += L; }
+      // no trivial pairs (the two ends side by side) and no piece that runs in a straight line only
+      const adj = (a, b) => nb(a).includes(b);
+      if (pieces.some((p) => adj(p[0], p[p.length - 1]))) continue;
+      const straight = (p) => p.every((c) => c % N === p[0] % N) || p.every((c) => ((c / N) | 0) === ((p[0] / N) | 0));
+      if (pieces.filter(straight).length > 1) continue;
+      return pieces.sort(() => Math.random() - 0.5);
+    }
+    return null;
+  }
+
+  // ---------- State ----------
+  let state = "menu", menu = null, pausedFrom = null, clock = 0;
+  let pi = 0, N = 5, sol = [], dots = [], paths = [], owner = [], dotAt = [], drag = null, solvedT = 0, puzzleT = 0;
+  let score = 0, hintsLeft = HINTS, allPerfect = true, results = [], fx = [], texts = [];
+  const cellSize = () => G.s / N;
+  const cellXY = (c) => ({ x: G.x + ((c % N) + 0.5) * cellSize(), y: G.y + (((c / N) | 0) + 0.5) * cellSize() });
+  const par = () => Math.round(N * N * 0.9);
+
+  function startGame() {
+    if (!audioCtx) { try { audioCtx = new (window.AudioContext || window.webkitAudioContext)(); } catch { audioCtx = null; } }
+    if (audioCtx && audioCtx.state === "suspended") audioCtx.resume();
+    pi = 0; score = 0; hintsLeft = HINTS; allPerfect = true; results = [];
+    startPuzzle();
+  }
+  function startPuzzle() {
+    N = diff.sizes[pi];
+    sol = generate(N) || generate(N);
+    dots = sol.map((p) => [p[0], p[p.length - 1]]);
+    dotAt = Array(N * N).fill(-1); dots.forEach(([a, b], k) => { dotAt[a] = k; dotAt[b] = k; });
+    paths = dots.map(() => []); owner = Array(N * N).fill(-1);
+    drag = null; solvedT = 0; puzzleT = 0; fx = []; texts = []; hintUsed = false;
+    state = "play"; menu = null; overlay.classList.add("hidden"); syncControls();
+  }
+  let hintUsed = false;
+  function rebuildOwner() { owner.fill(-1); paths.forEach((p, k) => p.forEach((c) => (owner[c] = k))); }
+  const complete = (k) => { const p = paths[k]; return p.length >= 2 && dots[k].includes(p[0]) && dots[k].includes(p[p.length - 1]) && p[0] !== p[p.length - 1]; };
+  const fillPct = () => owner.filter((o) => o >= 0).length / (N * N);
+
+  // ---------- Drawing wires ----------
+  function cellAt(p) {
+    const cs = cellSize(), x = Math.floor((p.x - G.x) / cs), y = Math.floor((p.y - G.y) / cs);
+    if (x < 0 || y < 0 || x >= N || y >= N) return -1;
+    return y * N + x;
+  }
+  function begin(c) {
+    if (c < 0 || state !== "play" || solvedT) return;
+    if (dotAt[c] >= 0) { const k = dotAt[c]; paths[k] = [c]; rebuildOwner(); drag = { k, last: c }; sfx.step(0); return; }
+    if (owner[c] >= 0) { const k = owner[c], p = paths[k]; paths[k] = p.slice(0, p.indexOf(c) + 1); rebuildOwner(); drag = { k, last: c }; }
+  }
+  function stepTo(n) {
+    const k = drag.k, p = paths[k], last = p[p.length - 1];
+    const x1 = last % N, y1 = (last / N) | 0, x2 = n % N, y2 = (n / N) | 0;
+    if (Math.abs(x1 - x2) + Math.abs(y1 - y2) !== 1) return false;
+    if (p.length >= 2 && n === p[p.length - 2]) { p.pop(); rebuildOwner(); sfx.step(p.length); return true; }
+    if (complete(k)) return false; // linked: only going back is allowed
+    if (p.includes(n)) { paths[k] = p.slice(0, p.indexOf(n) + 1); rebuildOwner(); return true; }
+    if (dotAt[n] >= 0 && dotAt[n] !== k) return false;
+    if (owner[n] >= 0 && owner[n] !== k) { const j = owner[n], q = paths[j]; paths[j] = q.slice(0, q.indexOf(n)); if (paths[j].length === 1 && dotAt[paths[j][0]] !== j) paths[j] = []; sfx.cut(); }
+    p.push(n); rebuildOwner();
+    if (complete(k)) { sfx.link(k); const q = cellXY(n); fx.push({ x: q.x, y: q.y, c: COLORS[k], t: 0, life: 0.5 }); checkSolved(); }
+    else sfx.step(p.length);
+    return true;
+  }
+  function moveTo(c) {
+    if (!drag || c < 0) return;
+    // walk one cell at a time towards the pointer (fast drags skip cells)
+    for (let guard = 0; guard < 30; guard++) {
+      const p = paths[drag.k], last = p[p.length - 1]; if (last === c || last === undefined) return;
+      const x1 = last % N, y1 = (last / N) | 0, x2 = c % N, y2 = (c / N) | 0;
+      const opts = [];
+      if (x2 !== x1) opts.push(y1 * N + x1 + Math.sign(x2 - x1));
+      if (y2 !== y1) opts.push((y1 + Math.sign(y2 - y1)) * N + x1);
+      if (Math.abs(y2 - y1) > Math.abs(x2 - x1)) opts.reverse();
+      if (!opts.some((n) => stepTo(n))) return;
+    }
+  }
+  function end() { drag = null; }
+  function checkSolved() {
+    if (!paths.every((_, k) => complete(k))) return;
+    const full = fillPct() >= 0.999;
+    const timeBonus = Math.max(0, Math.round((par() - puzzleT) * 5)), base = 20 * N, perfect = full ? 10 * N : 0;
+    const pts = base + timeBonus + perfect; score += pts; solvedT = 0.001;
+    if (!full) allPerfect = false;
+    if (N >= 7 && puzzleT < 20 && !hintUsed) feat("lampo");
+    results.push({ N, t: puzzleT, pts, full });
+    sfx.solve();
+    texts.push({ x: G.x + G.s / 2, y: G.y + G.s / 2, text: full ? `PERFETTO! +${pts}` : `COLLEGATI! +${pts}`, c: full ? "#5af0ff" : "#fff", t: 0, big: true });
+    if (!full) texts.push({ x: G.x + G.s / 2, y: G.y + G.s / 2 + 26, text: "(riempi tutta la griglia per il bonus)", c: "#c8c0e0", t: 0 });
+  }
+  function useHint() {
+    if (state !== "play" || solvedT || hintsLeft <= 0) return;
+    // lay down the solution wire of a colour that is not linked yet
+    const ks = paths.map((_, k) => k).filter((k) => !complete(k) || paths[k].join() !== sol[k].join() && paths[k].join() !== sol[k].slice().reverse().join());
+    if (!ks.length) return;
+    const k = ks[Math.floor(Math.random() * ks.length)];
+    hintsLeft--; hintUsed = true; score = Math.max(0, score - 40);
+    for (const c of sol[k]) { const j = owner[c]; if (j >= 0 && j !== k) { const q = paths[j]; paths[j] = q.slice(0, q.indexOf(c)); } }
+    paths[k] = sol[k].slice(); rebuildOwner(); sfx.hint();
+    texts.push({ x: G.x + G.s / 2, y: G.y + G.s / 2, text: "−40 · un filo al suo posto", c: "#ffe08a", t: 0 });
+    checkSolved();
+  }
+  function clearBoard() { if (state !== "play" || solvedT) return; paths = dots.map(() => []); rebuildOwner(); drag = null; sfx.cut(); }
+
+  // ---------- Update ----------
+  function update(dt) {
+    clock += dt;
+    for (const f of fx) f.t += dt; fx = fx.filter((f) => f.t < f.life);
+    for (const t of texts) t.t += dt; texts = texts.filter((t) => t.t < (t.big ? 1.8 : 1.6));
+    if (state !== "play") return;
+    if (!solvedT) puzzleT += dt;
+    else { solvedT += dt; if (solvedT > 1.8) nextPuzzle(); }
+  }
+  function nextPuzzle() {
+    pi++;
+    if (pi >= PUZZLES) { feat("maestro"); if (allPerfect) feat("perfetto"); gameOver(true); return; }
+    startPuzzle();
+  }
+  function gameOver(won, quit = false) {
+    if (state === "over") return;
+    state = "over"; drag = null;
+    const prev = parseInt(load(bestKey(difficulty)), 10) || 0, record = score > prev;
+    if (record) store(bestKey(difficulty), String(score));
+    const tot = results.reduce((a, r) => a + r.t, 0), perf = results.filter((r) => r.full).length;
+    menu = () => showOverlay(
+      (won ? `<h2>TUTTO ACCESO!</h2><p>Dieci griglie collegate in ${Math.floor(tot / 60)}′${String(Math.round(tot % 60)).padStart(2, "0")}″, ${perf} riempite del tutto.</p>`
+           : `<h2 class="lose">LUCI SPENTE</h2><p>${quit ? `Partita chiusa alla griglia ${pi + 1}.` : ""}</p>`) +
+      `<p>Punti: <b>${nf(score)}</b> · ${diff.label}</p>
+       ${record ? "<p style='color:var(--gold)'>★ NUOVO RECORD! ★</p>" : ""}
+       ${difficultyHTML()}
+       <button class="start" data-start>ANCORA</button>`);
+    menu(); syncControls();
+  }
+
+  // ---------- Render ----------
+  function rr(x, y, w, h, r) { ctx.beginPath(); ctx.roundRect(x, y, w, h, r); }
+  function circ(x, y, r) { ctx.beginPath(); ctx.arc(x, y, r, 0, TAU); }
+  function hexA(c, a) { const n = parseInt(c.slice(1), 16); return `rgba(${n >> 16},${(n >> 8) & 255},${n & 255},${a})`; }
+  function draw() {
+    ctx.setTransform(pxRatio, 0, 0, pxRatio, 0, 0);
+    const bg = ctx.createLinearGradient(0, 0, 0, H); bg.addColorStop(0, "#120e28"); bg.addColorStop(1, "#06050e"); ctx.fillStyle = bg; ctx.fillRect(0, 0, W, H);
+    ctx.fillStyle = "rgba(120,100,255,0.05)"; for (let i = 0; i < 40; i++) { const x = (i * 137) % W, y = (i * 89 + clock * 4 * (1 + (i % 3))) % H; ctx.fillRect(x, y, 1.5, 1.5); }
+    const cs = cellSize();
+    // board
+    rr(G.x - 6, G.y - 6, G.s + 12, G.s + 12, 12); ctx.fillStyle = "#0a0818"; ctx.fill(); ctx.strokeStyle = "rgba(120,110,220,0.5)"; ctx.lineWidth = 2; ctx.stroke();
+    // filled cells glow softly in their colour
+    for (let c = 0; c < N * N; c++) if (owner[c] >= 0) { const x = G.x + (c % N) * cs, y = G.y + ((c / N) | 0) * cs; ctx.fillStyle = hexA(COLORS[owner[c]], complete(owner[c]) ? 0.2 : 0.1); ctx.fillRect(x, y, cs, cs); }
+    ctx.strokeStyle = "rgba(140,130,230,0.22)"; ctx.lineWidth = 1;
+    for (let i = 1; i < N; i++) { ctx.beginPath(); ctx.moveTo(G.x + i * cs, G.y); ctx.lineTo(G.x + i * cs, G.y + G.s); ctx.moveTo(G.x, G.y + i * cs); ctx.lineTo(G.x + G.s, G.y + i * cs); ctx.stroke(); }
+    // wires
+    ctx.lineCap = "round"; ctx.lineJoin = "round";
+    paths.forEach((p, k) => {
+      if (p.length < 2) return;
+      const done = complete(k), col = COLORS[k];
+      const line = () => { ctx.beginPath(); p.forEach((c, i) => { const q = cellXY(c); i ? ctx.lineTo(q.x, q.y) : ctx.moveTo(q.x, q.y); }); ctx.stroke(); };
+      ctx.strokeStyle = hexA(col, done ? 0.28 : 0.14); ctx.lineWidth = cs * 0.62; line();
+      ctx.strokeStyle = col; ctx.lineWidth = cs * 0.3; line();
+      if (done) { ctx.strokeStyle = "rgba(255,255,255,0.5)"; ctx.lineWidth = cs * 0.08; line(); }
+    });
+    // dots
+    dots.forEach(([a, b], k) => {
+      for (const c of [a, b]) {
+        const q = cellXY(c), done = complete(k), pul = done ? 1 : 1 + 0.04 * Math.sin(clock * 4 + k);
+        circ(q.x, q.y, cs * 0.42 * pul); ctx.fillStyle = hexA(COLORS[k], 0.25); ctx.fill();
+        circ(q.x, q.y, cs * 0.33); ctx.fillStyle = COLORS[k]; ctx.fill();
+        circ(q.x - cs * 0.09, q.y - cs * 0.09, cs * 0.1); ctx.fillStyle = "rgba(255,255,255,0.45)"; ctx.fill();
+      }
+    });
+    // finger marker while dragging
+    if (drag) { const p = paths[drag.k], q = p.length && cellXY(p[p.length - 1]); if (q) { circ(q.x, q.y, cs * 0.5); ctx.strokeStyle = hexA(COLORS[drag.k], 0.7); ctx.lineWidth = 2; ctx.stroke(); } }
+    for (const f of fx) { const k = f.t / f.life; ctx.globalAlpha = 1 - k; circ(f.x, f.y, cs * (0.4 + k)); ctx.strokeStyle = f.c; ctx.lineWidth = 3; ctx.stroke(); }
+    ctx.globalAlpha = 1;
+    if (solvedT) { ctx.fillStyle = `rgba(90,240,255,${0.12 * Math.max(0, 1 - solvedT)})`; ctx.fillRect(G.x, G.y, G.s, G.s); }
+    // side panel / HUD
+    const linked = paths.filter((_, k) => complete(k)).length, pct = Math.round(fillPct() * 100);
+    ctx.textBaseline = "middle"; ctx.textAlign = "left";
+    const rows = [["GRIGLIA", `${pi + 1} / ${PUZZLES}  ·  ${N}×${N}`], ["PUNTI", nf(score)], ["FILI", `${linked} / ${dots.length}`], ["RIEMPITA", `${pct}%`], ["TEMPO", `${Math.floor(puzzleT)}″ / ${par()}″`]];
+    if (portrait) {
+      rr(10, 38, 340, 76, 12); ctx.fillStyle = "rgba(20,16,44,0.85)"; ctx.fill();
+      rows.forEach(([a, b], i) => { const x = 20 + (i % 3) * 112, y = 56 + Math.floor(i / 3) * 34; ctx.fillStyle = "#8a84c8"; ctx.font = "800 9px system-ui"; ctx.fillText(a, x, y - 6); ctx.fillStyle = i === 3 && pct === 100 ? "#5af0ff" : "#fff"; ctx.font = "800 14px system-ui"; ctx.fillText(b, x, y + 8); });
+    } else {
+      ctx.fillStyle = "#5af0ff"; ctx.font = "italic 900 24px system-ui"; ctx.fillText("FILI DI LUCE", 372, 36);
+      rows.forEach(([a, b], i) => { const y = 74 + i * 36; ctx.fillStyle = "#8a84c8"; ctx.font = "800 10px system-ui"; ctx.fillText(a, 374, y - 7); ctx.fillStyle = i === 3 && pct === 100 ? "#5af0ff" : "#fff"; ctx.font = "800 16px system-ui"; ctx.fillText(b, 374, y + 9); });
+    }
+    // time bar
+    const tb = clamp(1 - puzzleT / par(), 0, 1), bx = portrait ? 20 : 374, by = portrait ? 106 : 240, bw = portrait ? 320 : 246;
+    rr(bx, by, bw, 5, 3); ctx.fillStyle = "rgba(255,255,255,0.1)"; ctx.fill(); rr(bx, by, bw * tb, 5, 3); ctx.fillStyle = tb > 0.3 ? "#5af0ff" : "#ff5ac8"; ctx.fill();
+    for (const b of BTN) {
+      const dis = b.id === "hint" ? hintsLeft <= 0 : false;
+      rr(b.x, b.y, b.w, b.h, 10); ctx.fillStyle = dis ? "rgba(255,255,255,0.04)" : "rgba(90,240,255,0.12)"; ctx.fill(); ctx.strokeStyle = dis ? "rgba(255,255,255,0.15)" : "rgba(90,240,255,0.6)"; ctx.lineWidth = 2; ctx.stroke();
+      ctx.fillStyle = dis ? "rgba(255,255,255,0.3)" : "#e8f8ff"; ctx.font = "800 13px system-ui"; ctx.textAlign = "center";
+      ctx.fillText(b.id === "hint" ? `AIUTO (${hintsLeft})` : "RICOMINCIA", b.x + b.w / 2, b.y + b.h / 2);
+      ctx.textAlign = "left";
+    }
+    if (!portrait) { ctx.fillStyle = "#6a64a8"; ctx.font = "600 10px system-ui"; ctx.fillText("trascina da un punto all'altro dello stesso colore", 374, 326); ctx.fillText("i fili non si incrociano · riempi tutta la griglia", 374, 341); }
+    else { ctx.fillStyle = "#6a64a8"; ctx.font = "600 11px system-ui"; ctx.textAlign = "center"; ctx.fillText("Trascina da un punto all'altro dello stesso colore.", 180, 578); ctx.fillText("I fili non si incrociano: riempi tutta la griglia.", 180, 596); ctx.textAlign = "left"; }
+    for (const t of texts) {
+      const life = t.big ? 1.8 : 1.6; ctx.globalAlpha = Math.min(1, (life - t.t) * 2);
+      ctx.font = t.big ? "900 26px system-ui" : "800 12px system-ui"; ctx.textAlign = "center"; ctx.lineWidth = 5; ctx.strokeStyle = "rgba(6,5,14,0.85)";
+      ctx.strokeText(t.text, t.x, t.y - t.t * 10); ctx.fillStyle = t.c; ctx.fillText(t.text, t.x, t.y - t.t * 10);
+    }
+    ctx.globalAlpha = 1; ctx.textAlign = "left";
+  }
+
+  // ---------- Menus ----------
+  function showOverlay(html) { overlay.innerHTML = html; overlay.classList.remove("hidden"); }
+  function difficultyHTML() {
+    const buttons = DIFF_IDS.map((id) => { const d = DIFFICULTIES[id]; return `<button type="button" data-diff="${id}" class="${id === difficulty ? "on" : ""}" style="--c:${d.color}">${d.label}</button>`; }).join("");
+    const best = parseInt(load(bestKey(difficulty)), 10);
+    return `<div class="diff">${buttons}</div><p class="muted">${diff.desc}${best ? ` · Record: ${nf(best)}` : ""}</p>`;
+  }
+  function setDifficulty(id) { if (!DIFFICULTIES[id]) return; difficulty = id; diff = DIFFICULTIES[id]; store(DIFF_KEY, id); if (menu) menu(); }
+  function showTitle() {
+    menu = showTitle; state = "menu";
+    showOverlay(
+      `<h1>FILI DI <span>LUCE</span></h1>
+       <p>Sulla griglia ci sono coppie di punti luminosi dello stesso colore. Trascina il dito da un punto all'altro per stendere un filo di luce: i fili non possono incrociarsi né passare sopra gli altri punti. Collega tutte le coppie, e se riempi ogni casella della griglia prendi il bonus.</p>
+       <div class="pts">
+         <span><b>Fili</b></span><span>parti da un punto o dalla punta di un filo; torna indietro per accorciarlo, passa su un altro filo per tagliarlo</span>
+         <span><b>Punti</b></span><span>dieci griglie sempre più grandi: punti per ogni griglia, bonus per il tempo e per la griglia piena</span>
+         <span><b>Aiuto</b></span><span>tre in tutta la partita: mette un filo al posto giusto, ma costa 40 punti</span>
+       </div>
+       <p class="muted help">${touchMode ? "Si gioca trascinando il dito." : "Si gioca col mouse, trascinando. P pausa, M musica, R ricomincia la griglia."}</p>
+       ${difficultyHTML()}
+       <button class="start" data-start>ACCENDI</button>`);
+    syncControls();
+  }
+  function togglePause() {
+    if (state === "play") { pausedFrom = state; state = "paused"; drag = null; showOverlay(`<h2>PAUSA</h2><button class="start" data-resume>CONTINUA</button><p class="muted">Musica: <button type="button" data-music>${music ? "ACCESA" : "SPENTA"}</button></p>`); }
+    else if (state === "paused") { state = pausedFrom; overlay.classList.add("hidden"); lastT = performance.now(); }
+    syncControls();
+  }
+  window.addEventListener("sala:termina", () => { if (state !== "paused") return; overlay.classList.add("hidden"); gameOver(false, true); });
+  function syncControls() { pauseBtn.style.display = state === "play" && touchMode ? "block" : "none"; resize(); }
+  pauseBtn.addEventListener("click", () => togglePause());
+  overlay.addEventListener("click", (e) => {
+    const q = (s) => e.target.closest(s); let el;
+    if ((el = q("[data-diff]"))) { setDifficulty(el.dataset.diff); return; }
+    if (q("[data-music]")) { music = !music; store("fili-music", music ? "1" : "0"); q("[data-music]").textContent = music ? "ACCESA" : "SPENTA"; return; }
+    if (q("[data-start]")) { startGame(); return; }
+    if (q("[data-resume]")) { togglePause(); return; }
+  });
+
+  // ---------- Input ----------
+  let touchMode = !!(window.matchMedia && matchMedia("(pointer: coarse)").matches);
+  const toGame = (e) => { const rc = canvas.getBoundingClientRect(); return { x: ((e.clientX - rc.left) / rc.width) * W, y: ((e.clientY - rc.top) / rc.height) * H }; };
+  canvas.addEventListener("pointerdown", (e) => {
+    e.preventDefault(); if (state !== "play") return;
+    const p = toGame(e);
+    for (const b of BTN) if (p.x >= b.x && p.x <= b.x + b.w && p.y >= b.y && p.y <= b.y + b.h) { if (b.id === "hint") useHint(); else clearBoard(); return; }
+    try { canvas.setPointerCapture(e.pointerId); } catch { /* ignore */ }
+    begin(cellAt(p));
+  });
+  canvas.addEventListener("pointermove", (e) => { if (drag) moveTo(cellAt(toGame(e))); });
+  canvas.addEventListener("pointerup", end); canvas.addEventListener("pointercancel", end);
+  window.addEventListener("keydown", (e) => {
+    const k = e.key.toLowerCase();
+    if (state === "menu" || state === "over") { if (e.key === "Enter") startGame(); return; }
+    if (k === "p" || k === "escape") { if (!e.repeat) togglePause(); return; }
+    if (k === "m" && !e.repeat) { music = !music; store("fili-music", music ? "1" : "0"); return; }
+    if (k === "r" && !e.repeat) clearBoard();
+    if (k === "h" && !e.repeat) useHint();
+  });
+  window.addEventListener("blur", () => { if (state === "play") togglePause(); });
+  window.addEventListener("pointerdown", (e) => { if (e.pointerType === "touch" && !touchMode) { touchMode = true; syncControls(); if (menu) menu(); } }, true);
+
+  // ---------- Loop ----------
+  let lastT = performance.now();
+  function frame(now) {
+    const dt = Math.min(0.05, (now - lastT) / 1000); lastT = now;
+    if (state !== "paused") update(dt);
+    draw();
+    requestAnimationFrame(frame);
+  }
+  resize();
+  N = 5; sol = generate(5); dots = sol.map((p) => [p[0], p[p.length - 1]]); paths = sol.map((p, k) => (k % 2 ? p.slice() : [])); owner = Array(25).fill(-1); dotAt = Array(25).fill(-1); rebuildOwner();
+  showTitle();
+  requestAnimationFrame(frame);
+})();
+</script>
+<script src="../../shared/iniziali.js" data-record="fili-best-" data-kind="score"></script>
+</body>
+</html>

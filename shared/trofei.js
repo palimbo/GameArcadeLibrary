@@ -9,6 +9,7 @@
   "use strict";
   // record key prefix → [bronzo, argento, oro] (and t for times)
   const DATA = {
+    "fili-best-": [2000, 2800, 3300],   // fili-di-luce (stima sulle regole di punteggio)
     "capostazione-best-": [15000, 25000, 28000],   // capostazione (bot, con tempi di tocco umani)
     "pizzeria-best-": [800, 1100, 1200],   // pizzeria-svelta (bot, con tempi di tocco umani)
     "teschi-best-": [700000, 850000, 800000],   // teschi-e-fiocchi (stima sul punteggio a 1.000.000)

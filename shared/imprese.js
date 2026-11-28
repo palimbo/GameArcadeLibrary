@@ -9,6 +9,11 @@
   "use strict";
   // record key prefix of the game (as in trofei.js) → its feats
   const LIST = {
+    "fili-best-": [   // fili-di-luce
+      { id: "lampo", name: "Lampo di genio", desc: "risolvi una griglia da 7×7 in su in meno di 20 secondi, senza aiuti" },
+      { id: "perfetto", name: "Tutto illuminato", desc: "finisci una partita con tutte e dieci le griglie piene" },
+      { id: "maestro", name: "Maestro dei fili", desc: "finisci tutte e dieci le griglie" },
+    ],
     "capostazione-best-": [   // capostazione
       { id: "senzaerrori", name: "Puntuale come un orologio", desc: "finisci un livello, dal terzo in poi, senza un treno sbagliato" },
       { id: "serie", name: "Serie d'oro", desc: "porta 30 treni giusti di fila" },
