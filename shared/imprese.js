@@ -9,6 +9,11 @@
   "use strict";
   // record key prefix of the game (as in trofei.js) → its feats
   const LIST = {
+    "buca-best-": [   // buca-golosa
+      { id: "torre", name: "Giù la torre", desc: "inghiotti la torre in centro città" },
+      { id: "rivale", name: "Pesce grande", desc: "inghiotti una buca rivale" },
+      { id: "metropoli", name: "Metropoli in un boccone", desc: "inghiotti almeno metà delle cose della città in una partita" },
+    ],
     "dama-best-": [   // dama
       { id: "dama", name: "Fai dama", desc: "porta una pedina fino in fondo alla scacchiera" },
       { id: "retata", name: "Retata", desc: "prendi almeno tre pezzi in una mossa sola" },

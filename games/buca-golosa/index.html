@@ -1,0 +1,513 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no, viewport-fit=cover">
+<title>Buca Golosa</title>
+<style>
+  :root {
+    --bg: #1a1a24;
+    --fg: #f4f6ee;
+    --muted: #c8d0dc;
+    --gold: #ffd23a;
+    --red: #ff5a4a;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  html, body {
+    height: 100%;
+    background: var(--bg);
+    color: var(--fg);
+    font-family: system-ui, -apple-system, "Segoe UI", sans-serif;
+    overflow: hidden;
+    user-select: none;
+    -webkit-user-select: none;
+    -webkit-tap-highlight-color: transparent;
+    touch-action: none;
+  }
+  #wrap { position: fixed; inset: 0; display: flex; align-items: center; justify-content: center; }
+  canvas { cursor: pointer; display: block; touch-action: none; border-radius: 6px; box-shadow: 0 0 0 2px #2e3a4e, 0 10px 40px rgba(0,0,0,0.6); }
+  #pauseBtn {
+    position: fixed; z-index: 3; display: none; right: 10px; top: calc(10px + env(safe-area-inset-top, 0px));
+    font: 700 13px system-ui, sans-serif; color: var(--fg);
+    background: rgba(0, 0, 0, 0.6); border: 1px solid rgba(244, 246, 238, 0.35);
+    border-radius: 8px; padding: 6px 10px; cursor: pointer;
+  }
+  #touch { display: none !important; }
+  #overlay {
+    position: fixed; inset: 0; z-index: 5;
+    display: flex; flex-direction: column; align-items: center; justify-content: flex-start;
+    gap: 14px; padding: 16px; text-align: center; overflow-y: auto;
+    background: rgba(20, 26, 36, 0.94);
+  }
+  #overlay > :first-child { margin-top: auto; }
+  #overlay > :last-child { margin-bottom: auto; }
+  #overlay.hidden { display: none; }
+  #homeLink {
+    position: fixed; top: calc(10px + env(safe-area-inset-top, 0px)); left: 10px; z-index: 6;
+    font: 600 13px/1 system-ui, sans-serif; color: #fff; text-decoration: none;
+    padding: 8px 12px; border-radius: 999px; background: rgba(0,0,0,.55);
+    border: 1px solid rgba(255,255,255,.25);
+  }
+  #homeLink:hover { background: rgba(0,0,0,.8); }
+  #overlay.hidden ~ #homeLink { display: none; }
+  @media (max-width: 700px) { #overlay { padding-top: calc(52px + env(safe-area-inset-top, 0px)); } }
+  #overlay h1 { font-size: clamp(32px, 10vw, 58px); font-weight: 900; font-style: italic; letter-spacing: 1px; color: var(--gold);
+    text-shadow: 3px 3px 0 #2a2a6a, 0 0 22px rgba(255,210,58,0.35); }
+  #overlay h1 span { color: #fff; }
+  #overlay h2 { font-size: clamp(26px, 7vw, 42px); font-weight: 900; letter-spacing: 2px; color: var(--gold); }
+  #overlay h2.lose { color: var(--red); }
+  #overlay p { max-width: 540px; font-size: clamp(13px, 3.4vw, 16px); line-height: 1.55; }
+  #overlay p.muted { color: var(--muted); }
+  #overlay .pts { display: grid; grid-template-columns: repeat(2, auto); gap: 4px 18px; font-size: 13px; color: var(--muted); text-align: left; max-width: 560px; }
+  #overlay .pts b { color: var(--fg); }
+  #overlay .diff { display: flex; gap: 10px; flex-wrap: wrap; justify-content: center; }
+  #overlay button {
+    font: 800 15px system-ui, sans-serif; letter-spacing: 1.5px; color: var(--fg);
+    background: transparent; cursor: pointer;
+    border: 2px solid rgba(244,246,238,0.3); border-radius: 10px; padding: 9px 16px;
+  }
+  #overlay .diff button.on { border-color: var(--c); color: var(--c); box-shadow: 0 0 12px var(--c); }
+  #overlay button.start { border-color: var(--gold); color: #2a1a02; background: var(--gold); padding: 11px 30px; box-shadow: 0 4px 0 #a87a0a; }
+  #overlay .menuList { display: flex; flex-wrap: wrap; gap: 6px 10px; justify-content: center; max-width: 600px; font-size: 13px; color: var(--muted); }
+  #overlay .menuList span { background: rgba(255,255,255,0.06); border-radius: 8px; padding: 4px 9px; }
+  #overlay .menuList b { color: var(--gold); }
+  #overlay .upgs { display: flex; gap: 10px; flex-wrap: wrap; justify-content: center; }
+  #overlay button.upg { display: flex; flex-direction: column; gap: 3px; width: 170px; text-align: center; letter-spacing: 0.3px; font-size: 13px; }
+  #overlay button.upg span { font-weight: 600; font-size: 12px; color: var(--muted); }
+  #overlay button.upg:disabled { opacity: 0.4; cursor: default; }
+  @media (max-height: 560px) {
+    #overlay { gap: 8px; }
+    #overlay h1 { font-size: 30px; }
+    #overlay p { font-size: 13px; line-height: 1.4; }
+    #overlay .help, #overlay .pts { display: none; }
+    #overlay .menuList { font-size: 11px; gap: 4px; }
+    #overlay button.upg { width: 150px; padding: 6px 10px; }
+  }
+</style>
+</head>
+<body>
+<div id="wrap"><canvas id="game"></canvas></div>
+<div id="touch"></div>
+<button id="pauseBtn" type="button" aria-label="Pausa">❚❚</button>
+<div id="overlay"></div>
+<a id="homeLink" href="../../index.html">← Sala Giochi</a>
+
+
+<script>
+(() => {
+  "use strict";
+
+  const TAU = Math.PI * 2;
+  const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
+  const rnd = (a, b) => a + Math.random() * (b - a);
+  const pick = (a) => a[Math.floor(Math.random() * a.length)];
+  const nf = (n) => Math.floor(n).toLocaleString("it-IT");
+  const feat = (id) => window.dispatchEvent(new CustomEvent("sala:impresa", { detail: id }));
+  function store(k, v) { try { localStorage.setItem(k, v); } catch { /* ignore */ } }
+  function load(k) { try { return localStorage.getItem(k); } catch { return null; } }
+
+  const DIFFICULTIES = {
+    facile:    { label: "FACILE",    color: "#7ee0a0", desc: "2 minuti e mezzo · le buche rivali sono pigre", time: 150, rival: 0.7 },
+    normale:   { label: "NORMALE",   color: "#ffd23a", desc: "2 minuti · rivali affamate", time: 120, rival: 1 },
+    difficile: { label: "DIFFICILE", color: "#ff5a4a", desc: "1 minuto e 40 · rivali voraci e veloci", time: 100, rival: 1.25 },
+  };
+  const DIFF_IDS = Object.keys(DIFFICULTIES);
+  const DIFF_KEY = "buca-difficulty";
+  const bestKey = (id) => `buca-best-${id}`;
+  let difficulty = DIFFICULTIES[load(DIFF_KEY)] ? load(DIFF_KEY) : "normale";
+  let diff = DIFFICULTIES[difficulty];
+
+  // object types: size (radius in px) and points
+  const T = {
+    person: { s: 4, p: 1 }, cone: { s: 4, p: 1 }, hydrant: { s: 5, p: 2 }, bin: { s: 6, p: 2 }, lamp: { s: 6, p: 3 },
+    bush: { s: 9, p: 3 }, bench: { s: 10, p: 4 }, tree: { s: 13, p: 6 }, car: { s: 17, p: 12 }, kiosk: { s: 19, p: 10 },
+    fountain: { s: 26, p: 20 }, bus: { s: 28, p: 30 }, house: { s: 36, p: 40 }, shop: { s: 44, p: 60 }, building: { s: 58, p: 100 }, tower: { s: 80, p: 250 },
+  };
+  const WORLD = 1800, BLOCK = 300, ROAD = 44;
+
+  // ---------- Canvas ----------
+  const canvas = document.getElementById("game"), ctx = canvas.getContext("2d");
+  const overlay = document.getElementById("overlay"), pauseBtn = document.getElementById("pauseBtn");
+  let W = 640, H = 360, portrait = false, pxRatio = 1;
+  function resize() {
+    portrait = window.innerHeight > window.innerWidth * 1.05;
+    W = portrait ? 360 : 640; H = portrait ? 640 : 360;
+    const s = Math.max(0.2, Math.min((window.innerWidth - 4) / W, (window.innerHeight - 4) / H));
+    pxRatio = Math.min(3, s * (window.devicePixelRatio || 1));
+    canvas.style.width = W * s + "px"; canvas.style.height = H * s + "px";
+    canvas.width = Math.round(W * pxRatio); canvas.height = Math.round(H * pxRatio);
+  }
+  window.addEventListener("resize", () => syncControls());
+
+  // ---------- Sound ----------
+  let audioCtx = null;
+  function tone(freq, dur, type = "square", vol = 0.03, delay = 0, slide = 0) {
+    if (!audioCtx) return;
+    const t = audioCtx.currentTime + delay, o = audioCtx.createOscillator(), g = audioCtx.createGain();
+    o.type = type; o.frequency.setValueAtTime(freq, t); if (slide) o.frequency.exponentialRampToValueAtTime(slide, t + dur);
+    g.gain.setValueAtTime(0.0001, t); g.gain.exponentialRampToValueAtTime(vol, t + 0.008); g.gain.exponentialRampToValueAtTime(0.0001, t + dur);
+    o.connect(g).connect(audioCtx.destination); o.start(t); o.stop(t + dur + 0.02);
+  }
+  let gulpT = 0;
+  const sfx = {
+    gulp: (s) => { if (gulpT > 0) return; gulpT = 0.05; const f = clamp(900 - s * 9, 120, 900); tone(f, 0.12, "sine", 0.05, 0, f * 0.45); },
+    big: () => { tone(160, 0.5, "sawtooth", 0.05, 0, 50); tone(80, 0.6, "sine", 0.08, 0.05, 40); },
+    grow: () => [523, 659, 784].forEach((f, i) => tone(f, 0.1, "triangle", 0.035, i * 0.06)),
+    eaten: () => { tone(400, 0.6, "sawtooth", 0.05, 0, 60); },
+    tick: () => tone(1500, 0.04, "square", 0.025),
+    end: () => [784, 659, 523, 392].forEach((f, i) => tone(f, 0.2, "triangle", 0.04, i * 0.12)),
+  };
+  // a bouncy bass line
+  let music = load("buca-music") !== "0", mb = 0, nextT = 0;
+  const BASS = [36, 36, 43, 36, 39, 39, 46, 39, 41, 41, 48, 41, 43, 43, 38, 43];
+  setInterval(() => {
+    if (!audioCtx || !music || state !== "play") { if (audioCtx) nextT = audioCtx.currentTime + 0.05; return; }
+    while (nextT < audioCtx.currentTime + 0.15) {
+      const d = Math.max(0, nextT - audioCtx.currentTime), m = BASS[mb % 16];
+      tone(440 * Math.pow(2, (m - 69) / 12), 0.12, "triangle", 0.04, d);
+      if (mb % 2) tone(6000, 0.015, "square", 0.004, d);
+      if (mb % 4 === 0) tone(440 * Math.pow(2, (m + 24 - 69) / 12), 0.08, "square", 0.008, d + 0.03);
+      mb++; nextT += 0.16;
+    }
+  }, 50);
+
+  // ---------- The city ----------
+  let objs = [], roadsH = [], roadsV = [], blocks = [];
+  function add(type, x, y, extra = {}) { const t = T[type]; objs.push({ type, x, y, s: t.s * (extra.k || 1), p: t.p, rot: extra.rot || 0, c: extra.c, vx: extra.vx || 0, vy: extra.vy || 0, alive: true, fall: 0, seed: Math.random() }); }
+  function buildCity() {
+    objs = []; blocks = [];
+    const n = WORLD / BLOCK;
+    roadsH = []; roadsV = []; for (let i = 0; i <= n; i++) { roadsH.push(i * BLOCK); roadsV.push(i * BLOCK); }
+    const carCols = ["#e84a4a", "#3a7ae8", "#f2c230", "#f4f4f4", "#3aa84a", "#2a2a2a", "#f28a2a"];
+    const center = Math.floor(n / 2) - 1;
+    for (let bx = 0; bx < n; bx++) for (let by = 0; by < n; by++) {
+      const x0 = bx * BLOCK + ROAD / 2 + 10, y0 = by * BLOCK + ROAD / 2 + 10, sz = BLOCK - ROAD - 20, cx = x0 + sz / 2, cy = y0 + sz / 2;
+      let kind = pick(["park", "houses", "houses", "shops", "offices", "parking"]);
+      if (bx === center && by === center) kind = "tower";
+      if ((bx + by) % 5 === 0 && kind === "offices") kind = "park";
+      blocks.push({ x: x0, y: y0, s: sz, kind });
+      if (kind === "park") {
+        add("fountain", cx, cy);
+        for (let i = 0; i < 9; i++) { const a = rnd(0, TAU), d = rnd(60, sz / 2 - 16); add(pick(["tree", "tree", "bush"]), cx + Math.cos(a) * d, cy + Math.sin(a) * d); }
+        for (let i = 0; i < 4; i++) add("bench", cx + [-46, 46, 0, 0][i], cy + [0, 0, -46, 46][i], { rot: i < 2 ? Math.PI / 2 : 0 });
+        for (let i = 0; i < 7; i++) add("person", cx + rnd(-sz / 2, sz / 2) * 0.8, cy + rnd(-sz / 2, sz / 2) * 0.8, { vx: rnd(-14, 14), vy: rnd(-14, 14) });
+        add("kiosk", x0 + 26, y0 + 26);
+      } else if (kind === "houses") {
+        for (const [dx, dy] of [[0.27, 0.27], [0.73, 0.27], [0.27, 0.73], [0.73, 0.73]]) {
+          add("house", x0 + sz * dx, y0 + sz * dy, { c: pick(["#c84a3a", "#a8583a", "#7a4a8a", "#3a6a8a", "#5a8a4a"]), rot: Math.random() < 0.5 ? 0 : Math.PI / 2 });
+        }
+        for (let i = 0; i < 6; i++) add(pick(["tree", "bush", "bush"]), cx + rnd(-20, 20), y0 + rnd(10, sz - 10));
+        for (let i = 0; i < 3; i++) add(pick(["bin", "hydrant", "person"]), cx + rnd(-sz / 2, sz / 2) * 0.9, cy + rnd(-12, 12));
+        add("car", cx, cy, { c: pick(carCols), rot: Math.PI / 2 });
+      } else if (kind === "shops") {
+        add("shop", x0 + sz * 0.28, y0 + sz * 0.3, { c: "#d8b07a" }); add("shop", x0 + sz * 0.72, y0 + sz * 0.3, { c: "#9ac0d8" });
+        add("kiosk", x0 + sz * 0.3, y0 + sz * 0.75); add("kiosk", x0 + sz * 0.7, y0 + sz * 0.75);
+        for (let i = 0; i < 10; i++) add("person", cx + rnd(-sz / 2, sz / 2) * 0.85, y0 + sz * rnd(0.5, 0.95), { vx: rnd(-16, 16), vy: rnd(-6, 6) });
+        for (let i = 0; i < 4; i++) add(pick(["bin", "cone", "bench"]), x0 + rnd(10, sz - 10), y0 + sz * 0.55);
+      } else if (kind === "offices") {
+        add("building", cx, y0 + sz * 0.3, { c: pick(["#7a8aa0", "#8a7a6a", "#5a6a7a"]) });
+        add("shop", x0 + sz * 0.3, y0 + sz * 0.78, { c: "#c8a0a0" });
+        for (let i = 0; i < 4; i++) add("tree", x0 + sz * 0.62 + (i % 2) * 40, y0 + sz * 0.68 + Math.floor(i / 2) * 40);
+        for (let i = 0; i < 4; i++) add(pick(["person", "bin", "lamp"]), x0 + rnd(10, sz - 10), y0 + sz * 0.56);
+      } else if (kind === "parking") {
+        for (let r = 0; r < 3; r++) for (let c = 0; c < 5; c++) if (Math.random() < 0.75) add("car", x0 + 28 + c * ((sz - 56) / 4), y0 + 40 + r * 80, { c: pick(carCols), rot: Math.PI / 2 });
+        add("bus", cx, y0 + sz - 24, { c: "#f2a82a" });
+        for (let i = 0; i < 6; i++) add(pick(["cone", "person", "bin"]), x0 + rnd(10, sz - 10), y0 + rnd(10, sz - 10));
+      } else if (kind === "tower") {
+        add("tower", cx, cy, { c: "#4a5a7a" });
+        for (let i = 0; i < 8; i++) { const a = (i / 8) * TAU; add(i % 2 ? "tree" : "lamp", cx + Math.cos(a) * 112, cy + Math.sin(a) * 112); }
+        for (let i = 0; i < 8; i++) add("person", cx + rnd(-120, 120), cy + rnd(-120, 120), { vx: rnd(-12, 12), vy: rnd(-12, 12) });
+      }
+    }
+    // sidewalks: lamps, bins, hydrants and people along every road
+    for (const y of roadsH) for (let x = 40; x < WORLD; x += 70) { const side = Math.random() < 0.5 ? -1 : 1; add(pick(["lamp", "lamp", "bin", "hydrant", "cone"]), x + rnd(-10, 10), clamp(y + side * (ROAD / 2 + 6), 6, WORLD - 6)); if (Math.random() < 0.4) add("person", x + rnd(0, 40), clamp(y + side * (ROAD / 2 + 4), 6, WORLD - 6), { vx: pick([-18, 18]) }); }
+    for (const x of roadsV) for (let y = 40; y < WORLD; y += 90) { const side = Math.random() < 0.5 ? -1 : 1; add(pick(["lamp", "bin", "hydrant"]), clamp(x + side * (ROAD / 2 + 6), 6, WORLD - 6), y + rnd(-10, 10)); if (Math.random() < 0.4) add("person", clamp(x + side * (ROAD / 2 + 4), 6, WORLD - 6), y, { vy: pick([-18, 18]) }); }
+    // traffic
+    for (let i = 1; i < roadsH.length - 1; i++) for (let k = 0; k < 3; k++) { const dir = k % 2 ? 1 : -1; add(Math.random() < 0.15 ? "bus" : "car", rnd(0, WORLD), roadsH[i] + dir * 10, { c: pick(carCols), vx: dir * rnd(50, 80), rot: 0 }); }
+    for (let i = 1; i < roadsV.length - 1; i++) for (let k = 0; k < 2; k++) { const dir = k % 2 ? 1 : -1; add("car", roadsV[i] - dir * 10, rnd(0, WORLD), { c: pick(carCols), vy: dir * rnd(50, 80), rot: Math.PI / 2 }); }
+    totalObjs = objs.length;
+  }
+
+  // ---------- State ----------
+  let state = "menu", menu = null, pausedFrom = null, clock = 0;
+  let holes = [], player = null, timeLeft = 120, score = 0, eatenCount = 0, totalObjs = 1, cam = { x: 900, y: 900, z: 1 }, texts = [], input = { x: 0, y: 0 }, keys = {}, joy = null, lastSec = 0, ateTower = false;
+  const NAMES = [{ name: "Tu", c: "#ffd23a" }, { name: "Voragine", c: "#ff5a8a" }, { name: "Tombino", c: "#5ad0ff" }];
+  function newHole(i, x, y) { return { i, x, y, r: 14, vx: 0, vy: 0, score: 0, dead: 0, goal: null, think: 0, ...NAMES[i] }; }
+
+  function startGame() {
+    if (!audioCtx) { try { audioCtx = new (window.AudioContext || window.webkitAudioContext)(); } catch { audioCtx = null; } }
+    if (audioCtx && audioCtx.state === "suspended") audioCtx.resume();
+    buildCity();
+    holes = [newHole(0, BLOCK * 3 - 0, BLOCK * 3 + 40), newHole(1, BLOCK * 1, BLOCK * 1), newHole(2, BLOCK * 5, BLOCK * 5)];
+    player = holes[0]; timeLeft = diff.time; score = 0; eatenCount = 0; texts = []; lastSec = Math.ceil(timeLeft); ateTower = false;
+    cam = { x: player.x, y: player.y, z: 1.25 };
+    state = "play"; menu = null; overlay.classList.add("hidden"); syncControls();
+  }
+  const speedOf = (h) => 105 + h.r * 0.9;
+  const canEat = (h, o) => o.s < h.r * 0.86;
+
+  // ---------- Update ----------
+  function update(dt) {
+    clock += dt; gulpT -= dt;
+    for (const t of texts) t.t += dt; texts = texts.filter((t) => t.t < 1.2);
+    if (state !== "play") return;
+    timeLeft -= dt;
+    if (Math.ceil(timeLeft) !== lastSec) { lastSec = Math.ceil(timeLeft); if (lastSec <= 10 && lastSec > 0) sfx.tick(); }
+    if (timeLeft <= 0) { timeLeft = 0; endGame(); return; }
+    // moving things
+    for (const o of objs) {
+      if (!o.alive) { if (o.fall > 0) o.fall = Math.max(0, o.fall - dt * 2.6); continue; }
+      if (o.vx || o.vy) {
+        o.x += o.vx * dt; o.y += o.vy * dt;
+        if (o.type === "person") { if (Math.random() < dt * 0.4) { o.vx = rnd(-16, 16); o.vy = o.vy && Math.abs(o.vy) > 15 ? o.vy : rnd(-16, 16); } o.x = clamp(o.x, 4, WORLD - 4); o.y = clamp(o.y, 4, WORLD - 4); }
+        else { if (o.x < -30) o.x += WORLD + 60; if (o.x > WORLD + 30) o.x -= WORLD + 60; if (o.y < -30) o.y += WORLD + 60; if (o.y > WORLD + 30) o.y -= WORLD + 60; }
+      }
+    }
+    // the player
+    let dx = (keys.ArrowRight || keys.d ? 1 : 0) - (keys.ArrowLeft || keys.a ? 1 : 0), dy = (keys.ArrowDown || keys.s ? 1 : 0) - (keys.ArrowUp || keys.w ? 1 : 0);
+    if (!dx && !dy && (input.x || input.y)) { dx = input.x; dy = input.y; }
+    const m = Math.hypot(dx, dy); if (m > 1) { dx /= m; dy /= m; }
+    moveHole(player, dx, dy, dt);
+    for (const h of holes) if (h !== player) aiHole(h, dt);
+    // eating
+    for (const h of holes) {
+      if (h.safe > 0) h.safe -= dt;
+      if (h.dead > 0) { h.dead -= dt; if (h.dead <= 0) respawn(h); continue; }
+      for (const o of objs) {
+        if (!o.alive || !canEat(h, o)) continue;
+        const ddx = o.x - h.x, ddy = o.y - h.y, lim = h.r - o.s * 0.35;
+        if (ddx * ddx + ddy * ddy < lim * lim) eat(h, o);
+      }
+    }
+    // holes swallow smaller holes
+    for (const a of holes) for (const b of holes) {
+      if (a === b || a.dead > 0 || b.dead > 0 || b.safe > 0 || a.r < b.r * 1.3) continue;
+      if (Math.hypot(a.x - b.x, a.y - b.y) < a.r - b.r * 0.4) {
+        const pts = 50 + Math.round(b.r * 2); a.score += pts; a.r = Math.sqrt(a.r * a.r + b.r * b.r * 0.3);
+        b.dead = 2.5; b.r = Math.max(14, b.r * 0.75); b.safe = 5.5;
+        if (a === player) { score += pts; feat("rivale"); texts.push({ x: a.x, y: a.y - a.r - 10, text: `${b.name} inghiottita! +${pts}`, c: "#ff8ad8", t: 0 }); sfx.big(); }
+        if (b === player) { sfx.eaten(); texts.push({ x: b.x, y: b.y - 30, text: `Ti ha inghiottita ${a.name}!`, c: "#ff8a8a", t: 0 }); }
+      }
+    }
+    // camera follows and zooms out as you grow
+    const zt = clamp(1.25 * 40 / (player.r + 26), 0.42, 1.25) * (portrait ? 0.9 : 1);
+    cam.z += (zt - cam.z) * Math.min(1, dt * 2); cam.x += (player.x - cam.x) * Math.min(1, dt * 6); cam.y += (player.y - cam.y) * Math.min(1, dt * 6);
+  }
+  function moveHole(h, dx, dy, dt) {
+    if (h.dead > 0) return;
+    const sp = speedOf(h);
+    h.vx += (dx * sp - h.vx) * Math.min(1, dt * 8); h.vy += (dy * sp - h.vy) * Math.min(1, dt * 8);
+    h.x = clamp(h.x + h.vx * dt, h.r * 0.5, WORLD - h.r * 0.5); h.y = clamp(h.y + h.vy * dt, h.r * 0.5, WORLD - h.r * 0.5);
+  }
+  function aiHole(h, dt) {
+    h.think -= dt;
+    if (h.think <= 0 || !h.goal || !h.goal.alive) {
+      h.think = rnd(0.6, 1.2) / diff.rival;
+      // the best nearby meal: worth the most per distance, avoiding bigger holes
+      let best = null, bv = 0;
+      for (const o of objs) { if (!o.alive || !canEat(h, o)) continue; const d = Math.hypot(o.x - h.x, o.y - h.y); if (d > 320) continue; const v = (o.p + 1) / (d + 40); if (v > bv) { bv = v; best = o; } }
+      h.goal = best || { x: rnd(100, WORLD - 100), y: rnd(100, WORLD - 100), alive: true, fake: true };
+      // chase the player if clearly bigger, flee if clearly smaller
+      if (player.dead <= 0) { const d = Math.hypot(player.x - h.x, player.y - h.y); if (h.r > player.r * 1.35 && d < 260 && !(player.safe > 0)) h.goal = player; if (player.r > h.r * 1.2 && d < 160) h.goal = { x: h.x * 2 - player.x, y: h.y * 2 - player.y, alive: true, fake: true }; }
+    }
+    const g = h.goal; let dx = g.x - h.x, dy = g.y - h.y; const d = Math.hypot(dx, dy) || 1;
+    if (g.fake && d < 20) h.goal = null;
+    moveHole(h, dx / d * diff.rival * 0.85, dy / d * diff.rival * 0.85, dt);
+  }
+  function eat(h, o) {
+    o.alive = false; o.fall = 1; o.hole = h;
+    const before = h.r;
+    h.r = Math.sqrt(h.r * h.r + o.s * o.s * (h === player ? 0.13 : 0.13 * diff.rival * 0.85)); h.score += o.p;
+    if (h === player) {
+      score += o.p; eatenCount++; sfx.gulp(o.s);
+      if (o.s >= 26) { texts.push({ x: o.x, y: o.y - 20, text: `+${o.p}`, c: "#fff6a0", t: 0 }); if (o.s >= 40) sfx.big(); }
+      if (o.type === "tower") { ateTower = true; feat("torre"); texts.push({ x: o.x, y: o.y - 60, text: "LA TORRE! +250", c: "#ffd23a", t: 0 }); }
+      // tell the player when a bigger class of things becomes edible
+      for (const [type, label] of [["car", "auto"], ["house", "case"], ["building", "palazzi"], ["tower", "la torre"]]) if (before * 0.86 <= T[type].s && h.r * 0.86 > T[type].s) { texts.push({ x: h.x, y: h.y - h.r - 16, text: `Ora puoi mangiare ${label}!`, c: "#8affb0", t: 0 }); sfx.grow(); }
+    }
+  }
+  function respawn(h) { let best = null, bd = -1; for (let k = 0; k < 12; k++) { const x = rnd(150, WORLD - 150), y = rnd(150, WORLD - 150), d = Math.min(...holes.filter((o) => o !== h).map((o) => Math.hypot(o.x - x, o.y - y))); if (d > bd) { bd = d; best = { x, y }; } } h.x = best.x; h.y = best.y; h.vx = h.vy = 0; h.goal = null; }
+  function endGame(quit = false) {
+    state = "over"; sfx.end();
+    const pct = Math.round((eatenCount / totalObjs) * 100);
+    if (pct >= 50) feat("metropoli");
+    const rank = [...holes].sort((a, b) => b.score - a.score).findIndex((h) => h === player) + 1;
+    const prev = parseInt(load(bestKey(difficulty)), 10) || 0, record = !quit && score > prev;
+    if (record) store(bestKey(difficulty), String(score));
+    menu = () => showOverlay(
+      `<h2>${quit ? "STOP" : rank === 1 ? "LA BUCA PIÙ GOLOSA!" : "TEMPO SCADUTO"}</h2>
+       <p>${quit ? "La città respira." : `Hai inghiottito ${nf(eatenCount)} cose, il ${pct}% della città${ateTower ? ", torre compresa" : ""}. Sei arrivata ${rank}ª su 3.`}</p>
+       <p>${holes.map((h) => `<span style="color:${h.c}">${h.name}: ${nf(h.score)}</span>`).join(" · ")}</p>
+       <p>Punti: <b>${nf(score)}</b> · ${diff.label}</p>
+       ${record ? "<p style='color:var(--gold)'>★ NUOVO RECORD! ★</p>" : ""}
+       ${difficultyHTML()}
+       <button class="start" data-start>ANCORA UNA FAME</button>`);
+    menu(); syncControls();
+  }
+
+  // ---------- Drawing ----------
+  function circ(x, y, r) { ctx.beginPath(); ctx.arc(x, y, r, 0, TAU); }
+  function rr(x, y, w, h, r) { ctx.beginPath(); ctx.roundRect(x, y, w, h, r); }
+  function drawObj(o) {
+    const s = o.s;
+    ctx.save(); ctx.translate(o.x, o.y); if (o.rot) ctx.rotate(o.rot);
+    const sh = (w, h, r = 2) => { rr(-w / 2 + s * 0.12, -h / 2 + s * 0.18, w, h, r); ctx.fillStyle = "rgba(0,0,0,0.22)"; ctx.fill(); };
+    switch (o.type) {
+      case "person": circ(1, 2, 3.5); ctx.fillStyle = "rgba(0,0,0,0.2)"; ctx.fill(); circ(0, 0, 3.5); ctx.fillStyle = ["#e84a6a", "#3a8ae8", "#f2c230", "#5ab86a"][Math.floor(o.seed * 4)]; ctx.fill(); circ(0, -0.5, 2); ctx.fillStyle = "#ffd8b0"; ctx.fill(); break;
+      case "cone": ctx.fillStyle = "#ff7a2a"; ctx.beginPath(); ctx.moveTo(0, -4); ctx.lineTo(3.5, 3.5); ctx.lineTo(-3.5, 3.5); ctx.closePath(); ctx.fill(); ctx.fillStyle = "#fff"; ctx.fillRect(-2, 0, 4, 1.2); break;
+      case "hydrant": circ(0, 0, 4); ctx.fillStyle = "#d82a2a"; ctx.fill(); circ(0, 0, 2); ctx.fillStyle = "#ff8a6a"; ctx.fill(); break;
+      case "bin": sh(9, 9); rr(-4.5, -4.5, 9, 9, 2); ctx.fillStyle = "#3a7a4a"; ctx.fill(); ctx.fillStyle = "#2a5a3a"; ctx.fillRect(-4.5, -1, 9, 2); break;
+      case "lamp": circ(2, 3, 3); ctx.fillStyle = "rgba(0,0,0,0.25)"; ctx.fill(); circ(0, 0, 3); ctx.fillStyle = "#4a4a52"; ctx.fill(); circ(0, 0, 1.6); ctx.fillStyle = "#ffe8a0"; ctx.fill(); break;
+      case "bush": circ(1.5, 2, s * 0.9); ctx.fillStyle = "rgba(0,0,0,0.2)"; ctx.fill(); circ(0, 0, s * 0.9); ctx.fillStyle = "#3a9a3a"; ctx.fill(); circ(-2, -2, s * 0.4); ctx.fillStyle = "rgba(255,255,255,0.12)"; ctx.fill(); break;
+      case "bench": sh(18, 6); rr(-9, -3, 18, 6, 1.5); ctx.fillStyle = "#9a6a3a"; ctx.fill(); ctx.fillStyle = "#6a4a2a"; ctx.fillRect(-9, -1, 18, 1); break;
+      case "tree": circ(3, 4, s); ctx.fillStyle = "rgba(0,0,0,0.25)"; ctx.fill(); circ(0, 0, s); ctx.fillStyle = "#2f7a32"; ctx.fill(); circ(-3, -3, s * 0.6); ctx.fillStyle = "#3f9a42"; ctx.fill(); circ(-5, -5, s * 0.25); ctx.fillStyle = "rgba(255,255,255,0.12)"; ctx.fill(); break;
+      case "car": sh(30, 15, 4); rr(-15, -7.5, 30, 15, 4); ctx.fillStyle = o.c; ctx.fill(); rr(-6, -6, 13, 12, 2); ctx.fillStyle = "rgba(20,30,50,0.6)"; ctx.fill(); rr(-4, -5, 8, 10, 1.5); ctx.fillStyle = o.c; ctx.fill(); ctx.fillStyle = "#ffe8a0"; ctx.fillRect(13, -6, 2, 3); ctx.fillRect(13, 3, 2, 3); break;
+      case "kiosk": sh(30, 30, 4); rr(-15, -15, 30, 30, 4); ctx.fillStyle = "#e8e0d0"; ctx.fill(); for (let i = 0; i < 5; i++) { ctx.fillStyle = i % 2 ? "#e84a4a" : "#fff"; ctx.fillRect(-15 + i * 6, -15, 6, 30); } ctx.strokeStyle = "rgba(0,0,0,0.3)"; ctx.lineWidth = 1; ctx.strokeRect(-15, -15, 30, 30); break;
+      case "fountain": circ(0, 0, 25); ctx.fillStyle = "#b8b0a0"; ctx.fill(); circ(0, 0, 20); ctx.fillStyle = "#5ab0e8"; ctx.fill(); circ(0, 0, 6); ctx.fillStyle = "#c8c0b0"; ctx.fill(); ctx.strokeStyle = "rgba(255,255,255,0.6)"; ctx.lineWidth = 1.5; circ(0, 0, 10 + Math.sin(clock * 3) * 3); ctx.stroke(); break;
+      case "bus": sh(52, 18, 4); rr(-26, -9, 52, 18, 4); ctx.fillStyle = o.c || "#f2a82a"; ctx.fill(); ctx.fillStyle = "rgba(20,30,50,0.55)"; for (let i = 0; i < 5; i++) ctx.fillRect(-20 + i * 9, -7, 6, 14); ctx.fillStyle = "#fff"; ctx.fillRect(-26, -2, 52, 1.5); break;
+      case "house": { sh(56, 50, 4); rr(-28, -25, 56, 50, 3); ctx.fillStyle = o.c; ctx.fill(); ctx.fillStyle = "rgba(0,0,0,0.18)"; ctx.fillRect(0, -25, 28, 50); ctx.strokeStyle = "rgba(0,0,0,0.35)"; ctx.lineWidth = 2; ctx.beginPath(); ctx.moveTo(0, -25); ctx.lineTo(0, 25); ctx.stroke(); ctx.fillStyle = "#6a5a52"; ctx.fillRect(10, -18, 6, 8); break; }
+      case "shop": { sh(70, 60, 4); rr(-35, -30, 70, 60, 3); ctx.fillStyle = o.c; ctx.fill(); ctx.fillStyle = "rgba(0,0,0,0.12)"; for (let i = 0; i < 3; i++) ctx.fillRect(-28 + i * 20, -22, 14, 14); ctx.fillStyle = "#3a8a6a"; ctx.fillRect(-35, 18, 70, 12); ctx.fillStyle = "#fff"; for (let i = 0; i < 7; i++) ctx.fillRect(-35 + i * 10, 18, 5, 12); break; }
+      case "building": { sh(92, 92, 4); rr(-46, -46, 92, 92, 3); ctx.fillStyle = o.c; ctx.fill(); ctx.fillStyle = "rgba(255,255,255,0.12)"; for (let i = 0; i < 4; i++) for (let j = 0; j < 4; j++) ctx.fillRect(-38 + i * 20, -38 + j * 20, 14, 14); ctx.fillStyle = "#3a4a5a"; ctx.fillRect(-12, -12, 24, 24); circ(0, 0, 6); ctx.fillStyle = "#c8d0d8"; ctx.fill(); break; }
+      case "tower": { circ(14, 18, 70); ctx.fillStyle = "rgba(0,0,0,0.25)"; ctx.fill(); for (let k = 0; k < 4; k++) { const r = 66 - k * 14; ctx.fillStyle = ["#3a4a6a", "#4a5a7a", "#5a6a8a", "#7a8aaa"][k]; ctx.beginPath(); for (let i = 0; i < 8; i++) { const a = i * TAU / 8 + Math.PI / 8; ctx.lineTo(Math.cos(a) * r - k * 3, Math.sin(a) * r - k * 4); } ctx.closePath(); ctx.fill(); } circ(-12, -16, 6); ctx.fillStyle = "#ff4a3a"; ctx.fill(); break; }
+    }
+    ctx.restore();
+  }
+  function drawHole(h) {
+    if (h.dead > 0) return;
+    const g = ctx.createRadialGradient(h.x, h.y, h.r * 0.2, h.x, h.y, h.r);
+    g.addColorStop(0, "#000"); g.addColorStop(0.75, "#0a0a12"); g.addColorStop(1, "#2a2a3a");
+    circ(h.x, h.y, h.r); ctx.fillStyle = g; ctx.fill();
+    ctx.strokeStyle = h.c; ctx.lineWidth = Math.max(2, h.r * 0.08); ctx.globalAlpha = h.safe > 0 && Math.sin(clock * 14) > 0 ? 0.3 : 1; circ(h.x, h.y, h.r); ctx.stroke(); ctx.globalAlpha = 1;
+  }
+  function drawFalling(h) {
+    ctx.save(); circ(h.x, h.y, h.r); ctx.clip();
+    for (const o of objs) {
+      if (o.alive || o.fall <= 0 || o.hole !== h) continue;
+      const k = o.fall; // 1 → 0
+      o.x += (h.x - o.x) * 0.12; o.y += (h.y - o.y) * 0.12;
+      ctx.save(); ctx.translate(o.x, o.y); ctx.scale(0.3 + k * 0.7, 0.3 + k * 0.7); ctx.translate(-o.x, -o.y); ctx.globalAlpha = k; drawObj(o); ctx.restore();
+    }
+    ctx.globalAlpha = 1; ctx.restore();
+  }
+  function draw() {
+    ctx.setTransform(pxRatio, 0, 0, pxRatio, 0, 0);
+    ctx.fillStyle = "#4a8a3a"; ctx.fillRect(0, 0, W, H);
+    if (!holes.length) return;
+    const z = cam.z;
+    ctx.setTransform(pxRatio * z, 0, 0, pxRatio * z, pxRatio * (W / 2 - cam.x * z), pxRatio * (H / 2 - cam.y * z));
+    const vx0 = cam.x - W / 2 / z - 100, vx1 = cam.x + W / 2 / z + 100, vy0 = cam.y - H / 2 / z - 100, vy1 = cam.y + H / 2 / z + 100;
+    // ground: blocks, sidewalks, roads
+    ctx.fillStyle = "#7ab85a"; ctx.fillRect(0, 0, WORLD, WORLD);
+    for (const b of blocks) { if (b.x > vx1 || b.x + b.s < vx0 || b.y > vy1 || b.y + b.s < vy0) continue; ctx.fillStyle = b.kind === "park" ? "#6aba4a" : b.kind === "parking" ? "#8a8a92" : b.kind === "tower" ? "#c8c0b0" : b.kind === "shops" ? "#d8d0c0" : b.kind === "offices" ? "#b8b8b0" : "#8acb6a"; ctx.fillRect(b.x, b.y, b.s, b.s); if (b.kind === "parking") { ctx.strokeStyle = "rgba(255,255,255,0.5)"; ctx.lineWidth = 1.5; for (let r = 0; r < 3; r++) for (let c = 0; c <= 5; c++) { const x = b.x + 12 + c * ((b.s - 56) / 4); ctx.beginPath(); ctx.moveTo(x, b.y + 24 + r * 80); ctx.lineTo(x, b.y + 56 + r * 80); ctx.stroke(); } } }
+    ctx.fillStyle = "#c8c4b8"; for (const y of roadsH) ctx.fillRect(0, y - ROAD / 2 - 10, WORLD, ROAD + 20); for (const x of roadsV) ctx.fillRect(x - ROAD / 2 - 10, 0, ROAD + 20, WORLD);
+    ctx.fillStyle = "#4a4a52"; for (const y of roadsH) ctx.fillRect(0, y - ROAD / 2, WORLD, ROAD); for (const x of roadsV) ctx.fillRect(x - ROAD / 2, 0, ROAD, WORLD);
+    ctx.strokeStyle = "rgba(255,255,255,0.6)"; ctx.lineWidth = 2; ctx.setLineDash([14, 14]);
+    for (const y of roadsH) { ctx.beginPath(); ctx.moveTo(0, y); ctx.lineTo(WORLD, y); ctx.stroke(); } for (const x of roadsV) { ctx.beginPath(); ctx.moveTo(x, 0); ctx.lineTo(x, WORLD); ctx.stroke(); }
+    ctx.setLineDash([]);
+    // holes, what is falling in, then everything still standing
+    for (const h of holes) { drawHole(h); drawFalling(h); }
+    for (const o of objs) { if (!o.alive) continue; if (o.x < vx0 || o.x > vx1 || o.y < vy0 || o.y > vy1) continue; drawObj(o); }
+    // edible things near the player get a faint ring: easy to read what fits
+    for (const o of objs) { if (!o.alive || o.s < 12 || !canEat(player, o)) continue; const d = Math.hypot(o.x - player.x, o.y - player.y); if (d > 260) continue; ctx.strokeStyle = `rgba(255,255,160,${0.35 * (1 - d / 260)})`; ctx.lineWidth = 2 / z; circ(o.x, o.y, o.s + 3); ctx.stroke(); }
+    for (const h of holes) { if (h.dead > 0) continue; ctx.font = `800 ${12 / z}px system-ui`; ctx.textAlign = "center"; ctx.fillStyle = h.c; ctx.fillText(h.name, h.x, h.y - h.r - 6 / z); }
+    for (const t of texts) { ctx.globalAlpha = Math.min(1, (1.2 - t.t) * 2); ctx.font = `900 ${15 / z}px system-ui`; ctx.textAlign = "center"; ctx.lineWidth = 4 / z; ctx.strokeStyle = "rgba(20,20,30,0.8)"; ctx.strokeText(t.text, t.x, t.y - t.t * 30); ctx.fillStyle = t.c; ctx.fillText(t.text, t.x, t.y - t.t * 30); }
+    ctx.globalAlpha = 1;
+    drawHUD();
+  }
+  function drawHUD() {
+    ctx.setTransform(pxRatio, 0, 0, pxRatio, 0, 0);
+    // timer and score
+    rr(8, 8, 150, 50, 10); ctx.fillStyle = "rgba(20,20,30,0.72)"; ctx.fill();
+    ctx.textAlign = "left"; ctx.textBaseline = "middle";
+    const t = Math.ceil(timeLeft), low = t <= 10;
+    ctx.font = "900 20px system-ui"; ctx.fillStyle = low && Math.sin(clock * 10) > 0 ? "#ff5a4a" : "#fff"; ctx.fillText(`${Math.floor(t / 60)}:${String(t % 60).padStart(2, "0")}`, 18, 26);
+    ctx.font = "800 13px system-ui"; ctx.fillStyle = "#ffd23a"; ctx.fillText(`${nf(score)} punti`, 18, 46);
+    ctx.fillStyle = "rgba(255,255,255,0.7)"; ctx.font = "700 10px system-ui"; ctx.textAlign = "right"; ctx.fillText(`${Math.round(player.r * 2 / 10)} m`, 150, 26);
+    // ranking
+    const ranked = [...holes].sort((a, b) => b.score - a.score), rx = portrait ? 8 : 8, ry = 64;
+    rr(rx, ry, 150, 14 + ranked.length * 16, 10); ctx.fillStyle = "rgba(20,20,30,0.6)"; ctx.fill();
+    ranked.forEach((h, i) => { ctx.textAlign = "left"; ctx.fillStyle = h.c; ctx.font = `${h === player ? 900 : 700} 11px system-ui`; ctx.fillText(`${i + 1}. ${h.name}${h.dead > 0 ? " (risale)" : ""}`, rx + 10, ry + 14 + i * 16); ctx.textAlign = "right"; ctx.fillText(nf(h.score), rx + 140, ry + 14 + i * 16); });
+    // minimap
+    const ms = portrait ? 92 : 86, mx = W - ms - 8, my = portrait ? H - ms - 8 : H - ms - 8, k = ms / WORLD;
+    rr(mx - 3, my - 3, ms + 6, ms + 6, 6); ctx.fillStyle = "rgba(20,20,30,0.7)"; ctx.fill();
+    ctx.fillStyle = "rgba(255,255,255,0.15)"; for (const y of roadsH) ctx.fillRect(mx, my + y * k - 0.5, ms, 1); for (const x of roadsV) ctx.fillRect(mx + x * k - 0.5, my, 1, ms);
+    for (const o of objs) if (o.alive && o.s >= 36) { ctx.fillStyle = canEat(player, o) ? "#8aff8a" : "rgba(255,255,255,0.4)"; ctx.fillRect(mx + o.x * k - 1.5, my + o.y * k - 1.5, 3, 3); }
+    for (const h of holes) if (h.dead <= 0) { ctx.fillStyle = h.c; circ(mx + h.x * k, my + h.y * k, Math.max(2.5, h.r * k)); ctx.fill(); }
+    // joystick
+    if (joy) { ctx.globalAlpha = 0.5; circ(joy.x0, joy.y0, 40); ctx.strokeStyle = "#fff"; ctx.lineWidth = 2; ctx.stroke(); circ(joy.x0 + input.x * 34, joy.y0 + input.y * 34, 16); ctx.fillStyle = "#fff"; ctx.fill(); ctx.globalAlpha = 1; }
+  }
+
+  // ---------- Menus ----------
+  function showOverlay(html) { overlay.innerHTML = html; overlay.classList.remove("hidden"); }
+  function difficultyHTML() {
+    const buttons = DIFF_IDS.map((id) => { const d = DIFFICULTIES[id]; return `<button type="button" data-diff="${id}" class="${id === difficulty ? "on" : ""}" style="--c:${d.color}">${d.label}</button>`; }).join("");
+    const best = parseInt(load(bestKey(difficulty)), 10);
+    return `<div class="diff">${buttons}</div><p class="muted">${diff.desc}${best ? ` · Record: ${nf(best)}` : ""}</p>`;
+  }
+  function setDifficulty(id) { if (!DIFFICULTIES[id]) return; difficulty = id; diff = DIFFICULTIES[id]; store(DIFF_KEY, id); if (menu) menu(); }
+  function showTitle() {
+    menu = showTitle; state = "menu";
+    showOverlay(
+      `<h1>BUCA <span>GOLOSA</span></h1>
+       <p>Sei una buca in mezzo alla città, e hai una fame da lupi. Scivola per le strade e inghiotti tutto ciò che è più piccolo di te: coni, panchine e passanti, poi alberi e automobili, poi case, palazzi e, se ce la fai, la torre in centro. Più mangi, più cresci.</p>
+       <div class="pts">
+         <span><b>Muoversi</b></span><span>${touchMode ? "trascina il dito: compare una levetta" : "frecce o W A S D, oppure tieni premuto il mouse e trascina"}</span>
+         <span><b>Crescere</b></span><span>le cose che ci stanno hanno un alone giallo; sulla mappa in basso i palazzi già alla tua portata sono verdi</span>
+         <span><b>Rivali</b></span><span>Voragine e Tombino mangiano anche loro: se sei molto più grande puoi inghiottirle, e viceversa!</span>
+       </div>
+       <p class="muted help">${touchMode ? "" : "P pausa, M musica."}</p>
+       ${difficultyHTML()}
+       <button class="start" data-start>APRI LA BUCA</button>`);
+    syncControls();
+  }
+  function togglePause() {
+    if (state === "play") { pausedFrom = state; state = "paused"; keys = {}; joy = null; input = { x: 0, y: 0 }; showOverlay(`<h2>PAUSA</h2><button class="start" data-resume>CONTINUA</button><p class="muted">Musica: <button type="button" data-music>${music ? "ACCESA" : "SPENTA"}</button></p>`); }
+    else if (state === "paused") { state = pausedFrom; overlay.classList.add("hidden"); lastT = performance.now(); }
+    syncControls();
+  }
+  window.addEventListener("sala:termina", () => { if (state !== "paused") return; overlay.classList.add("hidden"); state = "play"; endGame(true); });
+  function syncControls() { pauseBtn.style.display = state === "play" && touchMode ? "block" : "none"; resize(); }
+  pauseBtn.addEventListener("click", () => togglePause());
+  overlay.addEventListener("click", (e) => {
+    const q = (s) => e.target.closest(s); let el;
+    if ((el = q("[data-diff]"))) { setDifficulty(el.dataset.diff); return; }
+    if (q("[data-music]")) { music = !music; store("buca-music", music ? "1" : "0"); q("[data-music]").textContent = music ? "ACCESA" : "SPENTA"; return; }
+    if (q("[data-start]")) { startGame(); return; }
+    if (q("[data-resume]")) { togglePause(); return; }
+  });
+
+  // ---------- Input ----------
+  let touchMode = !!(window.matchMedia && matchMedia("(pointer: coarse)").matches);
+  const toGame = (e) => { const rc = canvas.getBoundingClientRect(); return { x: ((e.clientX - rc.left) / rc.width) * W, y: ((e.clientY - rc.top) / rc.height) * H }; };
+  canvas.addEventListener("pointerdown", (e) => { e.preventDefault(); if (state !== "play") return; const p = toGame(e); joy = { id: e.pointerId, x0: p.x, y0: p.y }; input = { x: 0, y: 0 }; try { canvas.setPointerCapture(e.pointerId); } catch { /* ignore */ } });
+  canvas.addEventListener("pointermove", (e) => { if (!joy || e.pointerId !== joy.id) return; const p = toGame(e); let dx = (p.x - joy.x0) / 34, dy = (p.y - joy.y0) / 34; const m = Math.hypot(dx, dy); if (m > 1) { dx /= m; dy /= m; } input = { x: m < 0.15 ? 0 : dx, y: m < 0.15 ? 0 : dy }; });
+  const up = (e) => { if (joy && e.pointerId === joy.id) { joy = null; input = { x: 0, y: 0 }; } };
+  canvas.addEventListener("pointerup", up); canvas.addEventListener("pointercancel", up);
+  window.addEventListener("keydown", (e) => {
+    const k = e.key.length === 1 ? e.key.toLowerCase() : e.key;
+    if (state === "menu" || state === "over") { if (e.key === "Enter") startGame(); return; }
+    if (k === "p" || k === "Escape") { if (!e.repeat) togglePause(); return; }
+    if (k === "m" && !e.repeat) { music = !music; store("buca-music", music ? "1" : "0"); return; }
+    if (["ArrowLeft", "ArrowRight", "ArrowUp", "ArrowDown", "a", "d", "w", "s"].includes(k)) { e.preventDefault(); keys[k] = true; }
+  });
+  window.addEventListener("keyup", (e) => { const k = e.key.length === 1 ? e.key.toLowerCase() : e.key; keys[k] = false; });
+  window.addEventListener("blur", () => { if (state === "play") togglePause(); });
+  window.addEventListener("pointerdown", (e) => { if (e.pointerType === "touch" && !touchMode) { touchMode = true; syncControls(); if (menu) menu(); } }, true);
+
+  // ---------- Loop ----------
+  let lastT = performance.now();
+  function frame(now) {
+    const dt = Math.min(0.05, (now - lastT) / 1000); lastT = now;
+    if (state !== "paused") update(dt);
+    draw();
+    requestAnimationFrame(frame);
+  }
+  resize();
+  buildCity(); holes = [newHole(0, 900, 940), newHole(1, 300, 300), newHole(2, 1500, 1500)]; player = holes[0]; cam = { x: 900, y: 900, z: 0.7 };
+  showTitle();
+  requestAnimationFrame(frame);
+})();
+</script>
+<script src="../../shared/iniziali.js" data-record="buca-best-" data-kind="score"></script>
+</body>
+</html>
