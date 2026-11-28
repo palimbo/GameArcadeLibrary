@@ -9,6 +9,7 @@
   "use strict";
   // record key prefix → [bronzo, argento, oro] (and t for times)
   const DATA = {
+    "lancio-best-": [15000, 22000, 25000],   // lancio-libero (stima: il bot che vede tutto fa circa 37.000)
     "fili-best-": [2000, 2800, 3300],   // fili-di-luce (stima sulle regole di punteggio)
     "capostazione-best-": [15000, 25000, 28000],   // capostazione (bot, con tempi di tocco umani)
     "pizzeria-best-": [800, 1100, 1200],   // pizzeria-svelta (bot, con tempi di tocco umani)

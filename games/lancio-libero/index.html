@@ -1,0 +1,559 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no, viewport-fit=cover">
+<title>Lancio Libero</title>
+<style>
+  :root {
+    --bg: #0e2238;
+    --fg: #f4f6ee;
+    --muted: #c8d0dc;
+    --gold: #ffd24a;
+    --red: #ff5a4a;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  html, body {
+    height: 100%;
+    background: var(--bg);
+    color: var(--fg);
+    font-family: system-ui, -apple-system, "Segoe UI", sans-serif;
+    overflow: hidden;
+    user-select: none;
+    -webkit-user-select: none;
+    -webkit-tap-highlight-color: transparent;
+    touch-action: none;
+  }
+  #wrap { position: fixed; inset: 0; display: flex; align-items: center; justify-content: center; }
+  canvas { cursor: pointer; display: block; touch-action: none; border-radius: 6px; box-shadow: 0 0 0 2px #2e3a4e, 0 10px 40px rgba(0,0,0,0.6); }
+  #pauseBtn {
+    position: fixed; z-index: 3; display: none; right: 10px; top: calc(10px + env(safe-area-inset-top, 0px));
+    font: 700 13px system-ui, sans-serif; color: var(--fg);
+    background: rgba(0, 0, 0, 0.6); border: 1px solid rgba(244, 246, 238, 0.35);
+    border-radius: 8px; padding: 6px 10px; cursor: pointer;
+  }
+  #touch { display: none !important; }
+  #overlay {
+    position: fixed; inset: 0; z-index: 5;
+    display: flex; flex-direction: column; align-items: center; justify-content: flex-start;
+    gap: 14px; padding: 16px; text-align: center; overflow-y: auto;
+    background: rgba(20, 26, 36, 0.94);
+  }
+  #overlay > :first-child { margin-top: auto; }
+  #overlay > :last-child { margin-bottom: auto; }
+  #overlay.hidden { display: none; }
+  #homeLink {
+    position: fixed; top: calc(10px + env(safe-area-inset-top, 0px)); left: 10px; z-index: 6;
+    font: 600 13px/1 system-ui, sans-serif; color: #fff; text-decoration: none;
+    padding: 8px 12px; border-radius: 999px; background: rgba(0,0,0,.55);
+    border: 1px solid rgba(255,255,255,.25);
+  }
+  #homeLink:hover { background: rgba(0,0,0,.8); }
+  #overlay.hidden ~ #homeLink { display: none; }
+  @media (max-width: 700px) { #overlay { padding-top: calc(52px + env(safe-area-inset-top, 0px)); } }
+  #overlay h1 { font-size: clamp(32px, 10vw, 58px); font-weight: 900; font-style: italic; letter-spacing: 1px; color: var(--gold);
+    text-shadow: 3px 3px 0 #1a3a6a, 0 0 22px rgba(255,210,58,0.35); }
+  #overlay h1 span { color: #fff; }
+  #overlay h2 { font-size: clamp(26px, 7vw, 42px); font-weight: 900; letter-spacing: 2px; color: var(--gold); }
+  #overlay h2.lose { color: var(--red); }
+  #overlay p { max-width: 540px; font-size: clamp(13px, 3.4vw, 16px); line-height: 1.55; }
+  #overlay p.muted { color: var(--muted); }
+  #overlay .pts { display: grid; grid-template-columns: repeat(2, auto); gap: 4px 18px; font-size: 13px; color: var(--muted); text-align: left; max-width: 560px; }
+  #overlay .pts b { color: var(--fg); }
+  #overlay .diff { display: flex; gap: 10px; flex-wrap: wrap; justify-content: center; }
+  #overlay button {
+    font: 800 15px system-ui, sans-serif; letter-spacing: 1.5px; color: var(--fg);
+    background: transparent; cursor: pointer;
+    border: 2px solid rgba(244,246,238,0.3); border-radius: 10px; padding: 9px 16px;
+  }
+  #overlay .diff button.on { border-color: var(--c); color: var(--c); box-shadow: 0 0 12px var(--c); }
+  #overlay button.start { border-color: var(--gold); color: #2a1a02; background: var(--gold); padding: 11px 30px; box-shadow: 0 4px 0 #a87a0a; }
+  #overlay .menuList { display: flex; flex-wrap: wrap; gap: 6px 10px; justify-content: center; max-width: 600px; font-size: 13px; color: var(--muted); }
+  #overlay .menuList span { background: rgba(255,255,255,0.06); border-radius: 8px; padding: 4px 9px; }
+  #overlay .menuList b { color: var(--gold); }
+  #overlay .upgs { display: flex; gap: 10px; flex-wrap: wrap; justify-content: center; }
+  #overlay button.upg { display: flex; flex-direction: column; gap: 3px; width: 170px; text-align: center; letter-spacing: 0.3px; font-size: 13px; }
+  #overlay button.upg span { font-weight: 600; font-size: 12px; color: var(--muted); }
+  #overlay button.upg:disabled { opacity: 0.4; cursor: default; }
+  @media (max-height: 560px) {
+    #overlay { gap: 8px; }
+    #overlay h1 { font-size: 30px; }
+    #overlay p { font-size: 13px; line-height: 1.4; }
+    #overlay .help, #overlay .pts { display: none; }
+    #overlay .menuList { font-size: 11px; gap: 4px; }
+    #overlay button.upg { width: 150px; padding: 6px 10px; }
+  }
+</style>
+</head>
+<body>
+<div id="wrap"><canvas id="game"></canvas></div>
+<div id="touch"></div>
+<button id="pauseBtn" type="button" aria-label="Pausa">❚❚</button>
+<div id="overlay"></div>
+<a id="homeLink" href="../../index.html">← Sala Giochi</a>
+
+
+<script>
+(() => {
+  "use strict";
+
+  const TAU = Math.PI * 2;
+  const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
+  const lerp = (a, b, t) => a + (b - a) * t;
+  const rnd = (a, b) => a + Math.random() * (b - a);
+  const nf = (n) => Math.floor(n).toLocaleString("it-IT");
+  const feat = (id) => window.dispatchEvent(new CustomEvent("sala:impresa", { detail: id }));
+  function store(k, v) { try { localStorage.setItem(k, v); } catch { /* ignore */ } }
+  function load(k) { try { return localStorage.getItem(k); } catch { return null; } }
+
+  const DIFFICULTIES = {
+    facile:    { label: "FACILE",    color: "#7ee0a0", desc: "anelli larghi, poco vento, bersaglio grande · quattro paracadute di riserva", ring: 1.3, wind: 0.6, target: 1.3, speed: 0.88, lives: 4, birds: 0.6 },
+    normale:   { label: "NORMALE",   color: "#ffd24a", desc: "una bella giornata di lanci · tre paracadute di riserva", ring: 1, wind: 1, target: 1, speed: 1, lives: 3, birds: 1 },
+    difficile: { label: "DIFFICILE", color: "#ff5a4a", desc: "anelli stretti, raffiche forti, bersaglio piccolo", ring: 0.8, wind: 1.35, target: 0.82, speed: 1.1, lives: 3, birds: 1.4 },
+  };
+  const DIFF_IDS = Object.keys(DIFFICULTIES);
+  const DIFF_KEY = "lancio-difficulty";
+  const bestKey = (id) => `lancio-best-${id}`;
+  let difficulty = DIFFICULTIES[load(DIFF_KEY)] ? load(DIFF_KEY) : "normale";
+  let diff = DIFFICULTIES[difficulty];
+
+  // the eight drop zones
+  const JUMPS = [
+    { name: "Campagna", sky: ["#5aa8f0", "#cfe8ff"], ground: "#5aa84a", far: "#7ac06a", kind: "fields", wind: 12, rings: 10, birds: 1 },
+    { name: "Spiaggia", sky: ["#3a9ae8", "#d8f0ff"], ground: "#f0d89a", far: "#3a9ad8", kind: "beach", wind: 18, rings: 11, birds: 2 },
+    { name: "Colline al tramonto", sky: ["#e8784a", "#ffd8a0"], ground: "#9aa04a", far: "#c88a5a", kind: "hills", wind: 22, rings: 12, birds: 2 },
+    { name: "Montagna", sky: ["#4a8ad8", "#e8f4ff"], ground: "#f4f8fc", far: "#a8b8d0", kind: "snow", wind: 26, rings: 12, birds: 3 },
+    { name: "Città", sky: ["#6a9ad0", "#e0ecf8"], ground: "#8a8a92", far: "#6a7488", kind: "city", wind: 30, rings: 13, birds: 3 },
+    { name: "Deserto", sky: ["#e8a84a", "#fff0c8"], ground: "#e8c47a", far: "#d8a85a", kind: "desert", wind: 34, rings: 13, birds: 3 },
+    { name: "L'isola", sky: ["#2a8ae0", "#c8ecff"], ground: "#e8d090", far: "#2a8ad0", kind: "island", wind: 38, rings: 14, birds: 4 },
+    { name: "Notte di stelle", sky: ["#0a1030", "#2a3a6a"], ground: "#2a4a3a", far: "#1a2a4a", kind: "night", wind: 42, rings: 14, birds: 4 },
+  ];
+  const START_ALT = 1800, FALL = 62, CANOPY = 19, OPEN_TIME = 1.2, SAFE = 26;
+
+  // ---------- Canvas ----------
+  const canvas = document.getElementById("game"), ctx = canvas.getContext("2d");
+  const overlay = document.getElementById("overlay"), pauseBtn = document.getElementById("pauseBtn");
+  let W = 640, H = 360, portrait = false, pxRatio = 1, PPM = 3, PY = 110, PY0 = 110, OPEN_BTN = null;
+  function resize() {
+    const wasW = W;
+    portrait = window.innerHeight > window.innerWidth * 1.05;
+    W = portrait ? 360 : 640; H = portrait ? 640 : 360;
+    const s = Math.max(0.2, Math.min((window.innerWidth - 4) / W, (window.innerHeight - 4) / H));
+    pxRatio = Math.min(3, s * (window.devicePixelRatio || 1));
+    canvas.style.width = W * s + "px"; canvas.style.height = H * s + "px";
+    canvas.width = Math.round(W * pxRatio); canvas.height = Math.round(H * pxRatio);
+    PPM = portrait ? 640 / 150 : 360 / 105; PY0 = portrait ? 200 : 104; PY = PY0;
+    OPEN_BTN = portrait ? { x: W - 104, y: H - 104, r: 46 } : { x: W - 62, y: H - 62, r: 44 };
+    // keep horizontal positions on screen when the orientation changes
+    if (wasW !== W && P) { const k = W / wasW; P.x *= k; P.tx *= k; for (const o of [...rings, ...birds, ...stars]) o.x *= k; if (target) target.x *= k; }
+  }
+  window.addEventListener("resize", () => syncControls());
+
+  // ---------- Sound ----------
+  let audioCtx = null, windNode = null, windGain = null, windOn = load("lancio-wind") !== "0";
+  function tone(freq, dur, type = "square", vol = 0.03, delay = 0, slide = 0) {
+    if (!audioCtx) return;
+    const t = audioCtx.currentTime + delay, o = audioCtx.createOscillator(), g = audioCtx.createGain();
+    o.type = type; o.frequency.setValueAtTime(freq, t); if (slide) o.frequency.exponentialRampToValueAtTime(slide, t + dur);
+    g.gain.setValueAtTime(0.0001, t); g.gain.exponentialRampToValueAtTime(vol, t + 0.008); g.gain.exponentialRampToValueAtTime(0.0001, t + dur);
+    o.connect(g).connect(audioCtx.destination); o.start(t); o.stop(t + dur + 0.02);
+  }
+  function noise(dur, freq, vol) { if (!audioCtx) return; const t = audioCtx.currentTime, n = Math.floor(audioCtx.sampleRate * dur), b = audioCtx.createBuffer(1, n, audioCtx.sampleRate), d = b.getChannelData(0); for (let i = 0; i < n; i++) d[i] = (Math.random() * 2 - 1) * (1 - i / n); const s = audioCtx.createBufferSource(), f = audioCtx.createBiquadFilter(), g = audioCtx.createGain(); s.buffer = b; f.type = "lowpass"; f.frequency.value = freq; g.gain.value = vol; s.connect(f).connect(g).connect(audioCtx.destination); s.start(t); }
+  function startWind() {
+    if (!audioCtx || windNode) return;
+    const n = audioCtx.sampleRate * 2, b = audioCtx.createBuffer(1, n, audioCtx.sampleRate), d = b.getChannelData(0); for (let i = 0; i < n; i++) d[i] = Math.random() * 2 - 1;
+    windNode = audioCtx.createBufferSource(); windNode.buffer = b; windNode.loop = true;
+    const f = audioCtx.createBiquadFilter(); f.type = "bandpass"; f.frequency.value = 500; f.Q.value = 0.6;
+    windGain = audioCtx.createGain(); windGain.gain.value = 0;
+    windNode.connect(f).connect(windGain).connect(audioCtx.destination); windNode.start();
+  }
+  const sfx = {
+    ring: (c) => { tone(880 + c * 60, 0.12, "triangle", 0.045); tone(1320 + c * 90, 0.16, "triangle", 0.03, 0.05); },
+    center: () => [1047, 1319, 1568].forEach((f, i) => tone(f, 0.1, "square", 0.025, i * 0.05)),
+    open: () => { noise(0.5, 1800, 0.18); tone(140, 0.4, "sine", 0.08, 0.1, 70); },
+    bird: () => { tone(1800, 0.06, "square", 0.03, 0, 2600); tone(2200, 0.06, "square", 0.025, 0.08, 3000); noise(0.15, 1200, 0.1); },
+    star: () => tone(1760, 0.08, "triangle", 0.03),
+    land: (good) => good ? [523, 659, 784, 1047].forEach((f, i) => tone(f, 0.16, "triangle", 0.04, i * 0.08)) : tone(330, 0.3, "triangle", 0.04),
+    crash: () => { noise(0.6, 500, 0.25); tone(110, 0.5, "sawtooth", 0.05, 0, 55); },
+    splash: () => { noise(0.8, 2400, 0.18); tone(600, 0.3, "sine", 0.03, 0, 200); },
+    beep: () => tone(1400, 0.06, "square", 0.025),
+  };
+
+  // ---------- State ----------
+  let state = "menu", menu = null, pausedFrom = null, clock = 0;
+  let jump = 0, score = 0, lives = 3, P = null, rings = [], birds = [], stars = [], clouds = [], target = null, fx = [], texts = [];
+  let jumpScore = 0, ringsHit = 0, ringsTotal = 0, combo = 0, wind = 0, landed = 0, landInfo = null, keys = {}, pointer = null, beepT = 0;
+  const J = () => JUMPS[jump];
+
+  function startGame() {
+    if (!audioCtx) { try { audioCtx = new (window.AudioContext || window.webkitAudioContext)(); } catch { audioCtx = null; } }
+    if (audioCtx && audioCtx.state === "suspended") audioCtx.resume();
+    startWind();
+    jump = 0; score = 0; lives = diff.lives;
+    startJump();
+  }
+  function startJump() {
+    const j = J();
+    PY = PY0;
+    P = { x: W / 2, tx: W / 2, alt: START_ALT, vy: FALL * diff.speed, phase: "free", openT: 0, openAlt: 0, tumble: 0, tilt: 0, swing: 0 };
+    wind = j.wind * diff.wind * (Math.random() < 0.5 ? -1 : 1) * (portrait ? 0.75 : 1);
+    jumpScore = 0; ringsHit = 0; combo = 0; landed = 0; landInfo = null; fx = []; texts = [];
+    // rings from just under the plane down to the opening zone
+    rings = []; const n = j.rings; let lastX = W / 2;
+    for (let i = 0; i < n; i++) {
+      const alt = START_ALT - 140 - i * ((START_ALT - 420) / n) + rnd(-15, 15);
+      const r = (portrait ? 34 : 40) * diff.ring * (1 - jump * 0.025);
+      let x = clamp(lastX + rnd(-1, 1) * W * (0.25 + jump * 0.03), r + 16, W - r - 16); lastX = x;
+      rings.push({ x, alt, r, hit: 0, miss: false });
+    }
+    ringsTotal = rings.length;
+    birds = [];
+    const nb = Math.round(j.birds * diff.birds * 2.2);
+    for (let i = 0; i < nb; i++) { const dir = Math.random() < 0.5 ? 1 : -1; birds.push({ alt: rnd(260, START_ALT - 250), x: dir > 0 ? -40 - rnd(0, 200) : W + 40 + rnd(0, 200), vx: dir * rnd(40, 80) * (portrait ? 0.7 : 1), n: 1 + Math.floor(Math.random() * 3), hit: false, flap: Math.random() * 6, balloon: jump >= 2 && Math.random() < 0.3 }); }
+    for (const b of birds) if (b.balloon) { b.vx *= 0.25; b.x = rnd(40, W - 40); }
+    stars = []; for (let i = 0; i < 8; i++) stars.push({ x: rnd(30, W - 30), alt: rnd(40, 420), got: false });
+    target = { x: rnd(W * 0.25, W * 0.75), r: (portrait ? 40 : 46) * diff.target * (1 - jump * 0.04) };
+    clouds = []; for (let i = 0; i < 14; i++) clouds.push({ x: rnd(-40, W + 40), alt: rnd(300, START_ALT), s: rnd(0.6, 1.4), d: rnd(0.4, 1) });
+    state = "intro"; menu = null;
+    showOverlay(`<h2>LANCIO ${jump + 1} DI ${JUMPS.length}</h2><p><b>${j.name}</b> · vento ${Math.abs(Math.round(wind / 3))} nodi verso ${wind > 0 ? "destra →" : "← sinistra"}</p>
+      <p class="muted">${ringsTotal} anelli in caduta libera, poi apri il paracadute e punta al bersaglio. ${jump === 0 ? "Sotto i 150 metri l'apertura è da brivido (bonus grande), sotto i 60 è troppo tardi!" : ""}</p>
+      <button class="start" data-go>SALTA!</button>`);
+    syncControls();
+  }
+  function openChute() {
+    if (state !== "play" || P.phase !== "free") return;
+    P.phase = "opening"; P.openT = 0; P.openAlt = P.alt; sfx.open();
+    const a = P.alt;
+    const bonus = a > 800 ? 0 : a > 300 ? Math.round((800 - a) * 0.5) : Math.round(250 + (300 - a) * 2);
+    const label = a > 800 ? "apertura prudente" : a > 300 ? "bella apertura" : a > 150 ? "apertura coraggiosa!" : "APERTURA DA BRIVIDO!";
+    if (bonus) { jumpScore += bonus; texts.push({ x: P.x, y: PY - 40, text: `${label} +${bonus}`, c: a <= 150 ? "#ff8a5a" : "#fff6a0", t: 0 }); }
+    else texts.push({ x: P.x, y: PY - 40, text: label, c: "#e0f0ff", t: 0 });
+  }
+
+  // ---------- Update ----------
+  function update(dt) {
+    clock += dt;
+    for (const f of fx) f.t += dt; fx = fx.filter((f) => f.t < f.life);
+    for (const t of texts) t.t += dt; texts = texts.filter((t) => t.t < 1.6);
+    if (windGain && audioCtx) windGain.gain.setTargetAtTime(windOn && state === "play" ? (P.phase === "free" ? 0.05 : 0.015) : 0, audioCtx.currentTime, 0.2);
+    if (state !== "play") return;
+    if (landed) { landed += dt; if (landed > 2.4) endJump(); return; }
+    // steering
+    const free = P.phase === "free";
+    let dir = (keys.ArrowRight || keys.d ? 1 : 0) - (keys.ArrowLeft || keys.a ? 1 : 0);
+    const maxV = free ? 190 : 95;
+    if (P.tumble > 0) { P.tumble -= dt; dir = 0; }
+    else if (pointer) P.tx = clamp(pointer.x, 14, W - 14);
+    if (dir) P.tx = clamp(P.x + dir * 60, 14, W - 14);
+    const want = P.tumble > 0 ? 0 : clamp((P.tx - P.x) * 4, -maxV, maxV);
+    const vx = want + wind * (free ? 0.25 : 1);
+    P.x = clamp(P.x + vx * dt, 10, W - 10);
+    P.tilt = lerp(P.tilt, clamp(want / maxV, -1, 1), dt * 8);
+    // falling
+    const prevAlt = P.alt;
+    if (P.phase === "opening") { P.openT += dt; P.vy = lerp(FALL * diff.speed, CANOPY, clamp(P.openT / OPEN_TIME, 0, 1)); if (P.openT >= OPEN_TIME) P.phase = "canopy"; }
+    else if (P.phase === "canopy") P.vy = CANOPY;
+    P.alt -= P.vy * dt; P.swing = Math.sin(clock * 1.6) * (P.phase === "free" ? 0 : 0.08) + (P.phase === "free" ? 0 : -P.tilt * 0.2);
+    // rings
+    for (const r of rings) {
+      if (r.hit || r.miss || !(prevAlt >= r.alt && P.alt < r.alt)) continue;
+      const dx = Math.abs(P.x - r.x);
+      if (dx < r.r * 0.92 && P.tumble <= 0) {
+        combo++; ringsHit++; const centre = dx < r.r * 0.35;
+        const pts = 100 + (centre ? 100 : 0) + (combo - 1) * 25; jumpScore += pts; r.hit = 1;
+        texts.push({ x: r.x, y: PY - 26, text: `${centre ? "CENTRO! " : ""}+${pts}`, c: centre ? "#ffe060" : "#fff", t: 0 });
+        fx.push({ kind: "ring", x: r.x, y: PY, r: r.r, t: 0, life: 0.5 }); centre ? sfx.center() : sfx.ring(Math.min(combo, 8));
+      } else { r.miss = true; combo = 0; }
+    }
+    // birds and balloons
+    for (const b of birds) {
+      b.x += b.vx * dt; b.flap += dt * 10;
+      if (b.hit) continue;
+      const by = PY + (P.alt - b.alt) * PPM, w = b.balloon ? 22 : 12 + b.n * 9;
+      if (Math.abs(P.x - b.x) < w && Math.abs(by - PY) < (b.balloon ? 26 : 14) + (P.phase === "free" ? 6 : 12)) {
+        b.hit = true; P.tumble = free ? 1 : 0.6; combo = 0; jumpScore = Math.max(0, jumpScore - 50); sfx.bird();
+        texts.push({ x: P.x, y: PY + 30, text: b.balloon ? "BONK! −50" : "STORMO! −50", c: "#ff9a8a", t: 0 });
+        for (let k = 0; k < 8; k++) fx.push({ kind: "feather", x: b.x, y: by, vx: rnd(-60, 60), vy: rnd(-60, 30), t: 0, life: 0.9 });
+      }
+    }
+    // stars, under the canopy
+    for (const s of stars) if (!s.got && P.phase !== "free" && Math.abs(P.alt - s.alt) < 5 && Math.abs(P.x - s.x) < 20) { s.got = true; jumpScore += 25; sfx.star(); texts.push({ x: s.x, y: PY - 20, text: "+25", c: "#ffe060", t: 0 }); }
+    // altimeter beeps in the last few hundred metres of free fall
+    if (free && P.alt < 400) { beepT -= dt; if (beepT <= 0) { sfx.beep(); beepT = P.alt < 150 ? 0.15 : 0.4; } }
+    // the camera slides up near the ground so the landing zone stays in view
+    PY = P.phase === "free" ? PY0 : lerp(PY0, H * 0.66, clamp((80 - P.alt) / 80, 0, 1));
+    // the ground
+    if (P.alt <= 0) touchDown();
+  }
+  function touchDown() {
+    P.alt = 0;
+    const j = J(), dx = Math.abs(P.x - target.x), r = target.r;
+    const water = (j.kind === "beach" && P.x > W * 0.86) || (j.kind === "island" && dx > r * 2.4);
+    if (P.phase === "free" || (P.phase === "opening" && P.vy > SAFE)) {
+      lives--; sfx.crash(); landInfo = { crash: true }; jumpScore = Math.round(jumpScore / 2);
+      texts.push({ x: P.x, y: PY - 50, text: "TROPPO TARDI!", c: "#ff6a5a", t: 0 });
+      for (let k = 0; k < 18; k++) fx.push({ kind: "dust", x: P.x, y: PY + 10, vx: rnd(-120, 120), vy: rnd(-140, -20), t: 0, life: 1 });
+    } else if (water) {
+      sfx.splash(); landInfo = { water: true, pts: 0 };
+      texts.push({ x: P.x, y: PY - 50, text: "SPLASH! In acqua", c: "#a0e0ff", t: 0 });
+      for (let k = 0; k < 18; k++) fx.push({ kind: "drop", x: P.x, y: PY + 12, vx: rnd(-80, 80), vy: rnd(-160, -40), t: 0, life: 1 });
+    } else {
+      const pts = dx < r * 0.25 ? 500 : dx < r * 0.55 ? 300 : dx < r ? 150 : dx < r * 2 ? 50 : 0;
+      jumpScore += pts; landInfo = { pts, bull: dx < r * 0.25 };
+      sfx.land(pts >= 150);
+      texts.push({ x: P.x, y: PY - 50, text: pts >= 500 ? "CENTRO PERFETTO! +500" : pts ? `+${pts}` : "fuori bersaglio", c: pts >= 300 ? "#ffe060" : "#fff", t: 0 });
+      if (landInfo.bull) feat("centro");
+      if (P.openAlt <= 120 && pts > 0) feat("brivido");
+    }
+    if (ringsHit === ringsTotal) feat("anelli");
+    landed = 0.001; P.phase = landInfo.crash ? "crash" : "landed";
+  }
+  function endJump() {
+    score += jumpScore;
+    if (lives <= 0) { gameOver(false); return; }
+    if (jump >= JUMPS.length - 1) { gameOver(true); return; }
+    state = "between";
+    const li = landInfo;
+    menu = () => showOverlay(`<h2>${li.crash ? "AHI!" : li.water ? "SPLASH!" : li.pts >= 300 ? "CHE ATTERRAGGIO!" : "A TERRA!"}</h2>
+      <p>Anelli ${ringsHit}/${ringsTotal} · apertura a ${Math.max(0, Math.round(P.openAlt))} m · ${li.crash ? "paracadute di riserva usato" : li.water ? "atterraggio in acqua" : li.pts ? `bersaglio +${li.pts}` : "fuori bersaglio"}</p>
+      <p>Lancio: <b>+${nf(jumpScore)}</b> · totale <b>${nf(score)}</b> · ${"🪂".repeat(Math.max(0, lives))}</p>
+      <button class="start" data-next>LANCIO ${jump + 2}</button>`);
+    menu(); syncControls();
+  }
+  function gameOver(won, quit = false) {
+    if (state === "over") return;
+    state = "over";
+    const prev = parseInt(load(bestKey(difficulty)), 10) || 0, record = score > prev;
+    if (record) store(bestKey(difficulty), String(score));
+    menu = () => showOverlay(
+      (won ? `<h2>BREVETTO D'ORO!</h2><p>Otto lanci, otto zone di atterraggio: adesso si può pensare alle acrobazie in formazione.</p>`
+           : `<h2 class="lose">${quit ? "A TERRA" : "NIENTE PIÙ RISERVE"}</h2><p>${quit ? `Giornata di lanci chiusa al lancio ${jump + 1}.` : `I paracadute di riserva sono finiti al lancio ${jump + 1}.`}</p>`) +
+      `<p>Punti: <b>${nf(score)}</b> · ${diff.label}</p>
+       ${record ? "<p style='color:var(--gold)'>★ NUOVO RECORD! ★</p>" : ""}
+       ${difficultyHTML()}
+       <button class="start" data-start>SI RISALE IN AEREO</button>`);
+    menu(); syncControls();
+  }
+
+  // ---------- Drawing ----------
+  function circ(x, y, r) { ctx.beginPath(); ctx.arc(x, y, r, 0, TAU); }
+  function rr(x, y, w, h, r) { ctx.beginPath(); ctx.roundRect(x, y, w, h, r); }
+  const yOf = (alt) => PY + (P.alt - alt) * PPM;
+  function drawCloud(x, y, s, a) { ctx.globalAlpha = a; ctx.fillStyle = J().kind === "night" ? "#4a5a8a" : "#fff"; for (const [dx, dy, r] of [[-22, 4, 16], [0, -4, 22], [22, 4, 16], [10, 8, 14], [-10, 8, 14]]) { circ(x + dx * s, y + dy * s, r * s); ctx.fill(); } ctx.globalAlpha = 1; }
+  function drawGround() {
+    const j = J(), gy = yOf(0);
+    if (gy > H + 40) return;
+    // horizon band, then the ground
+    ctx.fillStyle = j.far; ctx.fillRect(0, gy - 30, W, 30);
+    ctx.fillStyle = j.ground; ctx.fillRect(0, gy, W, H - gy + 40);
+    const tx = target.x, r = target.r;
+    if (j.kind === "beach") { ctx.fillStyle = "#3a9ad8"; ctx.fillRect(W * 0.86, gy, W, H); ctx.fillStyle = "rgba(255,255,255,0.6)"; for (let i = 0; i < 6; i++) ctx.fillRect(W * 0.86 + 4, gy + 6 + i * 14 + Math.sin(clock * 2 + i) * 2, 10, 2); }
+    if (j.kind === "island") { ctx.fillStyle = "#2a8ad0"; ctx.fillRect(0, gy, W, H); ctx.fillStyle = j.ground; ctx.beginPath(); ctx.ellipse(tx, gy + 14, r * 2.4, 22, 0, 0, TAU); ctx.fill(); ctx.fillStyle = "#3a9a4a"; for (const d of [-1.9, 1.9]) { circ(tx + d * r, gy + 2, 9); ctx.fill(); } }
+    if (j.kind === "city") { ctx.fillStyle = "#5a5a66"; for (let i = 0; i < 12; i++) { const bx = (i * 61) % W, bw = 30, bh = 18 + ((i * 37) % 26); if (Math.abs(bx + bw / 2 - tx) < r * 2.2) continue; ctx.fillRect(bx, gy - bh, bw, bh); ctx.fillStyle = "#ffe08a"; for (let k = 0; k < 3; k++) ctx.fillRect(bx + 5 + k * 9, gy - bh + 5, 4, 4); ctx.fillStyle = "#5a5a66"; } }
+    if (j.kind === "fields" || j.kind === "hills") { for (let i = 0; i < 8; i++) { const x = (i * 83 + 20) % W; if (Math.abs(x - tx) < r * 2) continue; ctx.fillStyle = "#2a6a2a"; circ(x, gy - 4, 8); ctx.fill(); ctx.fillStyle = "#5a3a1a"; ctx.fillRect(x - 1.5, gy - 2, 3, 6); } }
+    if (j.kind === "snow") { ctx.fillStyle = "#2a5a3a"; for (let i = 0; i < 9; i++) { const x = (i * 71 + 10) % W; if (Math.abs(x - tx) < r * 2) continue; ctx.beginPath(); ctx.moveTo(x, gy - 18); ctx.lineTo(x + 7, gy); ctx.lineTo(x - 7, gy); ctx.closePath(); ctx.fill(); } }
+    if (j.kind === "desert") { ctx.fillStyle = "#3a8a4a"; for (let i = 0; i < 5; i++) { const x = (i * 131 + 40) % W; if (Math.abs(x - tx) < r * 2) continue; ctx.fillRect(x - 2, gy - 16, 4, 16); ctx.fillRect(x - 7, gy - 11, 3, 7); ctx.fillRect(x + 4, gy - 13, 3, 7); } }
+    // the target, seen from a low angle
+    const cols = j.kind === "night" ? ["#ffe060", "#2a4a3a", "#ffe060", "#ff4a3a"] : ["#ffffff", "#e83a3a", "#ffffff", "#e83a3a"];
+    [[1, 0], [0.55, 1], [0.25, 2]].forEach(([k], i) => { ctx.fillStyle = cols[i % 2 ? 1 : 0]; ctx.beginPath(); ctx.ellipse(tx, gy + 10, r * k, Math.max(4, r * k * 0.28), 0, 0, TAU); ctx.fill(); });
+    ctx.fillStyle = "#e83a3a"; ctx.beginPath(); ctx.ellipse(tx, gy + 10, r * 0.12, r * 0.04 + 2, 0, 0, TAU); ctx.fill();
+    // windsock
+    const sx = clamp(tx + r * 2 * Math.sign(-wind || 1), 20, W - 20);
+    ctx.strokeStyle = "#555"; ctx.lineWidth = 2; ctx.beginPath(); ctx.moveTo(sx, gy + 8); ctx.lineTo(sx, gy - 22); ctx.stroke();
+    ctx.fillStyle = "#ff7a2a"; const wl = 14 + Math.abs(wind) * 0.3, ws = Math.sign(wind) || 1; ctx.beginPath(); ctx.moveTo(sx, gy - 22); ctx.lineTo(sx + ws * wl, gy - 20 + Math.sin(clock * 6) * 1.5); ctx.lineTo(sx + ws * wl, gy - 17); ctx.lineTo(sx, gy - 14); ctx.closePath(); ctx.fill();
+  }
+  function drawRing(r, front) {
+    const y = yOf(r.alt); if (y < -40 || y > H + 40) return;
+    const ry = r.r * 0.32, col = r.hit ? "#8aff8a" : r.miss ? "rgba(255,255,255,0.35)" : "#ffcc2a";
+    ctx.strokeStyle = col; ctx.lineWidth = 5;
+    ctx.beginPath(); ctx.ellipse(r.x, y, r.r, ry, 0, front ? 0 : Math.PI, front ? Math.PI : TAU); ctx.stroke();
+    if (!front && !r.hit && !r.miss) { ctx.fillStyle = "rgba(255,220,60,0.12)"; ctx.beginPath(); ctx.ellipse(r.x, y, r.r, ry, 0, 0, TAU); ctx.fill(); }
+  }
+  function drawBird(b) {
+    const y = yOf(b.alt); if (y < -40 || y > H + 40) return;
+    if (b.balloon) {
+      ctx.globalAlpha = b.hit ? 0.5 : 1;
+      ctx.fillStyle = "#e84a6a"; ctx.beginPath(); ctx.ellipse(b.x, y - 8, 20, 24, 0, 0, TAU); ctx.fill();
+      ctx.fillStyle = "#ffd84a"; ctx.fillRect(b.x - 20, y - 12, 40, 7);
+      ctx.strokeStyle = "#5a3a1a"; ctx.lineWidth = 1; ctx.beginPath(); ctx.moveTo(b.x - 10, y + 12); ctx.lineTo(b.x - 6, y + 22); ctx.moveTo(b.x + 10, y + 12); ctx.lineTo(b.x + 6, y + 22); ctx.stroke();
+      ctx.fillStyle = "#8a5a2a"; ctx.fillRect(b.x - 7, y + 21, 14, 8); ctx.globalAlpha = 1; return;
+    }
+    for (let i = 0; i < b.n; i++) {
+      const x = b.x - Math.sign(b.vx) * i * 16, yy = y + (i % 2) * 7, f = Math.sin(b.flap + i) * 6;
+      ctx.strokeStyle = J().kind === "night" ? "#c8d0e8" : "#2a2a32"; ctx.lineWidth = 2.5; ctx.beginPath(); ctx.moveTo(x - 9, yy - f); ctx.quadraticCurveTo(x - 4, yy - 2, x, yy); ctx.quadraticCurveTo(x + 4, yy - 2, x + 9, yy - f); ctx.stroke();
+    }
+  }
+  function drawJumper() {
+    const x = P.x, y = PY;
+    ctx.save(); ctx.translate(x, y);
+    if (P.phase === "crash") { ctx.restore(); return; }
+    const open = P.phase === "free" ? 0 : P.phase === "opening" ? clamp(P.openT / OPEN_TIME, 0, 1) : 1;
+    if (open > 0) {
+      // the canopy above: a ram-air wing in stripes
+      ctx.save(); ctx.rotate(P.swing);
+      const cw = 30 + 26 * open, ch = 6 + 10 * open, cy = -46 * open - 10;
+      ctx.strokeStyle = "rgba(40,40,40,0.6)"; ctx.lineWidth = 1;
+      for (const k of [-1, -0.5, 0.5, 1]) { ctx.beginPath(); ctx.moveTo(k * 6, -8); ctx.lineTo(k * cw * 0.9, cy + ch * 0.4); ctx.stroke(); }
+      const cols = ["#ff4a3a", "#ffd23a", "#3a8aff", "#ffd23a", "#ff4a3a"];
+      for (let i = 0; i < 5; i++) { const a0 = Math.PI + (i / 5) * Math.PI, a1 = Math.PI + ((i + 1) / 5) * Math.PI; ctx.fillStyle = cols[i]; ctx.beginPath(); ctx.moveTo(0, cy + ch); ctx.ellipse(0, cy + ch, cw, ch * 2, 0, a0, a1); ctx.closePath(); ctx.fill(); }
+      ctx.strokeStyle = "#2a1a1a"; ctx.lineWidth = 1.5; ctx.beginPath(); ctx.ellipse(0, cy + ch, cw, ch * 2, 0, Math.PI, TAU); ctx.stroke();
+      ctx.restore();
+    }
+    // the jumper: belly-down X in free fall, hanging under the canopy
+    ctx.rotate(P.phase === "free" ? P.tilt * 0.35 + (P.tumble > 0 ? clock * 14 : 0) : P.swing);
+    const suit = "#2a7ae8", spread = P.phase === "free" ? 1 : 0;
+    ctx.strokeStyle = suit; ctx.lineCap = "round"; ctx.lineWidth = 5;
+    ctx.beginPath();
+    if (spread) { ctx.moveTo(-5, -3); ctx.lineTo(-15, -11 + P.tilt * 4); ctx.moveTo(5, -3); ctx.lineTo(15, -11 - P.tilt * 4); ctx.moveTo(-3, 8); ctx.lineTo(-11, 18); ctx.moveTo(3, 8); ctx.lineTo(11, 18); }
+    else { ctx.moveTo(-5, -3); ctx.lineTo(-8, -10); ctx.moveTo(5, -3); ctx.lineTo(8, -10); ctx.moveTo(-3, 8); ctx.lineTo(-4, 19); ctx.moveTo(3, 8); ctx.lineTo(4, 19); }
+    ctx.stroke();
+    rr(-6, -6, 12, 16, 5); ctx.fillStyle = suit; ctx.fill(); ctx.fillStyle = "#ff4a3a"; ctx.fillRect(-6, 1, 12, 3);
+    circ(0, -11, 6); ctx.fillStyle = "#ffcc3a"; ctx.fill(); ctx.fillStyle = "#1a2a3a"; ctx.fillRect(-5, -12, 10, 3);
+    ctx.lineCap = "butt"; ctx.restore();
+  }
+  function draw() {
+    ctx.setTransform(pxRatio, 0, 0, pxRatio, 0, 0);
+    const j = J(), g = ctx.createLinearGradient(0, 0, 0, H); g.addColorStop(0, j.sky[0]); g.addColorStop(1, j.sky[1]); ctx.fillStyle = g; ctx.fillRect(0, 0, W, H);
+    if (!P) return;
+    if (j.kind === "night") { ctx.fillStyle = "#fff"; for (let i = 0; i < 50; i++) { const y = ((i * 71) + (START_ALT - P.alt) * 0.05) % H; ctx.globalAlpha = 0.4 + 0.5 * Math.abs(Math.sin(clock + i)); ctx.fillRect((i * 127) % W, y, 1.6, 1.6); } ctx.globalAlpha = 1; }
+    // far clouds move slower (parallax)
+    for (const c of clouds) { const y = PY + (P.alt - c.alt) * PPM * c.d; if (y > -40 && y < H + 40) drawCloud(c.x, y, c.s * (0.6 + c.d * 0.6), 0.35 + c.d * 0.45); }
+    drawGround();
+    for (const r of rings) drawRing(r, false);
+    for (const s of stars) { if (s.got) continue; const y = yOf(s.alt); if (y < -20 || y > H + 20) continue; ctx.fillStyle = "#ffe060"; ctx.beginPath(); for (let i = 0; i < 10; i++) { const a = -Math.PI / 2 + i * Math.PI / 5 + clock, q = i % 2 ? 4 : 9; ctx.lineTo(s.x + Math.cos(a) * q, y + Math.sin(a) * q); } ctx.closePath(); ctx.fill(); }
+    for (const b of birds) drawBird(b);
+    drawJumper();
+    for (const r of rings) drawRing(r, true);
+    // landing guide: a shadow line from the jumper to the ground when it is in view
+    const gy = yOf(0);
+    if (P.phase !== "free" && gy < H && !landed) { ctx.setLineDash([4, 6]); ctx.strokeStyle = "rgba(255,255,255,0.45)"; ctx.lineWidth = 1.5; ctx.beginPath(); ctx.moveTo(P.x, PY + 22); ctx.lineTo(P.x, gy + 10); ctx.stroke(); ctx.setLineDash([]); }
+    for (const f of fx) {
+      const k = f.t / f.life; ctx.globalAlpha = 1 - k;
+      if (f.kind === "ring") { ctx.strokeStyle = "#ffe060"; ctx.lineWidth = 3; ctx.beginPath(); ctx.ellipse(f.x, f.y, f.r * (1 + k), f.r * 0.32 * (1 + k), 0, 0, TAU); ctx.stroke(); }
+      else { f.x += f.vx * 0.016; f.y += f.vy * 0.016; f.vy += 6; ctx.fillStyle = f.kind === "drop" ? "#bfe8ff" : f.kind === "dust" ? "#a08a6a" : "#f4f4f4"; ctx.fillRect(f.x, f.y, 3, 3); }
+    }
+    ctx.globalAlpha = 1;
+    for (const t of texts) { ctx.globalAlpha = Math.min(1, (1.6 - t.t) * 2); ctx.font = "900 14px system-ui, sans-serif"; ctx.textAlign = "center"; ctx.textBaseline = "middle"; const x = clamp(t.x, 90, W - 90); ctx.lineWidth = 4; ctx.strokeStyle = "rgba(10,20,40,0.75)"; ctx.strokeText(t.text, x, t.y - t.t * 18); ctx.fillStyle = t.c; ctx.fillText(t.text, x, t.y - t.t * 18); }
+    ctx.globalAlpha = 1;
+    drawHUD();
+  }
+  function drawHUD() {
+    // altimeter on the left: a bar with the danger zone
+    const ax = 12, ay = portrait ? 60 : 44, ah = portrait ? 300 : 210;
+    rr(ax, ay, 18, ah, 8); ctx.fillStyle = "rgba(10,20,40,0.55)"; ctx.fill();
+    const yA = (a) => ay + ah - (clamp(a, 0, START_ALT) / START_ALT) * ah;
+    ctx.fillStyle = "rgba(255,80,60,0.75)"; ctx.fillRect(ax + 3, yA(150), 12, yA(0) - yA(150));
+    ctx.fillStyle = "rgba(255,200,60,0.6)"; ctx.fillRect(ax + 3, yA(300), 12, yA(150) - yA(300));
+    ctx.fillStyle = "rgba(120,220,120,0.5)"; ctx.fillRect(ax + 3, yA(800), 12, yA(300) - yA(800));
+    const py = yA(P.alt); ctx.fillStyle = "#fff"; ctx.beginPath(); ctx.moveTo(ax + 20, py); ctx.lineTo(ax + 28, py - 5); ctx.lineTo(ax + 28, py + 5); ctx.closePath(); ctx.fill();
+    ctx.font = "900 16px system-ui"; ctx.textAlign = "left"; ctx.textBaseline = "middle";
+    const alt = Math.max(0, Math.round(P.alt)), danger = P.phase === "free" && P.alt < 150;
+    ctx.lineWidth = 4; ctx.strokeStyle = "rgba(10,20,40,0.7)"; ctx.strokeText(`${alt} m`, ax + 32, py); ctx.fillStyle = danger && Math.sin(clock * 20) > 0 ? "#ff5a4a" : "#fff"; ctx.fillText(`${alt} m`, ax + 32, py);
+    // top bar
+    rr(6, 6, portrait ? 300 : 360, 26, 9); ctx.fillStyle = "rgba(10,20,40,0.6)"; ctx.fill();
+    ctx.font = "800 12px system-ui"; ctx.fillStyle = "#fff"; ctx.fillText(`Lancio ${jump + 1}/${JUMPS.length}`, 14, 19);
+    ctx.fillStyle = "#ffe08a"; ctx.fillText(nf(score + jumpScore), portrait ? 104 : 108, 19);
+    ctx.fillStyle = "#fff"; ctx.fillText(`◯ ${ringsHit}/${ringsTotal}`, portrait ? 160 : 172, 19);
+    ctx.fillText("🪂".repeat(Math.max(0, lives)), portrait ? 224 : 240, 19);
+    // wind
+    const wx = portrait ? W - 64 : 420, wy = portrait ? 56 : 19;
+    {
+      const s = Math.sign(wind) || 1, len = 10 + Math.abs(wind) * 0.4, ay2 = wy + (portrait ? 6 : 11);
+      ctx.fillStyle = "rgba(255,255,255,0.9)"; ctx.font = "700 10px system-ui"; ctx.textAlign = "center"; ctx.fillText(`vento ${Math.abs(Math.round(wind / 3))} nodi`, wx, portrait ? wy - 8 : wy - 4);
+      ctx.strokeStyle = "#fff"; ctx.lineWidth = 2.5; ctx.beginPath(); ctx.moveTo(wx - s * len / 2, ay2); ctx.lineTo(wx + s * len / 2, ay2); ctx.moveTo(wx + s * len / 2 - s * 5, ay2 - 4); ctx.lineTo(wx + s * len / 2, ay2); ctx.lineTo(wx + s * len / 2 - s * 5, ay2 + 4); ctx.stroke();
+    }
+    // the big OPEN button
+    if (state === "play" && P.phase === "free") {
+      const B = OPEN_BTN, hot = P.alt < 800, pul = P.alt < 300 ? 1 + 0.06 * Math.sin(clock * 12) : 1;
+      circ(B.x, B.y, B.r * pul); ctx.fillStyle = hot ? "rgba(255,90,60,0.9)" : "rgba(255,255,255,0.25)"; ctx.fill(); ctx.strokeStyle = "#fff"; ctx.lineWidth = 3; ctx.stroke();
+      ctx.fillStyle = "#fff"; ctx.textAlign = "center"; ctx.font = "900 15px system-ui"; ctx.fillText("APRI", B.x, B.y - 4); ctx.font = "700 9px system-ui"; ctx.fillText(touchMode ? "il paracadute" : "spazio", B.x, B.y + 11);
+    }
+    ctx.textAlign = "left";
+  }
+
+  // ---------- Menus ----------
+  function showOverlay(html) { overlay.innerHTML = html; overlay.classList.remove("hidden"); }
+  function difficultyHTML() {
+    const buttons = DIFF_IDS.map((id) => { const d = DIFFICULTIES[id]; return `<button type="button" data-diff="${id}" class="${id === difficulty ? "on" : ""}" style="--c:${d.color}">${d.label}</button>`; }).join("");
+    const best = parseInt(load(bestKey(difficulty)), 10);
+    return `<div class="diff">${buttons}</div><p class="muted">${diff.desc}${best ? ` · Record: ${nf(best)}` : ""}</p>`;
+  }
+  function setDifficulty(id) { if (!DIFFICULTIES[id]) return; difficulty = id; diff = DIFFICULTIES[id]; store(DIFF_KEY, id); if (menu) menu(); }
+  function showTitle() {
+    menu = showTitle; state = "menu";
+    showOverlay(
+      `<h1>LANCIO <span>LIBERO</span></h1>
+       <p>Il portellone si apre a 1.800 metri: salta, attraversa gli anelli in caduta libera, apri il paracadute il più tardi che hai il coraggio di fare e porta la vela sul bersaglio, col vento che ti spinge di lato. Otto zone di lancio, dalla campagna a un'isola in mezzo al mare.</p>
+       <div class="pts">
+         <span><b>Caduta libera</b></span><span>${touchMode ? "trascina il dito a destra e a sinistra" : "frecce ← → (o A D), oppure trascina col mouse"}: passa negli anelli, al centro valgono doppio, di fila ancora di più; evita stormi e mongolfiere</span>
+         <span><b>Apertura</b></span><span>${touchMode ? "il pulsante APRI" : "spazio o il pulsante APRI"}: più è tardi, più punti (sotto i 150 metri è da brivido), ma sotto i 60 non c'è più tempo</span>
+         <span><b>Atterraggio</b></span><span>con la vela vai più piano e il vento conta di più: centra il bersaglio, raccogli le stelle, e occhio all'acqua</span>
+       </div>
+       <p class="muted help">${touchMode ? "" : "P pausa, M suono del vento."}</p>
+       ${difficultyHTML()}
+       <button class="start" data-start>AL PORTELLONE</button>`);
+    syncControls();
+  }
+  function togglePause() {
+    if (state === "play") { pausedFrom = state; state = "paused"; pointer = null; keys = {}; showOverlay(`<h2>PAUSA</h2><button class="start" data-resume>CONTINUA</button>`); }
+    else if (state === "paused") { state = pausedFrom; overlay.classList.add("hidden"); lastT = performance.now(); }
+    syncControls();
+  }
+  window.addEventListener("sala:termina", () => { if (state !== "paused") return; overlay.classList.add("hidden"); gameOver(false, true); });
+  function syncControls() { pauseBtn.style.display = state === "play" && touchMode ? "block" : "none"; resize(); }
+  pauseBtn.addEventListener("click", () => togglePause());
+  function go() { state = "play"; overlay.classList.add("hidden"); syncControls(); lastT = performance.now(); }
+  overlay.addEventListener("click", (e) => {
+    const q = (s) => e.target.closest(s); let el;
+    if ((el = q("[data-diff]"))) { setDifficulty(el.dataset.diff); return; }
+    if (q("[data-start]")) { startGame(); return; }
+    if (q("[data-go]")) { go(); return; }
+    if (q("[data-next]")) { jump++; startJump(); return; }
+    if (q("[data-resume]")) { togglePause(); return; }
+  });
+
+  // ---------- Input ----------
+  let touchMode = !!(window.matchMedia && matchMedia("(pointer: coarse)").matches);
+  const toGame = (e) => { const rc = canvas.getBoundingClientRect(); return { x: ((e.clientX - rc.left) / rc.width) * W, y: ((e.clientY - rc.top) / rc.height) * H }; };
+  let dragId = null;
+  canvas.addEventListener("pointerdown", (e) => {
+    e.preventDefault(); if (state !== "play") return;
+    const p = toGame(e), B = OPEN_BTN;
+    if (P.phase === "free" && Math.hypot(p.x - B.x, p.y - B.y) < B.r + 10) { openChute(); return; }
+    if (dragId === null) { dragId = e.pointerId; pointer = { x: p.x, ox: p.x - P.x }; try { canvas.setPointerCapture(e.pointerId); } catch { /* ignore */ } pointer.x = P.x; }
+  });
+  canvas.addEventListener("pointermove", (e) => { if (e.pointerId !== dragId || !pointer) return; const p = toGame(e); pointer.x = p.x - pointer.ox; });
+  const up = (e) => { if (e.pointerId === dragId) { dragId = null; pointer = null; if (P) P.tx = P.x; } };
+  canvas.addEventListener("pointerup", up); canvas.addEventListener("pointercancel", up);
+  window.addEventListener("keydown", (e) => {
+    const k = e.key.length === 1 ? e.key.toLowerCase() : e.key;
+    if (state === "menu" || state === "over") { if (e.key === "Enter") startGame(); return; }
+    if (state === "intro" && (e.key === "Enter" || e.key === " ")) { e.preventDefault(); go(); return; }
+    if (state === "between" && e.key === "Enter") { jump++; startJump(); return; }
+    if (k === "p" || k === "Escape") { if (!e.repeat) togglePause(); return; }
+    if (k === "m" && !e.repeat) { windOn = !windOn; store("lancio-wind", windOn ? "1" : "0"); return; }
+    if (state !== "play") return;
+    if (e.key === " " || e.key === "ArrowDown") { e.preventDefault(); openChute(); return; }
+    if (["ArrowLeft", "ArrowRight", "a", "d"].includes(k)) { e.preventDefault(); keys[k] = true; }
+  });
+  window.addEventListener("keyup", (e) => { const k = e.key.length === 1 ? e.key.toLowerCase() : e.key; keys[k] = false; if (P && ["ArrowLeft", "ArrowRight", "a", "d"].includes(k)) P.tx = P.x; });
+  window.addEventListener("blur", () => { if (state === "play") togglePause(); });
+  window.addEventListener("pointerdown", (e) => { if (e.pointerType === "touch" && !touchMode) { touchMode = true; syncControls(); if (menu) menu(); } }, true);
+
+  // ---------- Loop ----------
+  let lastT = performance.now();
+  function frame(now) {
+    const dt = Math.min(0.05, (now - lastT) / 1000); lastT = now;
+    if (state !== "paused") update(dt);
+    draw();
+    requestAnimationFrame(frame);
+  }
+  resize();
+  startJump(); state = "menu";
+  showTitle();
+  requestAnimationFrame(frame);
+})();
+</script>
+<script src="../../shared/iniziali.js" data-record="lancio-best-" data-kind="score"></script>
+</body>
+</html>

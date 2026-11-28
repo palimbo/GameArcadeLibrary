@@ -9,6 +9,11 @@
   "use strict";
   // record key prefix of the game (as in trofei.js) → its feats
   const LIST = {
+    "lancio-best-": [   // lancio-libero
+      { id: "centro", name: "Nel mezzo", desc: "atterra nel centro del bersaglio" },
+      { id: "anelli", name: "Collana di anelli", desc: "prendi tutti gli anelli di un lancio" },
+      { id: "brivido", name: "Sangue freddo", desc: "apri il paracadute sotto i 120 metri e atterra comunque sul bersaglio" },
+    ],
     "fili-best-": [   // fili-di-luce
       { id: "lampo", name: "Lampo di genio", desc: "risolvi una griglia da 7×7 in su in meno di 20 secondi, senza aiuti" },
       { id: "perfetto", name: "Tutto illuminato", desc: "finisci una partita con tutte e dieci le griglie piene" },
